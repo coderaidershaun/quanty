@@ -1,0 +1,17 @@
+# Binaries
+/target
+
+# Agent
+.claude/
+.claude/skills/rex-*
+.claude/skills/INDEX.md
+
+# Secrets
+.env
+
+# Waste
+.scratch
+
+
+# Local store data
+/data/

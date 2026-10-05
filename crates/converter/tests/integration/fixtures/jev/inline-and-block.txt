@@ -1,0 +1,52 @@
+7.1 Likelihood of Simplified Regular Vine Copulas                                                  147
+
+
+
+      Using (4.18) and (4.20), respectively, the likelihood of the D-vine copula is
+   given by
+
+                    n d—ld—j
+         ^^^Zd -Win                                                                        (7.3)
+                   k=Ij=l i=l
+                XCw+j;i+i:i+j-i(C/|i+i:i+j_i (uk.i|Uk.j+i:i+j_i), Ci+j|i+i:/+j_i(Uk,i+j|
+                   Ufc,i+l:i+j-l)),
+
+
+   while the likelihood of a C-vine copula can be written as
+
+                 n d—1d-j
+    1(0,u)   = nnn
+                k=ij=i i=i
+                                                                                           (7.4)
+
+             XCj,i+j;i:j_i(Ci|i:j_i (Ufc,/|Ufc,i:j-i), Ci+j|i:j-i(Ufc.i+j|Ufc,i:j-i)).
+
+
+     In particular for D-vine copulas, the conditional distribution func­
+  tion Ci|i+i:i+j_i depends first on Oij+j-ij+j-z, while Cj+jii+iti+j-i on
+  &i+2,/+j-i;i+j-i. This can be used recursively to determine the complete
+  parameter dependence.
+
+
+
+
+7.2 Sequential and Maximum Likelihood Estimation
+    in Simplified Regular Vine Copulas
+
+The standard parameter estimation method in statistics is maximum likelihood. This
+involves maximizing the likelihood. Often, it is easier to maximize the log-likelihood
+instead of the likelihood. Here it is particularly easy, since the likelihood of a regular
+vine copula is a product of terms, which transforms to a sum, when we optimize
+the log-likelihood. For hierarchical Archimedean copulas (see for example Savu and
+Trede 2010 and Okhrin et al. 2013), this is not possible.
+   In the case of simplified regular vine copulas in d dimensions with pair copulas
+with a single parameter, the number of parameters to be maximized is d(d — l)/2,
+which grows quadratically. Therefore it is important to find good starting values for
+the optimization. Such starting values are given by sequential parameter estimates.
+We first illustrate this approach in the three dimensional case.
+
+
+  Ex 7.3 (Sequential estimation in three dimensions) The associated likelihood
+  for the three-dimensional case is given in (7.2). In the first step, we find parameter
+  estimates of ei2 and 023 by using the bivariate sub samples (uk,i,nk,2) and
+

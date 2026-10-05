@@ -1,0 +1,63 @@
+      Figure 13-16 Dividend sensitivity.
+
+
+                                       +12
+
+                                                             Spread 7 (call calendar spread)
+                                                             Spread 8 (put calendar spread)
+                                       +10                   Spread 9 (call diagonal spread)
+                                                             Spread 10 (put diagonal spread)
+
+
+
+
+          Theoretical profit or loss
+                                        +8
+
+
+
+                                        +6
+
+
+
+                                        +4
+
+
+
+                                        +2
+
+
+                                         0
+                                             0   .10   .20     .30       .40    .50      .60     .70   .80     .90     1.00
+                                                                     Expected quarterly dividend
+
+
+
+       gamma, the potential profit when the underlying market moves. The risk is
+       the theta, the money that will be lost through the passage of time if the un­
+       derlying market fails to make sufficiently large moves. The trader would like
+       the reward (the gamma) to be as large as possible compared with the risk (the
+       theta). We might express this relationship as a ratio
+                                                                       gamma/theta
+       The larger the absolute value of this ratio, the more efficient the position.
+             In the same way, a trader who has a negative gamma and a positive theta
+       wants the risk (the gamma) to be as small as possible compared with the reward
+       (tlie theta). He therefore wants the absolute value of the gamma/theta ratio to
+       be as large as possible.
+             For example, we might go back and calculate the efficiency of Spreads 1
+       through 3 in Figure 13-3. The efficiencies are
+
+                                                                         Gamma/Theta                     Efficiency
+        Spread 1                                                         -406.0/0.4235                       959              _
+        Spread 2                                                         -165.5/0.1365                       1,212
+        Spread 3                                                         -370.0/0.4000                       925      ________
+
+       Because each spread has a negative gamma and positive theta, we want the effi­
+       ciency to be as small as possible. We can see that Spread 3 is best, which is consis­
+       tent with our previous analysis of each spread.
+            Assuming that all strategies have approximately the same theoretical edge,
+       the efficiency can be a reasonable method of quickly comparing strategies
+       where all options expire at the same time. In such cases, the gamma and theta
+
+246    OPTION VOLATILITY AND PRICING
+

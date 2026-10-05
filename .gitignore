@@ -6,12 +6,12 @@
 .claude/skills/rex-*
 .claude/skills/INDEX.md
 
+# Local store data
+/data/
+/content/
+
 # Secrets
 .env
 
 # Waste
 .scratch
-
-
-# Local store data
-/data/

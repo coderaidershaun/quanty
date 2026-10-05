@@ -35,13 +35,6 @@ crates/
         mixed.pdf
         tables.pdf
         text.pdf
-data/
-  falkordb/
-  qdrant/
-    aliases/
-      data.json
-    collections/
-    raft_state.json
 docker-compose.yaml
 ```
 

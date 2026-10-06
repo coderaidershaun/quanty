@@ -1,0 +1,105 @@
+# The questions that `rag-query eval` asks, and where the answer to each one is stored.
+#
+# A question counts as found when one of its top 5 results is an item of `document` on `page`.
+# `document` is the document title, as `rag-query` prints it. `page` is the position of the page
+# in the chapter, from 1 (the N of the folder `page-num-N`), not the page number that is printed.
+
+[[question]]
+text = "What is a call option worth on its expiration date?"
+document = "Quanty Sample Notes, chapter 1: Options Pricing Intuition"
+page = 1
+
+[[question]]
+text = "What is the difference between the intrinsic value and the time value of an option?"
+document = "Quanty Sample Notes, chapter 1: Options Pricing Intuition"
+page = 2
+
+[[question]]
+text = "Does a rise in volatility raise or lower the price of a call and of a put?"
+document = "Quanty Sample Notes, chapter 1: Options Pricing Intuition"
+page = 2
+
+[[question]]
+text = "What simple observation does the Black–Scholes model rest on?"
+document = "Quanty Sample Notes, chapter 1: Options Pricing Intuition"
+page = 3
+
+[[question]]
+text = "What is implied volatility and how is it read from the market price of an option?"
+document = "Quanty Sample Notes, chapter 1: Options Pricing Intuition"
+page = 3
+
+[[question]]
+text = "Which assumptions does the Black–Scholes model make about the stock and the market?"
+document = "Quanty Sample Notes, chapter 2: Black Scholes In Depth"
+page = 1
+
+[[question]]
+text = "What equation describes the random movement of the stock price in the Black–Scholes model?"
+document = "Quanty Sample Notes, chapter 2: Black Scholes In Depth"
+page = 1
+
+[[question]]
+text = "What does Itô's lemma give for the change in the value of an option?"
+document = "Quanty Sample Notes, chapter 2: Black Scholes In Depth"
+page = 2
+
+[[question]]
+text = "What is the Black–Scholes partial differential equation?"
+document = "Quanty Sample Notes, chapter 2: Black Scholes In Depth"
+page = 3
+
+[[question]]
+text = "What is the Black–Scholes formula for the price of a European call?"
+document = "Quanty Sample Notes, chapter 2: Black Scholes In Depth"
+page = 3
+
+[[question]]
+text = "What is put–call parity?"
+document = "Quanty Sample Notes, chapter 2: Black Scholes In Depth"
+page = 3
+
+[[question]]
+text = "What is a cash transaction?"
+document = "Option Volatility and Pricing, chapter 1: Sample Pages"
+page = 1
+
+[[question]]
+text = "How is the fair price of a forward contract worked out from the costs and benefits of buying now?"
+document = "Option Volatility and Pricing, chapter 1: Sample Pages"
+page = 2
+
+[[question]]
+text = "How do the values of stock option calls and puts change when the dividend is raised?"
+document = "Option Volatility and Pricing, chapter 1: Sample Pages"
+page = 3
+
+[[question]]
+text = "What does the delta of an option measure?"
+document = "Option Volatility and Pricing, chapter 1: Sample Pages"
+page = 3
+
+[[question]]
+text = "What is the likelihood of a D-vine copula?"
+document = "Option Volatility and Pricing, chapter 1: Sample Pages"
+page = 4
+
+[[question]]
+text = "Which chart compares the theoretical profit or loss of a short straddle, a ratio spread and a long butterfly?"
+document = "Option Volatility and Pricing, chapter 1: Sample Pages"
+page = 5
+
+[[question]]
+text = "How does the expected quarterly dividend change the profit of calendar spreads and diagonal spreads?"
+document = "Option Volatility and Pricing, chapter 1: Sample Pages"
+page = 6
+
+[[question]]
+text = "How is the efficiency of a spread worked out from its gamma and its theta?"
+document = "Option Volatility and Pricing, chapter 1: Sample Pages"
+page = 6
+
+[[question]]
+text = "What does the implied volatility surface of FTSE 100 options look like?"
+document = "Option Volatility and Pricing, chapter 1: Sample Pages"
+page = 7

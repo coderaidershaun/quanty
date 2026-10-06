@@ -62,3 +62,14 @@ cargo run -p rag-ingestion --bin rag-ingest -- samples/content/quanty-sample-not
 Reads one converted chapter folder with `ocr::read_chapter` and stores its items in a Qdrant collection, `items` unless `QDRANT_ITEMS_COLLECTION` names another. Text becomes chunks of about 300 to 500 tokens that never run past a heading, and a paragraph that a page break cut in two is joined again. Each formula, figure and table is an item of its own. A figure is embedded as its own picture together with its explanation, as one vector, and its payload keeps the path of the picture. Every item carries the book, chapter and section it sits in.
 
 The ids are computed from the chapter's source hash and the place of the item in the chapter, so running the command again on the same chapter overwrites the same points and adds none. The command needs `EMBEDDING_GEMINI_API_KEY`, and Gemini bills each run by the token.
+
+## Asking a question
+
+```bash
+cargo run -p rag-retrieval --bin rag-query -- "What is the Black–Scholes partial differential equation?"
+cargo run -p rag-retrieval --bin rag-query -- eval
+```
+
+The first command embeds the question, takes the five nearest items from the collection that `QDRANT_ITEMS_COLLECTION` names (`items` unless set) and prints each one with the title of its document, its page (the printed page number where there is one), its kind, its score and its text. A figure also prints the path of its own picture. `--kind` looks only at items of one kind: `chunk`, `formula`, `figure` or `table`, and any other value is refused. The command needs `EMBEDDING_GEMINI_API_KEY`, and Gemini bills each question by the token.
+
+`golden.toml` holds 20 questions about the three sample chapters in `samples/content`, each with the document and the page whose items must come back. `eval` asks them all and prints one line for each, then a last line with the score, in the shape `found in the top 5: <found> of 20`. The score is one number that can be compared from run to run, so a change to retrieval must not lower it. Run `eval` from the workspace root, where `golden.toml` is, after ingesting the three sample chapters.

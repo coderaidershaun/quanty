@@ -4,6 +4,7 @@
 
 use std::fmt;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -49,6 +50,14 @@ impl fmt::Display for ItemId {
     }
 }
 
+impl FromStr for ItemId {
+    type Err = uuid::Error;
+
+    fn from_str(text: &str) -> Result<ItemId, uuid::Error> {
+        text.parse().map(ItemId)
+    }
+}
+
 /// The four things a chapter is stored as. A heading is not one of them: it is context.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -60,6 +69,16 @@ pub enum ItemKind {
 }
 
 impl ItemKind {
+    /// Every kind, in the order of the enum.
+    // SMELL: a kind that is added to the enum must be added to this list by hand. Nothing checks
+    // it, and a kind that is missing here is refused as unknown.
+    pub const ALL: [ItemKind; 4] = [
+        ItemKind::Chunk,
+        ItemKind::Formula,
+        ItemKind::Figure,
+        ItemKind::Table,
+    ];
+
     /// The name stored in the payload and used to make the item's identifier.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -68,6 +87,29 @@ impl ItemKind {
             ItemKind::Figure => "figure",
             ItemKind::Table => "table",
         }
+    }
+}
+
+/// The text that was given as a kind is not the name of any kind.
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[error(
+    "`{given}` is not a kind of item; the kinds are {kinds}",
+    kinds = ItemKind::ALL.map(ItemKind::as_str).join(", ")
+)]
+pub struct UnknownItemKind {
+    given: String,
+}
+
+impl FromStr for ItemKind {
+    type Err = UnknownItemKind;
+
+    fn from_str(text: &str) -> Result<ItemKind, UnknownItemKind> {
+        ItemKind::ALL
+            .into_iter()
+            .find(|kind| kind.as_str() == text)
+            .ok_or_else(|| UnknownItemKind {
+                given: text.to_owned(),
+            })
     }
 }
 

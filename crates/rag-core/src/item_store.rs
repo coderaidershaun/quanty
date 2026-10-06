@@ -5,12 +5,13 @@
 use std::time::Duration;
 
 use qdrant_client::qdrant::{
-    CountPointsBuilder, CreateCollectionBuilder, Distance, PointStruct, UpsertPointsBuilder,
-    VectorParamsBuilder,
+    Condition, CountPointsBuilder, CreateCollectionBuilder, Distance, Filter, PointStruct,
+    QueryPointsBuilder, ScoredPoint, UpsertPointsBuilder, VectorParamsBuilder,
+    point_id::PointIdOptions,
 };
 use qdrant_client::{Payload, Qdrant, QdrantError};
 
-use crate::{Config, EMBEDDING_DIMENSIONS, Embedding, ItemId, ItemPayload};
+use crate::{Config, EMBEDDING_DIMENSIONS, Embedding, ItemId, ItemKind, ItemPayload};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 /// A group of this many points with their vectors is about a megabyte, well inside a request.
@@ -66,6 +67,24 @@ pub enum StoreError {
 
     #[error("the payload of item {id} is not a json object")]
     PayloadShape { id: ItemId },
+
+    #[error("a point of the collection {collection} has the id {point}, which is not an item id")]
+    PointId {
+        collection: String,
+        point: String,
+        #[source]
+        source: uuid::Error,
+    },
+
+    #[error(
+        "the payload stored for item {id} in the collection {collection} is not the payload of an item"
+    )]
+    StoredPayload {
+        id: ItemId,
+        collection: String,
+        #[source]
+        source: serde_json::Error,
+    },
 }
 
 impl ItemStore {
@@ -192,4 +211,84 @@ fn point_struct(point: &ItemPoint) -> Result<PointStruct, StoreError> {
         point.vector.clone(),
         payload,
     ))
+}
+
+/// A stored item that a search found.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ItemHit {
+    pub id: ItemId,
+    /// The cosine similarity to the question: higher is nearer.
+    pub score: f32,
+    pub payload: ItemPayload,
+}
+
+/// The name of the payload field that holds an item's kind. It must match the field name of
+/// `ItemPayload`.
+const KIND_FIELD: &str = "kind";
+
+impl ItemStore {
+    /// The `limit` items whose vectors are nearest to `vector`, nearest first, among the items of
+    /// `kind` when one is given. It never creates the collection.
+    ///
+    /// # Errors
+    /// - [`StoreError::Request`] when Qdrant refuses, cannot be reached, or has no such collection
+    /// - [`StoreError::PointId`] and [`StoreError::StoredPayload`] when a stored point is not an
+    ///   item; one such point fails the whole search
+    pub async fn search(
+        &self,
+        vector: Embedding,
+        kind: Option<ItemKind>,
+        limit: usize,
+    ) -> Result<Vec<ItemHit>, StoreError> {
+        let mut query = QueryPointsBuilder::new(self.collection.as_str())
+            .query(vector)
+            .limit(limit as u64)
+            .with_payload(true);
+        // SMELL: the collection has no index on the kind field, so Qdrant reads the kind of each
+        // point it visits. That is fine for a few chapters and slow for a large collection.
+        if let Some(kind) = kind {
+            query = query.filter(Filter::must([Condition::matches(
+                KIND_FIELD,
+                kind.as_str().to_owned(),
+            )]));
+        }
+        let reply = self
+            .client
+            .query(query)
+            .await
+            .map_err(|source| self.request_error("search for items", source))?;
+        reply
+            .result
+            .into_iter()
+            .map(|point| item_hit(&self.collection, point))
+            .collect()
+    }
+}
+
+fn item_hit(collection: &str, point: ScoredPoint) -> Result<ItemHit, StoreError> {
+    let id_text = match point.id.and_then(|id| id.point_id_options) {
+        Some(PointIdOptions::Uuid(text)) => text,
+        Some(PointIdOptions::Num(number)) => number.to_string(),
+        None => String::new(),
+    };
+    let id = id_text
+        .parse::<ItemId>()
+        .map_err(|source| StoreError::PointId {
+            collection: collection.to_owned(),
+            point: id_text,
+            source,
+        })?;
+    let json = serde_json::Value::from(Payload::from(point.payload));
+    let payload = serde_json::from_value::<ItemPayload>(json).map_err(|source| {
+        StoreError::StoredPayload {
+            id,
+            collection: collection.to_owned(),
+            source,
+        }
+    })?;
+    Ok(ItemHit {
+        id,
+        score: point.score,
+        payload,
+    })
 }

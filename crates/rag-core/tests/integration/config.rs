@@ -32,6 +32,7 @@ fn environment_wins_over_dotenv_and_stores_fall_back_to_localhost() {
         &dotenv,
         "QDRANT_URL=http://from-dotenv:6334\n\
          FALKORDB_URL=falkor://from-dotenv:6379\n\
+         FALKORDB_GRAPH=graph-from-dotenv\n\
          EMBEDDING_GEMINI_API_KEY=not-a-real-key\n\
          QDRANT_ITEMS_COLLECTION=   \n",
     )
@@ -44,6 +45,7 @@ fn environment_wins_over_dotenv_and_stores_fall_back_to_localhost() {
     .unwrap();
     assert_eq!(config.qdrant_url, "http://from-environment:6334");
     assert_eq!(config.falkordb_url, "falkor://from-dotenv:6379");
+    assert_eq!(config.falkordb_graph, "graph-from-dotenv");
     assert_eq!(
         config.gemini_api_key.as_ref().map(|key| key.expose()),
         Some("not-a-real-key")
@@ -57,15 +59,20 @@ fn environment_wins_over_dotenv_and_stores_fall_back_to_localhost() {
     let config = Config::from_sources(environment_of(&[]), None).unwrap();
     assert_eq!(config.qdrant_url, "http://localhost:6334");
     assert_eq!(config.falkordb_url, "falkor://localhost:6379");
+    assert_eq!(config.falkordb_graph, "quanty");
     assert_eq!(config.items_collection, "items");
     assert!(config.gemini_api_key.is_none());
 
     let config = Config::from_sources(
-        environment_of(&[("QDRANT_ITEMS_COLLECTION", "test-items-elsewhere")]),
+        environment_of(&[
+            ("QDRANT_ITEMS_COLLECTION", "test-items-elsewhere"),
+            ("FALKORDB_GRAPH", "test-graph-elsewhere"),
+        ]),
         Some(&folder.path().join("missing.env")),
     )
     .unwrap();
     assert_eq!(config.items_collection, "test-items-elsewhere");
+    assert_eq!(config.falkordb_graph, "test-graph-elsewhere");
 
     std::fs::write(&dotenv, "EMBEDDING_GEMINI_API_KEY not-a-real-key\n").unwrap();
     let error = Config::from_sources(environment_of(&[]), Some(&dotenv)).unwrap_err();

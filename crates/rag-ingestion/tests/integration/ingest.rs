@@ -1,25 +1,25 @@
-//! Runs a whole chapter through ingestion into a throwaway collection of the local Qdrant,
-//! with an embedder that makes up its vectors, so nothing is billed.
+//! Runs a whole chapter through ingestion into a throwaway collection of the local Qdrant and a
+//! throwaway graph of the local FalkorDB, with an embedder that makes up its vectors, so nothing
+//! is billed.
 
 use std::collections::BTreeSet;
 
 use ocr::{PieceDetail, read_chapter};
-use rag_core::ItemStore;
 use rag_ingestion::{chapter_items, ingest_chapter};
 
-use crate::support::{self, StandInEmbedder, ThrowawayCollection, points_in};
+use crate::support::{self, StandInEmbedder, ThrowawayStores, assert_graph_holds_only, points_in};
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored ingest::"]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored ingest::"]
 async fn ingest_fills_a_throwaway_collection_and_a_second_run_adds_nothing() {
-    let throwaway = ThrowawayCollection::new("ingest");
+    let throwaway = ThrowawayStores::new("ingest");
     let config = throwaway.config();
-    let store = ItemStore::connect(config).unwrap();
+    let stores = throwaway.connect().await;
     let embedder = StandInEmbedder::default();
     let chapter = read_chapter(&support::sample_chapter()).unwrap();
     let items = chapter_items(&chapter);
 
-    let summary = ingest_chapter(&support::sample_chapter(), &embedder, &store)
+    let summary = ingest_chapter(&support::sample_chapter(), &embedder, &stores)
         .await
         .unwrap();
     assert_eq!(summary.points_in_collection, items.len() as u64);
@@ -29,6 +29,14 @@ async fn ingest_fills_a_throwaway_collection_and_a_second_run_adds_nothing() {
     let stored_ids: BTreeSet<String> = points.iter().map(|(id, _)| id.clone()).collect();
     let item_ids: BTreeSet<String> = items.iter().map(|item| item.id.to_string()).collect();
     assert_eq!(stored_ids, item_ids);
+
+    let stored_document = assert_graph_holds_only(&stores.graph, &items).await;
+    let node_ids: BTreeSet<String> = stored_document
+        .items
+        .iter()
+        .map(|item| item.id.clone())
+        .collect();
+    assert_eq!(node_ids, stored_ids, "a node has the id of its point");
 
     let formulas: Vec<&str> = chapter
         .pieces
@@ -104,11 +112,16 @@ async fn ingest_fills_a_throwaway_collection_and_a_second_run_adds_nothing() {
         );
     }
 
-    let again = ingest_chapter(&support::sample_chapter(), &embedder, &store)
+    let again = ingest_chapter(&support::sample_chapter(), &embedder, &stores)
         .await
         .unwrap();
     assert_eq!(again.points_in_collection, summary.points_in_collection);
     let points_after = points_in(config).await;
     let ids_after: BTreeSet<String> = points_after.into_iter().map(|(id, _)| id).collect();
     assert_eq!(ids_after, stored_ids);
+    assert_eq!(
+        assert_graph_holds_only(&stores.graph, &items).await,
+        stored_document,
+        "a second run adds no node and no edge"
+    );
 }

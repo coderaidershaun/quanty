@@ -5,12 +5,12 @@
 use std::time::Duration;
 
 use qdrant_client::qdrant::{
-    CountPointsBuilder, CreateCollectionBuilder, Distance, PointStruct, UpsertPointsBuilder,
-    VectorParamsBuilder,
+    Condition, CountPointsBuilder, CreateCollectionBuilder, DeletePointsBuilder, Distance, Filter,
+    PointStruct, UpsertPointsBuilder, VectorParamsBuilder,
 };
 use qdrant_client::{Payload, Qdrant, QdrantError};
 
-use crate::{Config, EMBEDDING_DIMENSIONS, Embedding, ItemId, ItemPayload};
+use crate::{Config, DocId, EMBEDDING_DIMENSIONS, Embedding, ItemId, ItemPayload};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 /// A group of this many points with their vectors is about a megabyte, well inside a request.
@@ -168,6 +168,38 @@ impl ItemStore {
             .count(CountPointsBuilder::new(self.collection.as_str()).exact(true))
             .await
             .map_err(|source| self.request_error("count points", source))?;
+        Ok(reply.result.map_or(0, |result| result.count))
+    }
+
+    /// Removes every point of one document and returns how many points that was. A document
+    /// with no points gives `0`, which is not an error.
+    ///
+    /// # Errors
+    /// [`StoreError::Request`] when Qdrant refuses or cannot be reached. A collection that does
+    /// not exist is not a special case: the count fails, and that error, which names the
+    /// collection, is passed on.
+    pub async fn delete_document(&self, document: DocId) -> Result<u64, StoreError> {
+        let of_document = Filter::must([Condition::matches("doc_id", document.to_string())]);
+        // SMELL: counting and deleting are two calls, so points of the document that another
+        // program stores between the two are removed but not counted, and the number returned
+        // is then too low.
+        let reply = self
+            .client
+            .count(
+                CountPointsBuilder::new(self.collection.as_str())
+                    .filter(of_document.clone())
+                    .exact(true),
+            )
+            .await
+            .map_err(|source| self.request_error("count the points of the document", source))?;
+        self.client
+            .delete_points(
+                DeletePointsBuilder::new(self.collection.as_str())
+                    .points(of_document)
+                    .wait(true),
+            )
+            .await
+            .map_err(|source| self.request_error("delete the points of the document", source))?;
         Ok(reply.result.map_or(0, |result| result.count))
     }
 

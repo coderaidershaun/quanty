@@ -95,8 +95,8 @@ async fn ingest_asks_about_every_item_and_writes_concepts_mentions_and_relations
         .map(|question| question.input.clone())
         .collect();
     assert_eq!(asked, items.iter().map(input_of).collect::<BTreeSet<_>>());
-    let prompt_file =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/concepts/prompts/extract.md");
+    let prompt_file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src/ingest/concepts/prompts/extract.md");
     let prompt = std::fs::read_to_string(prompt_file).unwrap();
     for question in &questions {
         assert_eq!(

@@ -5,7 +5,7 @@ use graph::{RelationKind, UnknownRelationKind};
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::items::Item;
+use crate::ingest::items::Item;
 
 pub(super) const SYSTEM_PROMPT: &str = include_str!("prompts/extract.md");
 pub(super) const SCHEMA: &str = include_str!("prompts/extract.schema.json");

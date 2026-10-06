@@ -11,7 +11,7 @@ use rag_core::{ItemId, Llm, LlmError, Question};
 use super::cache::{Cache, key_of};
 use super::question::{Extraction, SCHEMA, SYSTEM_PROMPT, input_for};
 use super::{ConceptError, ConceptExtractor, SkippedItem};
-use crate::items::Item;
+use crate::ingest::items::Item;
 
 const CALLS_AT_A_TIME: usize = 4;
 /// A question that fails is asked once more before its item is skipped.

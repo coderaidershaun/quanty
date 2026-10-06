@@ -68,11 +68,11 @@ pub fn chapter_items(chapter: &Chapter) -> Vec<Item> {
         .collect()
 }
 
-pub(crate) fn document_id(index: &ChapterIndex) -> DocId {
+pub(super) fn document_id(index: &ChapterIndex) -> DocId {
     DocId::from_source_sha256(&index.source_sha256)
 }
 
-pub(crate) fn document_title(index: &ChapterIndex) -> String {
+pub(super) fn document_title(index: &ChapterIndex) -> String {
     format!(
         "{}, chapter {}: {}",
         index.book_title, index.chapter_number, index.chapter_name

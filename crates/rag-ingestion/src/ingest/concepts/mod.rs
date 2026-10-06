@@ -15,7 +15,7 @@ use rag_core::{ItemId, ItemKind, Llm, LlmError};
 
 pub use question::EXTRACTION_MODEL;
 
-use crate::items::Item;
+use super::items::Item;
 
 /// Reads items for the concepts they discuss, and keeps every good answer in a folder so that the
 /// same question is asked once.
@@ -51,7 +51,7 @@ impl<L: Llm> ConceptExtractor<L> {
     ///   are kept.
     /// - [`ConceptError::Cache`] when the cache folder cannot be used
     /// - [`ConceptError::Graph`] when the graph cannot be read or written
-    pub(crate) async fn extract<G: GraphStore>(
+    pub(super) async fn extract<G: GraphStore>(
         &self,
         items: &[Item],
         graph: &G,

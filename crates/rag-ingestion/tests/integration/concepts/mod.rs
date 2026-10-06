@@ -33,7 +33,6 @@ fn positions_of(items: &[Item]) -> HashMap<String, usize> {
         .collect()
 }
 
-/// An answer that finds the one concept `volatility` and no relation.
 fn finding_volatility() -> Value {
     json!({
         "concepts": [{ "name": "volatility", "definition": "how much a price moves over time" }],

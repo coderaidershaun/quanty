@@ -1,6 +1,16 @@
 //! Converts a whole chapter PDF into its folder of pages: cut the pages out, convert them a few
 //! at a time, and write `chapter.json` last. A finished chapter is never converted again.
 
+mod checks;
+mod figure;
+mod page;
+mod poppler;
+pub mod reply;
+mod route;
+mod save;
+pub mod services;
+mod summary;
+
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -8,23 +18,25 @@ use futures_util::StreamExt;
 use futures_util::stream;
 use sha2::{Digest, Sha256};
 
-use crate::claude::{self, ClaudeError};
 use crate::content::{
     ChapterIndex, ContentError, FORMAT_VERSION, PAGE_IMAGE_FILE, PAGE_PDF_FILE, PageIndex,
     TEXT_LAYER_FILE, book_folder_name, chapter_folder_name, is_partial_page_folder_name,
     page_folder_name, parse_chapter_file_name, partial_page_folder_name,
 };
-use crate::page::convert_page;
-use crate::poppler::{self, PopplerError};
-use crate::services::{LiveServices, PageServices, PageSource, ServiceError};
-use crate::summary::{CallTally, ConversionSummary};
 
-pub use crate::page::PageError;
+use page::convert_page;
+use services::{ClaudeError, LiveServices, PageServices, PageSource, ServiceError};
+
+pub use checks::{PieceRef, ReplyFault};
+pub use page::PageError;
+pub use poppler::PopplerError;
+pub use summary::{
+    CallTally, ConversionSummary, OutOfSequence, PageToCheck, PieceCounts, RouteCounts,
+};
 
 const PARALLEL_PAGES: usize = 4;
 const MODEL_IMAGE_FILE: &str = "model-view.png";
 
-/// Why a chapter could not be converted.
 #[derive(thiserror::Error, Debug)]
 pub enum ConvertError {
     #[error(transparent)]
@@ -81,8 +93,8 @@ impl ChapterJob {
     /// folder under `output_root`. Opens no file.
     ///
     /// # Errors
-    /// - [`ContentError::BadFileName`] if the name is not `chapter-<number>-<name>.pdf`
-    /// - [`ContentError::EmptyBookFolderName`] if the book title has no letters or digits
+    /// Fails if the name is not `chapter-<number>-<name>.pdf` or the book title has no letters
+    /// or digits.
     pub fn new(
         book_title: &str,
         chapter_pdf: &Path,
@@ -112,13 +124,9 @@ impl ChapterJob {
     }
 }
 
-/// What a first look at the chapter folder found.
 enum Prepared {
-    /// Every page is already saved.
     Finished(ConversionSummary),
-    ToDo {
-        source_sha256: String,
-    },
+    ToDo { source_sha256: String },
 }
 
 /// Converts a chapter with the real services: `claude` for Haiku and Sonnet, and Jev.
@@ -127,14 +135,12 @@ enum Prepared {
 /// needed. An interrupted chapter resumes at the pages that are missing.
 ///
 /// # Errors
-/// - [`ConvertError::ApiKeySet`] if `ANTHROPIC_API_KEY` is set, whether or not the chapter is
+/// - [`ConvertError::ApiKeySet`] if `ANTHROPIC_API_KEY` is set, even when the chapter is
 ///   finished
-/// - [`ConvertError::DifferentSource`] if the chapter folder was made from a different PDF
 /// - [`ConvertError::Services`] if Jev cannot be reached or refuses its key
 /// - [`ConvertError::PageFailed`] for the lowest page that failed; finished pages stay saved
-/// - the other variants for unreadable files and failed Poppler tools
 pub async fn convert_chapter(job: &ChapterJob) -> Result<ConversionSummary, ConvertError> {
-    if claude::api_key_is_set() {
+    if services::api_key_is_set() {
         return Err(ConvertError::ApiKeySet);
     }
     match prepare(job)? {
@@ -150,7 +156,7 @@ pub async fn convert_chapter(job: &ChapterJob) -> Result<ConversionSummary, Conv
 /// environment.
 ///
 /// # Errors
-/// The same as [`convert_chapter`], except the two that come from the environment.
+/// The same as [`convert_chapter`], except `ApiKeySet` and `Services`, which need the environment.
 pub async fn convert_chapter_with<S: PageServices>(
     job: &ChapterJob,
     services: &S,
@@ -202,10 +208,9 @@ fn prepare(job: &ChapterJob) -> Result<Prepared, ConvertError> {
     Ok(Prepared::ToDo { source_sha256 })
 }
 
-/// True when the page's folder exists and its `page.json` reads back at the current version. A
-/// missing file, a file that is not a page index and another format version all mean the page is
-/// not saved. Any other read error is returned: it says nothing about the page, and treating it
-/// as "not saved" would delete a page that was paid for.
+/// A missing `page.json`, one that is not a page index and one at another format version all
+/// mean the page is not saved. Any other read error is returned: it says nothing about the
+/// page, and treating it as "not saved" would delete a page that was paid for.
 fn is_saved(chapter_folder: &Path, position: u32) -> Result<bool, ContentError> {
     match PageIndex::read(&chapter_folder.join(page_folder_name(position))) {
         Ok(page) => Ok(page.format_version == FORMAT_VERSION),
@@ -263,8 +268,8 @@ async fn run<S: PageServices>(
     )?)
 }
 
-/// Converts the cut-out pages a few at a time and adds up what their calls cost. When pages
-/// fail, the error is for the one with the lowest position.
+/// Converts the pages a few at a time and adds up what their calls cost. When pages fail, the
+/// error is for the one with the lowest position.
 async fn convert_pages<S: PageServices>(
     services: &S,
     chapter_folder: &Path,
@@ -345,8 +350,8 @@ fn pages_to_do(folder: &Path, page_count: u32) -> Result<Vec<u32>, ContentError>
     Ok(to_do)
 }
 
-/// Cuts page `position` out of the chapter into its working folder and reads its text layer
-/// and image, so no paid call starts before all the local work is done.
+/// Does all the local work for a page in its working folder, so no paid call starts before it
+/// is finished.
 async fn cut_page_out(job: &ChapterJob, position: u32) -> Result<PageSource, ConvertError> {
     let partial = job.chapter_folder.join(partial_page_folder_name(position));
     std::fs::create_dir_all(&partial).map_err(write_error(&partial))?;

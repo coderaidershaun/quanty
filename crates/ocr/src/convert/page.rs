@@ -1,30 +1,27 @@
-//! One page from start to finish: tag it, choose Haiku or Sonnet, check what comes back, and
-//! save it.
+//! One page from start to finish: tag it, choose Haiku or Sonnet, check what comes back, cut out
+//! its figures and save it.
 
 use std::path::{Path, PathBuf};
 
-use crate::categorise::PageCategories;
-use crate::checks::{
-    ALMOST_EMPTY_WORDS, ReplyFault, any_string_has_backslash, check_reply, clean_reply,
-    piece_word_count, text_layer_word_count, word_match,
+use super::checks::{
+    ReplyFault, any_string_has_backslash, check_reply, clean_reply, piece_word_count,
+    text_layer_word_count, word_match,
 };
-use crate::claude::CallUsage;
+use super::figure::cut_figures;
+use super::reply::{TranscribedPage, TranscribedPiece};
+use super::route::route_reasons;
+use super::save::write_page;
+use super::services::{CallUsage, MathPlacement, PageServices, PageSource, ServiceError};
+use super::summary::CallTally;
 use crate::content::{
-    CallRecord, CallStep, Checks, ContentError, Conversion, MathCheck, REJECTED_REPLY_FILE, Route,
-    RouteReason, page_folder_name, partial_page_folder_name,
+    CallRecord, CallStep, Checks, ContentError, Conversion, MathCheck, PageCategories,
+    REJECTED_REPLY_FILE, Route, RouteReason, page_folder_name, partial_page_folder_name,
 };
-use crate::figure::cut_figures;
-use crate::jev::MathPlacement;
-use crate::save::write_page;
-use crate::services::{PageServices, PageSource, ServiceError};
-use crate::summary::CallTally;
-use crate::transcribe::{TranscribedPage, TranscribedPiece};
 
 // Both match ratios of a Haiku copy must reach this. A clean copy of the sample text page scored
 // 0.995 and 1.0, and a false alarm only costs one Sonnet call.
 const COPY_MATCH_MINIMUM: f64 = 0.96;
 
-/// Why a page could not be converted.
 #[derive(thiserror::Error, Debug)]
 pub enum PageError {
     #[error(transparent)]
@@ -41,54 +38,10 @@ pub enum PageError {
         saved_reply: PathBuf,
     },
 
-    /// A file of the page could not be written.
     #[error(transparent)]
     Content(#[from] ContentError),
 }
 
-/// Why a page goes to Sonnet, from what is known before any text is copied. An empty list means
-/// Haiku copies it.
-fn route_reasons(
-    tags: &PageCategories,
-    math_check: MathCheck,
-    text_layer_words: usize,
-) -> Vec<RouteReason> {
-    let reports_figure = tags.diagram_2d_multi_axis_chart
-        || tags.diagram_2d_single_axis_chart
-        || tags.diagram_3d_surface_chart
-        || tags.diagram_2d_bar_chart
-        || tags.diagram_2d_mixed_chart
-        || tags.diagram_other
-        || tags.image;
-    [
-        (
-            tags.math_notation || tags.inline_with_text_math_notation,
-            RouteReason::TagsReportMath,
-        ),
-        (reports_figure, RouteReason::TagsReportFigure),
-        (tags.table, RouteReason::TagsReportTable),
-        (
-            matches!(
-                math_check,
-                MathCheck::Inline | MathCheck::Block | MathCheck::Both
-            ),
-            RouteReason::MathCheckReportsMath,
-        ),
-        (
-            math_check == MathCheck::NoAnswer,
-            RouteReason::MathCheckFailed,
-        ),
-        (
-            text_layer_words < ALMOST_EMPTY_WORDS,
-            RouteReason::TextLayerAlmostEmpty,
-        ),
-    ]
-    .into_iter()
-    .filter_map(|(applies, reason)| applies.then_some(reason))
-    .collect()
-}
-
-/// The calls made for one page: what each cost, and how many there were.
 #[derive(Default)]
 struct Ledger {
     records: Vec<CallRecord>,
@@ -126,21 +79,17 @@ fn math_check_of(answer: Result<Option<MathPlacement>, ServiceError>) -> MathChe
     }
 }
 
-/// What came of asking Haiku for a page.
 enum CopyOutcome {
     Kept(TranscribedPage),
-    /// The copy cannot be saved, so the page goes to Sonnet.
     Refused(RouteReason),
 }
 
-/// The page to save, which model wrote it, and why a second reply was asked for, if it was.
 struct Written {
     page: TranscribedPage,
     route: Route,
     retry_reason: Option<String>,
 }
 
-/// One page on its way through the models: where its files are and what it has cost so far.
 struct PageRun<'a, S> {
     services: &'a S,
     source: &'a PageSource,
@@ -209,7 +158,6 @@ impl<S: PageServices> PageRun<'_, S> {
         })
     }
 
-    /// The first reason a cleaned Haiku copy cannot be saved, if there is one.
     fn copy_problem(&self, copy: &TranscribedPage) -> Option<RouteReason> {
         if copy.pieces.is_empty() {
             return Some(RouteReason::CopyHasNoPieces);
@@ -290,10 +238,9 @@ impl<S: PageServices> PageRun<'_, S> {
     }
 }
 
-/// Converts one page whose files are already in its working folder under `chapter_folder`, and
-/// renames that folder to the page's finished name when everything is saved. Returns what the
-/// page's calls cost.
-pub(crate) async fn convert_page<S: PageServices>(
+/// Converts one page whose files are already in its working folder, and renames that folder to
+/// the page's finished name once everything is saved.
+pub(super) async fn convert_page<S: PageServices>(
     services: &S,
     source: &PageSource,
     chapter_folder: &Path,
@@ -351,126 +298,4 @@ pub(crate) async fn convert_page<S: PageServices>(
         source,
     })?;
     Ok(run.ledger.tally)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    type SetTags = fn(&mut PageCategories);
-
-    fn tagged(set: SetTags) -> PageCategories {
-        let mut tags = PageCategories::default();
-        set(&mut tags);
-        tags
-    }
-
-    #[test]
-    fn route_sends_math_figures_tables_and_doubt_to_sonnet() {
-        let none = PageCategories::default();
-
-        // The one case that may go to Haiku. These four tags only describe the page's furniture:
-        // its headings and numbers.
-        let furniture = tagged(|tags| {
-            tags.chapter_number = true;
-            tags.chapter_name = true;
-            tags.page_number = true;
-            tags.sub_heading = true;
-        });
-        assert_eq!(route_reasons(&furniture, MathCheck::None, 300), []);
-
-        let by_tag: [(&str, SetTags, RouteReason); 10] = [
-            (
-                "displayed math",
-                |tags| tags.math_notation = true,
-                RouteReason::TagsReportMath,
-            ),
-            (
-                "inline math",
-                |tags| tags.inline_with_text_math_notation = true,
-                RouteReason::TagsReportMath,
-            ),
-            (
-                "multi-axis chart",
-                |tags| tags.diagram_2d_multi_axis_chart = true,
-                RouteReason::TagsReportFigure,
-            ),
-            (
-                "single-axis chart",
-                |tags| tags.diagram_2d_single_axis_chart = true,
-                RouteReason::TagsReportFigure,
-            ),
-            (
-                "surface chart",
-                |tags| tags.diagram_3d_surface_chart = true,
-                RouteReason::TagsReportFigure,
-            ),
-            (
-                "bar chart",
-                |tags| tags.diagram_2d_bar_chart = true,
-                RouteReason::TagsReportFigure,
-            ),
-            (
-                "mixed chart",
-                |tags| tags.diagram_2d_mixed_chart = true,
-                RouteReason::TagsReportFigure,
-            ),
-            (
-                "other diagram",
-                |tags| tags.diagram_other = true,
-                RouteReason::TagsReportFigure,
-            ),
-            (
-                "image",
-                |tags| tags.image = true,
-                RouteReason::TagsReportFigure,
-            ),
-            (
-                "table",
-                |tags| tags.table = true,
-                RouteReason::TagsReportTable,
-            ),
-        ];
-        for (name, set, reason) in by_tag {
-            assert_eq!(
-                route_reasons(&tagged(set), MathCheck::None, 300),
-                [reason],
-                "{name}"
-            );
-        }
-
-        let by_math_check = [
-            (MathCheck::Inline, RouteReason::MathCheckReportsMath),
-            (MathCheck::Block, RouteReason::MathCheckReportsMath),
-            (MathCheck::Both, RouteReason::MathCheckReportsMath),
-            (MathCheck::NoAnswer, RouteReason::MathCheckFailed),
-        ];
-        for (math_check, reason) in by_math_check {
-            assert_eq!(
-                route_reasons(&none, math_check, 300),
-                [reason],
-                "{math_check:?}"
-            );
-        }
-
-        assert_eq!(
-            route_reasons(&none, MathCheck::None, ALMOST_EMPTY_WORDS - 1),
-            [RouteReason::TextLayerAlmostEmpty]
-        );
-
-        // Reasons come in the order they are found.
-        let math_and_table = tagged(|tags| {
-            tags.math_notation = true;
-            tags.table = true;
-        });
-        assert_eq!(
-            route_reasons(&math_and_table, MathCheck::Block, 5),
-            [
-                RouteReason::TagsReportMath,
-                RouteReason::TagsReportTable,
-                RouteReason::MathCheckReportsMath,
-                RouteReason::TextLayerAlmostEmpty,
-            ]
-        );
-    }
 }

@@ -1,6 +1,5 @@
-//! Decides whether a model reply is good enough to save. A reply is tidied, checked against the
-//! rules a good page always meets, and measured against the page's text layer. A failed check
-//! returns one plain sentence that is sent back to the model for a second try.
+//! Decides whether a model reply is good enough to save. A failed check gives one plain sentence
+//! that is sent back to the model for a second try.
 
 mod clean;
 mod fault;
@@ -8,27 +7,23 @@ mod fields;
 mod latex;
 mod word_match;
 
+use super::reply::{TranscribedPage, TranscribedPiece};
+
 use fault::MIN_FIGURE_EXPLANATION_WORDS;
 
-use crate::transcribe::{TranscribedPage, TranscribedPiece};
-
-pub(crate) use clean::clean_reply;
+pub(super) use clean::clean_reply;
 pub use fault::{PieceRef, ReplyFault};
-pub(crate) use fields::any_string_has_backslash;
-pub(crate) use word_match::{
+pub(super) use fields::any_string_has_backslash;
+pub(super) use word_match::{
     piece_strings, piece_word_count, text_layer_word_count, word_match, words,
 };
 
-/// A page with fewer words than this in its text layer is treated as almost empty.
-pub(crate) const ALMOST_EMPTY_WORDS: usize = 20;
+pub(super) const ALMOST_EMPTY_WORDS: usize = 20;
 
-/// Checks a reply against the rules a good page always meets.
-///
-/// `text_layer_words` is how many words the page's text layer holds. The first broken rule is
-/// returned.
+/// Returns the first rule the reply breaks.
 // SMELL: a reply must be cleaned before it is checked, and nothing enforces that order. The table
 // rule expects lines that the cleaning has already trimmed.
-pub(crate) fn check_reply(
+pub(super) fn check_reply(
     page: &TranscribedPage,
     text_layer_words: usize,
 ) -> Result<(), ReplyFault> {
@@ -232,7 +227,7 @@ fn displayed_math(text: &str) -> Option<&'static str> {
 mod tests {
     use super::*;
     use crate::content::{PageBox, Symbol};
-    use crate::transcribe::{CitedKind, CitedLabel, Discussion};
+    use crate::convert::reply::{CitedKind, CitedLabel, Discussion};
 
     fn text(number: u32, markdown: &str) -> TranscribedPiece {
         TranscribedPiece::Text {

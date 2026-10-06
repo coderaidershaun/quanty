@@ -50,8 +50,7 @@ fn run_command(arguments: &[&std::ffi::OsStr], api_key: Option<&str>) -> std::pr
     command.output().unwrap()
 }
 
-/// Every page folder is whole, its pieces are numbered in order, and no saved index or piece
-/// file holds a soft hyphen. The text layer holds them by design, so it is left out of the search.
+/// The text layer holds soft hyphens by design, so only the saved index and pieces are searched.
 fn assert_pages_saved_without_soft_hyphens(chapter: &Path) {
     for position in 1..=7 {
         let folder = page_folder(chapter, position);
@@ -78,12 +77,11 @@ fn assert_pages_saved_without_soft_hyphens(chapter: &Path) {
             );
         }
     }
-    // Page 1 is a Haiku copy, and the cleaning pass took the soft hyphen out of it.
+    // Page 1 is a Haiku copy; the cleaning pass removed its soft hyphen.
     let first_text = std::fs::read_to_string(page_folder(chapter, 1).join("01-text.md")).unwrap();
     assert!(first_text.contains("settlement period"));
 }
 
-/// Each page took the branch its scenario was built for, and its `page.json` says so.
 fn assert_routes_reasons_and_calls(chapter: &Path, stubs: &StubServices) {
     let expected: [(&str, &[&str], &[&str]); 7] = [
         ("haiku-copy", &[], &["tag", "copy"]),
@@ -156,8 +154,6 @@ fn assert_routes_reasons_and_calls(chapter: &Path, stubs: &StubServices) {
     assert_eq!(stubs.calls().len(), 27);
 }
 
-/// A page with the standard transcription keeps all three kinds of relationship, and the
-/// footnote citation `ocr` adds from the marker.
 fn assert_relationships_saved(chapter: &Path) {
     let page_two = read_json(&page_folder(chapter, 2).join("page.json"));
     let relationships: Vec<(&str, u64, u64)> = page_two["relationships"]
@@ -235,8 +231,8 @@ fn assert_summary_counts_and_lists(summary: &ConversionSummary) {
     }
 }
 
-/// The writer and the reader agree, and the lead-in of the formula that opens page 7 is found on
-/// page 6 although no saved relationship crosses a page.
+/// The lead-in of the formula that opens page 7 is found on page 6, though no saved
+/// relationship crosses a page.
 fn assert_reads_back_with_bridged_lead_in(chapter: &Path, summary: &ConversionSummary) {
     let read_back = read_chapter(chapter).unwrap();
     let saved_pieces = summary.pieces;
@@ -286,7 +282,6 @@ async fn chapter_converts_then_reruns_without_calls() {
     assert_reads_back_with_bridged_lead_in(&chapter, &summary);
     assert_figure_pictures_read_back(&chapter);
 
-    // A second run changes nothing and makes no call.
     let calls_before = stubs.calls().len();
     let again = convert_chapter_with(&job, &stubs).await.unwrap();
     assert_eq!(stubs.calls().len(), calls_before);
@@ -299,7 +294,6 @@ async fn chapter_converts_then_reruns_without_calls() {
         0
     );
 
-    // The built command does the same with no key of any kind.
     let output = run_command(
         &[
             "--book".as_ref(),

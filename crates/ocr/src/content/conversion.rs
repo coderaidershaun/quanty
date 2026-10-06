@@ -1,9 +1,8 @@
 //! The record of how a page was made, saved under `conversion` in `page.json`: the tags, the
 //! route, the checks and every paid call.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-
-use crate::categorise::PageCategories;
 
 /// How a page was made. A page written by hand has none.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -17,7 +16,62 @@ pub struct Conversion {
     pub calls: Vec<CallRecord>,
 }
 
-/// What the math check said about the page's text.
+/// Which kinds of content are present on one PDF page.
+///
+/// The JSON schema the model must follow is generated from this struct, so the two cannot
+/// disagree. Each `description` is the wording the model reads for that category, so changing
+/// one changes the answers.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+// Do not remove: without it the doc comment above is sent to the model as the description.
+#[schemars(description = "Which kinds of content are present on one PDF page.")]
+pub struct PageCategories {
+    #[schemars(
+        description = "Displayed mathematical notation: an equation or formula set on its own line or lines, apart from the running text."
+    )]
+    pub math_notation: bool,
+    #[schemars(
+        description = "Mathematical notation inside a line of running text, such as symbols, subscripts or short expressions within a sentence. Plain numbers, money amounts, percentages and dates are not mathematical notation."
+    )]
+    pub inline_with_text_math_notation: bool,
+    #[schemars(
+        description = "A chapter number printed on the page, whether where a chapter opens or in a running header or footer."
+    )]
+    pub chapter_number: bool,
+    #[schemars(
+        description = "A chapter title printed on the page, whether where a chapter opens or in a running header or footer."
+    )]
+    pub chapter_name: bool,
+    #[schemars(description = "A printed page number in the header or footer.")]
+    pub page_number: bool,
+    #[schemars(
+        description = "A two-dimensional chart with more than one y-axis or more than one x-axis, each with its own scale, such as a second axis on the right-hand side."
+    )]
+    pub diagram_2d_multi_axis_chart: bool,
+    #[schemars(
+        description = "A two-dimensional line, scatter or area chart drawn against exactly one x-axis and one y-axis."
+    )]
+    pub diagram_2d_single_axis_chart: bool,
+    #[schemars(description = "A three-dimensional surface plot drawn against three axes.")]
+    pub diagram_3d_surface_chart: bool,
+    #[schemars(description = "A two-dimensional bar chart or histogram.")]
+    pub diagram_2d_bar_chart: bool,
+    #[schemars(
+        description = "A single two-dimensional chart that combines different kinds of marks, such as bars with a line drawn over them."
+    )]
+    pub diagram_2d_mixed_chart: bool,
+    #[schemars(
+        description = "Any other diagram that is not one of the chart kinds above, such as a flowchart, tree, network or schematic."
+    )]
+    pub diagram_other: bool,
+    #[schemars(description = "A photograph or picture that is not a chart or diagram.")]
+    pub image: bool,
+    #[schemars(description = "Data laid out in rows and columns.")]
+    pub table: bool,
+    #[schemars(description = "A section or sub-section heading below chapter level.")]
+    pub sub_heading: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MathCheck {
@@ -56,7 +110,6 @@ pub enum RouteReason {
     CopyFailedCopyCheck,
 }
 
-/// What was measured on the page that was saved.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Checks {
@@ -77,7 +130,6 @@ pub struct Checks {
     pub whole_page_figures: Vec<WholePageFigure>,
 }
 
-/// A figure that has the whole page as its picture, and why.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct WholePageFigure {
@@ -94,7 +146,6 @@ pub struct WordMatch {
     pub text_layer_words_in_pieces: f64,
 }
 
-/// One paid model call made for a page.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct CallRecord {

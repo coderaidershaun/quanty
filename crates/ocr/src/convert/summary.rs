@@ -12,13 +12,13 @@ use crate::content::{
 /// A Sonnet-written page whose copied words match the text layer less well than this, in either
 /// direction, is listed as a page to check. The text layer is unreliable around math, charts and
 /// tables, so a middling match there is normal and is never a failure.
-pub(crate) const LOW_WORD_MATCH: f64 = 0.60;
+const LOW_WORD_MATCH: f64 = 0.60;
 
 /// A figure picture that covers more than this share of its page is listed as a page to check: a
 /// figure is rarely that big, so a rectangle that large is more likely to be wrong.
 const MOST_OF_THE_PAGE_PERCENT: i64 = 80;
 
-/// The paid calls a run made, one per call through the services, so a corrected retry counts.
+/// The paid calls a run made. A corrected retry counts as a call of its own.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct CallTally {
     pub tag: u32,
@@ -29,7 +29,7 @@ pub struct CallTally {
 }
 
 impl CallTally {
-    pub(crate) fn add(&mut self, other: &CallTally) {
+    pub(super) fn add(&mut self, other: &CallTally) {
         self.tag += other.tag;
         self.math_check += other.math_check;
         self.copy += other.copy;
@@ -42,7 +42,7 @@ impl CallTally {
     }
 }
 
-/// How many pages each route wrote. A page written by hand is in none of them.
+/// A page written by hand is in none of these counts.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RouteCounts {
     pub haiku_copy: u32,
@@ -50,7 +50,6 @@ pub struct RouteCounts {
     pub haiku_then_sonnet: u32,
 }
 
-/// How many pieces of each kind the chapter holds.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PieceCounts {
     pub heading: u32,
@@ -68,7 +67,6 @@ pub struct OutOfSequence {
     pub shown: String,
 }
 
-/// A page worth a look, and why.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PageToCheck {
     pub position: u32,
@@ -90,12 +88,9 @@ pub struct ConversionSummary {
 }
 
 impl ConversionSummary {
-    /// Builds the summary of a chapter from its saved pages. `calls` is what this run spent and
-    /// `converted_now` how many of the pages it converted.
-    ///
-    /// # Errors
-    /// - [`ContentError`] if `chapter.json` or any `page.json` cannot be read
-    pub(crate) fn from_folder(
+    /// Builds the summary from the saved pages. `calls` is what this run spent and
+    /// `converted_now` how many pages it converted.
+    pub(super) fn from_folder(
         chapter_folder: &Path,
         converted_now: u32,
         calls: CallTally,
@@ -171,7 +166,6 @@ impl ConversionSummary {
     }
 }
 
-/// Why a converted page is worth a look, if it is.
 fn reasons_to_check(page: &PageIndex, conversion: &Conversion) -> Vec<&'static str> {
     let mut reasons = Vec::new();
     let word_match = conversion.checks.word_match;
@@ -212,8 +206,6 @@ fn reasons_to_check(page: &PageIndex, conversion: &Conversion) -> Vec<&'static s
     reasons
 }
 
-/// True for a figure cut out of its page from a rectangle that covers more than
-/// [`MOST_OF_THE_PAGE_PERCENT`] percent of the page.
 fn covers_most_of_the_page(image: &FigureImage) -> bool {
     // A rectangle is in thousandths of the page each way, so the whole page is a million.
     const WHOLE_PAGE: i64 = 1_000_000;

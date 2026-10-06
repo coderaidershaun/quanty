@@ -1,15 +1,14 @@
-//! Lists every string of a reply with where it sits, and the rules that read those strings:
-//! empty content, lost backslashes, unbalanced LaTeX and math that will not typeset.
+//! Lists every string of a reply with where it sits, and the rules that read those strings.
 
 use super::fault::{ALIGNED_WITHOUT_ROW_BREAK, PieceRef, ReplyFault};
 use super::latex;
-use crate::transcribe::{CitedLabel, TranscribedPage, TranscribedPiece};
+use crate::convert::reply::{CitedLabel, TranscribedPage, TranscribedPiece};
 
 #[derive(Clone, Copy, PartialEq)]
 enum Role {
-    /// A formula's LaTeX: LaTeX from end to end.
+    /// LaTeX from end to end.
     Formula,
-    /// A symbol of a formula: LaTeX from end to end.
+    /// LaTeX from end to end.
     Symbol,
     /// Prose that may hold `\( … \)` spans.
     Mixed,
@@ -52,7 +51,6 @@ impl<'a> Collector<'a> {
     }
 }
 
-/// Every string of the reply, with where it sits and how it is read.
 fn fields(page: &TranscribedPage) -> Vec<Field<'_>> {
     let mut collector = Collector {
         fields: Vec::new(),
@@ -194,8 +192,6 @@ fn lost_backslash(page: &TranscribedPage, fields: &[Field<'_>]) -> Result<(), Re
     Ok(())
 }
 
-/// The pieces of LaTeX inside a field: the whole text of a LaTeX field, or each math span of a
-/// mixed one.
 fn latex_parts<'a>(field: &Field<'a>) -> Result<Vec<&'a str>, &'static str> {
     match field.role {
         Role::Formula | Role::Symbol => Ok(vec![field.text]),
@@ -256,9 +252,7 @@ pub(crate) fn any_string_has_backslash(page: &TranscribedPage) -> bool {
     fields(page).iter().any(|field| field.text.contains('\\'))
 }
 
-/// Checks every string of the reply for empty content, lost backslashes, unbalanced LaTeX, and
-/// math that will not typeset. The first broken rule is returned.
-pub(crate) fn check_strings(page: &TranscribedPage) -> Result<(), ReplyFault> {
+pub(super) fn check_strings(page: &TranscribedPage) -> Result<(), ReplyFault> {
     let fields = fields(page);
     empty_content(page, &fields)?;
     lost_backslash(page, &fields)?;

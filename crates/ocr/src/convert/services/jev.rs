@@ -28,21 +28,17 @@ pub struct Jev {
     api_key: Box<str>,
 }
 
-/// Where the math on a page sits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MathPlacement {
     /// Math written inside sentences.
     Inline,
     /// Math on lines of its own.
     Block,
-    /// Both of the above.
     Both,
 }
 
-/// Why a Jev request failed.
 #[derive(thiserror::Error, Debug)]
 pub enum JevError {
-    /// The environment variable that holds the API key is not set, or is not valid Unicode.
     #[error("environment variable {JEV_API_KEY_VARIABLE} is not set, or is not valid Unicode")]
     MissingApiKey,
 
@@ -50,21 +46,12 @@ pub enum JevError {
     #[error("jev request failed")]
     Http(#[from] reqwest::Error),
 
-    /// The server answered with a non-success status.
     #[error("jev rejected the request with status {status}: {body}")]
-    Rejected {
-        /// The HTTP status code, such as 401 for a bad key or 429 when rate limited.
-        status: u16,
-        /// The response body, where the server says what it objected to.
-        body: String,
-    },
+    Rejected { status: u16, body: String },
 
-    /// The server answered with success but the body was not the expected shape.
     #[error("jev response could not be read: {body}")]
     Decode {
-        /// The response body as it arrived.
         body: String,
-        /// What was wrong with the body.
         #[source]
         source: serde_json::Error,
     },
@@ -78,10 +65,6 @@ impl fmt::Debug for Jev {
 }
 
 impl Jev {
-    /// Builds a client that sends `api_key` as a bearer token.
-    ///
-    /// # Errors
-    /// - [`JevError::Http`] if the HTTP client cannot be built.
     pub fn new(api_key: impl Into<String>) -> Result<Self, JevError> {
         let http = reqwest::Client::builder()
             .timeout(REQUEST_TIMEOUT)
@@ -93,29 +76,21 @@ impl Jev {
     }
 
     /// Builds a client from `CONVERTER_JEV_API_KEY` in the process environment.
-    ///
-    /// # Errors
-    /// - [`JevError::MissingApiKey`] if the variable is not set or is not valid Unicode.
-    /// - [`JevError::Http`] if the HTTP client cannot be built.
     pub fn from_env() -> Result<Self, JevError> {
         let api_key = std::env::var(JEV_API_KEY_VARIABLE).map_err(|_| JevError::MissingApiKey)?;
         Self::new(api_key)
     }
 
-    /// Reports whether `page` holds symbolic math and where it sits.
+    /// Reports whether `page` holds symbolic math and where it sits. `page` is the text of one
+    /// PDF page with its line breaks kept; each non-blank line is judged on its own.
     ///
-    /// `page` is the text extracted from one PDF page, with its line breaks kept. Each non-blank
-    /// line is judged on its own, all in one request. Returns `None` when no line holds a
-    /// formula. Plain numbers, arithmetic on numbers, formulas made of ordinary words and a
-    /// single letter standing alone in a sentence do not count; spelled-out Greek letter names
-    /// joined by an operator do. A page with no visible text returns `None` without calling
-    /// the API.
+    /// Plain numbers, arithmetic on numbers, formulas made of ordinary words and a single letter
+    /// standing alone in a sentence do not count; spelled-out Greek letter names joined by an
+    /// operator do. A page with no visible text returns `None` without calling the API.
     ///
     /// # Errors
-    /// - [`JevError::Http`] if the server cannot be reached or the request times out.
-    /// - [`JevError::Rejected`] if the server answers with a non-success status, such as 401 for
-    ///   a bad key or 429 when rate limited. Retrying is up to the caller.
-    /// - [`JevError::Decode`] if a success response is missing an answer or is not valid JSON.
+    /// A rejected request, such as 401 for a bad key or 429 when rate limited, is not retried
+    /// here. Retrying is up to the caller.
     pub async fn contains_math(&self, page: &str) -> Result<Option<MathPlacement>, JevError> {
         let lines: Vec<&str> = page
             .lines()

@@ -1,17 +1,18 @@
-//! Turns one cleaned and checked reply into the files of a page: one file per piece and the
-//! `page.json` that indexes them, with the relationships the page's own structure gives.
+//! Turns a checked reply into the files of a page: one file per piece and a `page.json` that
+//! indexes them.
 
 use std::path::Path;
 
+use super::reply::{CitedKind, CitedLabel, TranscribedPage, TranscribedPiece};
 use crate::content::{
     Cite, CiteKind, ContentError, Conversion, FORMAT_VERSION, FigureImage, PageIndex, PieceDetail,
     PieceEntry, Relationship, RelationshipKind,
 };
-use crate::transcribe::{CitedKind, CitedLabel, TranscribedPage, TranscribedPiece};
 
-/// Writes every piece file and `page.json` into `folder`. `images` holds the picture of each
-/// figure, by piece number.
-pub(crate) fn write_page(
+/// `images` holds the picture of each figure, by piece number.
+// SMELL: a page's position and a piece's number are both plain `u32`, here and everywhere they
+// are passed on, so one given in place of the other compiles.
+pub(super) fn write_page(
     folder: &Path,
     position: u32,
     page: &TranscribedPage,
@@ -45,7 +46,6 @@ pub(crate) fn write_page(
     index.write(folder)
 }
 
-/// The saved fields of a piece and what goes in its file. `image` is the picture of a figure.
 fn piece_parts(piece: &TranscribedPiece, image: Option<FigureImage>) -> (PieceDetail, String) {
     match piece {
         TranscribedPiece::Heading {
@@ -173,7 +173,7 @@ fn all_cites(markdown: &str, model_cites: &[CitedLabel]) -> Vec<Cite> {
     cites
 }
 
-/// The distinct footnote markers in `text`, written `[^1]`, in the order they first appear.
+/// The distinct markers written `[^1]`, in the order they first appear.
 fn footnote_markers(text: &str) -> Vec<String> {
     let mut markers: Vec<String> = Vec::new();
     let mut rest = text;
@@ -189,7 +189,6 @@ fn footnote_markers(text: &str) -> Vec<String> {
     markers
 }
 
-/// Every link between the pieces of one page, sorted and without repeats.
 fn relationships(page: &TranscribedPage) -> Vec<Relationship> {
     let mut links = lead_ins(page);
     links.extend(page.discusses.iter().map(|discussion| Relationship {
@@ -226,7 +225,6 @@ fn lead_ins(page: &TranscribedPage) -> Vec<Relationship> {
     links
 }
 
-/// One link from each footnote to every heading, text or table piece that carries its marker.
 fn footnote_links(page: &TranscribedPage) -> Vec<Relationship> {
     let mut links = Vec::new();
     for footnote in &page.pieces {

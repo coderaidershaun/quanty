@@ -9,38 +9,44 @@ crates/
   ocr/
     Cargo.toml
     src/
-      categorise.rs
-      checks/
-        clean.rs
-        fault.rs
-        fields.rs
-        latex.rs
-        word_match.rs
-      checks.rs
-      claude.rs
       content/
         conversion.rs
+        figure_image.rs
         index.rs
+        mod.rs
         piece.rs
-      content.rs
-      convert.rs
-      figure/
-        refine.rs
-      figure.rs
-      jev.rs
+      convert/
+        checks/
+          clean.rs
+          fault.rs
+          fields.rs
+          latex.rs
+          mod.rs
+          word_match.rs
+        figure/
+          mod.rs
+          refine.rs
+          sheet.rs
+        mod.rs
+        page.rs
+        poppler.rs
+        reply.rs
+        route.rs
+        save.rs
+        services/
+          categorise.rs
+          claude.rs
+          jev.rs
+          mod.rs
+          prompts/
+            copy.md
+            transcribe.md
+          schema.rs
+          transcribe.rs
+        summary.rs
       lib.rs
       main.rs
-      page.rs
-      poppler.rs
-      prompts/
-        copy.md
-        transcribe.md
       reader.rs
-      save.rs
-      schema.rs
-      services.rs
-      summary.rs
-      transcribe.rs
     tests/
       integration/
         categorise.rs

@@ -317,8 +317,7 @@ fn assert_volatility_surface_page(chapter: &Chapter) {
     );
 }
 
-/// Every figure has a picture that is a PNG under the size limit, and the three labelled figures
-/// were cut out of their pages. A whole-page picture there means the rectangle failed twice.
+/// A whole-page picture for a labelled figure means the rectangle failed twice.
 fn assert_figure_pictures(chapter: &Chapter) {
     for piece in chapter
         .pieces
@@ -364,9 +363,6 @@ fn assert_mixed_page(chapter: &Chapter) {
     );
 }
 
-/// What the committed page 1 shows about the plain text page: Haiku copied it, no Sonnet call
-/// was made, and the pale chapter number beside the title was read.
-///
 /// A live run is not held to this. The tagger sometimes takes the shaded corner block of that
 /// page for a picture, which rightly sends the page to Sonnet, and Haiku sometimes misses the
 /// number.
@@ -387,8 +383,6 @@ fn assert_text_page_was_copied_by_haiku(chapter_folder: &Path) {
     }
 }
 
-/// The committed figures are cut around their printed extent: nothing of the figure is cut off,
-/// and none of the text next to it is inside.
 fn assert_figures_were_cut_around_their_extent(chapter_folder: &Path) {
     let chapter = read_chapter(chapter_folder).unwrap();
     for figure in FIGURE_EXTENTS {

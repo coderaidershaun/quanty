@@ -2,12 +2,11 @@
 //! reader can see.
 
 use super::latex;
-use crate::transcribe::{CitedLabel, TranscribedPage, TranscribedPiece};
+use crate::convert::reply::{CitedLabel, TranscribedPage, TranscribedPiece};
 
-/// Removes the characters nobody can see. The text layer marks a word broken at a line end with
-/// a soft hyphen, and a model that copies it writes a word that looks right but that no search
-/// can find. The whitespace after a soft hyphen goes with it, so the two halves rejoin.
-pub(crate) fn remove_invisible(text: &str) -> String {
+/// Removes invisible characters. A soft hyphen marks a word broken at a line end, and copying it
+/// makes a word no search can find; the whitespace after it goes too so the halves rejoin.
+pub(super) fn remove_invisible(text: &str) -> String {
     let mut visible = String::with_capacity(text.len());
     let mut characters = text.chars().peekable();
     while let Some(character) = characters.next() {
@@ -20,9 +19,6 @@ pub(crate) fn remove_invisible(text: &str) -> String {
     visible
 }
 
-/// Cleans every string of a reply: invisible characters out, a line break after a row break in
-/// a formula mended, a bare row break in a formula put inside an aligned block, table lines
-/// tidied, every string trimmed, and an optional string that is empty turned into `None`.
 pub(crate) fn clean_reply(page: &mut TranscribedPage) {
     clean_optional(&mut page.printed_page_number);
     clean_optional(&mut page.running_header);
@@ -51,8 +47,7 @@ pub(crate) fn clean_reply(page: &mut TranscribedPage) {
                 ..
             } => {
                 *latex = latex::mend_row_breaks(&remove_invisible(latex));
-                // A formula printed over several lines belongs in an aligned block, and a row
-                // break with no block around it has nothing to break.
+                // A row break with no aligned block around it has nothing to break.
                 if latex::has_bare_row_break(latex) {
                     *latex = format!("\\begin{{aligned}} {latex} \\end{{aligned}}");
                 }

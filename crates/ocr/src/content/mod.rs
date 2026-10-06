@@ -1,17 +1,20 @@
 //! The saved shape of a converted chapter: folder and file names, and the `chapter.json` and
-//! `page.json` files that index it. Everything that reads or writes `content/` goes through here.
+//! `page.json` files that index it. The converter and the reader both build on it, and it uses
+//! neither.
 
 mod conversion;
+mod figure_image;
 mod index;
 mod piece;
 
 use std::path::PathBuf;
 
-pub use crate::figure::{FigureImage, ImageShows, PageBox};
 pub use conversion::{
-    CallRecord, CallStep, Checks, Conversion, MathCheck, Route, RouteReason, WholePageFigure,
-    WordMatch,
+    CallRecord, CallStep, Checks, Conversion, MathCheck, PageCategories, Route, RouteReason,
+    WholePageFigure, WordMatch,
 };
+pub use figure_image::{FigureImage, ImageShows, PageBox};
+pub(crate) use figure_image::{MIN_FIGURE_SIDE, figure_image_file_name};
 pub use index::{ChapterIndex, PageIndex};
 pub use piece::{Cite, CiteKind, PieceDetail, PieceEntry, Relationship, RelationshipKind, Symbol};
 
@@ -20,7 +23,6 @@ pub const FORMAT_VERSION: u32 = 1;
 
 const CHAPTER_FILE_PATTERN: &str = "chapter-<number>-<name>.pdf";
 
-/// Why a name could not be turned into a folder, or an index file could not be read or written.
 #[derive(thiserror::Error, Debug)]
 pub enum ContentError {
     #[error(
@@ -53,7 +55,6 @@ pub enum ContentError {
     },
 }
 
-/// The chapter number and name a chapter file's name carries.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChapterFileName {
     pub number: u32,
@@ -62,9 +63,6 @@ pub struct ChapterFileName {
 
 /// Reads `chapter-<number>-<name>.pdf`: the number is all digits and the name has at least one
 /// word. The name is the words between the hyphens, each with a capital letter.
-///
-/// # Errors
-/// - [`ContentError::BadFileName`] for any other name
 pub fn parse_chapter_file_name(file_name: &str) -> Result<ChapterFileName, ContentError> {
     let bad_name = || ContentError::BadFileName {
         name: file_name.to_owned(),
@@ -102,9 +100,6 @@ fn capitalise(word: &str) -> String {
 
 /// The folder a book's chapters live in: the title in lower case, every run of characters that
 /// are not letters or digits turned into one `-`, and no `-` at either end.
-///
-/// # Errors
-/// - [`ContentError::EmptyBookFolderName`] if the title has no letters or digits
 pub fn book_folder_name(book_title: &str) -> Result<String, ContentError> {
     let mut folder = String::new();
     for character in book_title.to_lowercase().chars() {
@@ -125,12 +120,11 @@ pub fn book_folder_name(book_title: &str) -> Result<String, ContentError> {
     Ok(folder)
 }
 
-/// The folder of one chapter, such as `chapter-7`.
 pub fn chapter_folder_name(chapter_number: u32) -> String {
     format!("chapter-{chapter_number}")
 }
 
-/// The folder of one finished page, such as `page-num-3`. Positions start at 1.
+/// Page positions start at 1.
 pub fn page_folder_name(page_position: u32) -> String {
     format!("page-num-{page_position}")
 }
@@ -140,7 +134,6 @@ pub fn partial_page_folder_name(page_position: u32) -> String {
     format!("page-num-{page_position}.partial")
 }
 
-/// True for the name of a folder a page was being built in, whatever its position.
 pub fn is_partial_page_folder_name(folder_name: &str) -> bool {
     folder_name
         .strip_prefix("page-num-")
@@ -154,7 +147,6 @@ pub const CHAPTER_INDEX_FILE: &str = "chapter.json";
 pub const PAGE_INDEX_FILE: &str = "page.json";
 /// The one page cut out of the chapter PDF.
 pub const PAGE_PDF_FILE: &str = "page.pdf";
-/// A picture of the whole page.
 pub const PAGE_IMAGE_FILE: &str = "page.png";
 /// The page's text as Poppler read it, saved unchanged. It can hold misread words.
 pub const TEXT_LAYER_FILE: &str = "text-layer.txt";

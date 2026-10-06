@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use ocr::jev::{Jev, JevError, MathPlacement};
+use ocr::convert::services::{Jev, JevError, MathPlacement};
 
 const RUN_COMMAND: &str = "set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p ocr --test integration -- --ignored jev::";
 

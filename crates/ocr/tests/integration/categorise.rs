@@ -4,7 +4,8 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use ocr::categorise::{PageCategories, categorise_page};
+use ocr::content::PageCategories;
+use ocr::convert::services::categorise_page;
 use tokio::time::timeout;
 
 const PAGE_TIMEOUT: Duration = Duration::from_secs(120);

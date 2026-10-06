@@ -1,4 +1,5 @@
-//! Thin wrappers over the Poppler command line tools, which do all the PDF work.
+//! Runs the Poppler command line tools, which do all the PDF work, and turns their failures
+//! into errors.
 
 use std::path::{Path, PathBuf};
 use std::process::{ExitStatus, Output, Stdio};
@@ -6,8 +7,8 @@ use std::time::Duration;
 
 use tokio::process::Command;
 
-use crate::figure::PageBox;
-use crate::jev::JEV_API_KEY_VARIABLE;
+use super::services::JEV_API_KEY_VARIABLE;
+use crate::content::PageBox;
 
 const TOOL_TIMEOUT: Duration = Duration::from_secs(60);
 /// The resolution of `page.png`.
@@ -20,7 +21,6 @@ const FIGURE_DPI: u32 = 200;
 // larger than the saved picture, because bold letters in math only show at that sharpness.
 const MODEL_IMAGE_LONG_SIDE: &str = "1568";
 
-/// Why a Poppler tool failed.
 #[derive(thiserror::Error, Debug)]
 pub enum PopplerError {
     #[error("could not start {tool}; install Poppler (for example `brew install poppler`)")]
@@ -48,8 +48,8 @@ pub enum PopplerError {
     NoPageSize { file: PathBuf },
 }
 
-/// The path to hand a tool as an argument. A relative path that starts with `-` would be read as
-/// an option, so a relative path gets `./` in front. An absolute path cannot start with `-`.
+/// A relative path that starts with `-` would be read as an option, so a relative path gets `./`
+/// in front. An absolute path cannot start with `-`.
 fn tool_path(path: &Path) -> PathBuf {
     if path.is_relative() {
         Path::new(".").join(path)
@@ -68,6 +68,8 @@ async fn run(
         .args(arguments)
         .stdin(Stdio::null())
         // The tools have no use for the Jev API key, so they never get it.
+        // SMELL: `claude` is kept from the key by a line of its own elsewhere. A new kind of child
+        // process gets the key unless someone remembers to write a third.
         .env_remove(JEV_API_KEY_VARIABLE)
         .kill_on_drop(true);
     let output = tokio::time::timeout(TOOL_TIMEOUT, command.output())
@@ -86,7 +88,7 @@ async fn run(
     }
 }
 
-pub(crate) async fn page_count(pdf: &Path) -> Result<u32, PopplerError> {
+pub(super) async fn page_count(pdf: &Path) -> Result<u32, PopplerError> {
     let output = run("pdfinfo", pdf, &[tool_path(pdf).as_os_str()]).await?;
     String::from_utf8_lossy(&output.stdout)
         .lines()
@@ -98,7 +100,7 @@ pub(crate) async fn page_count(pdf: &Path) -> Result<u32, PopplerError> {
 }
 
 /// Writes page `position` (1 is the first) of `source` to `destination` as a one-page PDF.
-pub(crate) async fn cut_page(
+pub(super) async fn cut_page(
     source: &Path,
     position: u32,
     destination: &Path,
@@ -121,8 +123,8 @@ pub(crate) async fn cut_page(
     Ok(())
 }
 
-/// The text layer of a one-page PDF, laid out as printed, exactly as the tool prints it.
-pub(crate) async fn text_layer(page_pdf: &Path) -> Result<String, PopplerError> {
+/// The text layer of a one-page PDF, exactly as the tool prints it.
+pub(super) async fn text_layer(page_pdf: &Path) -> Result<String, PopplerError> {
     let output = run(
         "pdftotext",
         page_pdf,
@@ -136,25 +138,22 @@ pub(crate) async fn text_layer(page_pdf: &Path) -> Result<String, PopplerError> 
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-/// One line of the text layer and where it sits on the page.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct TextLine {
+pub(super) struct TextLine {
     /// In thousandths of the page: left and top rounded down, right and bottom rounded up.
     pub area: PageBox,
-    /// The line's words, joined by single spaces.
     pub text: String,
 }
 
 /// The lines of a page's text layer, with the page size the tool printed them against.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct PageText {
+pub(super) struct PageText {
     pub width: f64,
     pub height: f64,
     pub lines: Vec<TextLine>,
 }
 
-/// The line boxes of a one-page PDF's text layer.
-pub(crate) async fn text_lines(page_pdf: &Path) -> Result<PageText, PopplerError> {
+pub(super) async fn text_lines(page_pdf: &Path) -> Result<PageText, PopplerError> {
     let output = run(
         "pdftotext",
         page_pdf,
@@ -218,7 +217,6 @@ fn parse_page_text(output: &str, file: &Path) -> Result<PageText, PopplerError> 
     })
 }
 
-/// The text of the tag that starts with `opening`, up to its closing `>`.
 fn tag_after<'a>(text: &'a str, opening: &str) -> Option<&'a str> {
     let rest = &text[text.find(opening)? + opening.len()..];
     rest.split('>').next()
@@ -239,23 +237,20 @@ fn unescape(text: &str) -> String {
         .replace("&amp;", "&")
 }
 
-/// Draws a one-page PDF to the PNG file `destination` at [`IMAGE_DPI`] dots per inch. This is the
-/// picture that is kept.
-pub(crate) async fn render_image(page_pdf: &Path, destination: &Path) -> Result<(), PopplerError> {
+/// The picture that is kept, drawn at [`IMAGE_DPI`] dots per inch.
+pub(super) async fn render_image(page_pdf: &Path, destination: &Path) -> Result<(), PopplerError> {
     let dpi = IMAGE_DPI.to_string();
     draw_png(page_pdf, destination, &["-r", &dpi]).await
 }
 
-/// Draws a one-page PDF to the PNG file `destination`, scaled so its longest side is
-/// [`MODEL_IMAGE_LONG_SIDE`] pixels. This is the picture the models read.
-pub(crate) async fn render_model_image(
+/// The picture the models read, scaled so its longest side is [`MODEL_IMAGE_LONG_SIDE`] pixels.
+pub(super) async fn render_model_image(
     page_pdf: &Path,
     destination: &Path,
 ) -> Result<(), PopplerError> {
     draw_png(page_pdf, destination, &["-scale-to", MODEL_IMAGE_LONG_SIDE]).await
 }
 
-/// `options` say how big the picture is drawn and, for a figure, which part of the page.
 async fn draw_png(
     page_pdf: &Path,
     destination: &Path,
@@ -281,7 +276,10 @@ async fn draw_png(
 /// size in pixels at the sharper resolution. `region` must be inside the page and usable: the
 /// tool never reports a bad crop, so none may be passed. The tool draws the whole page when the
 /// start is beyond the page, and everything up to the page edge when the width or height is 0.
-pub(crate) async fn render_region(
+// SMELL: that a rectangle is usable is a rule its callers have to remember to check. Nothing in
+// the type of `region` says it was checked, and the same holds where a figure's rectangle is
+// refined.
+pub(super) async fn render_region(
     page_pdf: &Path,
     picture_size: (u32, u32),
     region: PageBox,

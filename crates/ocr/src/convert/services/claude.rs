@@ -1,5 +1,5 @@
-//! The one place a headless `claude -p` process is started, so every model call is locked down
-//! the same way and every caller gets the same errors and usage figures.
+//! The one place the `claude` command is started to answer a single question, so every model call
+//! is locked down the same way and every caller gets the same errors and usage figures.
 
 use std::path::{Path, PathBuf};
 use std::process::{ExitStatus, Output, Stdio};
@@ -10,7 +10,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 use tokio::process::Command;
 
-use crate::jev::JEV_API_KEY_VARIABLE;
+use super::jev::JEV_API_KEY_VARIABLE;
 
 const API_KEY_VARIABLE: &str = "ANTHROPIC_API_KEY";
 
@@ -33,8 +33,7 @@ const SESSION_VARIABLES: [&str; 13] = [
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS",
 ];
 
-/// What one call to `claude` is asked to do.
-pub(crate) struct ClaudeCall<'a> {
+pub(super) struct ClaudeCall<'a> {
     pub model: &'a str,
     pub effort: Option<&'a str>,
     pub system_prompt: &'a str,
@@ -50,14 +49,12 @@ pub(crate) struct ClaudeCall<'a> {
     pub timeout: Duration,
 }
 
-/// A typed reply together with what the call cost.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Answer<T> {
     pub value: T,
     pub usage: CallUsage,
 }
 
-/// What one `claude` call used.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CallUsage {
     /// The model that answered when `claude` names exactly one, otherwise the one asked for.
@@ -68,7 +65,6 @@ pub struct CallUsage {
     pub seconds: f64,
 }
 
-/// Why a `claude` call failed.
 #[derive(thiserror::Error, Debug)]
 pub enum ClaudeError {
     #[error(
@@ -196,10 +192,8 @@ pub(crate) fn api_key_is_set() -> bool {
     std::env::var_os(API_KEY_VARIABLE).is_some_and(|value| !value.is_empty())
 }
 
-/// Runs `claude` once and reads its typed reply.
-///
 /// The model gets one tool, `Read`, confined to the folder the page file sits in.
-pub(crate) async fn run<T: DeserializeOwned>(
+pub(super) async fn run<T: DeserializeOwned>(
     call: &ClaudeCall<'_>,
 ) -> Result<Answer<T>, ClaudeError> {
     if api_key_is_set() {
@@ -233,7 +227,6 @@ pub(crate) async fn run<T: DeserializeOwned>(
     read_answer(&output, call.model, started.elapsed())
 }
 
-/// What the model is asked: which file or files to read, and what was wrong last time.
 fn user_prompt(
     call: &ClaudeCall<'_>,
     page_file: &Path,

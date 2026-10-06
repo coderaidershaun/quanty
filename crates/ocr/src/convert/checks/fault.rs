@@ -2,15 +2,14 @@
 
 use std::fmt;
 
-use crate::figure::MIN_FIGURE_SIDE;
-use crate::transcribe::{TranscribedPage, TranscribedPiece};
+use crate::content::MIN_FIGURE_SIDE;
+use crate::convert::reply::{TranscribedPage, TranscribedPiece};
 
-pub(crate) const MIN_FIGURE_EXPLANATION_WORDS: usize = 60;
-pub(crate) const ALIGNED_WITHOUT_ROW_BREAK: &str = "aligned with no row break";
+pub(super) const MIN_FIGURE_EXPLANATION_WORDS: usize = 60;
+pub(super) const ALIGNED_WITHOUT_ROW_BREAK: &str = "aligned with no row break";
 
-/// How a fault names a piece: its number, its kind, and its label or, with no label, its first
-/// six words. The second try is a fresh session that never saw the first reply, so a number
-/// alone would mean nothing to it.
+/// Names a piece by number, kind, and label or first six words. The second try is a fresh session
+/// that never saw the first reply, so a number alone would mean nothing to it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PieceRef {
     pub number: u32,
@@ -19,8 +18,7 @@ pub struct PieceRef {
 }
 
 impl PieceRef {
-    /// Names the piece at `index` of `page`.
-    pub(crate) fn of(page: &TranscribedPage, index: usize) -> Self {
+    pub(super) fn of(page: &TranscribedPage, index: usize) -> Self {
         let piece = &page.pieces[index];
         let (label, description): (Option<&str>, &str) = match piece {
             TranscribedPiece::Heading { text, .. } => (None, text),

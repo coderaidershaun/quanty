@@ -1,42 +1,32 @@
 //! Works out the rectangle to cut for a figure. The model's top and bottom edges cannot be trusted
-//! where body text sits next to a figure, but the page's text layer says where every line is.
-//!
-//! Each line is sorted as the figure's own, another piece's, or neither. The rectangle grows to
-//! take in the figure's own lines, then gets its padding, and is then trimmed above and below at
-//! the lines of other pieces. The padding goes on before the trim, because padding a trimmed
-//! rectangle would take the first line of the next paragraph straight back in.
+//! where body text sits next to a figure, but the page's text lines say where the text really is.
 
-use super::PageBox;
-use crate::checks::words;
-use crate::poppler::TextLine;
+use crate::content::PageBox;
+use crate::convert::checks::words;
+use crate::convert::poppler::TextLine;
 
 /// Words in a row that two texts must share before a line counts as copied from one of them.
-/// Single words and pairs recur between a figure and the paragraphs that discuss it; four in a
-/// row do not.
+/// Single words and pairs recur between a figure and its paragraphs; four in a row do not.
 const MIN_RUN: usize = 4;
 /// How far outside the model's rectangle, in thousandths of the page, one of the figure's own
-/// lines may be and still be taken in with nothing else checked. Tick values and axis titles sit
-/// within a text line or two of the plot. Farther out, a line above or below is taken in only when
-/// no line of another piece lies between it and the figure.
+/// lines may be and still be taken in unchecked. Tick values and axis titles sit within a line or
+/// two of the plot.
 const GROW_REACH: i32 = 30;
 /// How far a trimmed edge stays from the line it was trimmed at, in thousandths of the page.
 /// Printed letters reach about 2 outside the boxes the text layer gives them, and the narrowest
 /// gap measured between a figure and the text next to it is 20.
 const TRIM_MARGIN: i32 = 6;
 
-/// The rectangle to draw for a figure.
 pub(super) struct FigureCut {
     /// Padding included. Always a usable rectangle.
     pub area: PageBox,
     /// A line of another piece of the page is still wholly inside `area`.
     pub holds_body_text: bool,
-    /// Nothing on the page could be used to check the model's rectangle: none of the figure's own
-    /// lines was found at it, or the refined rectangle came out unusable. `area` is then the
-    /// model's rectangle with its padding, as given.
+    /// The model's rectangle could not be checked: none of the figure's own lines was found at it,
+    /// or the refined rectangle was unusable. `area` is then that rectangle with padding, as given.
     pub unchecked: bool,
 }
 
-/// What a line of the text layer belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Owner {
     /// The figure. A tied line matches another piece's text as well as it matches the figure's.
@@ -52,12 +42,9 @@ struct Classified {
     owner: Owner,
 }
 
-/// The rectangle to draw for a figure. `bounds` is the rectangle the model gave, which must
-/// already be usable.
-///
-/// `own` is every string the figure printed: its label and caption joined, its label, its caption
-/// and its printed text. `other` is every string the rest of the page copied from the page. The
-/// left and right edges only ever move outward.
+/// `bounds` is the rectangle the model gave, which must already be usable; its left and right
+/// edges only ever move outward. `own` is every string the figure printed, and `other` every
+/// string the rest of the page copied from the page.
 // SMELL: `own` and `other` have the same type, so a call that swaps them compiles and gets every
 // decision the wrong way round. One type holding both lists would make the swap impossible.
 pub(super) fn cut_rectangle(
@@ -76,6 +63,8 @@ pub(super) fn cut_rectangle(
         })
         .collect();
 
+    // Padding goes on before the trim: padding a trimmed rectangle would take the first line of
+    // the next paragraph straight back in.
     let refined = trimmed(grown(bounds, &lines).padded(), &lines)
         .filter(|refined| refined.problem().is_none());
     let unchecked = refined.is_none();
@@ -127,8 +116,7 @@ fn owner_of(line: &[String], own: &[Vec<String>], other: &[Vec<String>]) -> Owne
     }
 }
 
-/// The length of the longest run of consecutive words of `line` that are also consecutive in
-/// `string`.
+/// The most consecutive words of `line` that also appear consecutively in `string`.
 fn longest_run(line: &[String], string: &[String]) -> usize {
     let mut best = 0;
     let mut previous = vec![0; string.len() + 1];
@@ -145,13 +133,10 @@ fn longest_run(line: &[String], string: &[String]) -> usize {
     best
 }
 
-/// `bounds` grown to take in the figure's own lines. A line within [`GROW_REACH`] of `bounds` is
-/// always taken in. A line farther out is taken in only when it lies wholly above or below
-/// `bounds`, overlaps it sideways, and has no line of another piece between it and the figure:
-/// the model sometimes leaves out a label line far above a frame, and there the nearest line of
-/// another piece is the natural limit. Beside the figure there is no such limit, so only the
-/// reach applies. Every line is measured against the model's rectangle, so taking one line in
-/// never brings the next one into reach.
+/// One of the figure's own lines beyond [`GROW_REACH`] is taken in only when it is above or
+/// below `bounds` with no line of another piece in between, because the model sometimes leaves
+/// out a label line far above a frame. Every line is measured against the model's rectangle, so
+/// taking one line in never brings the next one into reach.
 fn grown(bounds: PageBox, lines: &[Classified]) -> PageBox {
     let reach = PageBox {
         left: bounds.left - GROW_REACH,
@@ -196,7 +181,6 @@ fn grown(bounds: PageBox, lines: &[Classified]) -> PageBox {
     area
 }
 
-/// The figure's own lines that touch `rectangle`, each with whether it is tied.
 fn figure_lines_touching(rectangle: PageBox, lines: &[Classified]) -> Vec<(PageBox, bool)> {
     lines
         .iter()
@@ -209,7 +193,6 @@ fn figure_lines_touching(rectangle: PageBox, lines: &[Classified]) -> Vec<(PageB
         .collect()
 }
 
-/// Where the lines that are not tied sit. Each line comes paired with whether it is tied.
 fn untied_areas(lines: &[(PageBox, bool)]) -> Vec<PageBox> {
     lines
         .iter()
@@ -243,8 +226,8 @@ fn trimmed(padded: PageBox, lines: &[Classified]) -> Option<PageBox> {
 
 /// From the top of the highest to the bottom of the lowest of the figure's own lines that touch
 /// `padded` and count. A tied line counts only when no neighbour lies between it and the nearest
-/// line that is not tied, because table cells and the short last lines of paragraphs often read
-/// exactly like a legend entry. With no line that is not tied, tied lines count like any other.
+/// untied line, because table cells and the short last lines of paragraphs often read exactly
+/// like a legend entry; with no untied line, tied lines count like any other.
 fn figure_span(
     padded: PageBox,
     lines: &[Classified],

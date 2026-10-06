@@ -1,13 +1,28 @@
 //! The four outside calls a page needs, behind one trait so the rest of the run can be tested
-//! with stub answers. The live version retries only failures that are worth retrying.
+//! with stub answers. The live version is the only place a failed call is tried again.
+
+mod categorise;
+mod claude;
+mod jev;
+mod schema;
+mod transcribe;
 
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::categorise::{PageCategories, categorise_page_with_usage};
-use crate::claude::{Answer, ClaudeError};
-use crate::jev::{Jev, JevError, MathPlacement};
-use crate::transcribe::{CopiedPage, TranscribedPage, copy_page, transcribe_page_with_picture};
+use super::reply::{CopiedPage, TranscribedPage};
+use crate::content::PageCategories;
+
+use categorise::categorise_page_with_usage;
+use transcribe::{copy_page, transcribe_page_with_picture};
+
+pub use categorise::categorise_page;
+pub use claude::{Answer, CallUsage, ClaudeError};
+pub use jev::{Jev, JevError, MathPlacement};
+pub use transcribe::transcribe_page;
+
+pub(super) use claude::api_key_is_set;
+pub(super) use jev::JEV_API_KEY_VARIABLE;
 
 const CLAUDE_RETRY_DELAYS: [Duration; 2] = [Duration::from_secs(30), Duration::from_secs(120)];
 const JEV_RETRY_DELAY: Duration = Duration::from_secs(2);
@@ -19,7 +34,6 @@ const KEY_PROBE_TEXT: &str = "a + b = c";
 pub struct PageSource {
     /// 1 for the first page of the chapter.
     pub position: u32,
-    /// The one-page PDF.
     pub pdf: PathBuf,
     /// A sharp picture of the page for the models to read. It is deleted when the page is saved.
     pub image: PathBuf,
@@ -27,7 +41,6 @@ pub struct PageSource {
     pub text_layer: String,
 }
 
-/// Why an outside call failed.
 #[derive(thiserror::Error, Debug)]
 pub enum ServiceError {
     #[error(transparent)]
@@ -37,8 +50,7 @@ pub enum ServiceError {
     Jev(#[from] JevError),
 }
 
-/// The paid calls made for a page. Each one means "ask until there is an answer or give up":
-/// retrying is the implementation's job, not the caller's.
+/// The paid calls made for a page. Each one retries inside the implementation, so callers do not.
 pub trait PageServices {
     /// Which kinds of content the page holds.
     fn tag(
@@ -72,8 +84,7 @@ pub struct LiveServices {
 }
 
 impl LiveServices {
-    /// Builds the services and sends Jev one short line, so a rejected key stops the run before
-    /// any page is started.
+    /// Sends Jev one short line, so a rejected key stops the run before any page is started.
     ///
     /// # Errors
     /// - [`ServiceError::Jev`] if `CONVERTER_JEV_API_KEY` is not set or Jev refuses the key
@@ -85,6 +96,8 @@ impl LiveServices {
         Ok(services)
     }
 
+    // SMELL: every failure is tried once more, a refused key included, so a bad key costs a second
+    // request before the run stops. Why the first try failed is dropped.
     async fn jev_contains_math(&self, text: &str) -> Result<Option<MathPlacement>, JevError> {
         match self.jev.contains_math(text).await {
             Ok(placement) => Ok(placement),

@@ -5,12 +5,9 @@ use schemars::JsonSchema;
 use schemars::generate::SchemaSettings;
 use serde_json::{Map, Value};
 
-/// The schema `claude` is given for a reply of type `T`.
-///
 /// The model must decide every field, so each is required and an optional value is a field that
-/// may be null. Only forms the `claude` command accepts are used: no `oneOf`, no `$ref`, no
-/// `format`.
-pub(crate) fn reply_schema<T: JsonSchema>() -> Value {
+/// may be null. There is no `oneOf`, no `$ref` and no `format`.
+pub(super) fn reply_schema<T: JsonSchema>() -> Value {
     let mut settings = SchemaSettings::draft07();
     settings.inline_subschemas = true;
     let mut schema = settings
@@ -82,7 +79,7 @@ fn kind_first(properties: Map<String, Value>) -> Map<String, Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transcribe::{CopiedPage, TranscribedPage};
+    use crate::convert::reply::{CopiedPage, TranscribedPage};
 
     fn walk(value: &Value, visit: &mut impl FnMut(&Map<String, Value>)) {
         match value {

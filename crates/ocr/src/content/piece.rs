@@ -4,9 +4,8 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::figure::{FigureImage, PageBox};
+use super::{FigureImage, PageBox};
 
-/// One piece of a page: its place in reading order, its file, and what kind it is.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PieceEntry {
     /// 1, 2, 3 and so on, with no gaps.
@@ -16,7 +15,6 @@ pub struct PieceEntry {
     pub detail: PieceDetail,
 }
 
-/// The kind of a piece and the fields saved for that kind.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "kind",
@@ -51,9 +49,8 @@ pub enum PieceDetail {
         /// Every separate piece of text printed inside the figure.
         #[serde(default)]
         printed_text: Vec<String>,
-        /// The rectangle of the page picture the model gave for the figure, as given, before any
-        /// padding. It is kept even when it was unusable. Trust it only when the figure's image
-        /// shows the figure.
+        /// The rectangle the model gave for the figure, before any padding, kept even when it
+        /// was unusable. Trust it only when the figure's image shows the figure.
         #[serde(default)]
         bounds: Option<PageBox>,
         /// The picture saved for the figure: its own, or the whole page when it could not be cut.
@@ -98,7 +95,7 @@ impl PieceDetail {
 }
 
 impl PieceEntry {
-    /// Builds the entry for piece `number` with its file name, such as `03-formula.tex`.
+    /// The file name is built from the number and kind, such as `03-formula.tex`.
     pub fn new(number: u32, detail: PieceDetail) -> Self {
         let file = format!(
             "{number:02}-{}.{}",
@@ -129,8 +126,8 @@ pub struct Symbol {
 
 /// A printed label a piece points at: a figure, a table, an equation or a footnote marker.
 ///
-/// The label is kept as cited. Finding the cited piece, on this page or another, is a lookup
-/// for whoever needs it.
+/// The label is kept as printed. Nothing in `ocr` looks up the piece it points at, on this page
+/// or another.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Cite {
     pub kind: CiteKind,
@@ -156,7 +153,6 @@ pub struct Relationship {
     pub to: u32,
 }
 
-/// What a [`Relationship`] says about its two ends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RelationshipKind {

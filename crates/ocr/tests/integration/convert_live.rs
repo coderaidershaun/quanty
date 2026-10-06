@@ -17,9 +17,6 @@ fn require_prod_api() {
     );
 }
 
-/// The routing rule, on whatever the live run saved. A page with no reason to go to Sonnet was
-/// copied by Haiku with no Sonnet call, and a page with any reason was written by Sonnet.
-///
 /// Which way the plain text page goes is not fixed on a live run: the tagger sometimes takes its
 /// shaded corner block for a picture, and that rightly sends it to Sonnet.
 fn assert_route_follows_its_reasons(position: u32, page: &serde_json::Value) {
@@ -48,9 +45,8 @@ fn assert_route_follows_its_reasons(position: u32, page: &serde_json::Value) {
     }
 }
 
-/// What the run gave for each figure, so a reader of the live output can judge the cut. Nothing
-/// is asserted about it: a live rectangle varies from run to run. It is printed before anything
-/// about the chapter is asserted, so a run that fails on a figure still shows what it gave.
+/// Nothing is asserted here because a live rectangle varies from run to run. It is printed first
+/// so a run that fails on a figure still shows what it gave.
 fn print_figures(chapter: &std::path::Path) {
     for piece in read_chapter(chapter).unwrap().pieces {
         if let PieceDetail::Figure {

@@ -1,5 +1,4 @@
-//! Checks on the pictures cut for figures in the stubbed chapter run. There are no tests in this
-//! file.
+//! Checks on the pictures cut for figures in the stubbed chapter run; it holds no tests.
 
 use std::path::Path;
 
@@ -30,9 +29,7 @@ fn sides(rectangle: &serde_json::Value) -> [i64; 4] {
     ["left", "top", "right", "bottom"].map(|side| rectangle[side].as_i64().unwrap())
 }
 
-/// Each figure of `CUT_ROWS` saved its rectangle as given, was drawn from the rectangle wanted
-/// (two thousandths either way, because Poppler's boxes are floats) with no body text left in it,
-/// and its picture has the pixel size that rectangle makes at 200 dpi.
+/// The cut may be two thousandths off either way, because Poppler's boxes are floats.
 pub fn assert_figures_cut(chapter: &Path) {
     for (position, index, given, wanted) in CUT_ROWS {
         let folder = page_folder(chapter, position);
@@ -125,7 +122,6 @@ pub fn assert_hard_fallbacks(chapter: &Path, stubs: &StubServices) {
     assert!(corrections[1].as_deref().unwrap().contains("bounds"));
 }
 
-/// `read_chapter` says which file is each figure's picture and what it shows.
 pub fn assert_figure_pictures_read_back(chapter: &Path) {
     let read = read_chapter(chapter).unwrap();
     let picture = |page, number| {

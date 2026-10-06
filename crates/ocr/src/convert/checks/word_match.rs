@@ -5,10 +5,8 @@ use std::collections::HashMap;
 
 use super::clean::remove_invisible;
 use crate::content::WordMatch;
-use crate::transcribe::{TranscribedPage, TranscribedPiece};
+use crate::convert::reply::{TranscribedPage, TranscribedPiece};
 
-/// The lowercase words of `text`: invisible characters removed, every character that is not a
-/// letter or a digit treated as a space.
 pub(crate) fn words(text: &str) -> Vec<String> {
     remove_invisible(text)
         .to_lowercase()
@@ -47,7 +45,6 @@ pub(crate) fn piece_word_count(page: &TranscribedPage) -> usize {
         .sum()
 }
 
-/// Every string the model copied from the page, as opposed to wrote in its own words.
 fn copied_strings(page: &TranscribedPage) -> Vec<&str> {
     let mut copied: Vec<&str> = Vec::new();
     copied.extend(page.printed_page_number.as_deref());
@@ -56,8 +53,7 @@ fn copied_strings(page: &TranscribedPage) -> Vec<&str> {
     copied
 }
 
-/// The strings one piece copied from the page. What the model wrote in its own words, such as a
-/// figure's explanation, is left out.
+/// The strings one piece copied from the page, not what the model wrote in its own words.
 pub(crate) fn piece_strings(piece: &TranscribedPiece) -> Vec<&str> {
     let mut copied: Vec<&str> = Vec::new();
     match piece {

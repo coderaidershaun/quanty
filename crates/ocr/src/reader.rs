@@ -9,7 +9,6 @@ use crate::content::{
     PAGE_INDEX_FILE, PageIndex, PieceDetail, PieceEntry, RelationshipKind, page_folder_name,
 };
 
-/// Why a chapter could not be read back.
 #[derive(thiserror::Error, Debug)]
 pub enum ReadChapterError {
     #[error(transparent)]
@@ -49,7 +48,6 @@ pub struct PieceId {
     pub number: u32,
 }
 
-/// A heading a piece sits under.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SectionHeading {
     pub rank: u8,
@@ -65,7 +63,6 @@ pub struct PieceRelationship {
     pub to: PieceId,
 }
 
-/// Where the picture saved for a figure is, and what it shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FigurePicture {
     /// Built from the folder the caller passed, so it is absolute when that was. The file is not
@@ -75,7 +72,6 @@ pub struct FigurePicture {
     pub shows: ImageShows,
 }
 
-/// One piece of a chapter.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChapterPiece {
     pub id: PieceId,
@@ -87,10 +83,9 @@ pub struct ChapterPiece {
     pub file: PathBuf,
     /// Where `page.png` of its page is, or would be.
     pub page_image: PathBuf,
-    /// The picture of a figure. `None` for every other kind. A figure whose `page.json` names no
-    /// image, such as one converted before figures were cut, gets the whole page.
+    /// `None` unless the piece is a figure. A figure whose `page.json` names no image, such as
+    /// one converted before figures were cut, gets the whole page.
     pub figure_image: Option<FigurePicture>,
-    /// Its kind and that kind's saved fields, including citations and a figure's printed text.
     pub detail: PieceDetail,
     /// True only on the first text piece of a page that begins partway through a sentence.
     ///
@@ -99,15 +94,13 @@ pub struct ChapterPiece {
     pub starts_mid_sentence: bool,
     /// True only on the last text piece of a page that ends partway through a sentence.
     ///
-    /// A page that ends with "… we obtain" and is followed by a page that begins with the
-    /// formula sets only this flag. The text and the formula are linked by an `introduces`
-    /// relationship instead.
+    /// A page that ends with "… we obtain" before a page that opens with the formula sets only
+    /// this flag. An `introduces` relationship links the two instead.
     pub ends_mid_sentence: bool,
-    /// Every relationship this piece is one end of.
+    /// Each relationship is listed on both of the pieces it joins.
     pub relationships: Vec<PieceRelationship>,
 }
 
-/// A whole chapter, read back.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Chapter {
     pub index: ChapterIndex,
@@ -116,7 +109,6 @@ pub struct Chapter {
 }
 
 impl Chapter {
-    /// The piece with this id, such as the text piece an `introduces` relationship starts from.
     pub fn piece(&self, id: PieceId) -> Option<&ChapterPiece> {
         self.pieces.iter().find(|piece| piece.id == id)
     }
@@ -128,13 +120,6 @@ impl Chapter {
 /// hand can be read too. A formula printed first on its page has its lead-in on the page before;
 /// that `introduces` relationship is worked out here, because saved relationships stay on one
 /// page.
-///
-/// # Errors
-/// - [`ReadChapterError::Content`] if `chapter.json` or a `page.json` is missing or unreadable
-/// - [`ReadChapterError::NotFinished`] if the chapter was not finished
-/// - [`ReadChapterError::FormatVersion`] if it was saved at another format version
-/// - [`ReadChapterError::PieceFile`] if a piece file is missing or unreadable
-/// - [`ReadChapterError::UnknownPiece`] if a relationship names a piece its page does not have
 pub fn read_chapter(chapter_folder: &Path) -> Result<Chapter, ReadChapterError> {
     let index = ChapterIndex::read(chapter_folder)?;
     if !index.finished {
@@ -203,7 +188,6 @@ fn figure_picture(page_folder: &Path, detail: &PieceDetail) -> Option<FigurePict
     })
 }
 
-/// Puts each relationship on both of the pieces it joins.
 fn attach_relationships(pieces: &mut [ChapterPiece], relationships: Vec<PieceRelationship>) {
     let positions: HashMap<PieceId, usize> = pieces
         .iter()

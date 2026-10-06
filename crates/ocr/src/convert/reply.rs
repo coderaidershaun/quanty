@@ -1,28 +1,9 @@
-//! The two model replies for a page, the schemas that force their shape, and the two calls that
-//! ask for them: a plain copy by Haiku, or a full transcription by Sonnet.
-
-use std::path::Path;
-use std::time::Duration;
+//! The types of the two model replies for a page, and the wording their schemas are made from.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::claude::{self, Answer, ClaudeCall, ClaudeError};
-use crate::content::Symbol;
-use crate::figure::PageBox;
-use crate::schema::reply_schema;
-
-const COPY_MODEL: &str = "haiku";
-const COPY_INSTRUCTION: &str = "Copy the text of the page in the file";
-const COPY_PROMPT: &str = include_str!("prompts/copy.md");
-
-// Pinned: the prompts were tuned against this model.
-const TRANSCRIBE_MODEL: &str = "claude-sonnet-5-5";
-const TRANSCRIBE_EFFORT: &str = "medium";
-const TRANSCRIBE_INSTRUCTION: &str = "Transcribe the page in the file";
-const TRANSCRIBE_PROMPT: &str = include_str!("prompts/transcribe.md");
-
-const REPLY_TIMEOUT: Duration = Duration::from_secs(180);
+use crate::content::{PageBox, Symbol};
 
 // The wording both replies share, written once so the copy and the transcription can never
 // describe the same field differently. The model reads these, so changing one changes the answers.
@@ -314,7 +295,6 @@ pub enum CopiedPiece {
 }
 
 impl TranscribedPiece {
-    /// The piece's place in reading order on its page, whatever its kind.
     pub fn number(&self) -> u32 {
         match self {
             Self::Heading { number, .. }
@@ -327,6 +307,8 @@ impl TranscribedPiece {
     }
 
     /// The kind as it is spelled in a reply and in `page.json`.
+    // SMELL: the six names are spelled again for the saved pieces, and nothing makes the two
+    // lists agree. A name changed in one would give a piece two different kind names.
     pub fn kind_name(&self) -> &'static str {
         match self {
             Self::Heading { .. } => "heading",
@@ -340,8 +322,8 @@ impl TranscribedPiece {
 }
 
 impl From<CopiedPage> for TranscribedPage {
-    /// Drops the stronger-model flag. A copied page has no `discusses` links because it has no
-    /// figure or table.
+    /// The stronger-model flag is dropped, so read it first. A copied page has no figure or
+    /// table, so it has no `discusses` links.
     fn from(copy: CopiedPage) -> Self {
         let pieces = copy
             .pieces
@@ -389,60 +371,4 @@ impl From<CopiedPage> for TranscribedPage {
             ends_mid_sentence: copy.ends_mid_sentence,
         }
     }
-}
-
-/// Asks Haiku to copy the text of a page, or to say the page needs the stronger model. One
-/// attempt, no retry.
-pub(crate) async fn copy_page(page_file: &Path) -> Result<Answer<CopiedPage>, ClaudeError> {
-    claude::run(&ClaudeCall {
-        model: COPY_MODEL,
-        effort: None,
-        system_prompt: COPY_PROMPT,
-        instruction: COPY_INSTRUCTION,
-        correction: None,
-        schema: &reply_schema::<CopiedPage>(),
-        file: page_file,
-        also_read: None,
-        timeout: REPLY_TIMEOUT,
-    })
-    .await
-}
-
-/// Asks Sonnet to break the page in `page_file` into its pieces. One attempt, no retry.
-///
-/// `page_file` is a one-page PDF or an image of a page. `correction` says why the last reply was
-/// rejected, for a second try; it has no closing full stop.
-///
-/// # Errors
-/// The errors of one `claude` call: [`ClaudeError::ApiKeySet`], [`ClaudeError::FileUnreadable`],
-/// [`ClaudeError::Spawn`], [`ClaudeError::TimedOut`], [`ClaudeError::Exited`],
-/// [`ClaudeError::UnreadableResponse`], [`ClaudeError::RunFailed`] and
-/// [`ClaudeError::UnexpectedReply`].
-pub async fn transcribe_page(
-    page_file: &Path,
-    correction: Option<&str>,
-) -> Result<Answer<TranscribedPage>, ClaudeError> {
-    transcribe_page_with_picture(page_file, None, correction).await
-}
-
-/// Like [`transcribe_page`], and the model also reads `picture`, a sharper image of the same
-/// page. The PDF's text layer anchors letters and indices; the picture shows bold weight and
-/// small subscripts. `picture` must sit in the same folder as `page_file`.
-pub(crate) async fn transcribe_page_with_picture(
-    page_file: &Path,
-    picture: Option<&Path>,
-    correction: Option<&str>,
-) -> Result<Answer<TranscribedPage>, ClaudeError> {
-    claude::run(&ClaudeCall {
-        model: TRANSCRIBE_MODEL,
-        effort: Some(TRANSCRIBE_EFFORT),
-        system_prompt: TRANSCRIBE_PROMPT,
-        instruction: TRANSCRIBE_INSTRUCTION,
-        correction,
-        schema: &reply_schema::<TranscribedPage>(),
-        file: page_file,
-        also_read: picture,
-        timeout: REPLY_TIMEOUT,
-    })
-    .await
 }

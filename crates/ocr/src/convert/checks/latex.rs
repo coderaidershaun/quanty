@@ -1,9 +1,5 @@
-//! A small reader for LaTeX that finds the mistakes a model makes when it writes math inside
-//! JSON: lost backslashes, unbalanced braces, and signs that would cut a formula short.
-//!
-//! Text is read left to right and a backslash together with the character after it is one unit.
-//! So `\{` is an escaped brace, `\\` is a row break, and `\\{` is a row break followed by an
-//! opening brace.
+//! Finds the mistakes a model makes when it writes LaTeX inside JSON: lost backslashes,
+//! unbalanced braces, and signs that would cut a formula short.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Kind<'a> {
@@ -21,6 +17,8 @@ struct Unit<'a> {
     kind: Kind<'a>,
 }
 
+// A backslash and the character after it read as one unit, so `\\{` is a row break followed by an
+// opening brace, not an escaped brace.
 fn units(text: &str) -> Vec<Unit<'_>> {
     let mut units = Vec::new();
     let mut characters = text.char_indices().peekable();
@@ -69,9 +67,8 @@ fn environment_name<'a>(
     Some(&text[open.end..close.start])
 }
 
-/// The text inside each `\( … \)` of `text`, or what is wrong with how the spans are opened and
-/// closed.
-pub(crate) fn math_spans(text: &str) -> Result<Vec<&str>, &'static str> {
+/// The text inside each `\( … \)`, or what is wrong with how the spans open and close.
+pub(super) fn math_spans(text: &str) -> Result<Vec<&str>, &'static str> {
     let mut spans = Vec::new();
     let mut open_at = None;
     for unit in units(text) {
@@ -93,7 +90,7 @@ pub(crate) fn math_spans(text: &str) -> Result<Vec<&str>, &'static str> {
 }
 
 /// What is unbalanced in `latex`: braces, `\begin` and `\end` by name, `\left` and `\right`.
-pub(crate) fn unbalanced(latex: &str) -> Option<&'static str> {
+pub(super) fn unbalanced(latex: &str) -> Option<&'static str> {
     let units = units(latex);
     let mut depth = 0_i32;
     let mut open_environments = Vec::new();
@@ -136,9 +133,8 @@ pub(crate) fn unbalanced(latex: &str) -> Option<&'static str> {
     None
 }
 
-/// A `%` or `$` with no backslash before it. In LaTeX a bare `%` starts a comment and a bare `$`
-/// opens or closes math.
-pub(crate) fn bare_percent_or_dollar(latex: &str) -> Option<&'static str> {
+/// In LaTeX a bare `%` starts a comment and a bare `$` opens or closes math.
+pub(super) fn bare_percent_or_dollar(latex: &str) -> Option<&'static str> {
     units(latex).iter().find_map(|unit| match unit.kind {
         Kind::Plain('%') => {
             Some("it holds a % with no backslash before it; a printed percent sign is written \\%")
@@ -161,9 +157,8 @@ const WRAPPING_ENVIRONMENTS: [&str; 8] = [
     "multline*",
 ];
 
-/// Why a formula's LaTeX would not typeset as the formula it is: it is wrapped in delimiters or
-/// an outer environment, or carries its own label.
-pub(crate) fn wrapped_or_labelled(latex: &str) -> Option<&'static str> {
+/// Why a formula's LaTeX would not typeset: it is wrapped, or carries its own label.
+pub(super) fn wrapped_or_labelled(latex: &str) -> Option<&'static str> {
     let latex = latex.trim_start();
     if latex.starts_with("\\(") {
         return Some("the LaTeX is wrapped in \\( and \\); write the LaTeX alone");
@@ -189,8 +184,7 @@ pub(crate) fn wrapped_or_labelled(latex: &str) -> Option<&'static str> {
         .then_some("the LaTeX holds a \\tag or \\label; the label belongs in the label field")
 }
 
-/// True when `latex` opens an `aligned` block and never writes a row break.
-pub(crate) fn aligned_without_row_break(latex: &str) -> bool {
+pub(super) fn aligned_without_row_break(latex: &str) -> bool {
     let units = units(latex);
     let opens_aligned = units.iter().enumerate().any(|(index, unit)| {
         unit.kind == Kind::Command("begin")
@@ -202,7 +196,7 @@ pub(crate) fn aligned_without_row_break(latex: &str) -> bool {
 /// Turns each row break followed by a line break into a row break followed by a space, except
 /// where a letter comes next: a lost backslash before a command such as `\nu` looks the same, and
 /// must still reach the reply check.
-pub(crate) fn mend_row_breaks(latex: &str) -> String {
+pub(super) fn mend_row_breaks(latex: &str) -> String {
     let mut mended = String::with_capacity(latex.len());
     let mut resume_at = 0;
     for unit in units(latex) {
@@ -228,7 +222,6 @@ pub(crate) fn mend_row_breaks(latex: &str) -> String {
     mended
 }
 
-/// Where the line break that follows `from` (after any spaces) ends, if there is one.
 fn line_break_end(text: &str, from: usize) -> Option<usize> {
     let after_spaces = text[from..].trim_start_matches(' ');
     let after_break = after_spaces
@@ -239,7 +232,7 @@ fn line_break_end(text: &str, from: usize) -> Option<usize> {
 
 /// True when `latex` has a row break outside any braces and any `\begin` environment. Inside
 /// braces one is fine (a stacked sum limit uses one).
-pub(crate) fn has_bare_row_break(latex: &str) -> bool {
+pub(super) fn has_bare_row_break(latex: &str) -> bool {
     let mut depth = 0_i32;
     let mut open_environments = 0_i32;
     let units = units(latex);

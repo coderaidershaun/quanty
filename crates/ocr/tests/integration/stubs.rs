@@ -5,13 +5,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use ocr::ChapterJob;
-use ocr::categorise::PageCategories;
-use ocr::claude::{Answer, CallUsage};
-use ocr::content::{PageBox, Symbol};
-use ocr::jev::{JevError, MathPlacement};
-use ocr::services::{PageServices, PageSource, ServiceError};
-use ocr::transcribe::{
+use ocr::content::{PageBox, PageCategories, Symbol};
+use ocr::convert::reply::{
     CitedKind, CitedLabel, CopiedPage, CopiedPiece, Discussion, TranscribedPage, TranscribedPiece,
+};
+use ocr::convert::services::{
+    Answer, CallUsage, JevError, MathPlacement, PageServices, PageSource, ServiceError,
 };
 
 /// The canned figure's rectangle. Its left edge is 0, so the padding is clamped at the page edge;
@@ -41,7 +40,6 @@ pub fn read_json(path: &Path) -> serde_json::Value {
     serde_json::from_str(&text).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
 }
 
-/// One call the run made through the services.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Call {
     Tag(u32),
@@ -62,7 +60,6 @@ impl Call {
     }
 }
 
-/// How the stub behaves page by page.
 #[derive(Clone, Copy)]
 pub enum Scenario {
     /// Each page of the sample chapter reaches a different branch of the run.
@@ -216,13 +213,11 @@ const UNUSABLE_BOUNDS: PageBox = PageBox {
     bottom: 500,
 };
 
-// A line printed on page 3 of the sample, and the first lines of the paragraph under the figure
-// on page 6. The canned text repeats them, so `ocr` can tell they are body text when it
-// works out where to cut a figure.
+// Lines really printed on pages 3 and 6. The canned text repeats them so `ocr` can tell they
+// are body text when it works out where to cut a figure.
 const PAGE_THREE_LINE: &str = "a trader depending on the types of strategies being executed";
 const PAGE_SIX_LINES: &str = "gamma, the potential profit when the underlying market moves. The risk is the theta, the money that will be lost through the passage of time";
 
-/// Adds a sentence the page really prints to the canned text piece (piece 4).
 fn add_sentence(mut page: TranscribedPage, sentence: &str) -> TranscribedPage {
     if let TranscribedPiece::Text { markdown, .. } = &mut page.pieces[3] {
         markdown.push(' ');
@@ -238,7 +233,6 @@ fn set_figure_bounds(mut page: TranscribedPage, bounds: PageBox) -> TranscribedP
     page
 }
 
-/// The canned page with an unbalanced brace in its formula.
 fn break_formula(mut page: TranscribedPage) -> TranscribedPage {
     if let TranscribedPiece::Formula { latex, .. } = &mut page.pieces[2] {
         *latex = "\\frac{a".to_owned();
@@ -246,7 +240,6 @@ fn break_formula(mut page: TranscribedPage) -> TranscribedPage {
     page
 }
 
-/// What the stub answers for each page of the sample chapter.
 fn sample_chapter_transcription(position: u32, is_second_try: bool) -> TranscribedPage {
     let canned = standard_transcription(position);
     let rectangle = |left, top, right, bottom| PageBox {

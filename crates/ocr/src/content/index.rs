@@ -25,8 +25,6 @@ pub struct ChapterIndex {
     pub finished: bool,
 }
 
-/// What `page.json` holds: what the page says, then how it was made.
-///
 /// A hand-written page may leave out everything marked `default`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -51,32 +49,21 @@ pub struct PageIndex {
 }
 
 impl ChapterIndex {
-    /// # Errors
-    /// - [`ContentError::Read`] if the file is missing or unreadable
-    /// - [`ContentError::Parse`] if it is not a chapter index
     pub fn read(chapter_folder: &Path) -> Result<Self, ContentError> {
         read_json(&chapter_folder.join(CHAPTER_INDEX_FILE))
     }
 
     /// Writes the file whole or not at all, so a killed run never leaves half of it.
-    ///
-    /// # Errors
-    /// - [`ContentError::Write`] if the file cannot be written
     pub fn write(&self, chapter_folder: &Path) -> Result<(), ContentError> {
         write_json(&chapter_folder.join(CHAPTER_INDEX_FILE), self)
     }
 }
 
 impl PageIndex {
-    /// # Errors
-    /// - [`ContentError::Read`] if the file is missing or unreadable
-    /// - [`ContentError::Parse`] if it is not a page index
     pub fn read(page_folder: &Path) -> Result<Self, ContentError> {
         read_json(&page_folder.join(PAGE_INDEX_FILE))
     }
 
-    /// # Errors
-    /// - [`ContentError::Write`] if the file cannot be written
     pub fn write(&self, page_folder: &Path) -> Result<(), ContentError> {
         write_json(&page_folder.join(PAGE_INDEX_FILE), self)
     }

@@ -1,0 +1,24 @@
+#!/bin/sh
+# A stand-in for the `claude` program, for tests. It asks no model anything.
+# STAND_IN_CLAUDE names a folder. The script records what it was given there:
+# `arguments` (each one followed by a NUL byte), `stdin`, `environment`, and one line in `calls`
+# for each run. It prints the file `stdout` of that folder and exits with the number in the file
+# `exit-code` (0 when the file is missing).
+
+if [ -z "$STAND_IN_CLAUDE" ]; then
+    echo "STAND_IN_CLAUDE must name the folder this stand-in works in" >&2
+    exit 2
+fi
+
+printf '%s\0' "$@" > "$STAND_IN_CLAUDE/arguments"
+cat > "$STAND_IN_CLAUDE/stdin"
+env > "$STAND_IN_CLAUDE/environment"
+echo run >> "$STAND_IN_CLAUDE/calls"
+
+if [ -f "$STAND_IN_CLAUDE/stdout" ]; then
+    cat "$STAND_IN_CLAUDE/stdout"
+fi
+if [ -f "$STAND_IN_CLAUDE/exit-code" ]; then
+    exit "$(cat "$STAND_IN_CLAUDE/exit-code")"
+fi
+exit 0

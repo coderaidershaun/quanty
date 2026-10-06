@@ -1,17 +1,19 @@
 //! Runs `rag-ingest delete-document` as a person would, against a throwaway collection of the
 //! local Qdrant and a throwaway graph of the local FalkorDB, because only that shows that the
-//! command removes one document from both stores and leaves the others alone.
+//! command removes one document from both stores and leaves the others alone. Concepts belong to
+//! no document, so they stay.
 
 use std::collections::BTreeSet;
 use std::process::Output;
 
-use graph::testing::{GraphSize, size, stored_document};
+use graph::testing::{GraphSize, size, stored_concept_graph, stored_document};
 use ocr::read_chapter;
 use rag_ingestion::{DeleteSummary, Item, chapter_items, ingest_chapter};
+use serde_json::json;
 
+use crate::stand_in_llm::StandInLlm;
 use crate::support::{
-    self, StandInEmbedder, ThrowawayStores, assert_graph_holds_only, points_in,
-    size_of_one_document,
+    self, ThrowawayStores, assert_document_stored, assert_graph_holds_only, points_in,
 };
 
 fn items_of(chapter_folder: &std::path::Path) -> Vec<Item> {
@@ -67,18 +69,44 @@ async fn delete_document_removes_one_document_from_both_stores_and_leaves_the_ot
     let throwaway = ThrowawayStores::new("delete");
     let collection = throwaway.config().items_collection.clone();
     let stores = throwaway.connect().await;
-    let embedder = StandInEmbedder::default();
     let items_a = items_of(&support::intuition_chapter());
     let items_b = items_of(&support::in_depth_chapter());
     let (a, b) = (items_a.len() as u64, items_b.len() as u64);
-    let first = ingest_chapter(&support::intuition_chapter(), &embedder, &stores)
+    // Every item names the model that both chapters are about and one concept of its own chapter,
+    // and says that the second is used for the first.
+    let title_of_a = items_a[0].payload.doc_title.clone();
+    let models = throwaway.models(StandInLlm::replying(move |input, _| {
+        let own = if input.starts_with(&title_of_a) {
+            "intuition about options"
+        } else {
+            "derivation of the model"
+        };
+        Ok(json!({
+            "concepts": [
+                { "name": "Black–Scholes model", "definition": "a model of option prices" },
+                { "name": own, "definition": "a part of one chapter" },
+            ],
+            "relations": [{ "from": own, "type": "USED_FOR", "to": "Black–Scholes model" }],
+        }))
+    }));
+    // What the graph holds when only the document of B, its items, and the concepts with their
+    // relations are left: the concepts and the two relations are the three nodes and two edges.
+    let size_with_b_and_concepts = GraphSize {
+        nodes: b + 1 + 3,
+        edges: b + (b - 1) + 2 * b + 2,
+    };
+    let first = ingest_chapter(&support::intuition_chapter(), &models, &stores)
         .await
         .unwrap();
-    let second = ingest_chapter(&support::in_depth_chapter(), &embedder, &stores)
+    let second = ingest_chapter(&support::in_depth_chapter(), &models, &stores)
         .await
         .unwrap();
     assert_ne!(first.doc_id, second.doc_id);
     assert_eq!(second.points_in_collection, a + b);
+    let before = stored_concept_graph(&stores.graph).await;
+    assert_eq!(before.concepts.len(), 3);
+    assert_eq!(before.mentions.len() as u64, 2 * a + 2 * b);
+    assert_eq!(before.relations.len(), 2);
 
     let output = delete_document(&throwaway, &first.doc_id.to_string());
     assert!(output.status.success(), "{}", stderr_text(&output));
@@ -92,14 +120,33 @@ async fn delete_document_removes_one_document_from_both_stores_and_leaves_the_ot
         })
     );
     assert!(stored_document(&stores.graph, first.doc_id).await.is_none());
-    assert_graph_holds_only(&stores.graph, &items_b).await;
+    assert_document_stored(&stores.graph, &items_b).await;
+    assert_eq!(size(&stores.graph).await, size_with_b_and_concepts);
     assert_eq!(point_ids(&throwaway).await, ids_of(&items_b));
+    let after = stored_concept_graph(&stores.graph).await;
+    assert_eq!(
+        after.concepts, before.concepts,
+        "the concepts stay, with their ids"
+    );
+    let ids_of_b = ids_of(&items_b);
+    let mentions_of_b: Vec<_> = before
+        .mentions
+        .iter()
+        .filter(|mention| ids_of_b.contains(&mention.item))
+        .cloned()
+        .collect();
+    assert_eq!(mentions_of_b.len() as u64, 2 * b);
+    assert_eq!(
+        after.mentions, mentions_of_b,
+        "only the mentions of the deleted document go"
+    );
+    assert_eq!(after.relations, before.relations, "the relations stay");
 
     // A delete that stopped half way, after the points and before the nodes, is finished by
     // running it again.
     let removed = stores.items.delete_document(second.doc_id).await.unwrap();
     assert_eq!(removed, b);
-    assert_eq!(size(&stores.graph).await, size_of_one_document(b as usize));
+    assert_eq!(size(&stores.graph).await, size_with_b_and_concepts);
     let output = delete_document(&throwaway, &second.doc_id.to_string());
     assert!(output.status.success(), "{}", stderr_text(&output));
     assert_eq!(
@@ -116,7 +163,15 @@ async fn delete_document_removes_one_document_from_both_stores_and_leaves_the_ot
             .await
             .is_none()
     );
-    assert_eq!(size(&stores.graph).await, GraphSize { nodes: 0, edges: 0 });
+    assert_eq!(
+        size(&stores.graph).await,
+        GraphSize { nodes: 3, edges: 2 },
+        "only the concepts and their relations are left"
+    );
+    let left = stored_concept_graph(&stores.graph).await;
+    assert_eq!(left.concepts, before.concepts);
+    assert!(left.mentions.is_empty());
+    assert_eq!(left.relations, before.relations);
     assert!(point_ids(&throwaway).await.is_empty());
 }
 
@@ -125,9 +180,9 @@ async fn delete_document_removes_one_document_from_both_stores_and_leaves_the_ot
 async fn delete_document_refuses_an_id_that_is_not_a_document_id() {
     let throwaway = ThrowawayStores::new("delete-refuse");
     let stores = throwaway.connect().await;
-    let embedder = StandInEmbedder::default();
+    let models = throwaway.models(StandInLlm::finding_nothing());
     let items = items_of(&support::intuition_chapter());
-    ingest_chapter(&support::intuition_chapter(), &embedder, &stores)
+    ingest_chapter(&support::intuition_chapter(), &models, &stores)
         .await
         .unwrap();
 

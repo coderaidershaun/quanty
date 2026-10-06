@@ -7,4 +7,7 @@ mod store;
 pub mod testing;
 
 pub use falkor::FalkorGraph;
-pub use store::{DocumentNode, GraphError, GraphStore, ItemNode};
+pub use store::{
+    ConceptNode, DocumentNode, GraphError, GraphStore, ItemNode, Mention, Relation, RelationKind,
+    UnknownRelationKind,
+};

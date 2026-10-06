@@ -7,9 +7,14 @@ use std::process::ExitCode;
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand};
 use graph::FalkorGraph;
-use rag_core::{Config, DocId, GeminiEmbedder, ItemStore};
-use rag_ingestion::{Stores, delete_document, health, ingest_chapter};
-use tracing_subscriber::filter::LevelFilter;
+use rag_core::{ClaudeCli, Config, DocId, GeminiEmbedder, ItemStore};
+use rag_ingestion::{
+    ConceptExtractor, EXTRACTION_MODEL, Models, Stores, delete_document, health, ingest_chapter,
+};
+use tracing::Level;
+use tracing_subscriber::filter::Targets;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 #[derive(Parser)]
 #[command(name = "rag-ingest", args_conflicts_with_subcommands = true)]
@@ -37,9 +42,14 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    tracing_subscriber::fmt()
-        .with_max_level(LevelFilter::WARN)
-        .with_writer(std::io::stderr)
+    // `rag_core` logs what each `claude` question cost, and a person should see it as it happens.
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+        .with(
+            Targets::new()
+                .with_default(Level::WARN)
+                .with_target("rag_core", Level::INFO),
+        )
         .init();
     match run(Cli::parse()).await {
         Ok(code) => code,
@@ -86,9 +96,15 @@ async fn connect_stores(config: &Config) -> Result<Stores<FalkorGraph>> {
 
 async fn ingest(folder: &Path) -> Result<()> {
     let config = Config::load().context("could not read the settings")?;
-    let embedder = GeminiEmbedder::from_config(&config).context("could not set up the embedder")?;
+    let models = Models {
+        embedder: GeminiEmbedder::from_config(&config).context("could not set up the embedder")?,
+        concepts: ConceptExtractor::new(
+            ClaudeCli::new(EXTRACTION_MODEL),
+            &config.concept_cache_folder,
+        ),
+    };
     let stores = connect_stores(&config).await?;
-    let summary = ingest_chapter(folder, &embedder, &stores)
+    let summary = ingest_chapter(folder, &models, &stores)
         .await
         .with_context(|| format!("could not ingest {}", folder.display()))?;
     println!("{summary}");

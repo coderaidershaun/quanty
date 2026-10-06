@@ -1,13 +1,14 @@
 //! Runs a whole chapter through ingestion into a throwaway collection of the local Qdrant and a
-//! throwaway graph of the local FalkorDB, with an embedder that makes up its vectors, so nothing
-//! is billed.
+//! throwaway graph of the local FalkorDB, with an embedder that makes up its vectors and a
+//! language model that finds no concept, so nothing is billed.
 
 use std::collections::BTreeSet;
 
 use ocr::{PieceDetail, read_chapter};
 use rag_ingestion::{chapter_items, ingest_chapter};
 
-use crate::support::{self, StandInEmbedder, ThrowawayStores, assert_graph_holds_only, points_in};
+use crate::stand_in_llm::StandInLlm;
+use crate::support::{self, ThrowawayStores, assert_graph_holds_only, points_in};
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored ingest::"]
@@ -15,11 +16,11 @@ async fn ingest_fills_a_throwaway_collection_and_a_second_run_adds_nothing() {
     let throwaway = ThrowawayStores::new("ingest");
     let config = throwaway.config();
     let stores = throwaway.connect().await;
-    let embedder = StandInEmbedder::default();
+    let models = throwaway.models(StandInLlm::finding_nothing());
     let chapter = read_chapter(&support::sample_chapter()).unwrap();
     let items = chapter_items(&chapter);
 
-    let summary = ingest_chapter(&support::sample_chapter(), &embedder, &stores)
+    let summary = ingest_chapter(&support::sample_chapter(), &models, &stores)
         .await
         .unwrap();
     assert_eq!(summary.points_in_collection, items.len() as u64);
@@ -86,7 +87,7 @@ async fn ingest_fills_a_throwaway_collection_and_a_second_run_adds_nothing() {
             .into()
     );
 
-    let received = embedder.received();
+    let received = models.embedder.received();
     assert_eq!(received.len(), items.len(), "one input for each item");
     let with_picture: Vec<_> = received
         .iter()
@@ -112,7 +113,7 @@ async fn ingest_fills_a_throwaway_collection_and_a_second_run_adds_nothing() {
         );
     }
 
-    let again = ingest_chapter(&support::sample_chapter(), &embedder, &stores)
+    let again = ingest_chapter(&support::sample_chapter(), &models, &stores)
         .await
         .unwrap();
     assert_eq!(again.points_in_collection, summary.points_in_collection);

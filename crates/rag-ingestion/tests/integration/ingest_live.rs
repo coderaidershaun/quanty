@@ -1,7 +1,8 @@
 //! Runs the real `rag-ingest` command twice on the sample chapter, against the real Gemini API,
 //! a throwaway collection of the local Qdrant and a throwaway graph of the local FalkorDB,
 //! because only that shows that the binary reads its key, finds its collection and its graph,
-//! and stores points and nodes that a second run overwrites.
+//! and stores points and nodes that a second run overwrites. The `claude` program is a stand-in
+//! that finds no concept, so only Gemini bills.
 
 use std::collections::BTreeSet;
 

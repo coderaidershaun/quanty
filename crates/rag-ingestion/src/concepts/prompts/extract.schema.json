@@ -1,0 +1,35 @@
+{
+  "type": "object",
+  "properties": {
+    "concepts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "definition": { "type": "string" }
+        },
+        "required": ["name", "definition"],
+        "additionalProperties": false
+      }
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "from": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["DERIVED_FROM", "ASSUMES", "GENERALISES", "PART_OF", "USED_FOR"]
+          },
+          "to": { "type": "string" }
+        },
+        "required": ["from", "type", "to"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["concepts", "relations"],
+  "additionalProperties": false
+}

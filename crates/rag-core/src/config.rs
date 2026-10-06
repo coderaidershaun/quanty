@@ -9,11 +9,13 @@ const FALKORDB_URL: &str = "FALKORDB_URL";
 const FALKORDB_GRAPH: &str = "FALKORDB_GRAPH";
 const QDRANT_ITEMS_COLLECTION: &str = "QDRANT_ITEMS_COLLECTION";
 const GEMINI_API_KEY: &str = "EMBEDDING_GEMINI_API_KEY";
+const CONCEPT_CACHE_DIR: &str = "CONCEPT_CACHE_DIR";
 
 const DEFAULT_QDRANT_URL: &str = "http://localhost:6334";
 const DEFAULT_FALKORDB_URL: &str = "falkor://localhost:6379";
 const DEFAULT_FALKORDB_GRAPH: &str = "quanty";
 const DEFAULT_ITEMS_COLLECTION: &str = "items";
+const DEFAULT_CONCEPT_CACHE_FOLDER: &str = "data/concept-cache";
 
 const DOTENV_FILE_NAME: &str = ".env";
 
@@ -50,6 +52,10 @@ pub struct Config {
     pub falkordb_graph: String,
     /// Where items are stored. Tests set another name so they never touch the real collection.
     pub items_collection: String,
+    /// Where the answers of concept extraction are kept, so that the same question is never paid
+    /// for twice. A relative path starts at the folder the command runs in. Tests set a temporary
+    /// folder so they never touch the real one.
+    pub concept_cache_folder: PathBuf,
     /// Not needed by every command, so a missing key is not an error here.
     pub gemini_api_key: Option<ApiKey>,
 }
@@ -113,6 +119,9 @@ impl Config {
                 .unwrap_or_else(|| DEFAULT_FALKORDB_GRAPH.to_owned()),
             items_collection: setting(QDRANT_ITEMS_COLLECTION)
                 .unwrap_or_else(|| DEFAULT_ITEMS_COLLECTION.to_owned()),
+            concept_cache_folder: setting(CONCEPT_CACHE_DIR)
+                .unwrap_or_else(|| DEFAULT_CONCEPT_CACHE_FOLDER.to_owned())
+                .into(),
             gemini_api_key: setting(GEMINI_API_KEY).map(ApiKey::new),
         })
     }

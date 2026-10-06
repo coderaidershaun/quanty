@@ -1,8 +1,9 @@
 //! Shared by the tests of this crate: where the committed chapters are, an embedder that makes
-//! up vectors, and a collection and a graph that are removed when the test ends.
+//! up vectors, and a collection, a graph and a cache folder that are removed when the test ends.
 
 use std::collections::hash_map::DefaultHasher;
 use std::ffi::OsStr;
+use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -17,12 +18,16 @@ use qdrant_client::qdrant::ScrollPointsBuilder;
 use qdrant_client::qdrant::point_id::PointIdOptions;
 use qdrant_client::{Payload, Qdrant};
 use rag_core::{
-    Config, DocumentInput, EMBEDDING_DIMENSIONS, EmbedError, Embedder, Embedding, ItemStore,
+    Config, DocumentInput, EMBEDDING_DIMENSIONS, EmbedError, Embedder, Embedding, ItemStore, Llm,
 };
-use rag_ingestion::{Item, Stores};
+use rag_ingestion::{ConceptExtractor, Item, Models, Stores};
 use serde_json::Value;
+use tempfile::TempDir;
 
 const THROWAWAY_PREFIX: &str = "test-items-";
+
+/// What the stand-in `claude` prints when the binary runs: no item discusses a concept.
+const STAND_IN_ANSWER: &str = r#"{"type":"result","subtype":"success","is_error":false,"structured_output":{"concepts":[],"relations":[]},"total_cost_usd":0}"#;
 
 fn content_folder() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/content")
@@ -42,6 +47,10 @@ pub fn intuition_chapter() -> PathBuf {
 /// Written by hand: the derivation and the formulas of the Black–Scholes model.
 pub fn in_depth_chapter() -> PathBuf {
     content_folder().join("quanty-sample-notes/chapter-2")
+}
+
+fn stand_in_claude_folder() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/stand-in-claude")
 }
 
 /// Keeps every input it is given, and answers each with a vector that depends on the input, so
@@ -91,13 +100,23 @@ fn unit_vector(seed_text: &str) -> Embedding {
     numbers.into_iter().map(|number| number / norm).collect()
 }
 
-/// A config that stores into a collection and a graph that no one else uses. The collection and
-/// the graph are deleted when this is dropped, so they go away also when the test fails. It never
-/// names the real collection or the real graph, and every store a test touches is reached through
-/// this config and from nowhere else.
+/// A config that stores into a collection, a graph and a cache folder that no one else uses. The
+/// collection and the graph are deleted when this is dropped, and the cache folder goes with a
+/// temporary folder, so they go away also when the test fails. It never names the real
+/// collection, the real graph or the real cache folder, and every store a test touches is reached
+/// through this config and from nowhere else.
 pub struct ThrowawayStores {
     config: Config,
+    temporary: TempDir,
     _graph: ThrowawayGraph,
+}
+
+/// Which `claude` program the `rag-ingest` command under test starts.
+enum ClaudeProgram {
+    /// The committed stand-in, which finds no concept and bills nothing.
+    StandIn,
+    /// The real one, on the subscription.
+    Real,
 }
 
 impl ThrowawayStores {
@@ -112,18 +131,22 @@ impl ThrowawayStores {
         );
         let settings = Config::load().expect("the settings should load");
         let graph = ThrowawayGraph::new(&settings, test_name);
+        let temporary = tempfile::tempdir().expect("a temporary folder should be made");
         let config = Config {
             items_collection: name,
             falkordb_graph: graph.name().to_owned(),
+            concept_cache_folder: temporary.path().join("cache"),
             ..settings
         };
-        // The names are copied into the config by hand. Without these two checks, a copy that is
-        // missing would leave the real names in the config, and the tests would write to the real
-        // graph and the real collection.
+        // The names are copied into the config by hand. Without these three checks, a copy that
+        // is missing would leave the real names in the config, and the tests would write to the
+        // real graph, the real collection and the real cache folder.
         assert_eq!(config.falkordb_graph, graph.name());
         assert!(config.items_collection.starts_with(THROWAWAY_PREFIX));
+        assert!(config.concept_cache_folder.starts_with(temporary.path()));
         Self {
             config,
+            temporary,
             _graph: graph,
         }
     }
@@ -142,9 +165,37 @@ impl ThrowawayStores {
         }
     }
 
-    /// Runs the `rag-ingest` command against these stores and no others. Every test that runs
-    /// the command to ingest or to delete goes through here.
+    /// Both models of an ingest: an embedder that makes up vectors, and the concept extractor
+    /// with this language model and the cache folder of this config. A test builds its models
+    /// here and nowhere else, so it never names a cache folder by hand.
+    pub fn models<L: Llm>(&self, llm: L) -> Models<StandInEmbedder, L> {
+        Models {
+            embedder: StandInEmbedder::default(),
+            concepts: ConceptExtractor::new(llm, &self.config.concept_cache_folder),
+        }
+    }
+
+    /// Runs the `rag-ingest` command against these stores and no others, with the stand-in
+    /// `claude` that finds no concept. Every test that runs the command to ingest or to delete
+    /// goes through here.
     pub fn rag_ingest(&self, arguments: impl IntoIterator<Item = impl AsRef<OsStr>>) -> Output {
+        self.run_rag_ingest(arguments, ClaudeProgram::StandIn)
+    }
+
+    /// Like [`ThrowawayStores::rag_ingest`], but the command starts the real `claude`, so it
+    /// spends usage of the subscription. Only the live concept test calls it.
+    pub fn rag_ingest_asking_claude(
+        &self,
+        arguments: impl IntoIterator<Item = impl AsRef<OsStr>>,
+    ) -> Output {
+        self.run_rag_ingest(arguments, ClaudeProgram::Real)
+    }
+
+    fn run_rag_ingest(
+        &self,
+        arguments: impl IntoIterator<Item = impl AsRef<OsStr>>,
+        claude: ClaudeProgram,
+    ) -> Output {
         let settings = [
             ("QDRANT_URL", self.config.qdrant_url.as_str()),
             ("FALKORDB_URL", self.config.falkordb_url.as_str()),
@@ -153,10 +204,17 @@ impl ThrowawayStores {
                 self.config.items_collection.as_str(),
             ),
             ("FALKORDB_GRAPH", self.config.falkordb_graph.as_str()),
+            (
+                "CONCEPT_CACHE_DIR",
+                self.config
+                    .concept_cache_folder
+                    .to_str()
+                    .expect("the cache folder should be UTF-8"),
+            ),
         ];
         // The setting names are typed by hand. A mistyped name would make the command fall back
-        // to the real collection and the real graph, so read the names back the way the command
-        // reads them before it starts.
+        // to the real collection, the real graph and the real cache folder, so read the names
+        // back the way the command reads them before it starts.
         let read_back = Config::from_sources(
             |name| {
                 settings
@@ -169,9 +227,25 @@ impl ThrowawayStores {
         .expect("the settings should read back");
         assert_eq!(read_back.items_collection, self.config.items_collection);
         assert_eq!(read_back.falkordb_graph, self.config.falkordb_graph);
-        Command::new(env!("CARGO_BIN_EXE_rag-ingest"))
-            .args(arguments)
-            .envs(settings)
+        assert_eq!(
+            read_back.concept_cache_folder,
+            self.config.concept_cache_folder
+        );
+        let mut command = Command::new(env!("CARGO_BIN_EXE_rag-ingest"));
+        command.args(arguments).envs(settings);
+        if let ClaudeProgram::StandIn = claude {
+            let work = self.temporary.path().join("stand-in-claude");
+            fs::create_dir_all(&work).expect("the stand-in folder should be made");
+            fs::write(work.join("stdout"), STAND_IN_ANSWER)
+                .expect("the stand-in answer should be written");
+            let path = format!(
+                "{}:{}",
+                stand_in_claude_folder().display(),
+                std::env::var("PATH").unwrap_or_default()
+            );
+            command.env("PATH", path).env("STAND_IN_CLAUDE", &work);
+        }
+        command
             .output()
             .expect("the rag-ingest binary should start")
     }
@@ -262,10 +336,10 @@ pub fn size_of_one_document(item_count: usize) -> GraphSize {
     }
 }
 
-/// Checks that the graph holds these items and nothing else: their document, each item with the
-/// values it was stored with, in reading order, and no other node or edge. Returns what the
+/// Checks that the graph holds the document of these items and each item with the values it was
+/// stored with, in reading order. It does not look at the rest of the graph. Returns what the
 /// graph holds for the document.
-pub async fn assert_graph_holds_only(graph: &FalkorGraph, items: &[Item]) -> StoredDocument {
+pub async fn assert_document_stored(graph: &FalkorGraph, items: &[Item]) -> StoredDocument {
     let payload = &items
         .first()
         .expect("a chapter should have at least one item")
@@ -275,6 +349,14 @@ pub async fn assert_graph_holds_only(graph: &FalkorGraph, items: &[Item]) -> Sto
         .expect("the graph should hold the document");
     assert_eq!(stored.title, payload.doc_title);
     assert_eq!(stored.items, expected_stored_items(items));
+    stored
+}
+
+/// Checks that the graph holds these items and nothing else: their document, each item with the
+/// values it was stored with, in reading order, and no other node or edge. Returns what the
+/// graph holds for the document.
+pub async fn assert_graph_holds_only(graph: &FalkorGraph, items: &[Item]) -> StoredDocument {
+    let stored = assert_document_stored(graph, items).await;
     assert_eq!(size(graph).await, size_of_one_document(items.len()));
     stored
 }

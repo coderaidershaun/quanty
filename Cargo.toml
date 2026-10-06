@@ -29,4 +29,4 @@ tokio = "1.53.2"
 toml = { version = "1.1.6", default-features = false, features = ["parse", "serde", "std"] }
 tracing = { version = "0.1.44", default-features = false, features = ["std"] }
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "std"] }
-uuid = { version = "1.27.0", default-features = false, features = ["serde", "std", "v5"] }
+uuid = { version = "1.27.0", default-features = false, features = ["serde", "std", "v4", "v5"] }

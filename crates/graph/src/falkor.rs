@@ -1,5 +1,5 @@
 //! The connection to FalkorDB, the check that the store behind it answers, and the statements
-//! that write and remove documents and items.
+//! that write documents, items and concepts, find a concept, and remove a document.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -8,9 +8,11 @@ use falkordb::{
     AsyncGraph, FalkorAsyncClient, FalkorClientBuilder, FalkorConnectionInfo, FalkorDBError,
     FalkorValue, QueryResult, RowStream,
 };
-use rag_core::{Config, DocId};
+use rag_core::{ConceptId, Config, DocId};
 
-use crate::store::{DocumentNode, GraphError, GraphStore, ItemNode};
+use crate::store::{
+    ConceptNode, DocumentNode, GraphError, GraphStore, ItemNode, Mention, Relation,
+};
 
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 /// Rows go in groups of this size, so that one statement stays quick also when the graph is
@@ -39,6 +41,31 @@ const DELETE_DOCUMENT: &str = "\
 MATCH (d:Document {id: $id})
 OPTIONAL MATCH (d)-[:HAS_ITEM]->(i:Item)
 DETACH DELETE i, d";
+
+const UPSERT_CONCEPT: &str = "\
+MERGE (c:Concept {id: $id})
+SET c.name = $name, c.normalised_name = $normalised_name, c.definition = $definition, c.aliases = $aliases";
+
+// SMELL: a mention whose item or concept is not in the graph is not written, and nothing reports
+// it.
+const ADD_MENTIONS: &str = "\
+UNWIND $mentions AS mention
+MATCH (i:Item {id: mention.item}), (c:Concept {id: mention.concept})
+MERGE (i)-[m:MENTIONS]->(c)
+SET m.wording = mention.wording";
+
+// SMELL: a relation whose concepts are not in the graph is not written, and nothing reports it.
+// A relation also keeps the id of the item that stated it after the document of that item is
+// deleted, and a concept stays when no item mentions it any more.
+const ADD_RELATIONS: &str = "\
+UNWIND $relations AS relation
+MATCH (a:Concept {id: relation.from}), (b:Concept {id: relation.to})
+MERGE (a)-[r:RELATES_TO {type: relation.type}]->(b)
+ON CREATE SET r.item = relation.item";
+
+// SMELL: there is no index on the normalised name either, so each lookup reads every concept
+// node.
+const FIND_CONCEPT: &str = "MATCH (c:Concept {normalised_name: $name}) RETURN c.id AS id LIMIT 1";
 
 /// An open connection to FalkorDB, and the graph that the config names.
 pub struct FalkorGraph {
@@ -162,6 +189,78 @@ impl GraphStore for FalkorGraph {
             .and_then(|count| u64::try_from(count).ok());
         Ok(removed.unwrap_or(0))
     }
+
+    async fn upsert_concept(&self, concept: &ConceptNode) -> Result<(), GraphError> {
+        let aliases = concept
+            .aliases
+            .iter()
+            .map(|alias| FalkorValue::String(alias.clone()))
+            .collect();
+        let parameters = vec![
+            ("id", id_value(concept.id)),
+            ("name", FalkorValue::String(concept.name.clone())),
+            (
+                "normalised_name",
+                FalkorValue::String(concept.normalised_name.clone()),
+            ),
+            (
+                "definition",
+                FalkorValue::String(concept.definition.clone()),
+            ),
+            ("aliases", FalkorValue::Array(aliases)),
+        ];
+        self.run("write the concept", UPSERT_CONCEPT, parameters)
+            .await?;
+        Ok(())
+    }
+
+    async fn add_mentions(&self, mentions: &[Mention]) -> Result<(), GraphError> {
+        for group in mentions.chunks(ROWS_PER_STATEMENT) {
+            let rows = group.iter().map(mention_row).collect();
+            let parameters = vec![("mentions", FalkorValue::Array(rows))];
+            self.run("write the mentions", ADD_MENTIONS, parameters)
+                .await?;
+        }
+        Ok(())
+    }
+
+    async fn add_relations(&self, relations: &[Relation]) -> Result<(), GraphError> {
+        for group in relations.chunks(ROWS_PER_STATEMENT) {
+            let rows = group.iter().map(relation_row).collect();
+            let parameters = vec![("relations", FalkorValue::Array(rows))];
+            self.run("write the relations", ADD_RELATIONS, parameters)
+                .await?;
+        }
+        Ok(())
+    }
+
+    async fn find_concept_by_name(
+        &self,
+        normalised_name: &str,
+    ) -> Result<Option<ConceptId>, GraphError> {
+        const ACTION: &str = "look up a concept by its name";
+        let parameters = vec![("name", FalkorValue::String(normalised_name.to_owned()))];
+        let reply = self.run(ACTION, FIND_CONCEPT, parameters).await?;
+        let first_value = reply
+            .data
+            .into_values_lossy()
+            .next()
+            .and_then(|row| row.into_iter().next());
+        let unreadable = |found: String| GraphError::UnreadableReply {
+            url: self.url.clone(),
+            graph: self.graph.graph_name().to_owned(),
+            action: ACTION,
+            found,
+        };
+        match first_value {
+            None => Ok(None),
+            Some(FalkorValue::String(text)) => text
+                .parse()
+                .map(Some)
+                .map_err(|_| unreadable(format!("{text:?}"))),
+            Some(other) => Err(unreadable(format!("{other:?}"))),
+        }
+    }
 }
 
 /// An id as the text that Qdrant also uses for it.
@@ -182,5 +281,28 @@ fn item_row(item: &ItemNode) -> FalkorValue {
         ),
         ("page".to_owned(), FalkorValue::I64(i64::from(item.page))),
         ("printed_page".to_owned(), printed_page),
+    ]))
+}
+
+fn mention_row(mention: &Mention) -> FalkorValue {
+    FalkorValue::Map(HashMap::from([
+        ("item".to_owned(), id_value(mention.item)),
+        ("concept".to_owned(), id_value(mention.concept)),
+        (
+            "wording".to_owned(),
+            FalkorValue::String(mention.wording.clone()),
+        ),
+    ]))
+}
+
+fn relation_row(relation: &Relation) -> FalkorValue {
+    FalkorValue::Map(HashMap::from([
+        ("from".to_owned(), id_value(relation.from)),
+        ("to".to_owned(), id_value(relation.to)),
+        (
+            "type".to_owned(),
+            FalkorValue::String(relation.kind.as_str().to_owned()),
+        ),
+        ("item".to_owned(), id_value(relation.item)),
     ]))
 }

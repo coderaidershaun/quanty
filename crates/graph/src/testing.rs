@@ -102,6 +102,42 @@ pub struct GraphSize {
     pub edges: u64,
 }
 
+/// A concept node, as stored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredConcept {
+    pub id: String,
+    pub name: String,
+    pub normalised_name: String,
+    pub definition: String,
+    pub aliases: Vec<String>,
+}
+
+/// A `MENTIONS` edge, as stored. `concept` is the normalised name of the concept, so a test needs
+/// no random id.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredMention {
+    pub item: String,
+    pub concept: String,
+    pub wording: String,
+}
+
+/// A `RELATES_TO` edge, as stored. `from` and `to` are the normalised names of the concepts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredRelation {
+    pub from: String,
+    pub kind: String,
+    pub to: String,
+    pub item: String,
+}
+
+/// Every concept, mention and relation of a graph, each list in a fixed order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredConceptGraph {
+    pub concepts: Vec<StoredConcept>,
+    pub mentions: Vec<StoredMention>,
+    pub relations: Vec<StoredRelation>,
+}
+
 /// The document with this id and its items in reading order, or `None` when the graph has no
 /// such document. The first item is the one of the document that no `NEXT` edge points to, and
 /// the others follow along the `NEXT` edges.
@@ -157,6 +193,83 @@ pub async fn size(graph: &FalkorGraph) -> GraphSize {
     }
 }
 
+/// Every concept, mention and relation of the whole graph. Concepts are sorted by normalised
+/// name, mentions by item and then concept, and relations by the concept they start at, their
+/// kind and the concept they end at.
+pub async fn stored_concept_graph(graph: &FalkorGraph) -> StoredConceptGraph {
+    StoredConceptGraph {
+        concepts: stored_concepts(graph).await,
+        mentions: stored_mentions(graph).await,
+        relations: stored_relations(graph).await,
+    }
+}
+
+async fn stored_concepts(graph: &FalkorGraph) -> Vec<StoredConcept> {
+    let rows = read_all(
+        graph,
+        "MATCH (c:Concept)
+         RETURN c.id, c.name, c.normalised_name, c.definition, c.aliases
+         ORDER BY c.normalised_name",
+    )
+    .await;
+    rows.into_iter()
+        .map(|row| {
+            let mut values = row.into_iter();
+            let mut next = || values.next().expect("a row has five values");
+            StoredConcept {
+                id: text(next()),
+                name: text(next()),
+                normalised_name: text(next()),
+                definition: text(next()),
+                aliases: texts(next()),
+            }
+        })
+        .collect()
+}
+
+async fn stored_mentions(graph: &FalkorGraph) -> Vec<StoredMention> {
+    let rows = read_all(
+        graph,
+        "MATCH (i:Item)-[m:MENTIONS]->(c:Concept)
+         RETURN i.id, c.normalised_name, m.wording
+         ORDER BY i.id, c.normalised_name",
+    )
+    .await;
+    rows.into_iter()
+        .map(|row| {
+            let mut values = row.into_iter();
+            let mut next = || values.next().expect("a row has three values");
+            StoredMention {
+                item: text(next()),
+                concept: text(next()),
+                wording: text(next()),
+            }
+        })
+        .collect()
+}
+
+async fn stored_relations(graph: &FalkorGraph) -> Vec<StoredRelation> {
+    let rows = read_all(
+        graph,
+        "MATCH (a:Concept)-[r:RELATES_TO]->(b:Concept)
+         RETURN a.normalised_name, r.type, b.normalised_name, r.item
+         ORDER BY a.normalised_name, r.type, b.normalised_name",
+    )
+    .await;
+    rows.into_iter()
+        .map(|row| {
+            let mut values = row.into_iter();
+            let mut next = || values.next().expect("a row has four values");
+            StoredRelation {
+                from: text(next()),
+                kind: text(next()),
+                to: text(next()),
+                item: text(next()),
+            }
+        })
+        .collect()
+}
+
 async fn read(graph: &FalkorGraph, statement: &str, id: &str) -> Vec<Vec<FalkorValue>> {
     let parameters = vec![("id", FalkorValue::String(id.to_owned()))];
     rows_of(graph, statement, parameters).await
@@ -184,6 +297,13 @@ fn text(value: FalkorValue) -> String {
     match value {
         FalkorValue::String(text) => text,
         other => panic!("expected text in the graph, found {other:?}"),
+    }
+}
+
+fn texts(value: FalkorValue) -> Vec<String> {
+    match value {
+        FalkorValue::Array(values) => values.into_iter().map(text).collect(),
+        other => panic!("expected a list of text in the graph, found {other:?}"),
     }
 }
 

@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 use std::error::Error;
+use std::path::Path;
 
 use rag_core::Config;
 
@@ -34,6 +35,7 @@ fn environment_wins_over_dotenv_and_stores_fall_back_to_localhost() {
          FALKORDB_URL=falkor://from-dotenv:6379\n\
          FALKORDB_GRAPH=graph-from-dotenv\n\
          EMBEDDING_GEMINI_API_KEY=not-a-real-key\n\
+         CONCEPT_CACHE_DIR=cache-from-dotenv\n\
          QDRANT_ITEMS_COLLECTION=   \n",
     )
     .unwrap();
@@ -46,6 +48,7 @@ fn environment_wins_over_dotenv_and_stores_fall_back_to_localhost() {
     assert_eq!(config.qdrant_url, "http://from-environment:6334");
     assert_eq!(config.falkordb_url, "falkor://from-dotenv:6379");
     assert_eq!(config.falkordb_graph, "graph-from-dotenv");
+    assert_eq!(config.concept_cache_folder, Path::new("cache-from-dotenv"));
     assert_eq!(
         config.gemini_api_key.as_ref().map(|key| key.expose()),
         Some("not-a-real-key")
@@ -61,18 +64,21 @@ fn environment_wins_over_dotenv_and_stores_fall_back_to_localhost() {
     assert_eq!(config.falkordb_url, "falkor://localhost:6379");
     assert_eq!(config.falkordb_graph, "quanty");
     assert_eq!(config.items_collection, "items");
+    assert_eq!(config.concept_cache_folder, Path::new("data/concept-cache"));
     assert!(config.gemini_api_key.is_none());
 
     let config = Config::from_sources(
         environment_of(&[
             ("QDRANT_ITEMS_COLLECTION", "test-items-elsewhere"),
             ("FALKORDB_GRAPH", "test-graph-elsewhere"),
+            ("CONCEPT_CACHE_DIR", "cache-elsewhere"),
         ]),
         Some(&folder.path().join("missing.env")),
     )
     .unwrap();
     assert_eq!(config.items_collection, "test-items-elsewhere");
     assert_eq!(config.falkordb_graph, "test-graph-elsewhere");
+    assert_eq!(config.concept_cache_folder, Path::new("cache-elsewhere"));
 
     std::fs::write(&dotenv, "EMBEDDING_GEMINI_API_KEY not-a-real-key\n").unwrap();
     let error = Config::from_sources(environment_of(&[]), Some(&dotenv)).unwrap_err();

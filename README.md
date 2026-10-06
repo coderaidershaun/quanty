@@ -65,13 +65,21 @@ The ids are computed from the chapter's source hash and the place of the item in
 
 The command also writes the chapter to the FalkorDB graph, `quanty` unless `FALKORDB_GRAPH` names another: one `Document` node, one `Item` node for each item, an edge `HAS_ITEM` from the document to each item, and an edge `NEXT` from each item to the one after it in reading order. An `Item` node has the same id as its point in Qdrant. The collection is prepared and the graph is written before anything is embedded, so a store that is down fails the run before Gemini bills anything, and a run that stopped half way is finished by running it again. A second run on the same chapter adds no node and no edge.
 
+Last, after the points are stored, the command asks `claude` which concepts each item discusses and how they relate, four items at a time. Every item is asked about, a figure as its explanation with no picture. `claude` runs on your subscription with the `haiku` model, with no tools and in safe mode. It is not started while `ANTHROPIC_API_KEY` is set, so that the work is not billed to the API: the chapter is stored, and then the run stops with a message that says to unset the key. The prompt and the JSON Schema of the answer are in `crates/rag-ingestion/src/concepts/prompts/`.
+
+The answers are written to the graph. A `Concept` node has an id, a name, a one-line definition and a list of aliases, and it belongs to no document. An edge `MENTIONS` goes from an item to each concept it discusses, with the wording the item used. An edge `RELATES_TO` goes from one concept to another, with one of the types `DERIVED_FROM`, `ASSUMES`, `GENERALISES`, `PART_OF` and `USED_FOR`, and the item that stated it. A name is matched by its exact normalised form: lower case, with every run of punctuation or hyphens turned into one space. So "Black–Scholes model" and "black-scholes model" are one concept, and a concept named by two items is one node with two `MENTIONS`. Nothing else is matched yet. A relation is dropped and counted when it names a concept that neither its own answer nor the graph holds, or when it joins a concept to itself.
+
+Every good answer is kept as a file in the folder that `CONCEPT_CACHE_DIR` names, `data/concept-cache` unless set. The name of the file is made from the prompt, its version, the schema, the model and the text that was sent, so a second run on the same chapter makes no `claude` call and adds no node and no edge. A usage limit, a missing sign-in, or a `claude` program that cannot be started stops the run with a clear message and is never tried again: the chapter is stored and can be searched, and running the same command again goes on from the answers that are kept. Any other failure of one item is tried once more, and then the item is skipped, not kept, and named in the summary, and the run goes on. The next run asks about it again.
+
+After the lines about items and points, the summary prints how many concepts were created and how many were linked to an existing one, the mentions written, the relations written and dropped, the `claude` calls made and the cache hits, and the number of items skipped with one line for each.
+
 ## Deleting a document
 
 ```bash
 cargo run -p rag-ingestion --bin rag-ingest -- delete-document <document id>
 ```
 
-Removes one document from both stores: its points from the Qdrant collection, and its `Document` node, its `Item` nodes and all their edges from the graph. Other documents are left whole. The document id is the one that an ingest prints as `document id`. The command prints how many points and nodes it removed, and refuses an id under which neither store holds anything, so an item id or a mistyped id removes nothing.
+Removes one document from both stores: its points from the Qdrant collection, and its `Document` node, its `Item` nodes and all their edges from the graph, the `MENTIONS` of its items among them. Other documents are left whole. Concepts and their `RELATES_TO` edges stay, because they belong to no document. The document id is the one that an ingest prints as `document id`. The command prints how many points and nodes it removed, and refuses an id under which neither store holds anything, so an item id or a mistyped id removes nothing.
 
 Run it again if it stopped half way: it removes what is left. It is also the way to clear a chapter before it is ingested again after the way it is cut into items has changed, because an ingest never removes the points and nodes of an earlier run.
 

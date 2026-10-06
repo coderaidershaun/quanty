@@ -1,5 +1,8 @@
-//! Tests of `rag-core` that go through its public interface, with a stand-in server or the real API.
+//! Tests of `rag-core` that go through its public interface, with a stand-in server, a stand-in
+//! `claude` program, or the real ones.
 
+mod claude_cli;
+mod claude_live;
 mod config;
 mod gemini_live;
 mod gemini_stub;

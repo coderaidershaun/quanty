@@ -1,7 +1,9 @@
 //! What the graph holds, and what a program can ask of the store that holds it.
 
+use std::str::FromStr;
+
 use falkordb::FalkorDBError;
-use rag_core::{DocId, ItemId, ItemKind};
+use rag_core::{ConceptId, DocId, ItemId, ItemKind};
 
 /// A document as the graph holds it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -17,6 +19,95 @@ pub struct ItemNode {
     pub kind: ItemKind,
     pub page: u32,
     pub printed_page: Option<String>,
+}
+
+/// A concept as the graph holds it. It belongs to no document.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ConceptNode {
+    pub id: ConceptId,
+    /// The name as the first item that named it wrote it.
+    pub name: String,
+    /// The name in the form that names are compared in. A concept is found by it.
+    pub normalised_name: String,
+    /// What the concept is, in one line.
+    pub definition: String,
+    pub aliases: Vec<String>,
+}
+
+/// An item discusses a concept.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Mention {
+    pub item: ItemId,
+    pub concept: ConceptId,
+    /// The name the item used.
+    pub wording: String,
+}
+
+/// How one concept relates to another. The list is fixed: a new kind is a change to this type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RelationKind {
+    DerivedFrom,
+    Assumes,
+    Generalises,
+    PartOf,
+    UsedFor,
+}
+
+impl RelationKind {
+    /// Every kind, in the order of the enum.
+    // SMELL: a kind that is added to the enum must be added to this list by hand. Nothing checks
+    // it, and a kind that is missing here is refused as unknown.
+    pub const ALL: [RelationKind; 5] = [
+        RelationKind::DerivedFrom,
+        RelationKind::Assumes,
+        RelationKind::Generalises,
+        RelationKind::PartOf,
+        RelationKind::UsedFor,
+    ];
+
+    /// The name stored on the edge.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RelationKind::DerivedFrom => "DERIVED_FROM",
+            RelationKind::Assumes => "ASSUMES",
+            RelationKind::Generalises => "GENERALISES",
+            RelationKind::PartOf => "PART_OF",
+            RelationKind::UsedFor => "USED_FOR",
+        }
+    }
+}
+
+/// The text that was given as a kind of relation is not the name of any kind.
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[error(
+    "`{given}` is not a kind of relation; the kinds are {kinds}",
+    kinds = RelationKind::ALL.map(RelationKind::as_str).join(", ")
+)]
+pub struct UnknownRelationKind {
+    given: String,
+}
+
+impl FromStr for RelationKind {
+    type Err = UnknownRelationKind;
+
+    fn from_str(text: &str) -> Result<RelationKind, UnknownRelationKind> {
+        RelationKind::ALL
+            .into_iter()
+            .find(|kind| kind.as_str() == text)
+            .ok_or_else(|| UnknownRelationKind {
+                given: text.to_owned(),
+            })
+    }
+}
+
+/// One concept relates to another.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Relation {
+    pub from: ConceptId,
+    pub to: ConceptId,
+    pub kind: RelationKind,
+    /// The item that stated it.
+    pub item: ItemId,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -54,10 +145,20 @@ pub enum GraphError {
         #[source]
         source: FalkorDBError,
     },
+
+    #[error(
+        "FalkorDB at {url} answered the request to {action} in the graph {graph} with {found}, which is not the id of a concept"
+    )]
+    UnreadableReply {
+        url: String,
+        graph: String,
+        action: &'static str,
+        found: String,
+    },
 }
 
-/// The graph of documents and items. Every write can be repeated: a second call with the same
-/// values changes nothing.
+/// The graph of documents, items and concepts. Every write can be repeated: a second call with
+/// the same values changes nothing.
 pub trait GraphStore {
     /// Creates the document node, or updates its title. Repeating it changes nothing.
     ///
@@ -84,10 +185,54 @@ pub trait GraphStore {
         items: &[ItemNode],
     ) -> impl Future<Output = Result<(), GraphError>> + Send;
 
-    /// Removes the document node, its item nodes and every edge of those nodes. Returns how many
-    /// nodes it removed. Zero means the graph has no such document, which is not an error.
+    /// Removes the document node, its item nodes and every edge of those nodes, the `MENTIONS`
+    /// edges of the items among them. Concepts and their `RELATES_TO` edges stay: they belong to
+    /// no document. Returns how many nodes it removed. Zero means the graph has no such document,
+    /// which is not an error.
     ///
     /// # Errors
     /// [`GraphError::Query`] when the store refuses or cannot be reached.
     fn delete_document(&self, id: DocId) -> impl Future<Output = Result<u64, GraphError>> + Send;
+
+    /// Creates the concept node, or writes its values again. Repeating it changes nothing.
+    ///
+    /// # Errors
+    /// [`GraphError::Query`] when the store refuses or cannot be reached.
+    fn upsert_concept(
+        &self,
+        concept: &ConceptNode,
+    ) -> impl Future<Output = Result<(), GraphError>> + Send;
+
+    /// Writes one `MENTIONS` edge from an item to a concept for each mention, with the wording.
+    /// An item mentions a concept once: a second mention of the same pair replaces the wording.
+    /// An empty slice makes no call.
+    ///
+    /// # Errors
+    /// [`GraphError::Query`] when the store refuses or cannot be reached.
+    fn add_mentions(
+        &self,
+        mentions: &[Mention],
+    ) -> impl Future<Output = Result<(), GraphError>> + Send;
+
+    /// Writes one `RELATES_TO` edge for each relation. Two concepts have at most one edge of a
+    /// kind: it keeps the item that stated it first. An empty slice makes no call.
+    ///
+    /// # Errors
+    /// [`GraphError::Query`] when the store refuses or cannot be reached.
+    fn add_relations(
+        &self,
+        relations: &[Relation],
+    ) -> impl Future<Output = Result<(), GraphError>> + Send;
+
+    /// The concept whose normalised name is exactly this text, or `None`. The text is compared as
+    /// it is given, so a name that is not in its normalised form finds nothing.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not the id
+    ///   of a concept
+    fn find_concept_by_name(
+        &self,
+        normalised_name: &str,
+    ) -> impl Future<Output = Result<Option<ConceptId>, GraphError>> + Send;
 }

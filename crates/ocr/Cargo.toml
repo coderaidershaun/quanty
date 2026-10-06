@@ -1,5 +1,5 @@
 [package]
-name = "converter"
+name = "ocr"
 version.workspace = true
 edition.workspace = true
 

@@ -1,13 +1,13 @@
 //! Converts the sample chapter with the real models and the real Jev API, because nothing
 //! offline can tell whether the flags, schemas and prompts still work together.
 
-use converter::content::PieceDetail;
-use converter::{convert_chapter, read_chapter};
+use ocr::content::PieceDetail;
+use ocr::{convert_chapter, read_chapter};
 
 use crate::read_chapter::assert_sample_chapter;
 use crate::stubs::{read_json, sample_job};
 
-const RUN_COMMAND: &str = "set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p converter --test integration -- --ignored convert_live::converts_sample_chapter_live --nocapture";
+const RUN_COMMAND: &str = "set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p ocr --test integration -- --ignored convert_live::converts_sample_chapter_live --nocapture";
 
 fn require_prod_api() {
     assert_eq!(
@@ -69,7 +69,7 @@ fn print_figures(chapter: &std::path::Path) {
 }
 
 #[tokio::test]
-#[ignore = "calls the real claude CLI and the real Jev API and spends quota; run with: set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p converter --test integration -- --ignored convert_live::converts_sample_chapter_live --nocapture"]
+#[ignore = "calls the real claude CLI and the real Jev API and spends quota; run with: set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p ocr --test integration -- --ignored convert_live::converts_sample_chapter_live --nocapture"]
 async fn converts_sample_chapter_live() {
     require_prod_api();
     let root = tempfile::tempdir().unwrap();

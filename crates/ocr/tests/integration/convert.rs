@@ -5,10 +5,10 @@ use std::error::Error;
 use std::path::Path;
 use std::process::Command;
 
-use converter::ConversionSummary;
-use converter::content::{ContentError, RelationshipKind};
-use converter::convert::{ConvertError, convert_chapter_with};
-use converter::reader::{PieceId, read_chapter};
+use ocr::ConversionSummary;
+use ocr::content::{ContentError, RelationshipKind};
+use ocr::convert::{ConvertError, convert_chapter_with};
+use ocr::reader::{PieceId, read_chapter};
 
 use crate::figure_pictures::{
     assert_figure_pictures_read_back, assert_figures_cut, assert_hard_fallbacks,
@@ -38,7 +38,7 @@ fn call_steps(page: &serde_json::Value) -> Vec<&str> {
 /// Runs the built command in an empty folder, so no `.env` file is found.
 fn run_command(arguments: &[&std::ffi::OsStr], api_key: Option<&str>) -> std::process::Output {
     let working_folder = tempfile::tempdir().unwrap();
-    let mut command = Command::new(env!("CARGO_BIN_EXE_converter"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ocr"));
     command
         .args(arguments)
         .current_dir(working_folder.path())
@@ -157,7 +157,7 @@ fn assert_routes_reasons_and_calls(chapter: &Path, stubs: &StubServices) {
 }
 
 /// A page with the standard transcription keeps all three kinds of relationship, and the
-/// footnote citation the converter adds from the marker.
+/// footnote citation `ocr` adds from the marker.
 fn assert_relationships_saved(chapter: &Path) {
     let page_two = read_json(&page_folder(chapter, 2).join("page.json"));
     let relationships: Vec<(&str, u64, u64)> = page_two["relationships"]
@@ -340,7 +340,7 @@ async fn failing_page_is_named_and_the_next_run_resumes() {
         matches!(
             &error,
             ConvertError::PageFailed { position: 7, source, .. }
-                if matches!(**source, converter::PageError::ReplyRejected { .. })
+                if matches!(**source, ocr::PageError::ReplyRejected { .. })
         ),
         "{error:?}"
     );
@@ -427,8 +427,7 @@ async fn different_pdf_for_the_same_chapter_is_refused() {
     let one_page = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/pdfs/text.pdf");
     std::fs::copy(one_page, &other_pdf).unwrap();
     let other_job =
-        converter::ChapterJob::new("Option Volatility and Pricing", &other_pdf, root.path())
-            .unwrap();
+        ocr::ChapterJob::new("Option Volatility and Pricing", &other_pdf, root.path()).unwrap();
 
     let error = convert_chapter_with(&other_job, &stubs).await.unwrap_err();
 

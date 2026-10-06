@@ -243,7 +243,7 @@ async fn run<S: PageServices>(
         finished: false,
     };
     // SMELL: nothing stops two runs on the same chapter at once. They would remove each other's
-    // working folders. Run one converter per chapter.
+    // working folders. Run one `ocr` run per chapter.
     index.write(folder)?;
 
     let to_do = pages_to_do(folder, page_count)?;

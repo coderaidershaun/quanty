@@ -4,13 +4,13 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use converter::ChapterJob;
-use converter::categorise::PageCategories;
-use converter::claude::{Answer, CallUsage};
-use converter::content::{PageBox, Symbol};
-use converter::jev::{JevError, MathPlacement};
-use converter::services::{PageServices, PageSource, ServiceError};
-use converter::transcribe::{
+use ocr::ChapterJob;
+use ocr::categorise::PageCategories;
+use ocr::claude::{Answer, CallUsage};
+use ocr::content::{PageBox, Symbol};
+use ocr::jev::{JevError, MathPlacement};
+use ocr::services::{PageServices, PageSource, ServiceError};
+use ocr::transcribe::{
     CitedKind, CitedLabel, CopiedPage, CopiedPiece, Discussion, TranscribedPage, TranscribedPiece,
 };
 
@@ -217,7 +217,7 @@ const UNUSABLE_BOUNDS: PageBox = PageBox {
 };
 
 // A line printed on page 3 of the sample, and the first lines of the paragraph under the figure
-// on page 6. The canned text repeats them, so the converter can tell they are body text when it
+// on page 6. The canned text repeats them, so `ocr` can tell they are body text when it
 // works out where to cut a figure.
 const PAGE_THREE_LINE: &str = "a trader depending on the types of strategies being executed";
 const PAGE_SIX_LINES: &str = "gamma, the potential profit when the underlying market moves. The risk is the theta, the money that will be lost through the passage of time";

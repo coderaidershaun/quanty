@@ -9,9 +9,9 @@ repos:
       - id: check-yaml
       - id: detect-private-key
       - id: end-of-file-fixer
-        exclude: ^(crates/converter/tests/integration/fixtures/|samples/content/)
+        exclude: ^(crates/ocr/tests/integration/fixtures/|samples/content/)
       - id: trailing-whitespace
-        exclude: ^(crates/converter/tests/integration/fixtures/|samples/content/)
+        exclude: ^(crates/ocr/tests/integration/fixtures/|samples/content/)
 
   - repo: local
     hooks:

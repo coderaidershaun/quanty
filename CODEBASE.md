@@ -6,7 +6,7 @@ Cargo.lock
 Cargo.toml
 README.md
 crates/
-  converter/
+  ocr/
     Cargo.toml
     src/
       categorise.rs

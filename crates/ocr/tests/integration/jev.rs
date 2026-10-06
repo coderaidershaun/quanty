@@ -3,9 +3,9 @@
 
 use std::path::PathBuf;
 
-use converter::jev::{Jev, JevError, MathPlacement};
+use ocr::jev::{Jev, JevError, MathPlacement};
 
-const RUN_COMMAND: &str = "set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p converter --test integration -- --ignored jev::";
+const RUN_COMMAND: &str = "set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p ocr --test integration -- --ignored jev::";
 
 const ANY_MATH: &[Option<MathPlacement>] = &[
     Some(MathPlacement::Inline),
@@ -30,7 +30,7 @@ fn fixture(file_name: &str) -> String {
 }
 
 #[tokio::test]
-#[ignore = "calls the real Jev API and spends API credit; run with: set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p converter --test integration -- --ignored jev::"]
+#[ignore = "calls the real Jev API and spends API credit; run with: set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p ocr --test integration -- --ignored jev::"]
 async fn contains_math_matches_sample_pages() {
     require_prod_api();
     let jev = Jev::from_env().expect("CONVERTER_JEV_API_KEY must be set; source .env first");
@@ -62,7 +62,7 @@ async fn contains_math_matches_sample_pages() {
 }
 
 #[tokio::test]
-#[ignore = "calls the real Jev API and spends API credit; run with: set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p converter --test integration -- --ignored jev::"]
+#[ignore = "calls the real Jev API and spends API credit; run with: set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p ocr --test integration -- --ignored jev::"]
 async fn bad_key_is_rejected() {
     require_prod_api();
     let jev = Jev::new("not-a-real-key").expect("client builds");

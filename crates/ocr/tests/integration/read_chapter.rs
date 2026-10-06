@@ -3,8 +3,8 @@
 
 use std::path::{Path, PathBuf};
 
-use converter::content::{CiteKind, ImageShows, PieceDetail, RelationshipKind};
-use converter::reader::{Chapter, ChapterPiece, PieceId, read_chapter};
+use ocr::content::{CiteKind, ImageShows, PieceDetail, RelationshipKind};
+use ocr::reader::{Chapter, ChapterPiece, PieceId, read_chapter};
 
 const SOFT_HYPHEN: char = '\u{AD}';
 const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];

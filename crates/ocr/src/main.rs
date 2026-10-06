@@ -4,10 +4,10 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
-use converter::{ChapterJob, convert_chapter};
+use ocr::{ChapterJob, convert_chapter};
 
 const USAGE: &str =
-    "usage: converter --book \"<Book Title>\" [--out <folder>] chapter-<number>-<name>.pdf
+    "usage: ocr --book \"<Book Title>\" [--out <folder>] chapter-<number>-<name>.pdf
 
 Breaks every page of a chapter PDF into its pieces and saves them under
 <folder>/<book-title>/chapter-<number>/. The folder defaults to `content`.

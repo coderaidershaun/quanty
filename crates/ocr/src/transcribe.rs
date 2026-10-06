@@ -218,7 +218,7 @@ pub struct CitedLabel {
 }
 
 // No doc comments on the variants: schemars would turn the simple list of values into a list of
-// described constants. There is no footnote value because the converter writes those itself.
+// described constants. There is no footnote value because `ocr` writes those itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum CitedKind {

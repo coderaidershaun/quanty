@@ -3,13 +3,13 @@
 
 use std::path::Path;
 
-use converter::content::ImageShows;
-use converter::reader::{PieceId, read_chapter};
+use ocr::content::ImageShows;
+use ocr::reader::{PieceId, read_chapter};
 
 use crate::stubs::{Call, StubServices, page_folder, read_json};
 
 /// The figures the run really cuts: the page, the figure's place in that page's `pieces`, the
-/// rectangle the stub gives, and the rectangle the converter must draw. Page 2's figure matches
+/// rectangle the stub gives, and the rectangle `ocr` must draw. Page 2's figure matches
 /// nothing printed on its page, so its rectangle is only padded. Page 6's is trimmed above the
 /// body text under it. Page 7's grows to take in a label line far above its top edge.
 const CUT_ROWS: [(u32, usize, [i64; 4], [i64; 4]); 3] = [

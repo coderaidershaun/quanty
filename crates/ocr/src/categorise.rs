@@ -1,4 +1,4 @@
-//! Finds out what kinds of content a PDF page holds, so the converter can choose how to handle it.
+//! Finds out what kinds of content a PDF page holds, so `ocr` can choose how to handle it.
 
 use std::path::Path;
 use std::time::Duration;

@@ -6,11 +6,13 @@ use std::path::{Path, PathBuf};
 
 const QDRANT_URL: &str = "QDRANT_URL";
 const FALKORDB_URL: &str = "FALKORDB_URL";
+const FALKORDB_GRAPH: &str = "FALKORDB_GRAPH";
 const QDRANT_ITEMS_COLLECTION: &str = "QDRANT_ITEMS_COLLECTION";
 const GEMINI_API_KEY: &str = "EMBEDDING_GEMINI_API_KEY";
 
 const DEFAULT_QDRANT_URL: &str = "http://localhost:6334";
 const DEFAULT_FALKORDB_URL: &str = "falkor://localhost:6379";
+const DEFAULT_FALKORDB_GRAPH: &str = "quanty";
 const DEFAULT_ITEMS_COLLECTION: &str = "items";
 
 const DOTENV_FILE_NAME: &str = ".env";
@@ -43,6 +45,9 @@ pub struct Config {
     /// The gRPC address of Qdrant.
     pub qdrant_url: String,
     pub falkordb_url: String,
+    /// The graph that documents and items are written to. Tests set another name so they never
+    /// touch the real graph.
+    pub falkordb_graph: String,
     /// Where items are stored. Tests set another name so they never touch the real collection.
     pub items_collection: String,
     /// Not needed by every command, so a missing key is not an error here.
@@ -104,6 +109,8 @@ impl Config {
         Ok(Config {
             qdrant_url: setting(QDRANT_URL).unwrap_or_else(|| DEFAULT_QDRANT_URL.to_owned()),
             falkordb_url: setting(FALKORDB_URL).unwrap_or_else(|| DEFAULT_FALKORDB_URL.to_owned()),
+            falkordb_graph: setting(FALKORDB_GRAPH)
+                .unwrap_or_else(|| DEFAULT_FALKORDB_GRAPH.to_owned()),
             items_collection: setting(QDRANT_ITEMS_COLLECTION)
                 .unwrap_or_else(|| DEFAULT_ITEMS_COLLECTION.to_owned()),
             gemini_api_key: setting(GEMINI_API_KEY).map(ApiKey::new),

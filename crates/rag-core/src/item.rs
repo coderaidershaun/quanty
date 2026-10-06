@@ -31,6 +31,32 @@ impl fmt::Display for DocId {
     }
 }
 
+impl FromStr for DocId {
+    type Err = ParseDocIdError;
+
+    /// Reads what `Display` prints: the UUID of a document.
+    fn from_str(text: &str) -> Result<DocId, ParseDocIdError> {
+        Uuid::parse_str(text)
+            .map(DocId)
+            .map_err(|source| ParseDocIdError {
+                text: text.to_owned(),
+                source,
+            })
+    }
+}
+
+/// The text is not the UUID of a document. The message is written to be read on its own,
+/// because a command line prints only this line.
+#[derive(thiserror::Error, Debug)]
+#[error(
+    "{text:?} is not a document id; a document id is the UUID that an ingest prints as \"document id\""
+)]
+pub struct ParseDocIdError {
+    text: String,
+    #[source]
+    source: uuid::Error,
+}
+
 /// One stored thing. An item has this one identifier in every store that holds it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]

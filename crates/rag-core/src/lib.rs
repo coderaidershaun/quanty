@@ -13,5 +13,5 @@ pub use embedder::{
     DocumentInput, EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, EmbedError, Embedder, Embedding,
     GeminiEmbedder,
 };
-pub use item::{DocId, ItemId, ItemKind, ItemPayload, UnknownItemKind};
+pub use item::{DocId, ItemId, ItemKind, ItemPayload, ParseDocIdError, UnknownItemKind};
 pub use item_store::{ItemHit, ItemPoint, ItemStore, StoreError};

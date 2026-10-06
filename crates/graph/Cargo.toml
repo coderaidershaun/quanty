@@ -7,3 +7,6 @@ edition.workspace = true
 falkordb.workspace = true
 rag-core.workspace = true
 thiserror.workspace = true
+
+[features]
+testing = []

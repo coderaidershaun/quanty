@@ -63,6 +63,18 @@ Reads one converted chapter folder with `ocr::read_chapter` and stores its items
 
 The ids are computed from the chapter's source hash and the place of the item in the chapter, so running the command again on the same chapter overwrites the same points and adds none. The command needs `EMBEDDING_GEMINI_API_KEY`, and Gemini bills each run by the token.
 
+The command also writes the chapter to the FalkorDB graph, `quanty` unless `FALKORDB_GRAPH` names another: one `Document` node, one `Item` node for each item, an edge `HAS_ITEM` from the document to each item, and an edge `NEXT` from each item to the one after it in reading order. An `Item` node has the same id as its point in Qdrant. The collection is prepared and the graph is written before anything is embedded, so a store that is down fails the run before Gemini bills anything, and a run that stopped half way is finished by running it again. A second run on the same chapter adds no node and no edge.
+
+## Deleting a document
+
+```bash
+cargo run -p rag-ingestion --bin rag-ingest -- delete-document <document id>
+```
+
+Removes one document from both stores: its points from the Qdrant collection, and its `Document` node, its `Item` nodes and all their edges from the graph. Other documents are left whole. The document id is the one that an ingest prints as `document id`. The command prints how many points and nodes it removed, and refuses an id under which neither store holds anything, so an item id or a mistyped id removes nothing.
+
+Run it again if it stopped half way: it removes what is left. It is also the way to clear a chapter before it is ingested again after the way it is cut into items has changed, because an ingest never removes the points and nodes of an earlier run.
+
 ## Asking a question
 
 ```bash

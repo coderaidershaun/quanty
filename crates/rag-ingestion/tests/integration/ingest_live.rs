@@ -1,14 +1,16 @@
-//! Runs the real `rag-ingest` command twice on the sample chapter, against the real Gemini API
-//! and a throwaway collection of the local Qdrant, because only that shows that the binary
-//! reads its key, finds its collection and stores points that a second run overwrites.
+//! Runs the real `rag-ingest` command twice on the sample chapter, against the real Gemini API,
+//! a throwaway collection of the local Qdrant and a throwaway graph of the local FalkorDB,
+//! because only that shows that the binary reads its key, finds its collection and its graph,
+//! and stores points and nodes that a second run overwrites.
 
 use std::collections::BTreeSet;
-use std::process::Command;
 
+use graph::FalkorGraph;
+use graph::testing::size;
 use ocr::read_chapter;
 use rag_ingestion::chapter_items;
 
-use crate::support::{self, ThrowawayCollection, points_in};
+use crate::support::{self, ThrowawayStores, points_in, size_of_one_document};
 
 const RUN_COMMAND: &str = "set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p rag-ingestion --test integration -- --ignored ingest_live::";
 
@@ -24,17 +26,11 @@ fn require_prod_api() {
 #[ignore = "calls the real Gemini API and spends API credit; run with: set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p rag-ingestion --test integration -- --ignored ingest_live::"]
 async fn rag_ingest_fills_a_throwaway_collection_twice_live() {
     require_prod_api();
-    let throwaway = ThrowawayCollection::new("ingest-live");
+    let throwaway = ThrowawayStores::new("ingest-live");
     let config = throwaway.config();
     let expected_items = chapter_items(&read_chapter(&support::sample_chapter()).unwrap()).len();
 
-    let run = || {
-        Command::new(env!("CARGO_BIN_EXE_rag-ingest"))
-            .arg(support::sample_chapter())
-            .env("QDRANT_ITEMS_COLLECTION", &config.items_collection)
-            .output()
-            .expect("the rag-ingest binary should start")
-    };
+    let run = || throwaway.rag_ingest([support::sample_chapter()]);
 
     let first = run();
     assert!(
@@ -53,6 +49,9 @@ async fn rag_ingest_fills_a_throwaway_collection_twice_live() {
         BTreeSet::from(["chunk", "figure", "formula", "table"])
     );
     let ids: BTreeSet<&String> = points.iter().map(|(id, _)| id).collect();
+    let graph = FalkorGraph::connect(config).await.unwrap();
+    let graph_size = size_of_one_document(expected_items);
+    assert_eq!(size(&graph).await, graph_size);
 
     let second = run();
     assert!(
@@ -68,4 +67,5 @@ async fn rag_ingest_fills_a_throwaway_collection_twice_live() {
     );
     let ids_again: BTreeSet<&String> = points_again.iter().map(|(id, _)| id).collect();
     assert_eq!(ids_again, ids);
+    assert_eq!(size(&graph).await, graph_size, "a second run adds nothing");
 }

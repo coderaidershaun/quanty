@@ -1,15 +1,16 @@
-//! Takes one converted chapter folder from disk to stored points: read, map to items, embed,
-//! store. Running it again on the same chapter writes the same points over themselves.
+//! Takes one converted chapter folder from disk to stored points and graph nodes: read, map to
+//! items, write the graph, embed, store. Running it again on the same chapter writes the same
+//! points and the same nodes over themselves.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use graph::{DocumentNode, GraphError, GraphStore, ItemNode};
 use ocr::ReadChapterError;
-use rag_core::{
-    DocId, DocumentInput, EmbedError, Embedder, ItemKind, ItemPoint, ItemStore, StoreError,
-};
+use rag_core::{DocId, DocumentInput, EmbedError, Embedder, ItemKind, ItemPoint, StoreError};
 
 use crate::items::{Item, chapter_items, document_id, document_title};
+use crate::stores::Stores;
 
 #[derive(thiserror::Error, Debug)]
 pub enum IngestError {
@@ -28,6 +29,9 @@ pub enum IngestError {
 
     #[error("could not store the items of the chapter")]
     Store(#[from] StoreError),
+
+    #[error("could not write the chapter to the graph")]
+    Graph(#[from] GraphError),
 
     #[error("the chapter made {items} items but the embedder returned {vectors} vectors")]
     VectorCount { items: usize, vectors: usize },
@@ -93,21 +97,25 @@ impl fmt::Display for IngestSummary {
     }
 }
 
-/// Reads the chapter in `chapter_folder`, embeds its items and stores them as points.
+/// Reads the chapter in `chapter_folder`, writes its document and items to the graph, embeds the
+/// items and stores them as points.
 ///
-/// The store is prepared before anything is embedded, so a store that is down fails the run
-/// before an embedding call is paid for. Every stored picture path is absolute.
+/// The collection is prepared and the graph is written before anything is embedded, so a store
+/// that is down fails the run before an embedding call is paid for. A run that stops after that
+/// leaves the chapter in the graph with no points yet, and running it again stores them. A point
+/// is never stored without its node. Every stored picture path is absolute.
 ///
 /// # Errors
 /// - [`IngestError::ChapterFolder`] when the folder does not exist
 /// - [`IngestError::Read`] when it is not a finished converted chapter
-/// - [`IngestError::Embed`] and [`IngestError::Store`] when the outside calls fail
+/// - [`IngestError::Embed`], [`IngestError::Store`] and [`IngestError::Graph`] when the outside
+///   calls fail
 /// - [`IngestError::VectorCount`] when the embedder returns another number of vectors than
 ///   there were items
-pub async fn ingest_chapter(
+pub async fn ingest_chapter<G: GraphStore>(
     chapter_folder: &Path,
     embedder: &impl Embedder,
-    store: &ItemStore,
+    stores: &Stores<G>,
 ) -> Result<IngestSummary, IngestError> {
     // SMELL: the stored picture paths are absolute, so they stop working when the chapter
     // folder is moved, until the chapter is ingested again.
@@ -119,8 +127,18 @@ pub async fn ingest_chapter(
     let chapter = ocr::read_chapter(&folder)?;
     let items = chapter_items(&chapter);
     let items_by_kind = ItemCounts::of(&items);
+    let document = DocumentNode {
+        id: document_id(&chapter.index),
+        title: document_title(&chapter.index),
+    };
+    let nodes: Vec<ItemNode> = items.iter().map(item_node).collect();
 
-    store.ensure_collection().await?;
+    stores.items.ensure_collection().await?;
+    // SMELL: nothing removes the item nodes of an earlier run either, with their `NEXT` edges. A
+    // chapter that is cut into items differently ends up with two chains of items in the graph,
+    // until its document is deleted and ingested again.
+    stores.graph.upsert_document(&document).await?;
+    stores.graph.upsert_items(document.id, &nodes).await?;
 
     let (inputs, stored): (Vec<DocumentInput>, Vec<_>) = items
         .into_iter()
@@ -146,14 +164,23 @@ pub async fn ingest_chapter(
     // SMELL: nothing removes the points of an earlier run. When the way a chapter is cut into
     // items changes, its items get other positions and so other identifiers, and the old points
     // of the chapter stay in the collection beside the new ones.
-    store.upsert(&points).await?;
-    let points_in_collection = store.count().await?;
+    stores.items.upsert(&points).await?;
+    let points_in_collection = stores.items.count().await?;
 
     Ok(IngestSummary {
-        doc_id: document_id(&chapter.index),
-        doc_title: document_title(&chapter.index),
-        collection: store.collection().to_owned(),
+        doc_id: document.id,
+        doc_title: document.title,
+        collection: stores.items.collection().to_owned(),
         items_by_kind,
         points_in_collection,
     })
+}
+
+fn item_node(item: &Item) -> ItemNode {
+    ItemNode {
+        id: item.id,
+        kind: item.payload.kind,
+        page: item.payload.page,
+        printed_page: item.payload.printed_page.clone(),
+    }
 }

@@ -1,15 +1,17 @@
 //! Finds out what kinds of content a PDF page holds, so the converter can choose how to handle it.
 
-use std::path::{Path, PathBuf};
-use std::process::{ExitStatus, Output, Stdio};
+use std::path::Path;
+use std::time::Duration;
 
 use schemars::JsonSchema;
 use schemars::generate::SchemaSettings;
 use serde::{Deserialize, Serialize};
-use tokio::process::Command;
+
+use crate::claude::{self, Answer, ClaudeCall, ClaudeError};
 
 // An alias for the newest Haiku model, so answers can change when a new one comes out.
 const MODEL: &str = "haiku";
+const TAGGING_TIMEOUT: Duration = Duration::from_secs(120);
 
 const SYSTEM_PROMPT: &str = "You categorise a single page from a PDF book. Read the page you are given, then report which kinds of content are visibly present on it. Mark a category true only when that content appears on the page itself, and mark every other category false.";
 
@@ -18,7 +20,7 @@ const SYSTEM_PROMPT: &str = "You categorise a single page from a PDF book. Read 
 /// The JSON schema the model must follow is generated from this struct, so the two cannot
 /// disagree. Each `description` is the wording the model reads for that category, so changing
 /// one changes the answers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 // Do not remove: without it the doc comment above is sent to the model as the description.
 #[schemars(description = "Which kinds of content are present on one PDF page.")]
@@ -28,7 +30,7 @@ pub struct PageCategories {
     )]
     pub math_notation: bool,
     #[schemars(
-        description = "Mathematical notation inside a line of running text, such as symbols, subscripts or short expressions within a sentence."
+        description = "Mathematical notation inside a line of running text, such as symbols, subscripts or short expressions within a sentence. Plain numbers, money amounts, percentages and dates are not mathematical notation."
     )]
     pub inline_with_text_math_notation: bool,
     #[schemars(
@@ -69,66 +71,6 @@ pub struct PageCategories {
     pub sub_heading: bool,
 }
 
-/// Why a page could not be categorised.
-#[derive(thiserror::Error, Debug)]
-pub enum CategoriseError {
-    #[error("pdf page is missing or unreadable at {}", path.display())]
-    PageUnreadable {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
-
-    #[error("could not start the claude command; check that it is installed and on PATH")]
-    Spawn(#[source] std::io::Error),
-
-    #[error("claude failed ({status}) with no readable response, stderr {stderr:?}")]
-    Exited {
-        status: ExitStatus,
-        stderr: String,
-        #[source]
-        source: serde_json::Error,
-    },
-
-    #[error("claude response was not the expected json")]
-    UnreadableResponse(#[source] serde_json::Error),
-
-    #[error(
-        "claude run ended with subtype {subtype} and no categories: {}",
-        join_reasons(.result.as_deref(), .errors)
-    )]
-    NoCategories {
-        subtype: String,
-        result: Option<String>,
-        errors: Vec<String>,
-    },
-}
-
-// SMELL: an empty `result` string counts as a reason, so the message ends with a bare colon.
-fn join_reasons(result: Option<&str>, errors: &[String]) -> String {
-    let reasons: Vec<&str> = result
-        .into_iter()
-        .chain(errors.iter().map(String::as_str))
-        .collect();
-    if reasons.is_empty() {
-        "no reason given".to_owned()
-    } else {
-        reasons.join("; ")
-    }
-}
-
-// Do not add `deny_unknown_fields`: `claude` adds new fields to this object over time.
-#[derive(Deserialize)]
-struct HeadlessResult {
-    subtype: String,
-    #[serde(default)]
-    result: Option<String>,
-    #[serde(default)]
-    errors: Vec<String>,
-    #[serde(default)]
-    structured_output: Option<PageCategories>,
-}
-
 /// Asks Claude which kinds of content are on a single-page PDF.
 ///
 /// This runs the `claude` command line tool, which must be installed and logged in.
@@ -136,87 +78,53 @@ struct HeadlessResult {
 /// The file must hold exactly one page. A longer PDF is read whole and categorised without
 /// complaint, so the answer would describe several pages at once.
 ///
-/// There is no timeout or retry. Wrap the call in `tokio::time::timeout` to bound it; dropping
-/// the future kills the `claude` process.
+/// The call gives up after 120 seconds and does not retry. It refuses to run when
+/// `ANTHROPIC_API_KEY` is set, because `claude` would then bill the API instead of the
+/// subscription.
 ///
 /// # Errors
-/// - [`CategoriseError::PageUnreadable`] if `pdf_page` does not exist or cannot be resolved
-/// - [`CategoriseError::Spawn`] if the `claude` command cannot be started, or waiting for it to
+/// - [`ClaudeError::ApiKeySet`] if `ANTHROPIC_API_KEY` is set
+/// - [`ClaudeError::FileUnreadable`] if `pdf_page` does not exist or cannot be resolved
+/// - [`ClaudeError::Spawn`] if the `claude` command cannot be started, or waiting for it to
 ///   finish fails
-/// - [`CategoriseError::Exited`] if `claude` fails and prints nothing readable
-/// - [`CategoriseError::UnreadableResponse`] if `claude` succeeds but prints something other than
+/// - [`ClaudeError::TimedOut`] if `claude` has not answered after 120 seconds
+/// - [`ClaudeError::Exited`] if `claude` fails and prints nothing readable
+/// - [`ClaudeError::UnreadableResponse`] if `claude` succeeds but prints something other than
 ///   its JSON result
-/// - [`CategoriseError::NoCategories`] if the run finished without producing categories
-pub async fn categorise_page(pdf_page: &Path) -> Result<PageCategories, CategoriseError> {
-    let absolute_path =
-        std::fs::canonicalize(pdf_page).map_err(|source| CategoriseError::PageUnreadable {
-            path: pdf_page.to_path_buf(),
-            source,
-        })?;
-    let prompt = format!(
-        "Categorise the PDF page at {}. Read the whole file with the Read tool first, with no page range.",
-        absolute_path.display()
-    );
-
-    // The prompt must come right after `-p`: `--tools` and `--allowedTools` take any number of
-    // values and would swallow a prompt placed after them.
-    let output = Command::new("claude")
-        .arg("-p")
-        .arg(prompt)
-        .args(["--model", MODEL])
-        .args(["--output-format", "json"])
-        .arg("--json-schema")
-        .arg(page_categories_schema().to_string())
-        .args(["--system-prompt", SYSTEM_PROMPT])
-        // Do not remove: without this flag the run loads the instructions, hooks and plugins of
-        // whatever project it is started in, and a hook could then fire for every page.
-        .arg("--safe-mode")
-        // Do not widen: Read is the only tool the model is given and anything else is refused, so
-        // text on a page cannot make it write files, run commands or fetch anything.
-        .args(["--tools", "Read"])
-        .args(["--allowedTools", "Read"])
-        .args(["--permission-mode", "dontAsk"])
-        .arg("--no-session-persistence")
-        // Without this, `claude` waits a few seconds for input on the caller's stdin.
-        .stdin(Stdio::null())
-        .kill_on_drop(true)
-        .output()
-        .await
-        // SMELL: a failure while waiting for `claude` is also reported as a failure to start it.
-        .map_err(CategoriseError::Spawn)?;
-
-    read_response(&output)
+/// - [`ClaudeError::RunFailed`] if the run finished without producing categories
+/// - [`ClaudeError::UnexpectedReply`] if the categories do not fit [`PageCategories`]
+pub async fn categorise_page(pdf_page: &Path) -> Result<PageCategories, ClaudeError> {
+    Ok(categorise_page_with_usage(pdf_page).await?.value)
 }
 
-fn read_response(output: &Output) -> Result<PageCategories, CategoriseError> {
-    // Stdout is read before the exit status: a run that fails still prints a JSON result saying
-    // why, and exits with a failure status.
-    match serde_json::from_slice::<HeadlessResult>(&output.stdout) {
-        Ok(HeadlessResult {
-            subtype,
-            structured_output: Some(categories),
-            ..
-        }) if subtype == "success" => Ok(categories),
-        Ok(run) => Err(CategoriseError::NoCategories {
-            subtype: run.subtype,
-            result: run.result,
-            errors: run.errors,
-        }),
-        Err(source) if output.status.success() => Err(CategoriseError::UnreadableResponse(source)),
-        Err(source) => Err(CategoriseError::Exited {
-            status: output.status,
-            stderr: String::from_utf8_lossy(&output.stderr).trim().to_owned(),
-            source,
-        }),
-    }
+/// Like [`categorise_page`], and also reports what the call used.
+pub(crate) async fn categorise_page_with_usage(
+    pdf_page: &Path,
+) -> Result<Answer<PageCategories>, ClaudeError> {
+    claude::run(&ClaudeCall {
+        model: MODEL,
+        effort: None,
+        system_prompt: SYSTEM_PROMPT,
+        instruction: "Categorise the PDF page",
+        correction: None,
+        schema: &page_categories_schema(),
+        file: pdf_page,
+        also_read: None,
+        timeout: TAGGING_TIMEOUT,
+    })
+    .await
 }
 
 // `claude` rejects schemas newer than draft 07, and schemars defaults to a newer one.
 fn page_categories_schema() -> serde_json::Value {
-    SchemaSettings::draft07()
+    let mut schema = SchemaSettings::draft07()
         .into_generator()
         .into_root_schema_for::<PageCategories>()
-        .to_value()
+        .to_value();
+    // Do not remove: the answers were tuned with the keys in sorted order, and the schema crate
+    // now keeps declaration order instead.
+    schema.sort_all_objects();
+    schema
 }
 
 #[cfg(test)]

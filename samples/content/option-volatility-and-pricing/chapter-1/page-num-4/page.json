@@ -1,0 +1,149 @@
+{
+  "format-version": 1,
+  "page-position": 4,
+  "printed-page-number": "147",
+  "running-header": "7.1 Likelihood of Simplified Regular Vine Copulas",
+  "starts-mid-sentence": false,
+  "ends-mid-sentence": true,
+  "pieces": [
+    {
+      "number": 1,
+      "file": "01-text.md",
+      "kind": "text",
+      "cites": [
+        {
+          "kind": "equation",
+          "label": "(4.18)"
+        },
+        {
+          "kind": "equation",
+          "label": "(4.20)"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "file": "02-formula.tex",
+      "kind": "formula",
+      "label": "(7.3)",
+      "name": "Likelihood of the D-vine copula",
+      "statement": "The likelihood of the D-vine copula is a product over observations, tree levels and positions of pair copula densities evaluated at conditional distribution functions.",
+      "symbols": []
+    },
+    {
+      "number": 3,
+      "file": "03-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 4,
+      "file": "04-formula.tex",
+      "kind": "formula",
+      "label": "(7.4)",
+      "name": "Likelihood of a C-vine copula",
+      "statement": "The likelihood of a C-vine copula is a product over observations, tree levels and positions of pair copula densities evaluated at conditional distribution functions.",
+      "symbols": []
+    },
+    {
+      "number": 5,
+      "file": "05-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 6,
+      "file": "06-heading.md",
+      "kind": "heading",
+      "rank": 2,
+      "printed-number": "7.2"
+    },
+    {
+      "number": 7,
+      "file": "07-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 8,
+      "file": "08-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 9,
+      "file": "09-text.md",
+      "kind": "text",
+      "cites": [
+        {
+          "kind": "equation",
+          "label": "(7.2)"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "kind": "introduces",
+      "from": 1,
+      "to": 2
+    },
+    {
+      "kind": "introduces",
+      "from": 3,
+      "to": 4
+    }
+  ],
+  "conversion": {
+    "tags": {
+      "math-notation": true,
+      "inline-with-text-math-notation": true,
+      "chapter-number": true,
+      "chapter-name": false,
+      "page-number": true,
+      "diagram-2d-multi-axis-chart": false,
+      "diagram-2d-single-axis-chart": false,
+      "diagram-3d-surface-chart": false,
+      "diagram-2d-bar-chart": false,
+      "diagram-2d-mixed-chart": false,
+      "diagram-other": false,
+      "image": false,
+      "table": false,
+      "sub-heading": true
+    },
+    "math-check": "both",
+    "route": "sonnet",
+    "route-reasons": [
+      "tags-report-math",
+      "math-check-reports-math"
+    ],
+    "checks": {
+      "text-layer-words": 375,
+      "piece-words": 286,
+      "word-match": {
+        "piece-words-in-text-layer": 0.943,
+        "text-layer-words-in-pieces": 0.747
+      },
+      "displayed-math-without-formula": false,
+      "reply-retried": false
+    },
+    "calls": [
+      {
+        "step": "tag",
+        "model": "claude-haiku-4-5-20251001",
+        "cost-usd": 0.020944000000000004,
+        "output-tokens": 1531,
+        "thinking-tokens": 855,
+        "seconds": 16.048600083
+      },
+      {
+        "step": "transcribe",
+        "model": "claude-sonnet-5-5",
+        "cost-usd": 0.024446,
+        "output-tokens": 1927,
+        "thinking-tokens": 0,
+        "seconds": 15.313325083
+      }
+    ]
+  }
+}

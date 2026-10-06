@@ -1,0 +1,36 @@
+                                                  Forward Pricing
+
+
+ What should be the fair price for a forward contract? We can answer this ques­
+ tion by considering the costs and benefits of buying now compared with buy­
+ ing on some future date. In a forward contract, the costs and benefits are not
+ eliminated; they are simply deferred. They should therefore be reflected in the
+     forward price.
+               forward price = current cash price + costs of buying now
+                                                  — benefits of buying now
+          Let's return to our example from Chapter 1 where my friendJerry wanted
+     to acquire land on which to build a restaurant. He was considering both a cash
+     purchase and a one-year forward contract. If he enters into a forward contract,
+     what should be a fair One-year forward price for the land?
+          IfJerry wants to buy the land right now, he will have to pay Farmer Smith's
+      asking price of $100,000. However, in researching the feasibility of a one-year
+      forward contract,Jerry has learned the following:
+
+            1. The cost of money, whether borrowing or lending,' is currently 8.00
+                 percent annually.
+            2. The owner of the land must pay $2,000 in real estate taxes; the taxes
+               are due in nine months.
+             3. There is a small oil well on the land that pumps oil at the rate of $500
+                per month; the oil revenue is receivable at the end of each month.
+
+           If Jerry decides to buy the land now, what are the costs compared with
+       buying the land one year from now? First, Jerry will have to borrow $100,000
+       from the local bank. At a rate of 8 percent, the one-year interest costs will be
+                                           8% ><$100,000 = $8,000
+
+       1At this point, we will assume that the same interest rate applies to all transactions, whether borrowing or
+       lending. Admittedly, for a trader, the interest cost of borrowing will almost always be higher than the interest
+       earned when lending
+
+12
+

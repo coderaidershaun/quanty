@@ -1,0 +1,1 @@
+will cause the option's value to rise by 0.5 × 0.10 = 0.05. Consequently, the option will only decline by 0.15, a decline of 0.20 due to a change in the underlying price combined with an increase of 0.05 due to the increase in implied volatility. The option has a *skewed* or *adjusted delta* of -15.

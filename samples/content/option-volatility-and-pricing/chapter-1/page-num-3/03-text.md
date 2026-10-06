@@ -1,0 +1,1 @@
+the *partial derivatives*, will not answer all our questions concerning changing market conditions, but they are an important starting point in analyzing the risks associated with both simple and complex option positions.

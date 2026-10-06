@@ -1,0 +1,71 @@
+  Figure 7-2 Effect of changing interest rates on option values.
+
+
+                                                                                  If foreign                     If foreign
+                                  lf domestic       If domestic
+                                                                                  rates rise                     rates fall
+                                   rates rise.       rates fall
+                                                                             not applicable                 not applicable
+                                  rise             fall
+      Stock option calls will
+                                                                             not applicable                 not applicable
+      stock option puts will      fan_________ rise
+
+      fl itiire^ Option calls
+                                                                             not applicable                 not applicable
+      (stnek-tvoe settlement)     fall              fall
+
+      flitiiroG notion DUtS                               --------------- -------------------------------------------------------------
+                                                                              not applicable                not applicable
+      (stock-type settlement)     fall              fall
+
+      futures option calls        no                no
+                                                                              not applicable                 not applicable
+      (futures-type settlement)   effect            effect
+
+      futures option puts          no                no
+                                                     effect                   not applicable                 not applicable
+      (futures-type settlement)    effect
+
+      foreign currency
+                                   rise              fall                      fall                          rise
+          option calls
+
+       foreign currency
+                                   fall              rise                      rise                           fall___________
+          option puts________
+
+
+      Figure 7-3 Effect of changing dividends on stock option values.
+
+
+                                                 If the dividend                                    If the dividend
+                                                   is raised                                                is cut               ____
+
+       stock option calls will                         fall                                                  rise               ____
+
+       stock option puts will                          rise                                                   fall
+
+
+
+
+      the partial derivatives, will not answer all our questions concerning changing market
+      conditions, but they are an important starting point in analyzing the risks associ­
+      ated with both simple and complex option positions.
+
+
+       The Delta
+
+       The delta (A) is a measure of an option's risk with respect to the direction of
+       movement in the underlying contract. A positive delta indicates a desire for
+       upward movement; a negative delta indicates a desire for downward move­
+       ment. The delta has several different interpretations, any of which may be use­
+       ful to a trader depending on the types of strategies being executed.
+
+        Rate of Change
+        At expiration, an option is worth exactly its intrinsic value. Prior to expiration,
+        however, the theoretical value of an option is a curve that will approach intrin­
+        sic value as the option goes very deeply into the money or very far out of the
+
+100     OPTION VOLATILITY AND PRICING
+

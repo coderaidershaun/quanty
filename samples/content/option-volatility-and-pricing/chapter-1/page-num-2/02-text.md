@@ -1,0 +1,1 @@
+What should be the fair price for a forward contract? We can answer this question by considering the costs and benefits of buying now compared with buying on some future date. In a forward contract, the costs and benefits are not eliminated; they are simply deferred. They should therefore be reflected in the forward price.

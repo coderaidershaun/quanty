@@ -1,0 +1,111 @@
+{
+  "format-version": 1,
+  "page-position": 3,
+  "printed-page-number": "100",
+  "running-header": "OPTION VOLATILITY AND PRICING",
+  "starts-mid-sentence": true,
+  "ends-mid-sentence": true,
+  "pieces": [
+    {
+      "number": 1,
+      "file": "01-table.md",
+      "kind": "table",
+      "label": "Figure 7-2",
+      "caption": "Effect of changing interest rates on option values.",
+      "summary": "Rows are option types and settlement styles; columns are rises or falls in domestic or foreign interest rates, giving the effect on option values."
+    },
+    {
+      "number": 2,
+      "file": "02-table.md",
+      "kind": "table",
+      "label": "Figure 7-3",
+      "caption": "Effect of changing dividends on stock option values.",
+      "summary": "Rows are stock option calls and puts; columns are a raised or cut dividend, giving the effect on option values."
+    },
+    {
+      "number": 3,
+      "file": "03-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 4,
+      "file": "04-heading.md",
+      "kind": "heading",
+      "rank": 2,
+      "printed-number": null
+    },
+    {
+      "number": 5,
+      "file": "05-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 6,
+      "file": "06-heading.md",
+      "kind": "heading",
+      "rank": 3,
+      "printed-number": null
+    },
+    {
+      "number": 7,
+      "file": "07-text.md",
+      "kind": "text",
+      "cites": []
+    }
+  ],
+  "relationships": [],
+  "conversion": {
+    "tags": {
+      "math-notation": false,
+      "inline-with-text-math-notation": true,
+      "chapter-number": false,
+      "chapter-name": false,
+      "page-number": true,
+      "diagram-2d-multi-axis-chart": false,
+      "diagram-2d-single-axis-chart": false,
+      "diagram-3d-surface-chart": false,
+      "diagram-2d-bar-chart": false,
+      "diagram-2d-mixed-chart": false,
+      "diagram-other": false,
+      "image": false,
+      "table": true,
+      "sub-heading": true
+    },
+    "math-check": "none",
+    "route": "sonnet",
+    "route-reasons": [
+      "tags-report-math",
+      "tags-report-table"
+    ],
+    "checks": {
+      "text-layer-words": 297,
+      "piece-words": 269,
+      "word-match": {
+        "piece-words-in-text-layer": 0.97,
+        "text-layer-words-in-pieces": 0.966
+      },
+      "displayed-math-without-formula": false,
+      "reply-retried": false
+    },
+    "calls": [
+      {
+        "step": "tag",
+        "model": "claude-haiku-4-5-20251001",
+        "cost-usd": 0.019958,
+        "output-tokens": 1451,
+        "thinking-tokens": 862,
+        "seconds": 16.206164125
+      },
+      {
+        "step": "transcribe",
+        "model": "claude-sonnet-5-5",
+        "cost-usd": 0.039104,
+        "output-tokens": 1360,
+        "thinking-tokens": 0,
+        "seconds": 10.285360667
+      }
+    ]
+  }
+}

@@ -4,13 +4,17 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+anyhow.workspace = true
+dotenvy.workspace = true
+futures-util.workspace = true
 reqwest.workspace = true
-rmcp.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["process"] }
+tokio = { workspace = true, features = ["macros", "process", "rt-multi-thread", "time"] }
 
 [dev-dependencies]
+tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt", "time"] }

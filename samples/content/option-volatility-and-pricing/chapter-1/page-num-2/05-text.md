@@ -1,0 +1,1 @@
+If Jerry wants to buy the land right now, he will have to pay Farmer Smith's asking price of $100,000. However, in researching the feasibility of a one-year forward contract, Jerry has learned the following:

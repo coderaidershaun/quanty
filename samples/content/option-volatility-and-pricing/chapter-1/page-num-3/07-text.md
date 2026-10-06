@@ -1,0 +1,1 @@
+At expiration, an option is worth exactly its intrinsic value. Prior to expiration, however, the theoretical value of an option is a curve that will approach intrinsic value as the option goes very deeply into the money or very far out of the

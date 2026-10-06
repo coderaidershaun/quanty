@@ -1,0 +1,97 @@
+{
+  "format-version": 1,
+  "page-position": 1,
+  "printed-page-number": "1",
+  "running-header": null,
+  "starts-mid-sentence": false,
+  "ends-mid-sentence": true,
+  "pieces": [
+    {
+      "number": 1,
+      "file": "01-heading.md",
+      "kind": "heading",
+      "rank": 1,
+      "printed-number": "1"
+    },
+    {
+      "number": 2,
+      "file": "02-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 3,
+      "file": "03-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 4,
+      "file": "04-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 5,
+      "file": "05-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 6,
+      "file": "06-text.md",
+      "kind": "text",
+      "cites": []
+    }
+  ],
+  "relationships": [],
+  "conversion": {
+    "tags": {
+      "math-notation": false,
+      "inline-with-text-math-notation": false,
+      "chapter-number": true,
+      "chapter-name": true,
+      "page-number": true,
+      "diagram-2d-multi-axis-chart": false,
+      "diagram-2d-single-axis-chart": false,
+      "diagram-3d-surface-chart": false,
+      "diagram-2d-bar-chart": false,
+      "diagram-2d-mixed-chart": false,
+      "diagram-other": false,
+      "image": false,
+      "table": false,
+      "sub-heading": false
+    },
+    "math-check": "none",
+    "route": "haiku-copy",
+    "route-reasons": [],
+    "checks": {
+      "text-layer-words": 401,
+      "piece-words": 401,
+      "word-match": {
+        "piece-words-in-text-layer": 0.995,
+        "text-layer-words-in-pieces": 1.0
+      },
+      "displayed-math-without-formula": false,
+      "reply-retried": false
+    },
+    "calls": [
+      {
+        "step": "tag",
+        "model": "claude-haiku-4-5-20251001",
+        "cost-usd": 0.020228,
+        "output-tokens": 1447,
+        "thinking-tokens": 863,
+        "seconds": 15.321822959
+      },
+      {
+        "step": "copy",
+        "model": "claude-haiku-4-5-20251001",
+        "cost-usd": 0.0536169,
+        "output-tokens": 7540,
+        "thinking-tokens": 6390,
+        "seconds": 69.974428167
+      }
+    ]
+  }
+}

@@ -1,0 +1,55 @@
+ Figure 13-4
+
+
+
+
+      -5
+
+     -10
+
+     -15
+
+     -20                               At an underlying price of
+     -25                               48.40, all three spreads
+                                       show approximately the
+     -30                               same theoretical profit.
+
+    -35
+
+    -40                           Spread 1 (short straddle)
+                                  Spread 2 (ratio spread)
+    -45                           Spread 3 (long butterfly)
+    -50
+       38      40     42         44    46      48      50      52   54    56     58
+                                        Underlying price
+
+
+
+
+      Which spread is best? That depends on what the trader is worried about. If
+ the trader is oblivious to the risk, it won't matter which spread he chooses. On
+ average, each position will show a profit of approximately 6.00. If, however, the
+ trader is more worried about a large downward move in the market, then per­
+ haps Spread 2 is best. And if the trader is unwilling to accept the risk of unlim­
+ited loss in either direction, then perhaps Spread 3 is best.
+      In addition to the possibility of a large move, all three positions are exposed
+to the risk of an incorrect volatility estimate. Because each spread has a nega­
+tive vega, there will be no problem if, over the life of the option, volatility turns
+out to be lower than 18 percent. In such a case, the spreads will show a profit
+greater than originally expected. On the other hand, if volatility turns out to be
+greater than 18 percent, this could present a problem. What will happen if vola­
+tility turns out to be 20 or 25 percent or some higher number? Each spread will
+be hurt because of the negative vega, but will they be hurt to the same degree?
+      Because Spread 2 has the smallest vega (—.875), we might initially conclude
+that it has the smallest volatility risk. But the vega, like the gamma, changes
+as market conditions change. If we raise volatility, the vega of Spread 1, the
+short straddle, will remain essentially unchanged because the vega of an at-the-
+money option is constant with respect to changes in volatility. But the vega of
+Spread 3, the long butterfly, will decline because the vega of in-the-money and
+out-of-the-money options (die May 46 and May 50 puts) will tend to increase as
+volatility rises. With Spread 2, the vega of both options, the May 50 call and the
+^y52 call, will begin to increase, so it's not immediately clear what will hap­
+pen if we increase volatility.
+
+                                                               RISK CONSIDERATIONS      233
+

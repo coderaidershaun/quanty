@@ -1,0 +1,52 @@
+      will cause the option's value to rise by 0.5 x 0.10 — 0.05. Consequently, the option
+      will only decline by 0.15, a decline of 0.20 due to a change in the underlying price
+      combined with an increase of 0.05 due to the increase in implied volatility. The
+      option has a skewed or adjusted delta of —15.
+            The inclusion of a volatility skew in a pricing model will affect the calcu­
+      lation of all option risk measures and can greatly complicate a trader's ability
+      to manage risk. For many traders, it may be best to keep things simple, per­
+      haps using a skew model to generate theoretical values while using a traditional
+      model to calculate the delta, gamma, theta, and vega. For an active trader who
+       carries large option positions, calculating accurate skewed sensitivities becomes
+       much more important because the total value of the position can change very
+       quickly as market conditions change. Financial engineers at professional option
+       trading firms are often responsible for developing methods to accurately calcu­
+       late theoretical values and risk sensitivities using a volatility skew model. But
+       even the most sophisticated model is unlikely to generate values that exactly
+       model option prices under all market conditions. A model can help, but it will
+       always have limitations.
+                combining the volatility term structure across expiration dates with the
+       volatility skew across exercise prices, we can form a volatility surface. While some­
+       times difficult to visualize, a volatility surface may enable a trader to more easily see
+       the basic volatility characteristics of an option market. The more exercise prices
+       and expiration dates that are available, the more accurate will be the volatility sur­
+       face. Sample volatility surfaces for the FTSE 100 options and wheat options are
+       shown in Figures 24-12 and 24-13. At the time, the FTSE 100 Index was trading
+       at 5,966, and the front-month wheat futures contract was trading at 647.
+
+       Figure 24-12 FTSE 100 volatility surface. March 16. 2012.
+
+
+
+
+                                                                                                  40%
+
+
+
+
+                                                                                                  25%
+
+
+                                                                                                  20%
+
+
+
+
+                   Exercise price                                           9 11
+                                                                   3   5   Months to expiration
+
+
+
+
+500   OPTION VOLATILITY AND PRICING
+

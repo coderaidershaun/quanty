@@ -1,0 +1,1 @@
+Ex 7.3 (*Sequential estimation in three dimensions*) The associated likelihood for the three-dimensional case is given in (7.2). In the first step, we find parameter estimates of \(\theta_{12}\) and \(\theta_{23}\) by using the bivariate sub samples \((u_{k,1}, u_{k,2})\) and

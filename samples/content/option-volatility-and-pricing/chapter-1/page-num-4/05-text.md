@@ -1,0 +1,1 @@
+In particular for D-vine copulas, the conditional distribution function \(C_{i|i+1:i+j-1}\) depends first on \(\theta_{i,i+j-1;i+j-2}\), while \(C_{i+j|i+1:i+j-1}\) on \(\theta_{i+2,i+j-1;i+j-1}\). This can be used recursively to determine the complete parameter dependence.

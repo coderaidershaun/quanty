@@ -1,0 +1,1 @@
+At this point, we will assume that the same interest rate applies to all transactions, whether borrowing or lending. Admittedly, for a trader, the interest cost of borrowing will almost always be higher than the interest earned when lending.

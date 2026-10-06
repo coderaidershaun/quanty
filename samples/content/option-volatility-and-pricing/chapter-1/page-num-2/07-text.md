@@ -1,0 +1,1 @@
+If Jerry decides to buy the land now, what are the costs compared with buying the land one year from now? First, Jerry will have to borrow $100,000 from the local bank. At a rate of 8 percent, the one-year interest costs will be

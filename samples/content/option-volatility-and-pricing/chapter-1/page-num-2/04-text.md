@@ -1,0 +1,1 @@
+Let's return to our example from Chapter 1 where my friend Jerry wanted to acquire land on which to build a restaurant. He was considering both a cash purchase and a one-year forward contract. If he enters into a forward contract, what should be a fair one-year forward price for the land?

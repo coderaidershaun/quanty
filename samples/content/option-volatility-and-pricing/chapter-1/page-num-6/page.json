@@ -1,0 +1,156 @@
+{
+  "format-version": 1,
+  "page-position": 6,
+  "printed-page-number": "246",
+  "running-header": "OPTION VOLATILITY AND PRICING",
+  "starts-mid-sentence": true,
+  "ends-mid-sentence": true,
+  "pieces": [
+    {
+      "number": 1,
+      "file": "01-figure.md",
+      "kind": "figure",
+      "label": "Figure 13-16",
+      "caption": "Dividend sensitivity.",
+      "printed-text": [
+        "+12, +10, +8, +6, +4, +2, 0",
+        "Theoretical profit or loss",
+        "0, .10, .20, .30, .40, .50, .60, .70, .80, .90, 1.00",
+        "Expected quarterly dividend",
+        "Spread 7 (call calendar spread)",
+        "Spread 8 (put calendar spread)",
+        "Spread 9 (call diagonal spread)",
+        "Spread 10 (put diagonal spread)"
+      ]
+    },
+    {
+      "number": 2,
+      "file": "02-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 3,
+      "file": "03-formula.tex",
+      "kind": "formula",
+      "label": null,
+      "name": null,
+      "statement": "The ratio of gamma to theta expresses the reward relative to the risk of a position.",
+      "symbols": []
+    },
+    {
+      "number": 4,
+      "file": "04-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 5,
+      "file": "05-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 6,
+      "file": "06-text.md",
+      "kind": "text",
+      "cites": [
+        {
+          "kind": "figure",
+          "label": "Figure 13-3"
+        }
+      ]
+    },
+    {
+      "number": 7,
+      "file": "07-table.md",
+      "kind": "table",
+      "label": null,
+      "caption": null,
+      "summary": "Gamma/theta ratio and efficiency for each of Spreads 1 through 3."
+    },
+    {
+      "number": 8,
+      "file": "08-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 9,
+      "file": "09-text.md",
+      "kind": "text",
+      "cites": []
+    }
+  ],
+  "relationships": [
+    {
+      "kind": "introduces",
+      "from": 2,
+      "to": 3
+    },
+    {
+      "kind": "discusses",
+      "from": 6,
+      "to": 7
+    },
+    {
+      "kind": "discusses",
+      "from": 8,
+      "to": 7
+    }
+  ],
+  "conversion": {
+    "tags": {
+      "math-notation": true,
+      "inline-with-text-math-notation": true,
+      "chapter-number": false,
+      "chapter-name": false,
+      "page-number": true,
+      "diagram-2d-multi-axis-chart": false,
+      "diagram-2d-single-axis-chart": true,
+      "diagram-3d-surface-chart": false,
+      "diagram-2d-bar-chart": false,
+      "diagram-2d-mixed-chart": false,
+      "diagram-other": false,
+      "image": false,
+      "table": true,
+      "sub-heading": false
+    },
+    "math-check": "both",
+    "route": "sonnet",
+    "route-reasons": [
+      "tags-report-math",
+      "tags-report-figure",
+      "tags-report-table",
+      "math-check-reports-math"
+    ],
+    "checks": {
+      "text-layer-words": 304,
+      "piece-words": 246,
+      "word-match": {
+        "piece-words-in-text-layer": 0.997,
+        "text-layer-words-in-pieces": 0.99
+      },
+      "displayed-math-without-formula": false,
+      "reply-retried": false
+    },
+    "calls": [
+      {
+        "step": "tag",
+        "model": "claude-haiku-4-5-20251001",
+        "cost-usd": 0.021698,
+        "output-tokens": 1777,
+        "thinking-tokens": 1085,
+        "seconds": 15.960715958
+      },
+      {
+        "step": "transcribe",
+        "model": "claude-sonnet-5-5",
+        "cost-usd": 0.047224,
+        "output-tokens": 2166,
+        "thinking-tokens": 220,
+        "seconds": 15.24013925
+      }
+    ]
+  }
+}

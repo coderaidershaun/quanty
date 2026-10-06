@@ -30,3 +30,15 @@ docker compose up -d   # Qdrant + FalkorDB
 ```
 
 The `claude` CLI must be on your `PATH` and signed in.
+
+## Converting a chapter
+
+```bash
+cargo run -p converter -- --book "Option Volatility and Pricing" chapter-1-sample-pages.pdf
+```
+
+The file must be named `chapter-<number>-<name>.pdf`. Every page is broken into its pieces (headings, text, formulas, figures, tables and footnotes) and saved under `content/<book-title>/chapter-<number>/page-num-<i>/`, with a `page.json` for each page and a `chapter.json` for the chapter. `--out <folder>` saves somewhere other than `content`. The command only saves files: nothing is put into Qdrant or FalkorDB.
+
+The command reads `CONVERTER_JEV_API_KEY` from `.env`, and it refuses to run while `ANTHROPIC_API_KEY` is set, so the work is billed to the `claude` subscription. A second run on a finished chapter makes no outside call and costs nothing. An interrupted run picks up at the pages that are missing. A different PDF for the same chapter is refused.
+
+Later crates read a chapter back, in reading order, with `converter::read_chapter`.

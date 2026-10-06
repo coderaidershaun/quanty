@@ -159,11 +159,15 @@ fn request_body(lines: &[&str]) -> Value {
             ]
         })
         .collect();
-    json!({
+    let mut body = json!({
         "state": { "guide": guide() },
         "model": MODEL,
         "questions": questions,
-    })
+    });
+    // Do not remove: the questions were tuned with the keys in sorted order, and `serde_json`
+    // now keeps insertion order instead.
+    body.sort_all_objects();
+    body
 }
 
 fn formula_id(line_index: usize) -> String {

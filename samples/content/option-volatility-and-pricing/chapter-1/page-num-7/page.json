@@ -1,0 +1,111 @@
+{
+  "format-version": 1,
+  "page-position": 7,
+  "printed-page-number": "500",
+  "running-header": "OPTION VOLATILITY AND PRICING",
+  "starts-mid-sentence": true,
+  "ends-mid-sentence": false,
+  "pieces": [
+    {
+      "number": 1,
+      "file": "01-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 2,
+      "file": "02-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 3,
+      "file": "03-text.md",
+      "kind": "text",
+      "cites": [
+        {
+          "kind": "figure",
+          "label": "Figure 24-12"
+        },
+        {
+          "kind": "figure",
+          "label": "Figure 24-13"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "file": "04-figure.md",
+      "kind": "figure",
+      "label": "Figure 24-12",
+      "caption": "FTSE 100 volatility surface. March 16. 2012.",
+      "printed-text": [
+        "45%, 40%, 35%, 30%, 25%, 20%, 15%, 10%",
+        "Implied volatility",
+        "4000, 4200, 4400, 4600, 4800, 5000, 5200, 5400, 5600, 5800, 6000, 6200, 6400, 6600, 6800, 7000, 7200, 7400, 7600, 7800, 8000",
+        "Exercise price",
+        "3, 5, 7, 9, 11, 13, 15, 17",
+        "Months to expiration"
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "kind": "discusses",
+      "from": 3,
+      "to": 4
+    }
+  ],
+  "conversion": {
+    "tags": {
+      "math-notation": false,
+      "inline-with-text-math-notation": true,
+      "chapter-number": false,
+      "chapter-name": true,
+      "page-number": true,
+      "diagram-2d-multi-axis-chart": false,
+      "diagram-2d-single-axis-chart": false,
+      "diagram-3d-surface-chart": true,
+      "diagram-2d-bar-chart": false,
+      "diagram-2d-mixed-chart": false,
+      "diagram-other": false,
+      "image": false,
+      "table": false,
+      "sub-heading": true
+    },
+    "math-check": "none",
+    "route": "sonnet",
+    "route-reasons": [
+      "tags-report-math",
+      "tags-report-figure"
+    ],
+    "checks": {
+      "text-layer-words": 346,
+      "piece-words": 319,
+      "word-match": {
+        "piece-words-in-text-layer": 0.913,
+        "text-layer-words-in-pieces": 0.997
+      },
+      "displayed-math-without-formula": false,
+      "reply-retried": false
+    },
+    "calls": [
+      {
+        "step": "tag",
+        "model": "claude-haiku-4-5-20251001",
+        "cost-usd": 0.024151,
+        "output-tokens": 2248,
+        "thinking-tokens": 1635,
+        "seconds": 22.446958125
+      },
+      {
+        "step": "transcribe",
+        "model": "claude-sonnet-5-5",
+        "cost-usd": 0.04245,
+        "output-tokens": 1681,
+        "thinking-tokens": 0,
+        "seconds": 11.234288
+      }
+    ]
+  }
+}

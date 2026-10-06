@@ -1,0 +1,145 @@
+{
+  "format-version": 1,
+  "page-position": 2,
+  "printed-page-number": "12",
+  "running-header": null,
+  "starts-mid-sentence": false,
+  "ends-mid-sentence": false,
+  "pieces": [
+    {
+      "number": 1,
+      "file": "01-heading.md",
+      "kind": "heading",
+      "rank": 1,
+      "printed-number": "2"
+    },
+    {
+      "number": 2,
+      "file": "02-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 3,
+      "file": "03-formula.tex",
+      "kind": "formula",
+      "label": null,
+      "name": null,
+      "statement": "The forward price equals the current cash price plus the costs of buying now minus the benefits of buying now.",
+      "symbols": []
+    },
+    {
+      "number": 4,
+      "file": "04-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 5,
+      "file": "05-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 6,
+      "file": "06-text.md",
+      "kind": "text",
+      "cites": [
+        {
+          "kind": "footnote",
+          "label": "1"
+        }
+      ]
+    },
+    {
+      "number": 7,
+      "file": "07-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 8,
+      "file": "08-formula.tex",
+      "kind": "formula",
+      "label": null,
+      "name": null,
+      "statement": "One-year interest cost of borrowing $100,000 at 8 percent is $8,000.",
+      "symbols": []
+    },
+    {
+      "number": 9,
+      "file": "09-footnote.md",
+      "kind": "footnote",
+      "marker": "1",
+      "cites": []
+    }
+  ],
+  "relationships": [
+    {
+      "kind": "introduces",
+      "from": 2,
+      "to": 3
+    },
+    {
+      "kind": "introduces",
+      "from": 7,
+      "to": 8
+    },
+    {
+      "kind": "footnote-of",
+      "from": 9,
+      "to": 6
+    }
+  ],
+  "conversion": {
+    "tags": {
+      "math-notation": true,
+      "inline-with-text-math-notation": false,
+      "chapter-number": true,
+      "chapter-name": true,
+      "page-number": true,
+      "diagram-2d-multi-axis-chart": false,
+      "diagram-2d-single-axis-chart": false,
+      "diagram-3d-surface-chart": false,
+      "diagram-2d-bar-chart": false,
+      "diagram-2d-mixed-chart": false,
+      "diagram-other": false,
+      "image": false,
+      "table": false,
+      "sub-heading": false
+    },
+    "math-check": "none",
+    "route": "sonnet",
+    "route-reasons": [
+      "tags-report-math"
+    ],
+    "checks": {
+      "text-layer-words": 319,
+      "piece-words": 303,
+      "word-match": {
+        "piece-words-in-text-layer": 0.974,
+        "text-layer-words-in-pieces": 0.934
+      },
+      "displayed-math-without-formula": false,
+      "reply-retried": false
+    },
+    "calls": [
+      {
+        "step": "tag",
+        "model": "claude-haiku-4-5-20251001",
+        "cost-usd": 0.021778,
+        "output-tokens": 1805,
+        "thinking-tokens": 1159,
+        "seconds": 20.437455
+      },
+      {
+        "step": "transcribe",
+        "model": "claude-sonnet-5-5",
+        "cost-usd": 0.03891800000000001,
+        "output-tokens": 1341,
+        "thinking-tokens": 0,
+        "seconds": 9.24814325
+      }
+    ]
+  }
+}

@@ -4,6 +4,8 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::figure::{FigureImage, PageBox};
+
 /// One piece of a page: its place in reading order, its file, and what kind it is.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PieceEntry {
@@ -49,6 +51,14 @@ pub enum PieceDetail {
         /// Every separate piece of text printed inside the figure.
         #[serde(default)]
         printed_text: Vec<String>,
+        /// The rectangle of the page picture the model gave for the figure, as given, before any
+        /// padding. It is kept even when it was unusable. Trust it only when the figure's image
+        /// shows the figure.
+        #[serde(default)]
+        bounds: Option<PageBox>,
+        /// The picture saved for the figure: its own, or the whole page when it could not be cut.
+        #[serde(default)]
+        image: Option<FigureImage>,
     },
     Table {
         #[serde(default)]

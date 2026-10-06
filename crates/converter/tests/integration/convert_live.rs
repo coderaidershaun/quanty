@@ -1,7 +1,8 @@
 //! Converts the sample chapter with the real models and the real Jev API, because nothing
 //! offline can tell whether the flags, schemas and prompts still work together.
 
-use converter::convert_chapter;
+use converter::content::PieceDetail;
+use converter::{convert_chapter, read_chapter};
 
 use crate::read_chapter::assert_sample_chapter;
 use crate::stubs::{read_json, sample_job};
@@ -47,6 +48,26 @@ fn assert_route_follows_its_reasons(position: u32, page: &serde_json::Value) {
     }
 }
 
+/// What the run gave for each figure, so a reader of the live output can judge the cut. Nothing
+/// is asserted about it: a live rectangle varies from run to run. It is printed before anything
+/// about the chapter is asserted, so a run that fails on a figure still shows what it gave.
+fn print_figures(chapter: &std::path::Path) {
+    for piece in read_chapter(chapter).unwrap().pieces {
+        if let PieceDetail::Figure {
+            label,
+            bounds,
+            image: Some(image),
+            ..
+        } = &piece.detail
+        {
+            println!(
+                "figure {label:?} on page {}: bounds {bounds:?}, cut {:?}, shows {:?}, holds body text {}, unchecked {}",
+                piece.id.page, image.cut, image.shows, image.holds_body_text, image.unchecked
+            );
+        }
+    }
+}
+
 #[tokio::test]
 #[ignore = "calls the real claude CLI and the real Jev API and spends quota; run with: set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p converter --test integration -- --ignored convert_live::converts_sample_chapter_live --nocapture"]
 async fn converts_sample_chapter_live() {
@@ -60,6 +81,7 @@ async fn converts_sample_chapter_live() {
     println!("{summary}");
 
     let chapter = job.chapter_folder();
+    print_figures(&chapter);
     assert_sample_chapter(&chapter);
     for position in 1..=7 {
         let page = read_json(&chapter.join(format!("page-num-{position}/page.json")));

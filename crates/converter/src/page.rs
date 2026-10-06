@@ -13,6 +13,7 @@ use crate::content::{
     CallRecord, CallStep, Checks, ContentError, Conversion, MathCheck, REJECTED_REPLY_FILE, Route,
     RouteReason, page_folder_name, partial_page_folder_name,
 };
+use crate::figure::cut_figures;
 use crate::jev::MathPlacement;
 use crate::save::write_page;
 use crate::services::{PageServices, PageSource, ServiceError};
@@ -132,11 +133,11 @@ enum CopyOutcome {
     Refused(RouteReason),
 }
 
-/// The page to save, which model wrote it, and whether Sonnet needed its second try.
+/// The page to save, which model wrote it, and why a second reply was asked for, if it was.
 struct Written {
     page: TranscribedPage,
     route: Route,
-    reply_retried: bool,
+    retry_reason: Option<String>,
 }
 
 /// One page on its way through the models: where its files are and what it has cost so far.
@@ -175,7 +176,7 @@ impl<S: PageServices> PageRun<'_, S> {
                     return Ok(Written {
                         page,
                         route: Route::HaikuCopy,
-                        reply_retried: false,
+                        retry_reason: None,
                     });
                 }
                 CopyOutcome::Refused(reason) => {
@@ -184,11 +185,11 @@ impl<S: PageServices> PageRun<'_, S> {
                 }
             }
         }
-        let (page, reply_retried) = self.transcribe_checked().await?;
+        let (page, retry_reason) = self.transcribe_checked().await?;
         Ok(Written {
             page,
             route,
-            reply_retried,
+            retry_reason,
         })
     }
 
@@ -240,25 +241,38 @@ impl<S: PageServices> PageRun<'_, S> {
     }
 
     /// Asks Sonnet for the page, and once more with the fault's sentence if the reply breaks a
-    /// rule. Returns the page to save and whether it came from the second try.
-    async fn transcribe_checked(&mut self) -> Result<(TranscribedPage, bool), PageError> {
-        let (page, checked) = self.transcribe_once(None).await?;
+    /// rule. Returns the page to save and, when a second reply was asked for, why.
+    ///
+    /// A reply whose only fault is a figure's rectangle is good content, so it is never thrown
+    /// away: that figure gets the whole page as its picture.
+    async fn transcribe_checked(&mut self) -> Result<(TranscribedPage, Option<String>), PageError> {
+        let (first, checked) = self.transcribe_once(None).await?;
         let first_fault = match checked {
-            Ok(()) => return Ok((page, false)),
+            Ok(()) => return Ok((first, None)),
             Err(fault) => fault,
         };
-        let (page, checked) = self.transcribe_once(Some(&first_fault.to_string())).await?;
+        let reason = first_fault.to_string();
+        let (second, checked) = self.transcribe_once(Some(&reason)).await?;
         let second_fault = match checked {
-            Ok(()) => return Ok((page, true)),
+            Ok(()) => return Ok((second, Some(reason))),
             Err(fault) => fault,
         };
+        let is_bad_bounds =
+            |fault: &ReplyFault| matches!(fault, ReplyFault::BadFigureBounds { .. });
+        if is_bad_bounds(&second_fault) {
+            return Ok((second, Some(reason)));
+        }
+        // The first reply was fine but for its rectangle and the second came back worse.
+        if is_bad_bounds(&first_fault) {
+            return Ok((first, Some(reason)));
+        }
 
         // The model has said twice that nothing is printed. A text layer can hold words that are
         // printed nowhere, so the page is accepted as blank.
         if matches!(first_fault, ReplyFault::NoPieces { .. })
             && matches!(second_fault, ReplyFault::NoPieces { .. })
         {
-            return Ok((page, true));
+            return Ok((second, Some(reason)));
         }
 
         let saved_reply = self.partial_folder.join(REJECTED_REPLY_FILE);
@@ -266,7 +280,8 @@ impl<S: PageServices> PageRun<'_, S> {
             path: saved_reply.clone(),
             source,
         };
-        let text = serde_json::to_string_pretty(&page).map_err(|error| save_error(error.into()))?;
+        let text =
+            serde_json::to_string_pretty(&second).map_err(|error| save_error(error.into()))?;
         std::fs::write(&saved_reply, format!("{text}\n")).map_err(save_error)?;
         Err(PageError::ReplyRejected {
             fault: second_fault,
@@ -295,6 +310,7 @@ pub(crate) async fn convert_page<S: PageServices>(
     let mut reasons = route_reasons(&tags, math_check, run.text_layer_words);
     let written = run.write_by_route(&mut reasons).await?;
     let page = &written.page;
+    let cut = cut_figures(&partial_folder, page).await;
 
     let reported_displayed_math =
         tags.math_notation || matches!(math_check, MathCheck::Block | MathCheck::Both);
@@ -312,11 +328,19 @@ pub(crate) async fn convert_page<S: PageServices>(
             piece_words: piece_word_count(page),
             word_match: word_match(page, &source.text_layer),
             displayed_math_without_formula: reported_displayed_math && !has_formula,
-            reply_retried: written.reply_retried,
+            reply_retried: written.retry_reason.is_some(),
+            retry_reason: written.retry_reason,
+            whole_page_figures: cut.whole_page,
         },
         calls: run.ledger.records,
     };
-    write_page(&partial_folder, source.position, page, conversion)?;
+    write_page(
+        &partial_folder,
+        source.position,
+        page,
+        &cut.images,
+        conversion,
+    )?;
     std::fs::remove_file(&source.image).map_err(|error| ContentError::Write {
         path: source.image.clone(),
         source: error,

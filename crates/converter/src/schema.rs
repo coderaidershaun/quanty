@@ -160,6 +160,12 @@ mod tests {
         let figure = &transcription_pieces[3];
         let figure_fields = keys(figure);
         assert!(position(&figure_fields, "printed-text") < position(&figure_fields, "explanation"));
+        assert!(position(&figure_fields, "printed-text") < position(&figure_fields, "bounds"));
+        assert!(position(&figure_fields, "bounds") < position(&figure_fields, "explanation"));
+        assert_eq!(
+            keys(&figure["properties"]["bounds"]),
+            ["left", "top", "right", "bottom"]
+        );
         assert_eq!(keys(&copy)[0], "needs-stronger-model");
     }
 }

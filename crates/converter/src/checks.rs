@@ -15,7 +15,9 @@ use crate::transcribe::{TranscribedPage, TranscribedPiece};
 pub(crate) use clean::clean_reply;
 pub use fault::{PieceRef, ReplyFault};
 pub(crate) use fields::any_string_has_backslash;
-pub(crate) use word_match::{piece_word_count, text_layer_word_count, word_match};
+pub(crate) use word_match::{
+    piece_strings, piece_word_count, text_layer_word_count, word_match, words,
+};
 
 /// A page with fewer words than this in its text layer is treated as almost empty.
 pub(crate) const ALMOST_EMPTY_WORDS: usize = 20;
@@ -37,7 +39,15 @@ pub(crate) fn check_reply(
     tables(page)?;
     discussion_links(page)?;
     mid_sentence_flags(page)?;
-    displayed_math_in_text(page)
+    displayed_math_in_text(page)?;
+    // Keep this rule last. A reply whose only fault is a bad rectangle has passed every other
+    // rule, so it is saved as good content and only that figure's picture falls back to the
+    // whole page.
+    // SMELL: a test fails if this rule moves above the string checks, but nothing fails if it
+    // moves above a later rule, or if another rule is put after it. A rule that runs after this
+    // one is never applied to a reply with a bad rectangle, and that reply is then saved as good
+    // content.
+    figure_bounds(page)
 }
 
 fn piece_numbers(page: &TranscribedPage) -> Result<(), ReplyFault> {
@@ -185,6 +195,20 @@ fn displayed_math_in_text(page: &TranscribedPage) -> Result<(), ReplyFault> {
     Ok(())
 }
 
+fn figure_bounds(page: &TranscribedPage) -> Result<(), ReplyFault> {
+    for (index, piece) in page.pieces.iter().enumerate() {
+        if let TranscribedPiece::Figure { bounds, .. } = piece
+            && let Some(seen) = bounds.problem()
+        {
+            return Err(ReplyFault::BadFigureBounds {
+                piece: PieceRef::of(page, index),
+                seen,
+            });
+        }
+    }
+    Ok(())
+}
+
 // `\[` is not looked for: a model may write `\[1\]` for a printed "[1]". A single `$$` is not a
 // fault either, because it can be printed money.
 fn displayed_math(text: &str) -> Option<&'static str> {
@@ -207,7 +231,7 @@ fn displayed_math(text: &str) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::content::Symbol;
+    use crate::content::{PageBox, Symbol};
     use crate::transcribe::{CitedKind, CitedLabel, Discussion};
 
     fn text(number: u32, markdown: &str) -> TranscribedPiece {
@@ -241,6 +265,12 @@ mod tests {
             label: Some("Figure 3-2".to_owned()),
             caption: Some("Growth of the price.".to_owned()),
             printed_text: Vec::new(),
+            bounds: PageBox {
+                left: 100,
+                top: 200,
+                right: 600,
+                bottom: 500,
+            },
             explanation,
         }
     }
@@ -370,6 +400,20 @@ mod tests {
                 "rule 11: \\begin{align} inside a text piece",
                 |page| replace(page, 5, text(6, "So \\begin{align} a \\end{align} holds")),
                 |fault| matches!(fault, ReplyFault::DisplayedMathInText { .. }),
+            ),
+            (
+                "rule 12: a rectangle in percentages",
+                |page| {
+                    if let TranscribedPiece::Figure { bounds, .. } = &mut page.pieces[3] {
+                        *bounds = PageBox {
+                            left: 4,
+                            top: 3,
+                            right: 90,
+                            bottom: 45,
+                        };
+                    }
+                },
+                |fault| matches!(fault, ReplyFault::BadFigureBounds { .. }),
             ),
         ];
         for (name, break_it, is_expected) in rows {

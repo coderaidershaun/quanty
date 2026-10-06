@@ -25,7 +25,7 @@
       "kind": "formula",
       "label": null,
       "name": null,
-      "statement": "The forward price equals the current cash price plus the costs of buying now minus the benefits of buying now.",
+      "statement": "The forward price equals the current cash price plus the costs of buying now, minus the benefits of buying now.",
       "symbols": []
     },
     {
@@ -63,7 +63,7 @@
       "kind": "formula",
       "label": null,
       "name": null,
-      "statement": "One-year interest cost of borrowing $100,000 at 8 percent is $8,000.",
+      "statement": "The one-year interest cost of borrowing $100,000 at 8 percent is $8,000.",
       "symbols": []
     },
     {
@@ -121,24 +121,26 @@
         "text-layer-words-in-pieces": 0.934
       },
       "displayed-math-without-formula": false,
-      "reply-retried": false
+      "reply-retried": false,
+      "retry-reason": null,
+      "whole-page-figures": []
     },
     "calls": [
       {
         "step": "tag",
         "model": "claude-haiku-4-5-20251001",
-        "cost-usd": 0.021778,
-        "output-tokens": 1805,
-        "thinking-tokens": 1159,
-        "seconds": 20.437455
+        "cost-usd": 0.020815,
+        "output-tokens": 1604,
+        "thinking-tokens": 963,
+        "seconds": 14.0206255
       },
       {
         "step": "transcribe",
         "model": "claude-sonnet-5-5",
-        "cost-usd": 0.03891800000000001,
-        "output-tokens": 1341,
+        "cost-usd": 0.062596,
+        "output-tokens": 1317,
         "thinking-tokens": 0,
-        "seconds": 9.24814325
+        "seconds": 9.529739542
       }
     ]
   }

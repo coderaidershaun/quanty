@@ -10,6 +10,8 @@ use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 use tokio::process::Command;
 
+use crate::jev::JEV_API_KEY_VARIABLE;
+
 const API_KEY_VARIABLE: &str = "ANTHROPIC_API_KEY";
 
 // The variables a Claude Code session sets for its children. A child that inherits them thinks
@@ -305,6 +307,8 @@ fn locked_down_command(call: &ClaudeCall<'_>, prompt: String, page_folder: &Path
     for variable in SESSION_VARIABLES {
         command.env_remove(variable);
     }
+    // `claude` has no use for the Jev API key, so it never gets it.
+    command.env_remove(JEV_API_KEY_VARIABLE);
     command
 }
 

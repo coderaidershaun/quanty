@@ -3,10 +3,48 @@
 
 use std::path::{Path, PathBuf};
 
-use converter::content::{CiteKind, PieceDetail, RelationshipKind};
+use converter::content::{CiteKind, ImageShows, PieceDetail, RelationshipKind};
 use converter::reader::{Chapter, ChapterPiece, PieceId, read_chapter};
 
 const SOFT_HYPHEN: char = '\u{AD}';
+const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+const MAX_PICTURE_BYTES: usize = 1_048_576;
+
+/// A labelled figure of the sample, with the printed extent its cut must hold (left, top, right,
+/// bottom) and where the text next to it starts, all in thousandths of the page. They were
+/// measured on the pages' ink and text layers. The cut must also stop short of the text under
+/// the figure, and of the text over it where there is some.
+struct FigureExtent {
+    page: u32,
+    label: &'static str,
+    printed: [i32; 4],
+    text_over: Option<i32>,
+    text_under: i32,
+}
+
+const FIGURE_EXTENTS: [FigureExtent; 3] = [
+    FigureExtent {
+        page: 5,
+        label: "Figure 13-4",
+        printed: [40, 37, 893, 447],
+        text_over: None,
+        text_under: 489,
+    },
+    FigureExtent {
+        page: 6,
+        label: "Figure 13-16",
+        printed: [121, 39, 938, 416],
+        text_over: None,
+        text_under: 444,
+    },
+    FigureExtent {
+        page: 7,
+        label: "Figure 24-12",
+        printed: [84, 523, 949, 946],
+        text_over: Some(493),
+        text_under: 966,
+    },
+];
 
 fn committed_chapter() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -82,6 +120,7 @@ pub fn assert_sample_chapter(chapter_folder: &Path) {
     assert_footnote_page(&chapter);
     assert_volatility_surface_page(&chapter);
     assert_mixed_page(&chapter);
+    assert_figure_pictures(&chapter);
 }
 
 fn assert_reading_order_and_page_numbers(chapter: &Chapter) {
@@ -278,6 +317,40 @@ fn assert_volatility_surface_page(chapter: &Chapter) {
     );
 }
 
+/// Every figure has a picture that is a PNG under the size limit, and the three labelled figures
+/// were cut out of their pages. A whole-page picture there means the rectangle failed twice.
+fn assert_figure_pictures(chapter: &Chapter) {
+    for piece in chapter
+        .pieces
+        .iter()
+        .filter(|piece| matches!(piece.detail, PieceDetail::Figure { .. }))
+    {
+        let picture = piece.figure_image.as_ref().unwrap();
+        let bytes = std::fs::read(&picture.path)
+            .unwrap_or_else(|error| panic!("{}: {error}", picture.path.display()));
+        assert!(
+            bytes.starts_with(&PNG_SIGNATURE),
+            "{}",
+            picture.path.display()
+        );
+        assert!(
+            bytes.len() < MAX_PICTURE_BYTES,
+            "{}",
+            picture.path.display()
+        );
+    }
+    for figure in FIGURE_EXTENTS {
+        let piece = find_labelled(chapter, figure.page, figure.label);
+        let picture = piece.figure_image.as_ref().unwrap();
+        assert_eq!(
+            picture.shows,
+            ImageShows::Figure,
+            "{} was not cut",
+            figure.label
+        );
+    }
+}
+
 fn assert_mixed_page(chapter: &Chapter) {
     assert!(
         on_page(chapter, 6).any(|piece| {
@@ -314,8 +387,56 @@ fn assert_text_page_was_copied_by_haiku(chapter_folder: &Path) {
     }
 }
 
+/// The committed figures are cut around their printed extent: nothing of the figure is cut off,
+/// and none of the text next to it is inside.
+fn assert_figures_were_cut_around_their_extent(chapter_folder: &Path) {
+    let chapter = read_chapter(chapter_folder).unwrap();
+    for figure in FIGURE_EXTENTS {
+        let FigureExtent {
+            page,
+            label,
+            printed: [left, top, right, bottom],
+            text_over,
+            text_under,
+        } = figure;
+        let piece = find_labelled(&chapter, page, label);
+        let picture = piece.figure_image.as_ref().unwrap();
+        assert_eq!(
+            picture.path.file_name().unwrap().to_string_lossy(),
+            format!("{:02}-figure.png", piece.id.number),
+            "{label}"
+        );
+        let PieceDetail::Figure {
+            image: Some(image), ..
+        } = &piece.detail
+        else {
+            panic!("{label} has no saved image");
+        };
+        let cut = image.cut.unwrap_or_else(|| panic!("{label} has no cut"));
+        assert!(
+            cut.left <= left && cut.top <= top && cut.right >= right && cut.bottom >= bottom,
+            "{label}: the cut {cut:?} does not hold its printed extent"
+        );
+        assert!(
+            cut.bottom < text_under,
+            "{label}: the cut {cut:?} holds the text under it"
+        );
+        if let Some(over) = text_over {
+            assert!(
+                cut.top > over,
+                "{label}: the cut {cut:?} holds the text over it"
+            );
+        }
+        assert!(
+            !image.holds_body_text,
+            "{label}: body text is left in the cut"
+        );
+    }
+}
+
 #[test]
 fn sample_chapter_reads_back_in_order_with_sections_and_relationships() {
     assert_sample_chapter(&committed_chapter());
     assert_text_page_was_copied_by_haiku(&committed_chapter());
+    assert_figures_were_cut_around_their_extent(&committed_chapter());
 }

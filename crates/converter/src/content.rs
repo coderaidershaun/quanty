@@ -7,8 +7,10 @@ mod piece;
 
 use std::path::PathBuf;
 
+pub use crate::figure::{FigureImage, ImageShows, PageBox};
 pub use conversion::{
-    CallRecord, CallStep, Checks, Conversion, MathCheck, Route, RouteReason, WordMatch,
+    CallRecord, CallStep, Checks, Conversion, MathCheck, Route, RouteReason, WholePageFigure,
+    WordMatch,
 };
 pub use index::{ChapterIndex, PageIndex};
 pub use piece::{Cite, CiteKind, PieceDetail, PieceEntry, Relationship, RelationshipKind, Symbol};

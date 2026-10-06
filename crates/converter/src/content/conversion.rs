@@ -66,8 +66,24 @@ pub struct Checks {
     pub word_match: WordMatch,
     /// The page was reported to hold displayed math but has no formula piece.
     pub displayed_math_without_formula: bool,
-    /// The first Sonnet reply failed the reply check and the second was saved.
+    /// A second reply was asked for because the first one broke a rule.
     pub reply_retried: bool,
+    /// What was wrong with the first reply, in the sentence the model was told. `None` when no
+    /// second reply was asked for.
+    #[serde(default)]
+    pub retry_reason: Option<String>,
+    /// The figures whose picture is the whole page, because their own could not be cut.
+    #[serde(default)]
+    pub whole_page_figures: Vec<WholePageFigure>,
+}
+
+/// A figure that has the whole page as its picture, and why.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct WholePageFigure {
+    /// The figure's piece number on its page.
+    pub piece: u32,
+    pub why: String,
 }
 
 /// How much of the copied words and of the text layer's words match, from 0 to 1.

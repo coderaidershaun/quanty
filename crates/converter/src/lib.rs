@@ -11,6 +11,7 @@ pub mod checks;
 pub mod claude;
 pub mod content;
 pub mod convert;
+mod figure;
 pub mod jev;
 mod page;
 mod poppler;
@@ -22,12 +23,14 @@ pub mod summary;
 pub mod transcribe;
 
 pub use content::{
-    ChapterIndex, Cite, CiteKind, ContentError, PieceDetail, RelationshipKind, Symbol,
+    ChapterIndex, Cite, CiteKind, ContentError, FigureImage, ImageShows, PageBox, PieceDetail,
+    RelationshipKind, Symbol,
 };
-pub use convert::{ChapterJob, ConvertError, convert_chapter};
+pub use convert::{ChapterJob, ConvertError, PageError, convert_chapter};
+pub use poppler::PopplerError;
 pub use reader::{
-    Chapter, ChapterPiece, PieceId, PieceRelationship, ReadChapterError, SectionHeading,
-    read_chapter,
+    Chapter, ChapterPiece, FigurePicture, PieceId, PieceRelationship, ReadChapterError,
+    SectionHeading, read_chapter,
 };
 pub use summary::ConversionSummary;
 

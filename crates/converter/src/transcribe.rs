@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::claude::{self, Answer, ClaudeCall, ClaudeError};
 use crate::content::Symbol;
+use crate::figure::PageBox;
 use crate::schema::reply_schema;
 
 const COPY_MODEL: &str = "haiku";
@@ -153,6 +154,10 @@ pub enum TranscribedPiece {
             description = "Every separate piece of text printed inside the figure, exactly as printed, one entry each; the tick labels of one axis as one entry."
         )]
         printed_text: Vec<String>,
+        #[schemars(
+            description = "The smallest rectangle in the picture of the page that holds the whole figure, with its axis titles, tick values, legend, annotations, label and caption. The figure's own image is cut out of the picture along it."
+        )]
+        bounds: PageBox,
         #[schemars(
             description = "A detailed description for someone who cannot see the figure: what it is, its axes or parts, each curve or part and its shape, each annotation quoted in full, and what the figure demonstrates."
         )]

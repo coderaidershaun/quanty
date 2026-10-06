@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::content::{
-    CHAPTER_INDEX_FILE, ChapterIndex, ContentError, FORMAT_VERSION, PAGE_IMAGE_FILE,
+    CHAPTER_INDEX_FILE, ChapterIndex, ContentError, FORMAT_VERSION, ImageShows, PAGE_IMAGE_FILE,
     PAGE_INDEX_FILE, PageIndex, PieceDetail, PieceEntry, RelationshipKind, page_folder_name,
 };
 
@@ -65,6 +65,16 @@ pub struct PieceRelationship {
     pub to: PieceId,
 }
 
+/// Where the picture saved for a figure is, and what it shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FigurePicture {
+    /// Built from the folder the caller passed, so it is absolute when that was. The file is not
+    /// checked to exist.
+    pub path: PathBuf,
+    /// Whether `path` is the figure cut out of its page, or the whole page because that failed.
+    pub shows: ImageShows,
+}
+
 /// One piece of a chapter.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChapterPiece {
@@ -77,6 +87,9 @@ pub struct ChapterPiece {
     pub file: PathBuf,
     /// Where `page.png` of its page is, or would be.
     pub page_image: PathBuf,
+    /// The picture of a figure. `None` for every other kind. A figure whose `page.json` names no
+    /// image, such as one converted before figures were cut, gets the whole page.
+    pub figure_image: Option<FigurePicture>,
     /// Its kind and that kind's saved fields, including citations and a figure's printed text.
     pub detail: PieceDetail,
     /// True only on the first text piece of a page that begins partway through a sentence.
@@ -159,6 +172,7 @@ pub fn read_chapter(chapter_folder: &Path) -> Result<Chapter, ReadChapterError> 
                 content,
                 file,
                 page_image: page_folder.join(PAGE_IMAGE_FILE),
+                figure_image: figure_picture(&page_folder, &entry.detail),
                 detail: entry.detail.clone(),
                 starts_mid_sentence: false,
                 ends_mid_sentence: false,
@@ -171,6 +185,22 @@ pub fn read_chapter(chapter_folder: &Path) -> Result<Chapter, ReadChapterError> 
 
     attach_relationships(&mut pieces, collect_relationships(&pages)?);
     Ok(Chapter { index, pieces })
+}
+
+fn figure_picture(page_folder: &Path, detail: &PieceDetail) -> Option<FigurePicture> {
+    let PieceDetail::Figure { image, .. } = detail else {
+        return None;
+    };
+    Some(match image {
+        Some(image) => FigurePicture {
+            path: page_folder.join(&image.file),
+            shows: image.shows,
+        },
+        None => FigurePicture {
+            path: page_folder.join(PAGE_IMAGE_FILE),
+            shows: ImageShows::WholePage,
+        },
+    })
 }
 
 /// Puts each relationship on both of the pieces it joins.

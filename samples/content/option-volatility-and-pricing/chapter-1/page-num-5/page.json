@@ -13,6 +13,7 @@
       "label": "Figure 13-4",
       "caption": null,
       "printed-text": [
+        "Figure 13-4",
         "+10, +5, 0, -5, -10, -15, -20, -25, -30, -35, -40, -45, -50",
         "Theoretical profit or loss",
         "38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58",
@@ -21,7 +22,24 @@
         "Spread 1 (short straddle)",
         "Spread 2 (ratio spread)",
         "Spread 3 (long butterfly)"
-      ]
+      ],
+      "bounds": {
+        "left": 30,
+        "top": 40,
+        "right": 890,
+        "bottom": 500
+      },
+      "image": {
+        "file": "01-figure.png",
+        "shows": "figure",
+        "cut": {
+          "left": 15,
+          "top": 23,
+          "right": 905,
+          "bottom": 485
+        },
+        "holds-body-text": false
+      }
     },
     {
       "number": 2,
@@ -76,28 +94,30 @@
       "text-layer-words": 394,
       "piece-words": 338,
       "word-match": {
-        "piece-words-in-text-layer": 0.975,
+        "piece-words-in-text-layer": 0.968,
         "text-layer-words-in-pieces": 0.995
       },
       "displayed-math-without-formula": false,
-      "reply-retried": false
+      "reply-retried": false,
+      "retry-reason": null,
+      "whole-page-figures": []
     },
     "calls": [
       {
         "step": "tag",
         "model": "claude-haiku-4-5-20251001",
-        "cost-usd": 0.019687,
-        "output-tokens": 1334,
-        "thinking-tokens": 745,
-        "seconds": 12.868529042
+        "cost-usd": 0.023793,
+        "output-tokens": 2132,
+        "thinking-tokens": 1505,
+        "seconds": 19.432000166999998
       },
       {
         "step": "transcribe",
         "model": "claude-sonnet-5-5",
-        "cost-usd": 0.043778,
-        "output-tokens": 1803,
+        "cost-usd": 0.04341,
+        "output-tokens": 1719,
         "thinking-tokens": 0,
-        "seconds": 13.365773083
+        "seconds": 11.150602458
       }
     ]
   }

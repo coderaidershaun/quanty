@@ -4,21 +4,27 @@
 use std::path::Path;
 
 use crate::content::{
-    Cite, CiteKind, ContentError, Conversion, FORMAT_VERSION, PageIndex, PieceDetail, PieceEntry,
-    Relationship, RelationshipKind,
+    Cite, CiteKind, ContentError, Conversion, FORMAT_VERSION, FigureImage, PageIndex, PieceDetail,
+    PieceEntry, Relationship, RelationshipKind,
 };
 use crate::transcribe::{CitedKind, CitedLabel, TranscribedPage, TranscribedPiece};
 
-/// Writes every piece file and `page.json` into `folder`.
+/// Writes every piece file and `page.json` into `folder`. `images` holds the picture of each
+/// figure, by piece number.
 pub(crate) fn write_page(
     folder: &Path,
     position: u32,
     page: &TranscribedPage,
+    images: &[(u32, FigureImage)],
     conversion: Conversion,
 ) -> Result<(), ContentError> {
     let mut pieces = Vec::new();
     for piece in &page.pieces {
-        let (detail, content) = piece_parts(piece);
+        let image = images
+            .iter()
+            .find(|(number, _)| *number == piece.number())
+            .map(|(_, image)| image.clone());
+        let (detail, content) = piece_parts(piece, image);
         let entry = PieceEntry::new(piece.number(), detail);
         let path = folder.join(&entry.file);
         std::fs::write(&path, format!("{}\n", content.trim()))
@@ -39,8 +45,8 @@ pub(crate) fn write_page(
     index.write(folder)
 }
 
-/// The saved fields of a piece and what goes in its file.
-fn piece_parts(piece: &TranscribedPiece) -> (PieceDetail, String) {
+/// The saved fields of a piece and what goes in its file. `image` is the picture of a figure.
+fn piece_parts(piece: &TranscribedPiece, image: Option<FigureImage>) -> (PieceDetail, String) {
     match piece {
         TranscribedPiece::Heading {
             rank,
@@ -82,6 +88,7 @@ fn piece_parts(piece: &TranscribedPiece) -> (PieceDetail, String) {
             label,
             caption,
             printed_text,
+            bounds,
             explanation,
             ..
         } => (
@@ -89,6 +96,8 @@ fn piece_parts(piece: &TranscribedPiece) -> (PieceDetail, String) {
                 label: label.clone(),
                 caption: caption.clone(),
                 printed_text: printed_text.clone(),
+                bounds: Some(*bounds),
+                image,
             },
             figure_file(explanation, printed_text),
         ),

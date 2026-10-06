@@ -73,24 +73,26 @@
         "text-layer-words-in-pieces": 1.0
       },
       "displayed-math-without-formula": false,
-      "reply-retried": false
+      "reply-retried": false,
+      "retry-reason": null,
+      "whole-page-figures": []
     },
     "calls": [
       {
         "step": "tag",
         "model": "claude-haiku-4-5-20251001",
-        "cost-usd": 0.020228,
-        "output-tokens": 1447,
-        "thinking-tokens": 863,
-        "seconds": 15.321822959
+        "cost-usd": 0.022284,
+        "output-tokens": 1881,
+        "thinking-tokens": 1290,
+        "seconds": 20.9395585
       },
       {
         "step": "copy",
         "model": "claude-haiku-4-5-20251001",
-        "cost-usd": 0.0536169,
-        "output-tokens": 7540,
-        "thinking-tokens": 6390,
-        "seconds": 69.974428167
+        "cost-usd": 0.0536769,
+        "output-tokens": 7554,
+        "thinking-tokens": 6531,
+        "seconds": 67.090456625
       }
     ]
   }

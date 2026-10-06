@@ -3,7 +3,7 @@
   "page-position": 6,
   "printed-page-number": "246",
   "running-header": "OPTION VOLATILITY AND PRICING",
-  "starts-mid-sentence": true,
+  "starts-mid-sentence": false,
   "ends-mid-sentence": true,
   "pieces": [
     {
@@ -21,7 +21,24 @@
         "Spread 8 (put calendar spread)",
         "Spread 9 (call diagonal spread)",
         "Spread 10 (put diagonal spread)"
-      ]
+      ],
+      "bounds": {
+        "left": 120,
+        "top": 55,
+        "right": 950,
+        "bottom": 680
+      },
+      "image": {
+        "file": "01-figure.png",
+        "shows": "figure",
+        "cut": {
+          "left": 105,
+          "top": 25,
+          "right": 965,
+          "bottom": 440
+        },
+        "holds-body-text": false
+      }
     },
     {
       "number": 2,
@@ -35,7 +52,7 @@
       "kind": "formula",
       "label": null,
       "name": null,
-      "statement": "The ratio of gamma to theta expresses the reward relative to the risk of a position.",
+      "statement": "The ratio of gamma to theta expresses the reward compared with the risk of a position.",
       "symbols": []
     },
     {
@@ -67,7 +84,7 @@
       "kind": "table",
       "label": null,
       "caption": null,
-      "summary": "Gamma/theta ratio and efficiency for each of Spreads 1 through 3."
+      "summary": "Gamma/theta ratios and resulting efficiencies for Spreads 1 through 3."
     },
     {
       "number": 8,
@@ -114,7 +131,7 @@
       "diagram-other": false,
       "image": false,
       "table": true,
-      "sub-heading": false
+      "sub-heading": true
     },
     "math-check": "both",
     "route": "sonnet",
@@ -132,24 +149,26 @@
         "text-layer-words-in-pieces": 0.99
       },
       "displayed-math-without-formula": false,
-      "reply-retried": false
+      "reply-retried": false,
+      "retry-reason": null,
+      "whole-page-figures": []
     },
     "calls": [
       {
         "step": "tag",
         "model": "claude-haiku-4-5-20251001",
-        "cost-usd": 0.021698,
-        "output-tokens": 1777,
-        "thinking-tokens": 1085,
-        "seconds": 15.960715958
+        "cost-usd": 0.019488,
+        "output-tokens": 1335,
+        "thinking-tokens": 748,
+        "seconds": 15.1510065
       },
       {
         "step": "transcribe",
         "model": "claude-sonnet-5-5",
-        "cost-usd": 0.047224,
-        "output-tokens": 2166,
-        "thinking-tokens": 220,
-        "seconds": 15.24013925
+        "cost-usd": 0.04488600000000001,
+        "output-tokens": 1885,
+        "thinking-tokens": 0,
+        "seconds": 12.09471275
       }
     ]
   }

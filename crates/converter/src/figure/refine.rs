@@ -1,0 +1,377 @@
+//! Works out the rectangle to cut for a figure. The model's top and bottom edges cannot be trusted
+//! where body text sits next to a figure, but the page's text layer says where every line is.
+//!
+//! Each line is sorted as the figure's own, another piece's, or neither. The rectangle grows to
+//! take in the figure's own lines, then gets its padding, and is then trimmed above and below at
+//! the lines of other pieces. The padding goes on before the trim, because padding a trimmed
+//! rectangle would take the first line of the next paragraph straight back in.
+
+use super::PageBox;
+use crate::checks::words;
+use crate::poppler::TextLine;
+
+/// Words in a row that two texts must share before a line counts as copied from one of them.
+/// Single words and pairs recur between a figure and the paragraphs that discuss it; four in a
+/// row do not.
+const MIN_RUN: usize = 4;
+/// How far outside the model's rectangle, in thousandths of the page, one of the figure's own
+/// lines may be and still be taken in with nothing else checked. Tick values and axis titles sit
+/// within a text line or two of the plot. Farther out, a line above or below is taken in only when
+/// no line of another piece lies between it and the figure.
+const GROW_REACH: i32 = 30;
+/// How far a trimmed edge stays from the line it was trimmed at, in thousandths of the page.
+/// Printed letters reach about 2 outside the boxes the text layer gives them, and the narrowest
+/// gap measured between a figure and the text next to it is 20.
+const TRIM_MARGIN: i32 = 6;
+
+/// The rectangle to draw for a figure.
+pub(super) struct FigureCut {
+    /// Padding included. Always a usable rectangle.
+    pub area: PageBox,
+    /// A line of another piece of the page is still wholly inside `area`.
+    pub holds_body_text: bool,
+    /// Nothing on the page could be used to check the model's rectangle: none of the figure's own
+    /// lines was found at it, or the refined rectangle came out unusable. `area` is then the
+    /// model's rectangle with its padding, as given.
+    pub unchecked: bool,
+}
+
+/// What a line of the text layer belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Owner {
+    /// The figure. A tied line matches another piece's text as well as it matches the figure's.
+    Figure {
+        is_tied: bool,
+    },
+    Other,
+    Neither,
+}
+
+struct Classified {
+    area: PageBox,
+    owner: Owner,
+}
+
+/// The rectangle to draw for a figure. `bounds` is the rectangle the model gave, which must
+/// already be usable.
+///
+/// `own` is every string the figure printed: its label and caption joined, its label, its caption
+/// and its printed text. `other` is every string the rest of the page copied from the page. The
+/// left and right edges only ever move outward.
+// SMELL: `own` and `other` have the same type, so a call that swaps them compiles and gets every
+// decision the wrong way round. One type holding both lists would make the swap impossible.
+pub(super) fn cut_rectangle(
+    bounds: PageBox,
+    own: &[String],
+    other: &[String],
+    lines: &[TextLine],
+) -> FigureCut {
+    let own: Vec<Vec<String>> = own.iter().map(|text| words(text)).collect();
+    let other: Vec<Vec<String>> = other.iter().map(|text| words(text)).collect();
+    let lines: Vec<Classified> = lines
+        .iter()
+        .map(|line| Classified {
+            area: line.area,
+            owner: owner_of(&words(&line.text), &own, &other),
+        })
+        .collect();
+
+    let refined = trimmed(grown(bounds, &lines).padded(), &lines)
+        .filter(|refined| refined.problem().is_none());
+    let unchecked = refined.is_none();
+    let area = refined.unwrap_or_else(|| bounds.padded());
+    let holds_body_text = lines
+        .iter()
+        .any(|line| line.owner == Owner::Other && is_inside(line.area, area));
+    FigureCut {
+        area,
+        holds_body_text,
+        unchecked,
+    }
+}
+
+fn owner_of(line: &[String], own: &[Vec<String>], other: &[Vec<String>]) -> Owner {
+    let count = line.len();
+    if count == 0 {
+        return Owner::Neither;
+    }
+    let longest = |strings: &[Vec<String>]| {
+        strings
+            .iter()
+            .map(|string| longest_run(line, string))
+            .max()
+            .unwrap_or(0)
+    };
+    let (own_run, other_run) = (longest(own), longest(other));
+    let is_a_whole_other_string = count >= 2 && other.iter().any(|string| string == line);
+    if other_run > own_run && (other_run >= MIN_RUN || is_a_whole_other_string) {
+        return Owner::Other;
+    }
+    if own_run < other_run {
+        return Owner::Neither;
+    }
+    let belongs_to_figure = if count == 1 {
+        // A line of one word is the figure's only when no other piece has that word, and it is
+        // never counted as another piece's: clipping a figure is worse than keeping a stray word.
+        own.iter().any(|string| string.contains(&line[0]))
+            && !other.iter().any(|string| string.contains(&line[0]))
+    } else {
+        own_run == count || own_run >= MIN_RUN
+    };
+    if belongs_to_figure {
+        Owner::Figure {
+            is_tied: own_run == other_run,
+        }
+    } else {
+        Owner::Neither
+    }
+}
+
+/// The length of the longest run of consecutive words of `line` that are also consecutive in
+/// `string`.
+fn longest_run(line: &[String], string: &[String]) -> usize {
+    let mut best = 0;
+    let mut previous = vec![0; string.len() + 1];
+    for word in line {
+        let mut current = vec![0; string.len() + 1];
+        for (index, candidate) in string.iter().enumerate() {
+            if word == candidate {
+                current[index + 1] = previous[index] + 1;
+                best = best.max(current[index + 1]);
+            }
+        }
+        previous = current;
+    }
+    best
+}
+
+/// `bounds` grown to take in the figure's own lines. A line within [`GROW_REACH`] of `bounds` is
+/// always taken in. A line farther out is taken in only when it lies wholly above or below
+/// `bounds`, overlaps it sideways, and has no line of another piece between it and the figure:
+/// the model sometimes leaves out a label line far above a frame, and there the nearest line of
+/// another piece is the natural limit. Beside the figure there is no such limit, so only the
+/// reach applies. Every line is measured against the model's rectangle, so taking one line in
+/// never brings the next one into reach.
+fn grown(bounds: PageBox, lines: &[Classified]) -> PageBox {
+    let reach = PageBox {
+        left: bounds.left - GROW_REACH,
+        top: bounds.top - GROW_REACH,
+        right: bounds.right + GROW_REACH,
+        bottom: bounds.bottom + GROW_REACH,
+    };
+    let touching = figure_lines_touching(bounds, lines);
+    let untied = untied_areas(&touching);
+    // What stands for the figure when looking for a line in between: its own lines that touch
+    // `bounds`, the untied ones when there are any. With none, `bounds` itself stands for it.
+    let anchors: Vec<PageBox> = if untied.is_empty() {
+        touching.iter().map(|(area, _)| *area).collect()
+    } else {
+        untied
+    };
+    let neighbours: Vec<PageBox> = lines
+        .iter()
+        .filter(|line| line.owner == Owner::Other && overlaps_sideways(line.area, bounds))
+        .map(|line| line.area)
+        .collect();
+    let is_clear_of_neighbours = |line: PageBox| {
+        let is_above_or_below = line.bottom < bounds.top || line.top > bounds.bottom;
+        let figure = nearest(line, &anchors).unwrap_or(bounds);
+        is_above_or_below
+            && overlaps_sideways(line, bounds)
+            && !neighbours
+                .iter()
+                .any(|between| lies_between(*between, line, figure))
+    };
+    let mut area = bounds;
+    for line in lines.iter().filter(|line| is_figure_line(line)) {
+        if touches(reach, line.area) || is_clear_of_neighbours(line.area) {
+            area = PageBox {
+                left: area.left.min(line.area.left),
+                top: area.top.min(line.area.top),
+                right: area.right.max(line.area.right),
+                bottom: area.bottom.max(line.area.bottom),
+            };
+        }
+    }
+    area
+}
+
+/// The figure's own lines that touch `rectangle`, each with whether it is tied.
+fn figure_lines_touching(rectangle: PageBox, lines: &[Classified]) -> Vec<(PageBox, bool)> {
+    lines
+        .iter()
+        .filter_map(|line| match line.owner {
+            Owner::Figure { is_tied } if touches(rectangle, line.area) => {
+                Some((line.area, is_tied))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// Where the lines that are not tied sit. Each line comes paired with whether it is tied.
+fn untied_areas(lines: &[(PageBox, bool)]) -> Vec<PageBox> {
+    lines
+        .iter()
+        .filter(|(_, is_tied)| !is_tied)
+        .map(|(area, _)| *area)
+        .collect()
+}
+
+/// The top and bottom edges move in to [`TRIM_MARGIN`] from the lines of other pieces that sit
+/// above or below the figure's own lines, and never in past the figure's own lines. `None` when
+/// none of the figure's own lines is there to trim against.
+fn trimmed(padded: PageBox, lines: &[Classified]) -> Option<PageBox> {
+    let neighbours: Vec<PageBox> = lines
+        .iter()
+        .filter(|line| line.owner == Owner::Other && overlaps_sideways(line.area, padded))
+        .map(|line| line.area)
+        .collect();
+    let (span_top, span_bottom) = figure_span(padded, lines, &neighbours)?;
+    let mut area = padded;
+    for neighbour in neighbours {
+        if neighbour.bottom <= span_top {
+            area.top = area.top.max(neighbour.bottom + TRIM_MARGIN);
+        } else if neighbour.top >= span_bottom {
+            area.bottom = area.bottom.min(neighbour.top - TRIM_MARGIN);
+        }
+    }
+    area.top = area.top.min(span_top);
+    area.bottom = area.bottom.max(span_bottom);
+    Some(area)
+}
+
+/// From the top of the highest to the bottom of the lowest of the figure's own lines that touch
+/// `padded` and count. A tied line counts only when no neighbour lies between it and the nearest
+/// line that is not tied, because table cells and the short last lines of paragraphs often read
+/// exactly like a legend entry. With no line that is not tied, tied lines count like any other.
+fn figure_span(
+    padded: PageBox,
+    lines: &[Classified],
+    neighbours: &[PageBox],
+) -> Option<(i32, i32)> {
+    let touching = figure_lines_touching(padded, lines);
+    let untied = untied_areas(&touching);
+    let counted = touching.iter().filter(|(area, is_tied)| {
+        !is_tied
+            || untied.is_empty()
+            || nearest(*area, &untied).is_none_or(|anchor| {
+                !neighbours
+                    .iter()
+                    .any(|between| lies_between(*between, *area, anchor))
+            })
+    });
+    counted.fold(None, |span, (area, _)| match span {
+        None => Some((area.top, area.bottom)),
+        Some((top, bottom)) => Some((top.min(area.top), bottom.max(area.bottom))),
+    })
+}
+
+/// Twice the vertical centre, so that no rounding is needed.
+fn doubled_centre(area: PageBox) -> i32 {
+    area.top + area.bottom
+}
+
+fn nearest(from: PageBox, candidates: &[PageBox]) -> Option<PageBox> {
+    candidates
+        .iter()
+        .copied()
+        .min_by_key(|candidate| (doubled_centre(*candidate) - doubled_centre(from)).abs())
+}
+
+fn lies_between(middle: PageBox, one: PageBox, other: PageBox) -> bool {
+    let (centre, one, other) = (
+        doubled_centre(middle),
+        doubled_centre(one),
+        doubled_centre(other),
+    );
+    one.min(other) < centre && centre < one.max(other)
+}
+
+fn is_figure_line(line: &Classified) -> bool {
+    matches!(line.owner, Owner::Figure { .. })
+}
+
+fn touches(one: PageBox, other: PageBox) -> bool {
+    one.left <= other.right
+        && other.left <= one.right
+        && one.top <= other.bottom
+        && other.top <= one.bottom
+}
+
+/// True when the two overlap sideways across at least half of the narrower of the two.
+fn overlaps_sideways(line: PageBox, rectangle: PageBox) -> bool {
+    let overlap = line.right.min(rectangle.right) - line.left.max(rectangle.left);
+    let narrower = (line.right - line.left).min(rectangle.right - rectangle.left);
+    overlap > 0 && overlap * 2 >= narrower
+}
+
+fn is_inside(line: PageBox, rectangle: PageBox) -> bool {
+    line.left >= rectangle.left
+        && line.right <= rectangle.right
+        && line.top >= rectangle.top
+        && line.bottom <= rectangle.bottom
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn boxed(left: i32, top: i32, right: i32, bottom: i32) -> PageBox {
+        PageBox {
+            left,
+            top,
+            right,
+            bottom,
+        }
+    }
+
+    fn line(left: i32, top: i32, right: i32, bottom: i32, text: &str) -> TextLine {
+        TextLine {
+            area: boxed(left, top, right, bottom),
+            text: text.to_owned(),
+        }
+    }
+
+    fn strings(texts: &[&str]) -> Vec<String> {
+        texts.iter().map(|text| (*text).to_owned()).collect()
+    }
+
+    const PARAGRAPH: &str = "The quick brown fox jumps over the lazy dog every single day";
+
+    #[test]
+    fn a_tied_line_past_body_text_does_not_hold_the_bottom_open() {
+        let lines = [
+            line(400, 450, 500, 465, "Underlying price"),
+            line(100, 520, 900, 535, "The quick brown fox jumps over"),
+            line(100, 600, 200, 612, "Spread 1"),
+        ];
+        let cut = cut_rectangle(
+            boxed(100, 200, 900, 800),
+            &strings(&["Underlying price", "Spread 1"]),
+            &strings(&[PARAGRAPH, "Spread 1 Efficiency 959"]),
+            &lines,
+        );
+        assert_eq!(cut.area.bottom, 514);
+    }
+
+    #[test]
+    fn a_label_line_far_above_is_grown_in_unless_another_pieces_line_is_between() {
+        let label = line(100, 400, 400, 415, "Figure 3-1 A caption");
+        let tick = line(400, 700, 500, 715, "Underlying price");
+        let own = strings(&["Figure 3-1 A caption", "Underlying price"]);
+        let bounds = boxed(100, 600, 900, 900);
+
+        let far = cut_rectangle(bounds, &own, &[], &[label.clone(), tick.clone()]);
+        assert_eq!(far.area.top, 385);
+
+        let paragraph = line(100, 500, 900, 515, "The quick brown fox jumps over");
+        let blocked = cut_rectangle(
+            bounds,
+            &own,
+            &strings(&[PARAGRAPH]),
+            &[label, paragraph, tick],
+        );
+        assert_eq!(blocked.area.top, 585);
+    }
+}

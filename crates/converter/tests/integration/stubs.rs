@@ -7,11 +7,20 @@ use std::sync::Mutex;
 use converter::ChapterJob;
 use converter::categorise::PageCategories;
 use converter::claude::{Answer, CallUsage};
-use converter::content::Symbol;
+use converter::content::{PageBox, Symbol};
 use converter::jev::{JevError, MathPlacement};
 use converter::services::{PageServices, PageSource, ServiceError};
 use converter::transcribe::{
     CitedKind, CitedLabel, CopiedPage, CopiedPiece, Discussion, TranscribedPage, TranscribedPiece,
+};
+
+/// The canned figure's rectangle. Its left edge is 0, so the padding is clamped at the page edge;
+/// the other three sides show the padding.
+const CANNED_FIGURE_BOUNDS: PageBox = PageBox {
+    left: 0,
+    top: 200,
+    right: 700,
+    bottom: 500,
 };
 
 pub fn sample_pdf() -> PathBuf {
@@ -20,6 +29,10 @@ pub fn sample_pdf() -> PathBuf {
 
 pub fn sample_job(output_root: &Path) -> ChapterJob {
     ChapterJob::new("Option Volatility and Pricing", &sample_pdf(), output_root).unwrap()
+}
+
+pub fn page_folder(chapter: &Path, position: u32) -> PathBuf {
+    chapter.join(format!("page-num-{position}"))
 }
 
 pub fn read_json(path: &Path) -> serde_json::Value {
@@ -145,17 +158,13 @@ fn standard_transcription(position: u32) -> TranscribedPage {
                 label: "Figure 3-1".to_owned(),
             }],
         ),
-        TranscribedPiece::Figure {
-            number: 5,
-            label: Some("Figure 3-1".to_owned()),
-            caption: Some("Growth.".to_owned()),
-            printed_text: vec!["Growth".to_owned(), "Time".to_owned()],
-            explanation: "Figure 3-1, Growth. A line chart with time along the bottom axis and \
-                growth up the side. The line starts low on the left, climbs steadily through the \
-                middle of the chart and flattens near the top right. The title reads Growth and \
-                the bottom axis is labelled Time. The chart shows growth that slows over time, so early gains are large and later gains are small, and the line never turns down anywhere on the page."
-                .to_owned(),
-        },
+        canned_figure(
+            5,
+            "Figure 3-1",
+            "Growth.",
+            &["Growth", "Time"],
+            CANNED_FIGURE_BOUNDS,
+        ),
         TranscribedPiece::Table {
             number: 6,
             label: Some("Table 3-1".to_owned()),
@@ -174,6 +183,114 @@ fn standard_transcription(position: u32) -> TranscribedPage {
     TranscribedPage {
         discusses: vec![Discussion { piece: 4, about: 5 }],
         ..page_of(position, pieces)
+    }
+}
+
+fn canned_figure(
+    number: u32,
+    label: &str,
+    caption: &str,
+    printed_text: &[&str],
+    bounds: PageBox,
+) -> TranscribedPiece {
+    TranscribedPiece::Figure {
+        number,
+        label: Some(label.to_owned()),
+        caption: Some(caption.to_owned()),
+        printed_text: printed_text.iter().map(|text| (*text).to_owned()).collect(),
+        bounds,
+        explanation: "A line chart with time along the bottom axis and growth up the side. The \
+            line starts low on the left, climbs steadily through the middle of the chart and \
+            flattens near the top right. The title reads Growth and the bottom axis is labelled \
+            Time. The chart shows growth that slows over time, so early gains are large and \
+            later gains are small, and the line never turns down anywhere on the page."
+            .to_owned(),
+    }
+}
+
+/// A rectangle the reply check refuses: its left edge is past its right edge.
+const UNUSABLE_BOUNDS: PageBox = PageBox {
+    left: 700,
+    top: 200,
+    right: 100,
+    bottom: 500,
+};
+
+// A line printed on page 3 of the sample, and the first lines of the paragraph under the figure
+// on page 6. The canned text repeats them, so the converter can tell they are body text when it
+// works out where to cut a figure.
+const PAGE_THREE_LINE: &str = "a trader depending on the types of strategies being executed";
+const PAGE_SIX_LINES: &str = "gamma, the potential profit when the underlying market moves. The risk is the theta, the money that will be lost through the passage of time";
+
+/// Adds a sentence the page really prints to the canned text piece (piece 4).
+fn add_sentence(mut page: TranscribedPage, sentence: &str) -> TranscribedPage {
+    if let TranscribedPiece::Text { markdown, .. } = &mut page.pieces[3] {
+        markdown.push(' ');
+        markdown.push_str(sentence);
+    }
+    page
+}
+
+fn set_figure_bounds(mut page: TranscribedPage, bounds: PageBox) -> TranscribedPage {
+    if let TranscribedPiece::Figure { bounds: old, .. } = &mut page.pieces[4] {
+        *old = bounds;
+    }
+    page
+}
+
+/// The canned page with an unbalanced brace in its formula.
+fn break_formula(mut page: TranscribedPage) -> TranscribedPage {
+    if let TranscribedPiece::Formula { latex, .. } = &mut page.pieces[2] {
+        *latex = "\\frac{a".to_owned();
+    }
+    page
+}
+
+/// What the stub answers for each page of the sample chapter.
+fn sample_chapter_transcription(position: u32, is_second_try: bool) -> TranscribedPage {
+    let canned = standard_transcription(position);
+    let rectangle = |left, top, right, bottom| PageBox {
+        left,
+        top,
+        right,
+        bottom,
+    };
+    match (position, is_second_try) {
+        (3, _) => add_sentence(
+            set_figure_bounds(canned, rectangle(0, 50, 1000, 950)),
+            PAGE_THREE_LINE,
+        ),
+        (4, false) => break_formula(canned),
+        (4, true) | (5, false) => set_figure_bounds(canned, UNUSABLE_BOUNDS),
+        // This reply has a bad rectangle and a broken formula. It must never be saved as a reply
+        // whose only fault is its rectangle.
+        (5, true) => break_formula(set_figure_bounds(canned, UNUSABLE_BOUNDS)),
+        (6, _) => {
+            let mut page = add_sentence(canned, PAGE_SIX_LINES);
+            page.pieces[4] = canned_figure(
+                5,
+                "Figure 13-16",
+                "Dividend sensitivity.",
+                &["Expected quarterly dividend"],
+                rectangle(115, 55, 950, 675),
+            );
+            TranscribedPage {
+                ends_mid_sentence: true,
+                ..page
+            }
+        }
+        (7, _) => {
+            let mut page = page_seven_transcription();
+            page.pieces.push(canned_figure(
+                3,
+                "Figure 24-12",
+                "FTSE 100 volatility surface. March 16. 2012.",
+                &["Exercise price", "Months to expiration"],
+                rectangle(80, 578, 950, 945),
+            ));
+            page
+        }
+        _ => canned,
     }
 }
 
@@ -302,11 +419,9 @@ impl PageServices for StubServices {
             Scenario::AllTables {
                 broken_page: Some(broken),
             } if broken == page.position => broken_transcription(page.position),
-            Scenario::SampleChapter if page.position == 7 => page_seven_transcription(),
-            Scenario::SampleChapter if page.position == 6 => TranscribedPage {
-                ends_mid_sentence: true,
-                ..standard_transcription(6)
-            },
+            Scenario::SampleChapter => {
+                sample_chapter_transcription(page.position, correction.is_some())
+            }
             _ => standard_transcription(page.position),
         };
         Ok(Answer {

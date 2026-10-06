@@ -27,7 +27,7 @@
       "kind": "formula",
       "label": "(7.3)",
       "name": "Likelihood of the D-vine copula",
-      "statement": "The likelihood of the D-vine copula is a product over observations, tree levels and positions of pair copula densities evaluated at conditional distribution functions.",
+      "statement": "The likelihood of the D-vine copula is the product over observations, tree levels and pairs of the pair copula densities evaluated at the conditional distribution functions.",
       "symbols": []
     },
     {
@@ -42,7 +42,7 @@
       "kind": "formula",
       "label": "(7.4)",
       "name": "Likelihood of a C-vine copula",
-      "statement": "The likelihood of a C-vine copula is a product over observations, tree levels and positions of pair copula densities evaluated at conditional distribution functions.",
+      "statement": "The likelihood of a C-vine copula is the product over observations, tree levels and pairs of the pair copula densities evaluated at the conditional distribution functions.",
       "symbols": []
     },
     {
@@ -98,7 +98,7 @@
     "tags": {
       "math-notation": true,
       "inline-with-text-math-notation": true,
-      "chapter-number": true,
+      "chapter-number": false,
       "chapter-name": false,
       "page-number": true,
       "diagram-2d-multi-axis-chart": false,
@@ -125,24 +125,26 @@
         "text-layer-words-in-pieces": 0.747
       },
       "displayed-math-without-formula": false,
-      "reply-retried": false
+      "reply-retried": false,
+      "retry-reason": null,
+      "whole-page-figures": []
     },
     "calls": [
       {
         "step": "tag",
         "model": "claude-haiku-4-5-20251001",
-        "cost-usd": 0.020944000000000004,
-        "output-tokens": 1531,
-        "thinking-tokens": 855,
-        "seconds": 16.048600083
+        "cost-usd": 0.020667,
+        "output-tokens": 1484,
+        "thinking-tokens": 868,
+        "seconds": 14.803163959
       },
       {
         "step": "transcribe",
         "model": "claude-sonnet-5-5",
-        "cost-usd": 0.024446,
-        "output-tokens": 1927,
+        "cost-usd": 0.069242,
+        "output-tokens": 1864,
         "thinking-tokens": 0,
-        "seconds": 15.313325083
+        "seconds": 11.789606917
       }
     ]
   }

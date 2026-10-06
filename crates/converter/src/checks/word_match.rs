@@ -9,7 +9,7 @@ use crate::transcribe::{TranscribedPage, TranscribedPiece};
 
 /// The lowercase words of `text`: invisible characters removed, every character that is not a
 /// letter or a digit treated as a space.
-fn words(text: &str) -> Vec<String> {
+pub(crate) fn words(text: &str) -> Vec<String> {
     remove_invisible(text)
         .to_lowercase()
         .chars()
@@ -52,49 +52,55 @@ fn copied_strings(page: &TranscribedPage) -> Vec<&str> {
     let mut copied: Vec<&str> = Vec::new();
     copied.extend(page.printed_page_number.as_deref());
     copied.extend(page.running_header.as_deref());
-    for piece in &page.pieces {
-        match piece {
-            TranscribedPiece::Heading {
-                printed_number,
-                text,
-                ..
-            } => {
-                copied.extend(printed_number.as_deref());
-                copied.push(text);
-            }
-            TranscribedPiece::Text { markdown, .. } => copied.push(markdown),
-            // SMELL: a formula's printed label is copied from the page too, but it is left out
-            // here, so a page with labelled formulas matches a little less of its text layer.
-            // Adding it would change the ratios, which are already saved for converted pages.
-            TranscribedPiece::Formula { .. } => {}
-            TranscribedPiece::Figure {
-                label,
-                caption,
-                printed_text,
-                ..
-            } => {
-                copied.extend(label.as_deref());
-                copied.extend(caption.as_deref());
-                copied.extend(printed_text.iter().map(String::as_str));
-            }
-            TranscribedPiece::Table {
-                label,
-                caption,
-                markdown,
-                note,
-                ..
-            } => {
-                copied.extend(label.as_deref());
-                copied.extend(caption.as_deref());
-                copied.push(markdown);
-                copied.extend(note.as_deref());
-            }
-            TranscribedPiece::Footnote {
-                marker, markdown, ..
-            } => {
-                copied.extend(marker.as_deref());
-                copied.push(markdown);
-            }
+    copied.extend(page.pieces.iter().flat_map(piece_strings));
+    copied
+}
+
+/// The strings one piece copied from the page. What the model wrote in its own words, such as a
+/// figure's explanation, is left out.
+pub(crate) fn piece_strings(piece: &TranscribedPiece) -> Vec<&str> {
+    let mut copied: Vec<&str> = Vec::new();
+    match piece {
+        TranscribedPiece::Heading {
+            printed_number,
+            text,
+            ..
+        } => {
+            copied.extend(printed_number.as_deref());
+            copied.push(text);
+        }
+        TranscribedPiece::Text { markdown, .. } => copied.push(markdown),
+        // SMELL: a formula's printed label is copied from the page too, but it is left out
+        // here, so a page with labelled formulas matches a little less of its text layer.
+        // Adding it would change the ratios, which are already saved for converted pages.
+        TranscribedPiece::Formula { .. } => {}
+        TranscribedPiece::Figure {
+            label,
+            caption,
+            printed_text,
+            ..
+        } => {
+            copied.extend(label.as_deref());
+            copied.extend(caption.as_deref());
+            copied.extend(printed_text.iter().map(String::as_str));
+        }
+        TranscribedPiece::Table {
+            label,
+            caption,
+            markdown,
+            note,
+            ..
+        } => {
+            copied.extend(label.as_deref());
+            copied.extend(caption.as_deref());
+            copied.push(markdown);
+            copied.extend(note.as_deref());
+        }
+        TranscribedPiece::Footnote {
+            marker, markdown, ..
+        } => {
+            copied.extend(marker.as_deref());
+            copied.push(markdown);
         }
     }
     copied

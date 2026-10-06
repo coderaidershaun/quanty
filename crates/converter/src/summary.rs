@@ -5,13 +5,18 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use crate::content::{
-    ChapterIndex, ContentError, Conversion, PageIndex, PieceDetail, Route, page_folder_name,
+    ChapterIndex, ContentError, Conversion, FigureImage, ImageShows, PageIndex, PieceDetail, Route,
+    page_folder_name,
 };
 
 /// A Sonnet-written page whose copied words match the text layer less well than this, in either
 /// direction, is listed as a page to check. The text layer is unreliable around math, charts and
 /// tables, so a middling match there is normal and is never a failure.
 pub(crate) const LOW_WORD_MATCH: f64 = 0.60;
+
+/// A figure picture that covers more than this share of its page is listed as a page to check: a
+/// figure is rarely that big, so a rectangle that large is more likely to be wrong.
+const MOST_OF_THE_PAGE_PERCENT: i64 = 80;
 
 /// The paid calls a run made, one per call through the services, so a corrected retry counts.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -115,7 +120,7 @@ impl ConversionSummary {
             let reasons = match &page.conversion {
                 Some(conversion) => {
                     summary.count_route(conversion.route);
-                    reasons_to_check(conversion)
+                    reasons_to_check(&page, conversion)
                 }
                 None => Vec::new(),
             };
@@ -167,7 +172,7 @@ impl ConversionSummary {
 }
 
 /// Why a converted page is worth a look, if it is.
-fn reasons_to_check(conversion: &Conversion) -> Vec<&'static str> {
+fn reasons_to_check(page: &PageIndex, conversion: &Conversion) -> Vec<&'static str> {
     let mut reasons = Vec::new();
     let word_match = conversion.checks.word_match;
     let written_by_sonnet = conversion.route != Route::HaikuCopy;
@@ -180,7 +185,43 @@ fn reasons_to_check(conversion: &Conversion) -> Vec<&'static str> {
     if conversion.checks.displayed_math_without_formula {
         reasons.push("displayed math reported, no formula piece");
     }
+    if !conversion.checks.whole_page_figures.is_empty() {
+        reasons.push("figure image is the whole page");
+    }
+    let images: Vec<&FigureImage> = page
+        .pieces
+        .iter()
+        .filter_map(|piece| match &piece.detail {
+            PieceDetail::Figure { image, .. } => image.as_ref(),
+            _ => None,
+        })
+        .collect();
+    let has_text = page
+        .pieces
+        .iter()
+        .any(|piece| matches!(piece.detail, PieceDetail::Text { .. }));
+    if has_text && images.iter().any(|image| covers_most_of_the_page(image)) {
+        reasons.push("figure image is most of the page");
+    }
+    if images.iter().any(|image| image.holds_body_text) {
+        reasons.push("figure image holds body text");
+    }
+    if images.iter().any(|image| image.unchecked) {
+        reasons.push("figure image was not checked against the page's text");
+    }
     reasons
+}
+
+/// True for a figure cut out of its page from a rectangle that covers more than
+/// [`MOST_OF_THE_PAGE_PERCENT`] percent of the page.
+fn covers_most_of_the_page(image: &FigureImage) -> bool {
+    // A rectangle is in thousandths of the page each way, so the whole page is a million.
+    const WHOLE_PAGE: i64 = 1_000_000;
+    image.shows == ImageShows::Figure
+        && image.cut.is_some_and(|cut| {
+            let area = i64::from(cut.right - cut.left) * i64::from(cut.bottom - cut.top);
+            area * 100 > MOST_OF_THE_PAGE_PERCENT * WHOLE_PAGE
+        })
 }
 
 impl fmt::Display for ConversionSummary {

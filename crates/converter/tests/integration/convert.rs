@@ -6,11 +6,14 @@ use std::path::Path;
 use std::process::Command;
 
 use converter::ConversionSummary;
-use converter::content::RelationshipKind;
+use converter::content::{ContentError, RelationshipKind};
 use converter::convert::{ConvertError, convert_chapter_with};
 use converter::reader::{PieceId, read_chapter};
 
-use crate::stubs::{Call, Scenario, StubServices, read_json, sample_job, sample_pdf};
+use crate::figure_pictures::{
+    assert_figure_pictures_read_back, assert_figures_cut, assert_hard_fallbacks,
+};
+use crate::stubs::{Call, Scenario, StubServices, page_folder, read_json, sample_job, sample_pdf};
 
 const SOFT_HYPHEN: char = '\u{AD}';
 
@@ -21,10 +24,6 @@ fn strings(value: &serde_json::Value) -> Vec<&str> {
         .iter()
         .map(|item| item.as_str().unwrap())
         .collect()
-}
-
-fn page_folder(chapter: &Path, position: u32) -> std::path::PathBuf {
-    chapter.join(format!("page-num-{position}"))
 }
 
 fn call_steps(page: &serde_json::Value) -> Vec<&str> {
@@ -101,12 +100,12 @@ fn assert_routes_reasons_and_calls(chapter: &Path, stubs: &StubServices) {
         (
             "haiku-then-sonnet",
             &["copy-failed-copy-check"],
-            &["tag", "copy", "transcribe"],
+            &["tag", "copy", "transcribe", "transcribe"],
         ),
         (
             "haiku-then-sonnet",
             &["copy-failed-copy-check"],
-            &["tag", "copy", "transcribe"],
+            &["tag", "copy", "transcribe", "transcribe"],
         ),
         ("sonnet", &["tags-report-table"], &["tag", "transcribe"]),
         ("sonnet", &["math-check-failed"], &["tag", "transcribe"]),
@@ -154,7 +153,7 @@ fn assert_routes_reasons_and_calls(chapter: &Path, stubs: &StubServices) {
         stubs.calls_for(1),
         [Call::Tag(1), Call::Math(1), Call::Copy(1)]
     );
-    assert_eq!(stubs.calls().len(), 25);
+    assert_eq!(stubs.calls().len(), 27);
 }
 
 /// A page with the standard transcription keeps all three kinds of relationship, and the
@@ -197,7 +196,7 @@ fn assert_summary_counts_and_lists(summary: &ConversionSummary) {
             summary.calls.copy,
             summary.calls.transcribe
         ),
-        (7, 7, 5, 6)
+        (7, 7, 5, 8)
     );
     assert_eq!(
         (
@@ -221,6 +220,17 @@ fn assert_summary_counts_and_lists(summary: &ConversionSummary) {
         assert!(
             to_check.contains(&format!("page {position} (low word match")),
             "{to_check}"
+        );
+    }
+    for expected in [
+        "page 2 (low word match, figure image was not checked against the page's text)",
+        "page 3 (low word match, figure image is most of the page, figure image holds body text, figure image was not checked against the page's text)",
+        "page 4 (low word match, figure image is the whole page)",
+        "page 5 (low word match, figure image is the whole page)",
+    ] {
+        assert!(
+            to_check.contains(expected),
+            "{expected} missing from {to_check}"
         );
     }
 }
@@ -270,8 +280,11 @@ async fn chapter_converts_then_reruns_without_calls() {
     assert_pages_saved_without_soft_hyphens(&chapter);
     assert_routes_reasons_and_calls(&chapter, &stubs);
     assert_relationships_saved(&chapter);
+    assert_figures_cut(&chapter);
+    assert_hard_fallbacks(&chapter, &stubs);
     assert_summary_counts_and_lists(&summary);
     assert_reads_back_with_bridged_lead_in(&chapter, &summary);
+    assert_figure_pictures_read_back(&chapter);
 
     // A second run changes nothing and makes no call.
     let calls_before = stubs.calls().len();
@@ -324,7 +337,11 @@ async fn failing_page_is_named_and_the_next_run_resumes() {
     let chapter = job.chapter_folder();
     let rejected = chapter.join("page-num-7.partial/rejected-reply.json");
     assert!(
-        matches!(error, ConvertError::PageFailed { position: 7, .. }),
+        matches!(
+            &error,
+            ConvertError::PageFailed { position: 7, source, .. }
+                if matches!(**source, converter::PageError::ReplyRejected { .. })
+        ),
         "{error:?}"
     );
     let mut chain = vec![error.to_string()];
@@ -368,6 +385,23 @@ async fn failing_page_is_named_and_the_next_run_resumes() {
     }
     assert!(!page_folder(&chapter, 7).exists());
     assert_eq!(read_json(&chapter.join("chapter.json"))["finished"], false);
+
+    // A page.json that cannot be read for any reason except being missing or malformed is an
+    // error to report, not a reason to delete the page and pay to convert it again.
+    let page_json = page_folder(&chapter, 3).join("page.json");
+    let saved_page_json = std::fs::read(&page_json).unwrap();
+    std::fs::remove_file(&page_json).unwrap();
+    std::fs::create_dir(&page_json).unwrap();
+    let unreadable = StubServices::new(Scenario::AllTables { broken_page: None });
+    let error = convert_chapter_with(&job, &unreadable).await.unwrap_err();
+    assert!(
+        matches!(error, ConvertError::Content(ContentError::Read { .. })),
+        "{error:?}"
+    );
+    assert!(unreadable.calls().is_empty());
+    assert!(page_folder(&chapter, 3).join("02-text.md").is_file());
+    std::fs::remove_dir(&page_json).unwrap();
+    std::fs::write(&page_json, saved_page_json).unwrap();
 
     let working = StubServices::new(Scenario::AllTables { broken_page: None });
     let summary = convert_chapter_with(&job, &working).await.unwrap();

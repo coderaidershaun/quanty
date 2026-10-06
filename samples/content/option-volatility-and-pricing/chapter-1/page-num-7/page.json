@@ -40,13 +40,37 @@
       "label": "Figure 24-12",
       "caption": "FTSE 100 volatility surface. March 16. 2012.",
       "printed-text": [
-        "45%, 40%, 35%, 30%, 25%, 20%, 15%, 10%",
+        "45%",
+        "40%",
+        "35%",
+        "30%",
+        "25%",
+        "20%",
+        "15%",
+        "10%",
         "Implied volatility",
         "4000, 4200, 4400, 4600, 4800, 5000, 5200, 5400, 5600, 5800, 6000, 6200, 6400, 6600, 6800, 7000, 7200, 7400, 7600, 7800, 8000",
         "Exercise price",
         "3, 5, 7, 9, 11, 13, 15, 17",
         "Months to expiration"
-      ]
+      ],
+      "bounds": {
+        "left": 90,
+        "top": 525,
+        "right": 955,
+        "bottom": 950
+      },
+      "image": {
+        "file": "04-figure.png",
+        "shows": "figure",
+        "cut": {
+          "left": 75,
+          "top": 510,
+          "right": 970,
+          "bottom": 960
+        },
+        "holds-body-text": false
+      }
     }
   ],
   "relationships": [
@@ -87,24 +111,26 @@
         "text-layer-words-in-pieces": 0.997
       },
       "displayed-math-without-formula": false,
-      "reply-retried": false
+      "reply-retried": false,
+      "retry-reason": null,
+      "whole-page-figures": []
     },
     "calls": [
       {
         "step": "tag",
         "model": "claude-haiku-4-5-20251001",
-        "cost-usd": 0.024151,
-        "output-tokens": 2248,
-        "thinking-tokens": 1635,
-        "seconds": 22.446958125
+        "cost-usd": 0.021466,
+        "output-tokens": 1705,
+        "thinking-tokens": 1056,
+        "seconds": 17.7170115
       },
       {
         "step": "transcribe",
         "model": "claude-sonnet-5-5",
-        "cost-usd": 0.04245,
-        "output-tokens": 1681,
+        "cost-usd": 0.0226058,
+        "output-tokens": 1701,
         "thinking-tokens": 0,
-        "seconds": 11.234288
+        "seconds": 11.751885875
       }
     ]
   }

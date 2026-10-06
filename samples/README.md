@@ -9,3 +9,5 @@ Never rebuild it. A rebuilt file has another hash, and the converter refuses a P
 ```bash
 cargo run -p converter -- --book "Option Volatility and Pricing" --out samples/content samples/chapter-1-sample-pages.pdf
 ```
+
+The three figures in it were converted before the `unchecked` key existed, so their `image` entries in `page.json` do not carry it and it reads as false, which is what the converter would write for them.

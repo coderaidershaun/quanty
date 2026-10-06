@@ -24,6 +24,9 @@ crates/
         piece.rs
       content.rs
       convert.rs
+      figure/
+        refine.rs
+      figure.rs
       jev.rs
       lib.rs
       main.rs
@@ -43,6 +46,7 @@ crates/
         categorise.rs
         convert.rs
         convert_live.rs
+        figure_pictures.rs
         fixtures/
           jev/
             block-only.txt
@@ -126,6 +130,7 @@ samples/
           text-layer.txt
         page-num-5/
           01-figure.md
+          01-figure.png
           02-text.md
           03-text.md
           04-text.md
@@ -135,6 +140,7 @@ samples/
           text-layer.txt
         page-num-6/
           01-figure.md
+          01-figure.png
           02-text.md
           03-formula.tex
           04-text.md
@@ -152,6 +158,7 @@ samples/
           02-text.md
           03-text.md
           04-figure.md
+          04-figure.png
           page.json
           page.pdf
           page.png

@@ -8,7 +8,7 @@ use std::time::Duration;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-const API_KEY_VARIABLE: &str = "CONVERTER_JEV_API_KEY";
+pub(crate) const JEV_API_KEY_VARIABLE: &str = "CONVERTER_JEV_API_KEY";
 const ENDPOINT: &str = "https://api.typesafe.ai/v1/systemone";
 // Pinned because the questions were tuned against this version; a newer one may answer differently.
 const MODEL: &str = "jev-1.13.0";
@@ -43,7 +43,7 @@ pub enum MathPlacement {
 #[derive(thiserror::Error, Debug)]
 pub enum JevError {
     /// The environment variable that holds the API key is not set, or is not valid Unicode.
-    #[error("environment variable {API_KEY_VARIABLE} is not set, or is not valid Unicode")]
+    #[error("environment variable {JEV_API_KEY_VARIABLE} is not set, or is not valid Unicode")]
     MissingApiKey,
 
     /// The client could not be built, the server could not be reached, or the request timed out.
@@ -98,7 +98,7 @@ impl Jev {
     /// - [`JevError::MissingApiKey`] if the variable is not set or is not valid Unicode.
     /// - [`JevError::Http`] if the HTTP client cannot be built.
     pub fn from_env() -> Result<Self, JevError> {
-        let api_key = std::env::var(API_KEY_VARIABLE).map_err(|_| JevError::MissingApiKey)?;
+        let api_key = std::env::var(JEV_API_KEY_VARIABLE).map_err(|_| JevError::MissingApiKey)?;
         Self::new(api_key)
     }
 

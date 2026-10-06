@@ -190,8 +190,11 @@ fn prepare(job: &ChapterJob) -> Result<Prepared, ConvertError> {
             given_file: job.source_file_name.clone(),
         });
     }
-    let every_page_saved =
-        (1..=saved.page_count).all(|position| is_saved(&job.chapter_folder, position));
+    // Every page is looked at, so a read error on any of them is returned.
+    let mut every_page_saved = true;
+    for position in 1..=saved.page_count {
+        every_page_saved &= is_saved(&job.chapter_folder, position)?;
+    }
     if saved.finished && saved.format_version == FORMAT_VERSION && every_page_saved {
         let summary = ConversionSummary::from_folder(&job.chapter_folder, 0, CallTally::default())?;
         return Ok(Prepared::Finished(summary));
@@ -199,10 +202,19 @@ fn prepare(job: &ChapterJob) -> Result<Prepared, ConvertError> {
     Ok(Prepared::ToDo { source_sha256 })
 }
 
-/// True when the page's folder exists and its `page.json` reads back at the current version.
-fn is_saved(chapter_folder: &Path, position: u32) -> bool {
-    PageIndex::read(&chapter_folder.join(page_folder_name(position)))
-        .is_ok_and(|page| page.format_version == FORMAT_VERSION)
+/// True when the page's folder exists and its `page.json` reads back at the current version. A
+/// missing file, a file that is not a page index and another format version all mean the page is
+/// not saved. Any other read error is returned: it says nothing about the page, and treating it
+/// as "not saved" would delete a page that was paid for.
+fn is_saved(chapter_folder: &Path, position: u32) -> Result<bool, ContentError> {
+    match PageIndex::read(&chapter_folder.join(page_folder_name(position))) {
+        Ok(page) => Ok(page.format_version == FORMAT_VERSION),
+        Err(ContentError::Read { source, .. }) if source.kind() == std::io::ErrorKind::NotFound => {
+            Ok(false)
+        }
+        Err(ContentError::Parse { .. }) => Ok(false),
+        Err(error) => Err(error),
+    }
 }
 
 fn write_error(path: &Path) -> impl FnOnce(std::io::Error) -> ContentError + '_ {
@@ -321,7 +333,7 @@ fn pages_to_do(folder: &Path, page_count: u32) -> Result<Vec<u32>, ContentError>
     }
     let mut to_do = Vec::new();
     for position in 1..=page_count {
-        if is_saved(folder, position) {
+        if is_saved(folder, position)? {
             continue;
         }
         let page_folder = folder.join(page_folder_name(position));

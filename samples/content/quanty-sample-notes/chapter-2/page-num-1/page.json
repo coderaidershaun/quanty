@@ -1,0 +1,87 @@
+{
+  "format-version": 1,
+  "page-position": 1,
+  "printed-page-number": "5",
+  "starts-mid-sentence": false,
+  "ends-mid-sentence": false,
+  "pieces": [
+    {
+      "number": 1,
+      "file": "01-heading.md",
+      "kind": "heading",
+      "rank": 1,
+      "printed-number": "2"
+    },
+    {
+      "number": 2,
+      "file": "02-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 3,
+      "file": "03-heading.md",
+      "kind": "heading",
+      "rank": 2,
+      "printed-number": null
+    },
+    {
+      "number": 4,
+      "file": "04-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 5,
+      "file": "05-heading.md",
+      "kind": "heading",
+      "rank": 2,
+      "printed-number": null
+    },
+    {
+      "number": 6,
+      "file": "06-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 7,
+      "file": "07-formula.tex",
+      "kind": "formula",
+      "label": "(2.1)",
+      "name": "Geometric Brownian motion",
+      "statement": "The change in the stock price over a short time is a drift term proportional to the price plus a random term proportional to the price.",
+      "symbols": [
+        {
+          "symbol": "S",
+          "meaning": "the stock price"
+        },
+        {
+          "symbol": "\\mu",
+          "meaning": "the average growth rate of the stock"
+        },
+        {
+          "symbol": "\\sigma",
+          "meaning": "the volatility of the stock"
+        },
+        {
+          "symbol": "W",
+          "meaning": "a Brownian motion, the source of the randomness"
+        }
+      ]
+    },
+    {
+      "number": 8,
+      "file": "08-text.md",
+      "kind": "text",
+      "cites": []
+    }
+  ],
+  "relationships": [
+    {
+      "kind": "introduces",
+      "from": 6,
+      "to": 7
+    }
+  ]
+}

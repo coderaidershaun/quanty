@@ -1,0 +1,200 @@
+{
+  "format-version": 1,
+  "page-position": 3,
+  "printed-page-number": "7",
+  "starts-mid-sentence": false,
+  "ends-mid-sentence": false,
+  "pieces": [
+    {
+      "number": 1,
+      "file": "01-formula.tex",
+      "kind": "formula",
+      "label": "(2.3)",
+      "name": "Black–Scholes partial differential equation",
+      "statement": "The value of the option satisfies an equation in which its change with time, half the squared volatility times the squared stock price times its curvature in the stock price, the risk-free rate times the stock price times its slope in the stock price, and minus the risk-free rate times its value add up to zero.",
+      "symbols": [
+        {
+          "symbol": "V",
+          "meaning": "the value of the option"
+        },
+        {
+          "symbol": "S",
+          "meaning": "the stock price"
+        },
+        {
+          "symbol": "t",
+          "meaning": "time"
+        },
+        {
+          "symbol": "\\sigma",
+          "meaning": "the volatility of the stock"
+        },
+        {
+          "symbol": "r",
+          "meaning": "the risk-free interest rate"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "file": "02-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 3,
+      "file": "03-heading.md",
+      "kind": "heading",
+      "rank": 2,
+      "printed-number": null
+    },
+    {
+      "number": 4,
+      "file": "04-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 5,
+      "file": "05-formula.tex",
+      "kind": "formula",
+      "label": "(2.4)",
+      "name": "Black–Scholes call price",
+      "statement": "The price of a European call is the stock price times N of d one, minus the strike discounted to today times N of d two.",
+      "symbols": [
+        {
+          "symbol": "C",
+          "meaning": "the price of the call"
+        },
+        {
+          "symbol": "S",
+          "meaning": "the stock price"
+        },
+        {
+          "symbol": "K",
+          "meaning": "the strike price"
+        },
+        {
+          "symbol": "r",
+          "meaning": "the risk-free interest rate"
+        },
+        {
+          "symbol": "T",
+          "meaning": "the time to expiration"
+        },
+        {
+          "symbol": "N",
+          "meaning": "the cumulative distribution function of the standard normal distribution"
+        }
+      ]
+    },
+    {
+      "number": 6,
+      "file": "06-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 7,
+      "file": "07-formula.tex",
+      "kind": "formula",
+      "label": "(2.5)",
+      "name": "Black–Scholes put price",
+      "statement": "The price of a European put is the strike discounted to today times N of minus d two, minus the stock price times N of minus d one.",
+      "symbols": [
+        {
+          "symbol": "P",
+          "meaning": "the price of the put"
+        },
+        {
+          "symbol": "S",
+          "meaning": "the stock price"
+        },
+        {
+          "symbol": "K",
+          "meaning": "the strike price"
+        },
+        {
+          "symbol": "r",
+          "meaning": "the risk-free interest rate"
+        },
+        {
+          "symbol": "T",
+          "meaning": "the time to expiration"
+        },
+        {
+          "symbol": "N",
+          "meaning": "the cumulative distribution function of the standard normal distribution"
+        }
+      ]
+    },
+    {
+      "number": 8,
+      "file": "08-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 9,
+      "file": "09-formula.tex",
+      "kind": "formula",
+      "label": "(2.6)",
+      "name": "The terms d one and d two",
+      "statement": "The quantity d one is the logarithm of the stock price over the strike, plus the time to expiration times the sum of the risk-free rate and half the squared volatility, all divided by the volatility times the square root of the time to expiration, and d two is d one minus the volatility times the square root of the time to expiration.",
+      "symbols": [
+        {
+          "symbol": "S",
+          "meaning": "the stock price"
+        },
+        {
+          "symbol": "K",
+          "meaning": "the strike price"
+        },
+        {
+          "symbol": "r",
+          "meaning": "the risk-free interest rate"
+        },
+        {
+          "symbol": "\\sigma",
+          "meaning": "the volatility of the stock"
+        },
+        {
+          "symbol": "T",
+          "meaning": "the time to expiration"
+        }
+      ]
+    },
+    {
+      "number": 10,
+      "file": "10-text.md",
+      "kind": "text",
+      "cites": [
+        {
+          "kind": "equation",
+          "label": "(2.4)"
+        },
+        {
+          "kind": "equation",
+          "label": "(2.5)"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "kind": "introduces",
+      "from": 4,
+      "to": 5
+    },
+    {
+      "kind": "introduces",
+      "from": 6,
+      "to": 7
+    },
+    {
+      "kind": "introduces",
+      "from": 8,
+      "to": 9
+    }
+  ]
+}

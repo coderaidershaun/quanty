@@ -1,0 +1,95 @@
+{
+  "format-version": 1,
+  "page-position": 1,
+  "printed-page-number": "1",
+  "starts-mid-sentence": false,
+  "ends-mid-sentence": false,
+  "pieces": [
+    {
+      "number": 1,
+      "file": "01-heading.md",
+      "kind": "heading",
+      "rank": 1,
+      "printed-number": "1"
+    },
+    {
+      "number": 2,
+      "file": "02-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 3,
+      "file": "03-heading.md",
+      "kind": "heading",
+      "rank": 2,
+      "printed-number": null
+    },
+    {
+      "number": 4,
+      "file": "04-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 5,
+      "file": "05-formula.tex",
+      "kind": "formula",
+      "label": "(1.1)",
+      "name": "Call payoff at expiration",
+      "statement": "The value of a call at expiration is the larger of the stock price minus the strike, and zero.",
+      "symbols": [
+        {
+          "symbol": "S_T",
+          "meaning": "the stock price on the expiration date"
+        },
+        {
+          "symbol": "K",
+          "meaning": "the strike price"
+        }
+      ]
+    },
+    {
+      "number": 6,
+      "file": "06-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 7,
+      "file": "07-formula.tex",
+      "kind": "formula",
+      "label": "(1.2)",
+      "name": "Put payoff at expiration",
+      "statement": "The value of a put at expiration is the larger of the strike minus the stock price, and zero.",
+      "symbols": [
+        {
+          "symbol": "S_T",
+          "meaning": "the stock price on the expiration date"
+        },
+        {
+          "symbol": "K",
+          "meaning": "the strike price"
+        }
+      ]
+    },
+    {
+      "number": 8,
+      "file": "08-text.md",
+      "kind": "text",
+      "cites": []
+    }
+  ],
+  "relationships": [
+    {
+      "kind": "introduces",
+      "from": 4,
+      "to": 5
+    },
+    {
+      "kind": "introduces",
+      "from": 6,
+      "to": 7
+    }
+  ]
+}

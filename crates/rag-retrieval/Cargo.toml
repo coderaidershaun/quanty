@@ -1,0 +1,8 @@
+[package]
+name = "rag-retrieval"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+graph.workspace = true
+rag-core.workspace = true

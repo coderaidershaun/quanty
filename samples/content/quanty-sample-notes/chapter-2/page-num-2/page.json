@@ -1,0 +1,81 @@
+{
+  "format-version": 1,
+  "page-position": 2,
+  "printed-page-number": "6",
+  "starts-mid-sentence": false,
+  "ends-mid-sentence": true,
+  "pieces": [
+    {
+      "number": 1,
+      "file": "01-heading.md",
+      "kind": "heading",
+      "rank": 2,
+      "printed-number": null
+    },
+    {
+      "number": 2,
+      "file": "02-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 3,
+      "file": "03-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 4,
+      "file": "04-formula.tex",
+      "kind": "formula",
+      "label": "(2.2)",
+      "name": "Itô's lemma for the option value",
+      "statement": "The change in the option value over a short time is a drift term plus a random term that depends on how sensitive the option is to the stock price.",
+      "symbols": [
+        {
+          "symbol": "V",
+          "meaning": "the value of the option"
+        },
+        {
+          "symbol": "S",
+          "meaning": "the stock price"
+        },
+        {
+          "symbol": "t",
+          "meaning": "time"
+        },
+        {
+          "symbol": "\\mu",
+          "meaning": "the average growth rate of the stock"
+        },
+        {
+          "symbol": "\\sigma",
+          "meaning": "the volatility of the stock"
+        },
+        {
+          "symbol": "W",
+          "meaning": "a Brownian motion, the source of the randomness"
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "file": "05-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 6,
+      "file": "06-text.md",
+      "kind": "text",
+      "cites": []
+    }
+  ],
+  "relationships": [
+    {
+      "kind": "introduces",
+      "from": 3,
+      "to": 4
+    }
+  ]
+}

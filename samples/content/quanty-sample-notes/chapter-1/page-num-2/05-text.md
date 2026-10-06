@@ -1,0 +1,1 @@
+Four of the five inputs can be looked up in a quote or in the contract itself. The fifth, volatility, has no quote of its own, so every pricing model must decide what number to use in its place, and the model that made this question famous is the

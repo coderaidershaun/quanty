@@ -11,3 +11,5 @@ cargo run -p ocr -- --book "Option Volatility and Pricing" --out samples/content
 ```
 
 The three figures in it were converted before the `unchecked` key existed, so their `image` entries in `page.json` do not carry it and it reads as false, which is what `ocr` would write for them.
+
+`content/quanty-sample-notes/` holds two short chapters that are written by hand, for the tests and for the search and concept features that come later. There is no PDF behind them, they have no pictures, and their `source-sha256` values are made up. `chapter-1` explains what options are worth at the level of intuition and ends with the idea behind the Black–Scholes model. `chapter-2` derives the Black–Scholes equation and gives the pricing formulas as formula pieces. They are in the same format as a converted chapter, and `ocr::read_chapter` reads them.

@@ -1,0 +1,1 @@
+The model assumes that the stock price moves in small random steps whose size is proportional to the price itself. Over a short time interval \( dt \), the change \( dS \) in the stock price \( S \) is written

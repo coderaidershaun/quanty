@@ -1,0 +1,66 @@
+{
+  "format-version": 1,
+  "page-position": 2,
+  "printed-page-number": "2",
+  "starts-mid-sentence": false,
+  "ends-mid-sentence": true,
+  "pieces": [
+    {
+      "number": 1,
+      "file": "01-heading.md",
+      "kind": "heading",
+      "rank": 2,
+      "printed-number": null
+    },
+    {
+      "number": 2,
+      "file": "02-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 3,
+      "file": "03-table.md",
+      "kind": "table",
+      "label": "Table 1-1",
+      "caption": "How the price of a call and of a put respond when one input rises.",
+      "summary": "For each of five inputs, whether the price of a call and the price of a put rises or falls when that input rises and the other four stay the same."
+    },
+    {
+      "number": 4,
+      "file": "04-text.md",
+      "kind": "text",
+      "cites": [
+        {
+          "kind": "table",
+          "label": "Table 1-1"
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "file": "05-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 6,
+      "file": "06-footnote.md",
+      "kind": "footnote",
+      "marker": "1",
+      "cites": []
+    }
+  ],
+  "relationships": [
+    {
+      "kind": "discusses",
+      "from": 4,
+      "to": 3
+    },
+    {
+      "kind": "footnote-of",
+      "from": 6,
+      "to": 3
+    }
+  ]
+}

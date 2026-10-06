@@ -1,0 +1,24 @@
+[package]
+name = "rag-ingestion"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "rag-ingest"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+graph.workspace = true
+ocr.workspace = true
+rag-core.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+qdrant-client.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }

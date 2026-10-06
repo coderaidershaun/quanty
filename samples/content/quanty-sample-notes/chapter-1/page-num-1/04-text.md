@@ -1,0 +1,1 @@
+On the expiration date there is nothing left to guess. Suppose the stock then trades at \( S_T \) and the strike is \( K \). A call holder will use the right only when the stock is worth more than the strike, and the gain is the difference. When the stock is at or below the strike the right is worthless and the holder simply walks away, so the value of a call at expiration is

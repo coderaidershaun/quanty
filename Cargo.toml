@@ -8,8 +8,15 @@ edition = "2024"
 
 [workspace.dependencies]
 anyhow = "1.0.104"
+base64 = { version = "0.23.1", default-features = false, features = ["std"] }
+clap = { version = "4.6.7", default-features = false, features = ["derive", "error-context", "help", "std", "usage"] }
 dotenvy = "0.15.7"
+falkordb = { version = "0.10.4", features = ["tokio"] }
 futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
+graph = { path = "crates/graph" }
+ocr = { path = "crates/ocr" }
+qdrant-client = { version = "1.19.0", default-features = false, features = ["serde"] }
+rag-core = { path = "crates/rag-core" }
 reqwest = { version = "0.13.5", features = ["json"] }
 schemars = { version = "1.2.2", features = ["preserve_order"] }
 serde = { version = "1.0.229", features = ["derive"] }
@@ -18,3 +25,6 @@ sha2 = { version = "0.11.0", default-features = false }
 tempfile = { version = "3.27.0", default-features = false }
 thiserror = "2.0.21"
 tokio = "1.53.2"
+tracing = { version = "0.1.44", default-features = false, features = ["std"] }
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "std"] }
+uuid = { version = "1.27.0", default-features = false, features = ["serde", "std", "v5"] }

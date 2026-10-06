@@ -1,0 +1,1 @@
+A put works the other way round. Its holder gains when the stock ends below the strike, because the stock can then be sold for more than it is worth, and gains nothing otherwise, so the value of a put at expiration is

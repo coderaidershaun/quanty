@@ -1,0 +1,1 @@
+Now form the change of the portfolio, \( d\Pi = dV - \Delta\, dS \), and put in the two expressions for \( dV \) and \( dS \). The terms with \( \mu \) cancel, and so does every term that contains \( dW \). Nothing random is left, so the portfolio is riskless over the interval, and a riskless portfolio must earn the risk-free rate \( r \): its change must equal \( r \Pi\, dt \).

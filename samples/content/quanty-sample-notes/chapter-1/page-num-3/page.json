@@ -1,0 +1,59 @@
+{
+  "format-version": 1,
+  "page-position": 3,
+  "printed-page-number": "3",
+  "starts-mid-sentence": true,
+  "ends-mid-sentence": false,
+  "pieces": [
+    {
+      "number": 1,
+      "file": "01-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 2,
+      "file": "02-heading.md",
+      "kind": "heading",
+      "rank": 2,
+      "printed-number": null
+    },
+    {
+      "number": 3,
+      "file": "03-text.md",
+      "kind": "text",
+      "cites": [
+        {
+          "kind": "footnote",
+          "label": "2"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "file": "04-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 5,
+      "file": "05-text.md",
+      "kind": "text",
+      "cites": []
+    },
+    {
+      "number": 6,
+      "file": "06-footnote.md",
+      "kind": "footnote",
+      "marker": "2",
+      "cites": []
+    }
+  ],
+  "relationships": [
+    {
+      "kind": "footnote-of",
+      "from": 6,
+      "to": 3
+    }
+  ]
+}

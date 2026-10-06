@@ -1,0 +1,1 @@
+Neither value can be negative, because the holder is never forced to act. That one-sided shape, a floor of zero and a gain that grows on one side only, is the source of everything interesting about option prices.

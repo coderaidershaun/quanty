@@ -11,14 +11,26 @@ anyhow = "1.0.104"
 base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 clap = { version = "4.6.7", default-features = false, features = ["derive", "error-context", "help", "std", "usage"] }
 dotenvy = "0.15.7"
+eframe = { version = "=0.36.2", default-features = false, features = ["accesskit", "default_fonts", "wgpu"] }
+egui-phosphor = { version = "=0.14.0", default-features = false, features = ["regular"] }
+egui_kittest = { version = "=0.36.2", default-features = false, features = ["eframe", "snapshot", "wgpu"] }
 falkordb = { version = "0.10.4", features = ["tokio"] }
 futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
 graph = { path = "crates/graph" }
+gui = { path = "crates/gui" }
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
 ocr = { path = "crates/ocr" }
+proptest = { version = "1.11.0", default-features = false, features = ["std"] }
 qdrant-client = { version = "1.19.0", default-features = false, features = ["serde"] }
 rag-core = { path = "crates/rag-core" }
 rag-ingestion = { path = "crates/rag-ingestion" }
+rag-retrieval = { path = "crates/rag-retrieval" }
+ratex-layout = "=0.1.14"
+ratex-parser = "=0.1.14"
+ratex-render = { version = "=0.1.14", features = ["embed-fonts"] }
+ratex-types = "=0.1.14"
 reqwest = { version = "0.13.5", features = ["json"] }
+rfd = { version = "0.17.2", default-features = false }
 schemars = { version = "1.2.2", features = ["preserve_order"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
@@ -30,3 +42,7 @@ toml = { version = "1.1.6", default-features = false, features = ["parse", "serd
 tracing = { version = "0.1.44", default-features = false, features = ["std"] }
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "std"] }
 uuid = { version = "1.27.0", default-features = false, features = ["serde", "std", "v4", "v5"] }
+
+[profile.dev.package."*"]
+debug = false
+opt-level = 2

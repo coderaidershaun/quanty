@@ -10,3 +10,7 @@ thiserror.workspace = true
 
 [features]
 testing = []
+
+[dev-dependencies]
+graph = { workspace = true, features = ["testing"] }
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }

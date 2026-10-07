@@ -13,5 +13,10 @@
 # Secrets
 .env
 
+# Pictures that egui_kittest writes beside a snapshot that does not match
+crates/gui/tests/snapshots/**/*.new.png
+crates/gui/tests/snapshots/**/*.diff.png
+crates/gui/tests/snapshots/**/*.old.png
+
 # Waste
 .scratch

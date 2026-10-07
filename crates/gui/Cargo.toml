@@ -6,3 +6,40 @@ edition.workspace = true
 [[bin]]
 name = "quanty"
 path = "src/main.rs"
+
+[features]
+testing = ["dep:egui_kittest"]
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+eframe.workspace = true
+egui-phosphor.workspace = true
+egui_kittest = { workspace = true, optional = true }
+graph.workspace = true
+image.workspace = true
+ocr.workspace = true
+rag-core.workspace = true
+rag-ingestion.workspace = true
+rag-retrieval.workspace = true
+ratex-layout.workspace = true
+ratex-parser.workspace = true
+ratex-render.workspace = true
+ratex-types.workspace = true
+rfd.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+graph = { workspace = true, features = ["testing"] }
+gui = { workspace = true, features = ["testing"] }
+ocr = { workspace = true, features = ["testing"] }
+proptest.workspace = true
+rag-ingestion = { workspace = true, features = ["testing"] }
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }

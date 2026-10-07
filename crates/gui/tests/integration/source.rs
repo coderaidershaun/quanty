@@ -177,7 +177,7 @@ async fn a_page_that_cannot_be_shown_says_what_to_do() {
     assert_eq!(
         failure.hint,
         format!(
-            "quanty does not know where this chapter's pages are. Put its chapter folder under {searched}, or ingest its PDF again with rag-ingest pdf."
+            "quanty does not know where this chapter's pages are. Put its chapter folder inside a book folder under {searched}, or ingest its PDF again with rag-ingest pdf."
         )
     );
     assert!(failure.detail.contains(&unknown.doc.0.to_string()));

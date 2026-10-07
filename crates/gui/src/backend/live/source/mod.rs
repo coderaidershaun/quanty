@@ -78,7 +78,7 @@ impl PageFault {
                     ),
                 )
                 .with_hint(format!(
-                    "quanty does not know where this chapter's pages are. Put its chapter folder under {searched}, or ingest its PDF again with rag-ingest pdf."
+                    "quanty does not know where this chapter's pages are. Put its chapter folder inside a book folder under {searched}, or ingest its PDF again with rag-ingest pdf."
                 ))
             }
             PageFault::NoSuchPage { page_count } => Failure::new(

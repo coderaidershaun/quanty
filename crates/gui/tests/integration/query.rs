@@ -14,7 +14,7 @@ use gui::contract::{
     GraphNode, ItemId, ItemKind, NodeId, NodeKind, Reason, RequestId, ResultItem,
 };
 use ocr::testing::{Scenario, StubServices};
-use rag_core::{ItemKind as StoredKind, LlmError};
+use rag_core::{Config, ItemKind as StoredKind, LlmError};
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores, first_axis, vector_at};
 use rag_ingestion::{Item, chapter_items, ingest_chapter};
 use rag_retrieval::RESULTS_PER_QUERY;
@@ -189,6 +189,27 @@ async fn an_ask_with_nothing_stored_sends_an_empty_search_and_asks_no_model() {
     assert!(search.results.is_empty());
     assert_eq!(search.trace.documents_searched, None);
     assert_eq!(search.trace.seed_concepts, None);
+    assert_eq!(answering.calls(), 0);
+
+    // A store that does not answer is a failure, not the empty state.
+    let stores = ThrowawayStores::new("query-qdrant-down");
+    let config = Config {
+        qdrant_url: "http://127.0.0.1:1".to_owned(),
+        ..stores.config().clone()
+    };
+    let cx = context_over(config, stores, &answering, StandInEmbedder::default);
+
+    let events = ask(&cx, AskMode::Answer, Filters::default()).await;
+
+    let [
+        Event::Search {
+            request: REQUEST,
+            result: Err(_),
+        },
+    ] = events.as_slice()
+    else {
+        panic!("expected a failed search alone, with id 7: {events:#?}");
+    };
     assert_eq!(answering.calls(), 0);
 }
 
@@ -367,6 +388,16 @@ fn context_with(
     embedder: impl Fn() -> StandInEmbedder + Send + Sync + 'static,
 ) -> LiveContext<StandInServices> {
     let config = stores.config().clone();
+    context_over(config, stores, answering, embedder)
+}
+
+/// The same, with the settings of the context given: the graph is still the one of `stores`.
+fn context_over(
+    config: Config,
+    stores: ThrowawayStores,
+    answering: &StandInLlm,
+    embedder: impl Fn() -> StandInEmbedder + Send + Sync + 'static,
+) -> LiveContext<StandInServices> {
     let answering = answering.clone();
     let services = StandInServices {
         stores,

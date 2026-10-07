@@ -6,3 +6,4 @@ mod claude_live;
 mod gemini_live;
 mod gemini_stub;
 mod gemini_wire;
+mod item_store;

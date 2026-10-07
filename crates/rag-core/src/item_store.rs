@@ -73,6 +73,17 @@ impl ItemStore {
         ensure_collection(&self.client, &self.url, &self.collection).await
     }
 
+    /// Whether the collection is there. It never creates it.
+    ///
+    /// # Errors
+    /// [`StoreError::Request`] when Qdrant refuses or cannot be reached.
+    pub async fn collection_exists(&self) -> Result<bool, StoreError> {
+        self.client
+            .collection_exists(self.collection.as_str())
+            .await
+            .map_err(|source| self.request_error("look for the collection", source))
+    }
+
     /// Stores the points, replacing any point that has the same identifier, and returns once
     /// Qdrant has applied them. An empty slice makes no call.
     ///

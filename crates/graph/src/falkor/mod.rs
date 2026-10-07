@@ -1,9 +1,13 @@
 //! The connection to FalkorDB and the check that the store behind it answers. The statements
-//! that write are in `writes`, and the statements that read are in `reads`.
+//! that write are in `writes`, and the statements that read are in `reads`, `records` and `edges`.
 
+mod edges;
 mod reads;
+mod records;
 mod writes;
 
+use std::path::Path;
+use std::pin::Pin;
 use std::time::Duration;
 
 use falkordb::{
@@ -12,10 +16,11 @@ use falkordb::{
 };
 use rag_core::{ConceptId, Config, DocId, ItemId};
 
-use crate::store::{
-    ConceptAlias, ConceptNode, DocumentNode, GraphError, GraphStore, ItemMentions, ItemNode,
-    Mention, Relation,
+use crate::contents::{
+    ConceptAlias, ConceptNode, DocumentNode, DocumentRecord, ItemMentions, ItemNode, Mention,
+    Relation,
 };
+use crate::store::{GraphError, GraphStore};
 
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -80,7 +85,11 @@ impl FalkorGraph {
         // Each query needs the graph handle by `&mut`, and a clone is cheap.
         let mut graph = self.graph.clone();
         let query = graph.query(statement).with_params(parameters).execute();
-        Box::pin(query).await.map_err(|source| GraphError::Query {
+        // The boxed future also gets a type that hides what is inside it. Otherwise, to prove that
+        // a caller's future can move to another thread, the compiler walks every future nested in
+        // the client, and it stops with an overflow error on a caller that spawns a whole ingest.
+        let query: Pin<Box<dyn Future<Output = _> + Send + '_>> = Box::pin(query);
+        query.await.map_err(|source| GraphError::Query {
             url: self.url.clone(),
             graph: self.graph.graph_name().to_owned(),
             action,
@@ -98,6 +107,10 @@ impl GraphStore for FalkorGraph {
         reads::documents(self).await
     }
 
+    async fn document_records(&self) -> Result<Vec<DocumentRecord>, GraphError> {
+        records::document_records(self).await
+    }
+
     async fn upsert_items(&self, document: DocId, items: &[ItemNode]) -> Result<(), GraphError> {
         writes::upsert_items(self, document, items).await
     }
@@ -112,6 +125,10 @@ impl GraphStore for FalkorGraph {
 
     async fn ingested_items(&self, document: DocId) -> Result<Option<u64>, GraphError> {
         reads::ingested_items(self, document).await
+    }
+
+    async fn set_chapter_folder(&self, document: DocId, folder: &Path) -> Result<(), GraphError> {
+        writes::set_chapter_folder(self, document, folder).await
     }
 
     async fn delete_document(&self, id: DocId) -> Result<u64, GraphError> {
@@ -162,6 +179,26 @@ impl GraphStore for FalkorGraph {
         concepts: &[ConceptId],
     ) -> Result<Vec<ConceptNode>, GraphError> {
         reads::related_concepts(self, concepts).await
+    }
+
+    async fn concepts_on_page(
+        &self,
+        document: DocId,
+        page: u32,
+    ) -> Result<Vec<ConceptNode>, GraphError> {
+        reads::concepts_on_page(self, document, page).await
+    }
+
+    async fn relations_among(&self, concepts: &[ConceptId]) -> Result<Vec<Relation>, GraphError> {
+        edges::relations_among(self, concepts).await
+    }
+
+    async fn mentions_between(
+        &self,
+        items: &[ItemId],
+        concepts: &[ConceptId],
+    ) -> Result<Vec<Mention>, GraphError> {
+        edges::mentions_between(self, items, concepts).await
     }
 }
 

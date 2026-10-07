@@ -5,7 +5,8 @@ use falkordb::FalkorValue;
 use rag_core::{ConceptId, DocId, DocumentLabels, ItemId, Tag};
 
 use super::{FalkorGraph, id_value};
-use crate::store::{ConceptNode, DocumentNode, GraphError, ItemMentions};
+use crate::contents::{ConceptNode, DocumentNode, ItemMentions};
+use crate::store::GraphError;
 
 const DOCUMENT_ROW: &str =
     "a document (an id, a title, a book or null, an author or null and a list of tags or null)";
@@ -44,7 +45,7 @@ LIMIT 1";
 // creates an empty graph of that name, so a program that reads before anything was written finds
 // nothing and leaves an empty graph behind. The read-only form of the query fails instead, and
 // this code does not use it.
-// SMELL: like the writes, the three reads below have no index on `id`, so each one looks at every
+// SMELL: like the writes, the four reads below have no index on `id`, so each one looks at every
 // node with its label and gets slower as the graph grows.
 const CONCEPTS_FOR_ITEMS: &str = "\
 MATCH (i:Item)-[:MENTIONS]->(c:Concept)
@@ -66,6 +67,13 @@ MATCH (a:Concept)-[:RELATES_TO]-(b:Concept)
 WHERE a.id IN $concepts AND NOT b.id IN $concepts
 RETURN DISTINCT b.id, b.name, b.normalised_name, b.definition
 ORDER BY b.normalised_name";
+
+const CONCEPTS_ON_PAGE: &str = "\
+MATCH (d:Document {id: $document})-[:HAS_ITEM]->(i:Item)-[:MENTIONS]->(c:Concept)
+WHERE i.page = $page
+WITH c, count(i) AS mentions
+RETURN c.id, c.name, c.normalised_name, c.definition
+ORDER BY mentions DESC, c.normalised_name";
 
 pub(super) async fn find_concept_by_name(
     graph: &FalkorGraph,
@@ -141,7 +149,7 @@ async fn read_concepts(
         .map_err(|found| unreadable_reply(graph, action, CONCEPT_ROW, found))
 }
 
-fn unreadable_reply(
+pub(super) fn unreadable_reply(
     graph: &FalkorGraph,
     action: &'static str,
     expected: &'static str,
@@ -215,13 +223,31 @@ pub(super) async fn related_concepts(
     .await
 }
 
-fn id_list(ids: &[impl ToString + Copy]) -> FalkorValue {
+pub(super) async fn concepts_on_page(
+    graph: &FalkorGraph,
+    document: DocId,
+    page: u32,
+) -> Result<Vec<ConceptNode>, GraphError> {
+    let parameters = vec![
+        ("document", id_value(document)),
+        ("page", FalkorValue::I64(i64::from(page))),
+    ];
+    read_concepts(
+        graph,
+        "read the concepts that the items on a page mention",
+        CONCEPTS_ON_PAGE,
+        parameters,
+    )
+    .await
+}
+
+pub(super) fn id_list(ids: &[impl ToString + Copy]) -> FalkorValue {
     FalkorValue::Array(ids.iter().copied().map(id_value).collect())
 }
 
 /// Reads a row of an id, a title, a book or null, an author or null and a list of tags or null.
 /// Any other row comes back as the text that the error shows.
-fn document_from_row(row: Vec<FalkorValue>) -> Result<DocumentNode, String> {
+pub(super) fn document_from_row(row: Vec<FalkorValue>) -> Result<DocumentNode, String> {
     let row = <[FalkorValue; 5]>::try_from(row).map_err(|row| format!("{row:?}"))?;
     let [
         FalkorValue::String(id),

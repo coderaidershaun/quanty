@@ -2,14 +2,14 @@
 //! that runs each one and the rows it takes.
 
 use std::collections::HashMap;
+use std::path::Path;
 
 use falkordb::FalkorValue;
 use rag_core::DocId;
 
 use super::{FalkorGraph, id_value};
-use crate::store::{
-    ConceptAlias, ConceptNode, DocumentNode, GraphError, ItemNode, Mention, Relation,
-};
+use crate::contents::{ConceptAlias, ConceptNode, DocumentNode, ItemNode, Mention, Relation};
+use crate::store::GraphError;
 
 /// Rows go in groups of this size, so that one statement stays quick also when the graph is
 /// large: the client waits only a short time for a reply.
@@ -22,6 +22,8 @@ MERGE (d:Document {id: $id})
 SET d.title = $title, d.book = $book, d.author = $author, d.tags = $tags";
 
 const SET_INGESTED_ITEMS: &str = "MATCH (d:Document {id: $id}) SET d.ingested_items = $items";
+
+const SET_CHAPTER_FOLDER: &str = "MATCH (d:Document {id: $id}) SET d.chapter_folder = $folder";
 
 // SMELL: there is no index on `id`, so every `MERGE` reads all the nodes with its label, and a
 // write gets slower as the graph grows. In a very large graph one write would take longer than
@@ -117,6 +119,30 @@ pub(super) async fn set_ingested_items(
         .run(
             "record whether the document is ingested whole",
             SET_INGESTED_ITEMS,
+            parameters,
+        )
+        .await?;
+    Ok(())
+}
+
+pub(super) async fn set_chapter_folder(
+    graph: &FalkorGraph,
+    document: DocId,
+    folder: &Path,
+) -> Result<(), GraphError> {
+    let text = folder
+        .to_str()
+        .ok_or_else(|| GraphError::FolderNotUnicode {
+            folder: folder.to_path_buf(),
+        })?;
+    let parameters = vec![
+        ("id", id_value(document)),
+        ("folder", FalkorValue::String(text.to_owned())),
+    ];
+    graph
+        .run(
+            "record the folder the document was ingested from",
+            SET_CHAPTER_FOLDER,
             parameters,
         )
         .await?;

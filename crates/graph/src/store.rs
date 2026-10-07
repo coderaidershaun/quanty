@@ -1,133 +1,14 @@
-//! What the graph holds, and what a program can ask of the store that holds it.
+//! What a program can ask of the graph store, and the ways a request can fail.
 
-use std::str::FromStr;
+use std::path::{Path, PathBuf};
 
 use falkordb::FalkorDBError;
-use rag_core::{ConceptId, DocId, DocumentLabels, ItemId, ItemKind};
+use rag_core::{ConceptId, DocId, ItemId};
 
-/// A document as the graph holds it.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct DocumentNode {
-    pub id: DocId,
-    pub title: String,
-    pub labels: DocumentLabels,
-}
-
-/// An item as the graph holds it. Its id is also the id of its point in Qdrant.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ItemNode {
-    pub id: ItemId,
-    pub kind: ItemKind,
-    pub page: u32,
-    pub printed_page: Option<String>,
-}
-
-/// A concept as the graph holds it. It belongs to no document. It starts with no aliases, and
-/// only [`GraphStore::add_alias`] adds one.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ConceptNode {
-    pub id: ConceptId,
-    /// The name as the first item that named it wrote it.
-    pub name: String,
-    /// The name in the form that names are compared in. A concept is found by it.
-    pub normalised_name: String,
-    /// What the concept is, in one line.
-    pub definition: String,
-}
-
-/// One more name for a stored concept.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ConceptAlias {
-    pub concept: ConceptId,
-    /// The name as the item wrote it.
-    pub name: String,
-    /// The name in the form that names are compared in. The concept is found by it.
-    pub normalised_name: String,
-}
-
-/// An item, and the concepts it mentions among the ones that were asked about.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ItemMentions {
-    pub item: ItemId,
-    /// In no fixed order.
-    pub concepts: Vec<ConceptId>,
-}
-
-/// An item discusses a concept.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Mention {
-    pub item: ItemId,
-    pub concept: ConceptId,
-    /// The name the item used.
-    pub wording: String,
-}
-
-/// How one concept relates to another. The list is fixed: a new kind is a change to this type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum RelationKind {
-    DerivedFrom,
-    Assumes,
-    Generalises,
-    PartOf,
-    UsedFor,
-}
-
-impl RelationKind {
-    /// Every kind, in the order of the enum.
-    // SMELL: a kind that is added to the enum must be added to this list by hand. Nothing checks
-    // it, and a kind that is missing here is refused as unknown.
-    pub const ALL: [RelationKind; 5] = [
-        RelationKind::DerivedFrom,
-        RelationKind::Assumes,
-        RelationKind::Generalises,
-        RelationKind::PartOf,
-        RelationKind::UsedFor,
-    ];
-
-    /// The name stored on the edge.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            RelationKind::DerivedFrom => "DERIVED_FROM",
-            RelationKind::Assumes => "ASSUMES",
-            RelationKind::Generalises => "GENERALISES",
-            RelationKind::PartOf => "PART_OF",
-            RelationKind::UsedFor => "USED_FOR",
-        }
-    }
-}
-
-/// The text that was given as a kind of relation is not the name of any kind.
-#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-#[error(
-    "`{given}` is not a kind of relation; the kinds are {kinds}",
-    kinds = RelationKind::ALL.map(RelationKind::as_str).join(", ")
-)]
-pub struct UnknownRelationKind {
-    given: String,
-}
-
-impl FromStr for RelationKind {
-    type Err = UnknownRelationKind;
-
-    fn from_str(text: &str) -> Result<RelationKind, UnknownRelationKind> {
-        RelationKind::ALL
-            .into_iter()
-            .find(|kind| kind.as_str() == text)
-            .ok_or_else(|| UnknownRelationKind {
-                given: text.to_owned(),
-            })
-    }
-}
-
-/// One concept relates to another.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Relation {
-    pub from: ConceptId,
-    pub to: ConceptId,
-    pub kind: RelationKind,
-    /// The item that stated it.
-    pub item: ItemId,
-}
+use crate::contents::{
+    ConceptAlias, ConceptNode, DocumentNode, DocumentRecord, ItemMentions, ItemNode, Mention,
+    Relation,
+};
 
 #[derive(thiserror::Error, Debug)]
 pub enum GraphError {
@@ -176,6 +57,12 @@ pub enum GraphError {
         /// What the reply should have been, in words that fit after "which is not".
         expected: &'static str,
     },
+
+    #[error(
+        "the folder {} cannot be kept in the graph because its path is not valid Unicode",
+        folder.display()
+    )]
+    FolderNotUnicode { folder: PathBuf },
 }
 
 /// The graph of documents, items and concepts. Every write can be repeated: a second call with
@@ -199,6 +86,20 @@ pub trait GraphStore {
     /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
     ///   document
     fn documents(&self) -> impl Future<Output = Result<Vec<DocumentNode>, GraphError>> + Send;
+
+    /// Every document, each once, ordered by title and then by id, with its labels, the mark that
+    /// it is ingested whole, the folder it was ingested from and how many items of each kind it
+    /// has. A document with no items has zero of each kind. This read counts every item in the
+    /// graph, so [`GraphStore::documents`] is the read to use when the title and the labels are
+    /// enough.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   document with its mark and its folder, or not a count of items of one kind
+    fn document_records(
+        &self,
+    ) -> impl Future<Output = Result<Vec<DocumentRecord>, GraphError>> + Send;
 
     /// Writes the items of a document: a node for each item, an edge `HAS_ITEM` from the
     /// document to each item, and an edge `NEXT` from each item to the one after it. Creates the
@@ -239,6 +140,19 @@ pub trait GraphStore {
         &self,
         document: DocId,
     ) -> impl Future<Output = Result<Option<u64>, GraphError>> + Send;
+
+    /// Records the folder the document was ingested from. A document that is not in the graph is
+    /// not created. Repeating it changes nothing.
+    ///
+    /// # Errors
+    /// - [`GraphError::FolderNotUnicode`] when the path of the folder is not valid Unicode, which
+    ///   the graph cannot keep
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    fn set_chapter_folder(
+        &self,
+        document: DocId,
+        folder: &Path,
+    ) -> impl Future<Output = Result<(), GraphError>> + Send;
 
     /// Removes the document node, its item nodes and every edge of those nodes, the `MENTIONS`
     /// edges of the items among them. Concepts and their `RELATES_TO` edges stay: they belong to
@@ -356,4 +270,47 @@ pub trait GraphStore {
         &self,
         concepts: &[ConceptId],
     ) -> impl Future<Output = Result<Vec<ConceptNode>, GraphError>> + Send;
+
+    /// The concepts that the items on this page of this document mention, each once. They are
+    /// ordered by how many of those items mention them, the most first, and then by normalised
+    /// name. `page` is the position of the page in the chapter, counted from 1. A page with no
+    /// item, and a document that is not in the graph, give no concept.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   concept
+    fn concepts_on_page(
+        &self,
+        document: DocId,
+        page: u32,
+    ) -> impl Future<Output = Result<Vec<ConceptNode>, GraphError>> + Send;
+
+    /// Every `RELATES_TO` edge that has both ends among these concepts, with its direction (from
+    /// the concept it leaves to the concept it reaches), its kind and the item that stated it. The
+    /// edges are ordered by the id of the concept they leave, then by the id of the concept they
+    /// reach, then by the name of their kind as the edge stores it. An empty slice makes no call.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   relation
+    fn relations_among(
+        &self,
+        concepts: &[ConceptId],
+    ) -> impl Future<Output = Result<Vec<Relation>, GraphError>> + Send;
+
+    /// Every `MENTIONS` edge from one of these items to one of these concepts, with its wording,
+    /// ordered by the id of the item and then by the id of the concept. An empty slice, for the
+    /// items or for the concepts, makes no call.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   mention
+    fn mentions_between(
+        &self,
+        items: &[ItemId],
+        concepts: &[ConceptId],
+    ) -> impl Future<Output = Result<Vec<Mention>, GraphError>> + Send;
 }

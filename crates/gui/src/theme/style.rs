@@ -11,6 +11,7 @@ const TOOLTIP_WIDTH: f32 = 320.0;
 const SCROLL_BAR_WIDTH: f32 = 8.0;
 const TOOLTIP_DELAY: f32 = 0.4;
 const DISABLED_ALPHA: f32 = 0.45;
+const CARET_WIDTH: f32 = 2.0;
 
 /// The same style goes to both egui themes, so the system theme changes nothing.
 pub(super) fn apply(style: &mut egui::Style) {
@@ -80,7 +81,7 @@ fn visuals(visuals: &mut style::Visuals) {
 
     visuals.selection.bg_fill = color::SELECTION;
     visuals.selection.stroke = Stroke::new(stroke::BORDER, color::FOCUS);
-    visuals.text_cursor.stroke = Stroke::new(stroke::FOCUS, color::TEXT);
+    visuals.text_cursor.stroke = Stroke::new(CARET_WIDTH, color::TEXT);
     // A blinking caret would repaint an idle window for as long as a box has the focus.
     visuals.text_cursor.blink = false;
     visuals.handle_shape = style::HandleShape::Circle;

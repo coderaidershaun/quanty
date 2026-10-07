@@ -117,8 +117,10 @@ impl Command {
         }
     }
 
-    /// The events that answer this command with a failure: what a part that is not built, a panic or a scene
-    /// sends.
+    /// The events that answer this command with a failure: what a part that is not built, a panic
+    /// or a scene sends. A health check is answered with `Unknown` for every service and not with
+    /// `Down`: a check that failed says nothing about the services, and `Down` would make the next
+    /// good search send the check again, for ever.
     pub fn failed(&self, failure: &Failure) -> Vec<Event> {
         match self {
             // An ask is answered in three parts, and any of them may still be waited for.
@@ -173,7 +175,7 @@ impl Command {
                 .map(|service| Event::Health {
                     request: *request,
                     service,
-                    state: ServiceState::Down(failure.clone()),
+                    state: ServiceState::Unknown,
                 })
                 .collect(),
             Command::Cancel(_) => Vec::new(),

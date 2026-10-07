@@ -7,7 +7,7 @@ use eframe::egui::{self, Color32, FontFamily, FontId};
 use super::color;
 use super::fonts::{MEDIUM, SEMIBOLD};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TextRole {
     Title,
     Heading,

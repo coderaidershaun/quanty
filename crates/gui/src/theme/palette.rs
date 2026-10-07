@@ -48,7 +48,7 @@ pub enum Tone {
 /// The five colours of one tone. `solid` is a fill or a stroke, `on_solid` is text on that
 /// fill, `text` is the hue as readable text on a dark surface, `wash` is a dark tinted fill,
 /// and `edge` is the outline of that fill.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Swatch {
     pub solid: Color32,
     pub on_solid: Color32,

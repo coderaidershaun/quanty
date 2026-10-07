@@ -12,7 +12,8 @@ const DOTS: usize = 8;
 const DOT_RADIUS: f32 = 1.5;
 const BAR_HEIGHT: f32 = 4.0;
 
-/// A ring of dots with one bright dot that moves ten times a second. `label` is its name.
+/// A ring of dots. One bright dot moves round it ten times a second, and the dots behind it
+/// fade. `label` is its name.
 pub fn spinner(ui: &mut egui::Ui, label: &str) -> Response {
     let side = egui::Vec2::splat(size::ICON_MD);
     let (rect, response) = ui.allocate_exact_size(side, egui::Sense::hover());
@@ -33,7 +34,7 @@ pub(super) fn paint_spinner(ui: &egui::Ui, rect: Rect, bright: Color32) {
     for dot in 0..DOTS {
         let angle = TAU * dot as f32 / DOTS as f32;
         let centre = rect.center() + ring * egui::vec2(angle.cos(), angle.sin());
-        let age = (dot + DOTS - head) % DOTS;
+        let age = (head + DOTS - dot) % DOTS;
         let fade = 1.0 - age as f32 / DOTS as f32;
         ui.painter()
             .circle_filled(centre, DOT_RADIUS, bright.gamma_multiply(fade));

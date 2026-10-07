@@ -20,6 +20,8 @@ const BOOKS: [&str; 2] = [
 ];
 /// A chip label that does not fit in its width, to show the cut.
 pub(super) const CUT_CHIP: &str = "A concept chip with a label far too long to fit";
+/// A stepper text wider than the room a short one gets, to show that the stepper grows.
+pub(super) const LONG_STEP: &str = "page 5 of 7";
 const PLACEHOLDER_AREA: egui::Vec2 = egui::vec2(196.0, 170.0);
 
 pub(super) fn show(ui: &mut egui::Ui, state: &mut GalleryState) {
@@ -183,6 +185,13 @@ fn inputs(ui: &mut egui::Ui, state: &mut GalleryState) {
             .show(ui);
         if first.is_some() {
             state.last_activated = Some("Stepper::first");
+        }
+        let long = Stepper::new(LONG_STEP)
+            .previous("Previous step", true)
+            .next("Next step", true)
+            .show(ui);
+        if long.is_some() {
+            state.last_activated = Some("Stepper::long");
         }
     });
 }
@@ -366,7 +375,10 @@ fn chips(ui: &mut egui::Ui, state: &mut GalleryState) {
 fn notices(ui: &mut egui::Ui, state: &mut GalleryState) {
     section(ui, "Notices");
     let info = Notice::info("No sources found")
-        .body("I can't answer this question from the ingested documents. Try broadening the question or adding more relevant chapters.")
+        .body(
+            "I can't answer this question from the ingested documents. Try broadening the \
+             question or adding more relevant chapters.",
+        )
         .dismissable()
         .show(ui);
     if info.dismissed {
@@ -433,9 +445,9 @@ fn confirm(ui: &mut egui::Ui, state: &mut GalleryState) {
     section(ui, "Confirm");
     let open = ui.add(Button::secondary("Open the dialog"));
     if open.clicked() {
-        state.demo.confirm_open = true;
+        state.demo.is_confirm_open = true;
     }
-    if state.demo.confirm_open {
+    if state.demo.is_confirm_open {
         let sheet = Confirm::new("gallery-confirm", "Delete this book?")
             .body("Its pages are removed from the library. This cannot be undone.")
             .confirm_label("Delete book")
@@ -443,11 +455,11 @@ fn confirm(ui: &mut egui::Ui, state: &mut GalleryState) {
             .show(ui.ctx());
         match sheet {
             Some(Choice::Confirmed) => {
-                state.demo.confirm_open = false;
+                state.demo.is_confirm_open = false;
                 state.last_activated = Some("Confirm::confirmed");
             }
             Some(Choice::Cancelled) => {
-                state.demo.confirm_open = false;
+                state.demo.is_confirm_open = false;
                 state.last_activated = Some("Confirm::cancelled");
             }
             None => {}

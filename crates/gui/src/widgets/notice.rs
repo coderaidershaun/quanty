@@ -15,7 +15,7 @@ pub struct Notice<'a> {
     icon: Icon,
     body: Option<&'a str>,
     action: Option<&'a str>,
-    dismissable: bool,
+    is_dismissable: bool,
 }
 
 /// What a notice reports. `dismissed` is its close button.
@@ -33,7 +33,7 @@ impl<'a> Notice<'a> {
             icon,
             body: None,
             action: None,
-            dismissable: false,
+            is_dismissable: false,
         }
     }
 
@@ -66,7 +66,7 @@ impl<'a> Notice<'a> {
 
     /// Adds a close button, named "Dismiss".
     pub fn dismissable(mut self) -> Self {
-        self.dismissable = true;
+        self.is_dismissable = true;
         self
     }
 
@@ -91,7 +91,7 @@ impl<'a> Notice<'a> {
                         Icon::font(size::ICON_LG),
                         swatch.text,
                     );
-                    let after = if self.dismissable {
+                    let after = if self.is_dismissable {
                         size::CONTROL_SM + ui.spacing().item_spacing.x
                     } else {
                         0.0
@@ -107,23 +107,28 @@ impl<'a> Notice<'a> {
                             action_clicked = ui.add(button).clicked();
                         }
                     });
-                    if self.dismissable {
+                    if self.is_dismissable {
                         dismissed = ui.add(Button::icon_only(Icon::CLOSE, "Dismiss")).clicked();
                     }
                 });
             });
-        let name = match self.body {
-            Some(body) => format!("{}. {body}", self.title),
-            None => self.title.to_owned(),
-        };
-        framed
-            .response
-            .widget_info(|| WidgetInfo::labeled(WidgetType::Label, true, &name));
+        framed.response.widget_info(|| {
+            WidgetInfo::labeled(WidgetType::Label, true, whole_text(self.title, self.body))
+        });
         NoticeResponse {
             response: framed.response,
             action_clicked,
             dismissed,
         }
+    }
+}
+
+/// The name a notice or a placeholder answers to as a whole: "{title}. {detail}", or the title
+/// alone.
+fn whole_text(title: &str, detail: Option<&str>) -> String {
+    match detail {
+        Some(detail) => format!("{title}. {detail}"),
+        None => title.to_owned(),
     }
 }
 
@@ -166,6 +171,7 @@ impl<'a> Placeholder<'a> {
     }
 
     pub fn empty(_icon: Icon, title: &'a str) -> Self {
+        // SMELL: `_icon` is used, so its underscore is wrong. Rename it to `icon`.
         Placeholder::with_fill(Fill::Empty(_icon), title)
     }
 
@@ -222,13 +228,9 @@ impl<'a> Placeholder<'a> {
                 }
             },
         );
-        let name = match self.hint {
-            Some(hint) => format!("{}. {hint}", self.title),
-            None => self.title.to_owned(),
-        };
-        centred
-            .response
-            .widget_info(|| WidgetInfo::labeled(WidgetType::Label, true, &name));
+        centred.response.widget_info(|| {
+            WidgetInfo::labeled(WidgetType::Label, true, whole_text(self.title, self.hint))
+        });
         PlaceholderResponse {
             response: centred.response,
             action_clicked,
@@ -258,6 +260,8 @@ impl<'a> Placeholder<'a> {
 
     /// The height of everything that is stacked in the middle, to centre it.
     fn content_height(&self, ui: &egui::Ui, text_width: f32) -> f32 {
+        // SMELL: this lists again what `show` stacks. A part that is added there and not here
+        // puts the placeholder off centre.
         let gap = ui.spacing().item_spacing.y;
         let mut heights = vec![
             PLACEHOLDER_ICON,

@@ -28,7 +28,7 @@ pub fn modal<R>(
         .show(ctx, add_contents)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Choice {
     Confirmed,
     Cancelled,
@@ -41,18 +41,19 @@ pub struct Confirm<'a> {
     body: Option<&'a str>,
     confirm_label: &'a str,
     cancel_label: &'a str,
-    destructive: bool,
+    is_destructive: bool,
 }
 
 impl<'a> Confirm<'a> {
     pub fn new(id_salt: &'a str, title: &'a str) -> Self {
+        // SMELL: `id_salt` and `title` are both `&str`, so a call that swaps them still compiles.
         Confirm {
             id_salt,
             title,
             body: None,
             confirm_label: "Confirm",
             cancel_label: "Cancel",
-            destructive: false,
+            is_destructive: false,
         }
     }
 
@@ -73,7 +74,7 @@ impl<'a> Confirm<'a> {
 
     /// The confirm button is dangerous: it is drawn in the danger colour.
     pub fn destructive(mut self) -> Self {
-        self.destructive = true;
+        self.is_destructive = true;
         self
     }
 
@@ -88,7 +89,7 @@ impl<'a> Confirm<'a> {
             }
             ui.add_space(space::MD);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let confirm = if self.destructive {
+                let confirm = if self.is_destructive {
                     Button::danger(self.confirm_label)
                 } else {
                     Button::primary(self.confirm_label)

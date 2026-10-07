@@ -5,7 +5,7 @@ use eframe::egui::{self, Rect, Response};
 
 use crate::theme::{color, size, stroke};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ControlSize {
     Small,
     Medium,

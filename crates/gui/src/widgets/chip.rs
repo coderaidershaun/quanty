@@ -16,7 +16,7 @@ const CHIP_BADGE: f32 = 16.0;
 /// The number of a source, as a clickable chip. Its accessible name is "Citation {n}".
 pub struct CitationChip {
     number: usize,
-    selected: bool,
+    is_selected: bool,
     forced: Option<Look>,
 }
 
@@ -24,13 +24,13 @@ impl CitationChip {
     pub const fn new(number: usize) -> Self {
         CitationChip {
             number,
-            selected: false,
+            is_selected: false,
             forced: None,
         }
     }
 
     pub const fn selected(mut self, is_selected: bool) -> Self {
-        self.selected = is_selected;
+        self.is_selected = is_selected;
         self
     }
 
@@ -60,12 +60,14 @@ impl CitationChip {
     }
 
     fn finish(&self, ui: &egui::Ui, rect: Rect, response: Response) -> Response {
-        let label = format!("Citation {}", self.number);
-        response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), &label));
+        response.widget_info(|| {
+            let label = format!("Citation {}", self.number);
+            WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), label)
+        });
         if ui.is_rect_visible(rect) {
             let look = self.forced.unwrap_or_else(|| Look::of(&response));
             let blue = Tone::Blue.swatch();
-            let (fill, text) = if self.selected {
+            let (fill, text) = if self.is_selected {
                 (blue.solid, blue.on_solid)
             } else if look.hovered {
                 (blue.edge, color::TEXT)
@@ -106,7 +108,7 @@ impl egui::Widget for CitationChip {
 pub struct Chip<'a> {
     label: &'a str,
     kind: Option<Kind>,
-    selected: bool,
+    is_selected: bool,
     max_width: f32,
     forced: Option<Look>,
 }
@@ -116,7 +118,7 @@ impl<'a> Chip<'a> {
         Chip {
             label,
             kind: Some(kind),
-            selected: false,
+            is_selected: false,
             max_width: f32::INFINITY,
             forced: None,
         }
@@ -126,14 +128,14 @@ impl<'a> Chip<'a> {
         Chip {
             label,
             kind: None,
-            selected: false,
+            is_selected: false,
             max_width: f32::INFINITY,
             forced: None,
         }
     }
 
     pub fn selected(mut self, is_selected: bool) -> Self {
-        self.selected = is_selected;
+        self.is_selected = is_selected;
         self
     }
 
@@ -162,19 +164,19 @@ impl<'a> Chip<'a> {
         let (fill, edge, corner) = match self.kind {
             Some(kind) => {
                 let swatch = kind.tone().swatch();
-                let edge = if self.selected {
+                let edge = if self.is_selected {
                     Stroke::new(stroke::EDGE, swatch.solid)
                 } else if look.hovered {
                     Stroke::new(stroke::BORDER, swatch.solid)
                 } else {
                     Stroke::new(stroke::BORDER, swatch.edge)
                 };
-                if self.selected {
+                if self.is_selected {
                     painter.add(glow(kind.tone()).as_shape(rect, radius::MD));
                 }
                 (swatch.wash, edge, radius::MD)
             }
-            None if self.selected => {
+            None if self.is_selected => {
                 let blue = Tone::Blue.swatch();
                 (blue.wash, Stroke::new(stroke::EDGE, blue.solid), radius::XL)
             }
@@ -257,6 +259,7 @@ impl<'a> Badge<'a> {
 
     /// An icon before the text.
     pub const fn icon(self, _icon: Icon) -> Self {
+        // SMELL: `_icon` is used, so its underscore is wrong. Rename it to `icon`.
         Badge {
             icon: Some(_icon),
             ..self
@@ -303,7 +306,7 @@ impl egui::Widget for Badge<'_> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StepState {
     Done,
     Active,
@@ -341,8 +344,9 @@ impl egui::Widget for StepMarker {
     fn ui(self, ui: &mut egui::Ui) -> Response {
         let side = egui::Vec2::splat(size::STEP);
         let (rect, response) = ui.allocate_exact_size(side, egui::Sense::hover());
-        let label = format!("Step {}", self.number);
-        response.widget_info(|| WidgetInfo::labeled(WidgetType::Label, true, &label));
+        response.widget_info(|| {
+            WidgetInfo::labeled(WidgetType::Label, true, format!("Step {}", self.number))
+        });
         if ui.is_rect_visible(rect) {
             let swatch = self.tone.swatch();
             let painter = ui.painter();

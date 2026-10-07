@@ -31,8 +31,9 @@ pub struct Button<'a> {
     variant: Variant,
     icon: Option<Icon>,
     size: ControlSize,
-    selected: bool,
-    loading: bool,
+    height: Option<f32>,
+    is_selected: bool,
+    is_loading: bool,
     min_width: f32,
     forced: Option<Look>,
 }
@@ -55,8 +56,9 @@ impl<'a> Button<'a> {
             } else {
                 ControlSize::Medium
             },
-            selected: false,
-            loading: false,
+            height: None,
+            is_selected: false,
+            is_loading: false,
             min_width: 0.0,
             forced: None,
         }
@@ -84,6 +86,7 @@ impl<'a> Button<'a> {
 
     /// `label` is the accessible name and the tooltip.
     pub fn icon_only(_icon: Icon, label: &'a str) -> Self {
+        // SMELL: `_icon` is used, so its underscore is wrong. Rename it to `icon`.
         Button {
             icon: Some(_icon),
             ..Button::with_variant(label, Variant::IconOnly)
@@ -92,6 +95,7 @@ impl<'a> Button<'a> {
 
     /// An icon before the text.
     pub fn icon(self, _icon: Icon) -> Self {
+        // SMELL: `_icon` is used, so its underscore is wrong. Rename it to `icon`.
         Button {
             icon: Some(_icon),
             ..self
@@ -106,19 +110,26 @@ impl<'a> Button<'a> {
 
     /// Drawn as chosen. The two solid looks ignore it.
     pub fn selected(mut self, is_selected: bool) -> Self {
-        self.selected = is_selected;
+        self.is_selected = is_selected;
         self
     }
 
     /// A spinner takes the place of the icon, and clicks are ignored.
     pub fn loading(mut self, is_loading: bool) -> Self {
-        self.loading = is_loading;
+        self.is_loading = is_loading;
         self
     }
 
     /// The button is at least this wide.
     pub fn min_width(mut self, width: f32) -> Self {
         self.min_width = width;
+        self
+    }
+
+    /// The height in points, in place of the one its size gives. It is for a button that must
+    /// fit inside another control.
+    pub(super) fn height(mut self, height: f32) -> Self {
+        self.height = Some(height);
         self
     }
 
@@ -156,7 +167,7 @@ impl<'a> Button<'a> {
         match self.variant {
             Variant::Primary => solid(Tone::Magenta),
             Variant::Danger => solid(Tone::Danger),
-            Variant::Secondary | Variant::Ghost | Variant::IconOnly if self.selected => {
+            Variant::Secondary | Variant::Ghost | Variant::IconOnly if self.is_selected => {
                 let blue = Tone::Blue.swatch();
                 Colours {
                     fill: blue.wash,
@@ -199,7 +210,7 @@ impl<'a> Button<'a> {
         }
 
         let icon_size = self.size.icon();
-        let has_icon = self.icon.is_some() || self.loading;
+        let has_icon = self.icon.is_some() || self.is_loading;
         let text_width = text.as_ref().map_or(0.0, |galley| galley.size().x);
         let gap = if has_icon && text.is_some() {
             space::SM
@@ -210,7 +221,7 @@ impl<'a> Button<'a> {
         let mut x = rect.center().x - (icon_width + gap + text_width) / 2.0;
         if has_icon {
             let centre = egui::pos2(x + icon_size / 2.0, rect.center().y);
-            if self.loading {
+            if self.is_loading {
                 let spot = Rect::from_center_size(centre, egui::Vec2::splat(icon_size));
                 paint_spinner(ui, spot, colours.text);
             } else if let Some(icon) = self.icon {
@@ -233,13 +244,15 @@ impl<'a> Button<'a> {
 
 impl egui::Widget for Button<'_> {
     fn ui(self, ui: &mut egui::Ui) -> Response {
-        let height = self.size.height();
+        let height = self.height.unwrap_or_else(|| self.size.height());
         let text = (self.variant != Variant::IconOnly)
             .then(|| TextRole::Label.galley(ui, self.label, color::TEXT));
         let width = match &text {
             None => height,
             Some(galley) => {
-                let icon = if self.icon.is_some() || self.loading {
+                // SMELL: a button with no icon gets wider while it loads, to make room for
+                // the spinner, so what stands beside it moves.
+                let icon = if self.icon.is_some() || self.is_loading {
                     self.size.icon() + space::SM
                 } else {
                     0.0
@@ -249,16 +262,16 @@ impl egui::Widget for Button<'_> {
                     .max(self.min_width)
             }
         };
-        let sense = if self.loading {
+        let sense = if self.is_loading {
             Sense::hover()
         } else {
             Sense::click()
         };
         let (rect, response) = ui.allocate_exact_size(vec2(width, height), sense);
-        let is_enabled = ui.is_enabled() && !self.loading;
+        let is_enabled = ui.is_enabled() && !self.is_loading;
         response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, is_enabled, self.label));
         if ui.is_rect_visible(rect) {
-            let look = if self.loading {
+            let look = if self.is_loading {
                 Look::default()
             } else {
                 self.forced.unwrap_or_else(|| Look::of(&response))

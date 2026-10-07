@@ -11,6 +11,8 @@ use crate::theme::{TextRole, space};
 /// The left column of the page, with the colours, the text styles and the icons.
 const TOKENS_WIDTH: f32 = 680.0;
 
+// SMELL: the path already says `gallery`, so `gallery::GalleryState` says it twice. `State` is
+// enough.
 #[derive(Debug, Default)]
 pub struct GalleryState {
     /// The name of the widget that was last used.
@@ -28,7 +30,7 @@ struct Demo {
     tab: usize,
     top_tab: usize,
     compact_tab: usize,
-    confirm_open: bool,
+    is_confirm_open: bool,
 }
 
 impl Default for Demo {
@@ -41,7 +43,7 @@ impl Default for Demo {
             tab: 0,
             top_tab: 0,
             compact_tab: 0,
-            confirm_open: false,
+            is_confirm_open: false,
         }
     }
 }
@@ -103,6 +105,7 @@ mod tests {
     use super::*;
     use crate::state::Shared;
     use crate::testkit::{self, Host};
+    use crate::theme::size;
 
     /// A window tall enough to show the whole gallery with no scrolling.
     const WINDOW: [f32; 2] = [1400.0, 2450.0];
@@ -181,6 +184,22 @@ mod tests {
         harness.get_by_role_and_label(Role::Slider, "Zoom");
         harness.get_by_label("Step 3");
         harness.get_by_label("Ingested");
+        harness.get_by_role_and_label(Role::Label, "Figure (from source)");
+        // The title and the body of a notice and of a placeholder are also nodes of their own.
+        for text in [
+            "Qdrant is not running",
+            "Start it with docker compose up, then try again.",
+            "Nothing here yet",
+            "Ask a question to see the results.",
+        ] {
+            harness.get_by_role_and_label(Role::Label, text);
+        }
+        let step = harness.get_by_role_and_label(Role::Label, states::LONG_STEP);
+        assert!(
+            step.rect().height() <= size::CONTROL_SM,
+            "the text of a stepper stays on one line: {} high",
+            step.rect().height()
+        );
         let results = harness.get_by_role_and_label(Role::Tab, "Results");
         assert_eq!(
             results.value().as_deref(),

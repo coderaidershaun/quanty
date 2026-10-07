@@ -17,7 +17,7 @@ const TAG_BOX: f32 = 16.0;
 pub struct Card<'a> {
     tag: Option<(Kind, &'a str)>,
     action: Option<(Icon, &'a str)>,
-    selected: bool,
+    is_selected: bool,
     clickable: Option<&'a str>,
     forced: Option<Look>,
 }
@@ -47,7 +47,7 @@ impl<'a> Card<'a> {
     }
 
     pub fn selected(mut self, is_selected: bool) -> Self {
-        self.selected = is_selected;
+        self.is_selected = is_selected;
         self
     }
 
@@ -76,7 +76,7 @@ impl<'a> Card<'a> {
         }
         let mut action_clicked = false;
         let scope = ui.scope_builder(builder, |ui| {
-            let edge = if self.selected {
+            let edge = if self.is_selected {
                 Tone::Blue.swatch().solid
             } else {
                 color::BORDER
@@ -142,13 +142,15 @@ impl<'a> Card<'a> {
     }
 }
 
-/// The corner tag: a small coloured box with the kind's icon, then its name.
+/// The corner tag: a small coloured box with the kind's icon, then its name. The name is a
+/// label of its own, so a test or a screen reader finds it.
 fn paint_tag(ui: &mut egui::Ui, kind: Kind, text: &str) {
     let swatch = kind.tone().swatch();
     let galley = TextRole::Small.galley(ui, text, swatch.text);
     let inset = (size::CHIP - TAG_BOX) / 2.0;
     let width = inset + TAG_BOX + space::SM + galley.size().x + space::SM;
-    let (rect, _) = ui.allocate_exact_size(vec2(width, size::CHIP), Sense::hover());
+    let (rect, response) = ui.allocate_exact_size(vec2(width, size::CHIP), Sense::hover());
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Label, true, text));
     if !ui.is_rect_visible(rect) {
         return;
     }

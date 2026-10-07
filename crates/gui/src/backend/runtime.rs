@@ -1,5 +1,5 @@
 //! Runs a backend on its own threads: one task for each command, cancelled by abort, except
-//! an ingest, which is only asked to stop.
+//! an ingest, which is only asked to stop. A task that panics is answered for with a failure.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -10,7 +10,7 @@ use tokio::runtime::{Builder, Runtime};
 use tokio::task::AbortHandle;
 
 use super::handler::{Handler, Reply, Stop};
-use crate::contract::{Command, Event, RequestId};
+use crate::contract::{Command, Event, Failure, RequestId};
 
 const WORKER_THREADS: usize = 4;
 const SHUTDOWN_WAIT: Duration = Duration::from_secs(2);
@@ -28,6 +28,16 @@ pub struct Backend {
     spawn: Spawn,
     events: Receiver<Event>,
     tasks: HashMap<RequestId, Task>,
+}
+
+/// What the panic said, when it said it in text.
+fn panic_text(payload: &(dyn std::any::Any + Send)) -> String {
+    let message = payload
+        .downcast_ref::<&str>()
+        .map(|text| (*text).to_owned())
+        .or_else(|| payload.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "no message".to_owned());
+    format!("a backend task stopped on a bug: {message}")
 }
 
 impl Backend {
@@ -54,9 +64,24 @@ impl Backend {
             let reply = Reply::new(sender.clone(), Arc::clone(&wake), stopped);
             let is_ingest = matches!(command, Command::Ingest { .. });
             let handler = Arc::clone(&handler);
+            let watch_reply = reply.clone();
+            let watched = command.clone();
             let task = handle.spawn(async move { handler.serve(command, reply).await });
+            let abort = task.abort_handle();
+            // A task that panics sends nothing, and the window would wait for it for ever. This
+            // second task answers for it with a failure.
+            handle.spawn(async move {
+                if let Err(ended) = task.await
+                    && ended.is_panic()
+                {
+                    let failure = Failure::internal(panic_text(ended.into_panic().as_ref()));
+                    for event in watched.failed(&failure) {
+                        watch_reply.send(event);
+                    }
+                }
+            });
             Task {
-                handle: task.abort_handle(),
+                handle: abort,
                 stop,
                 is_ingest,
             }

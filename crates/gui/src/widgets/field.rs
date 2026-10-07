@@ -30,6 +30,7 @@ pub struct TextInputResponse {
 
 impl<'a> TextInput<'a> {
     pub fn new(id_salt: &'a str, label: &'a str, text: &'a mut String) -> Self {
+        // SMELL: `id_salt` and `label` are both `&str`, so a call that swaps them still compiles.
         TextInput {
             id_salt,
             label,
@@ -49,6 +50,7 @@ impl<'a> TextInput<'a> {
 
     /// An icon before the text.
     pub fn icon(self, _icon: Icon) -> Self {
+        // SMELL: `_icon` is used, so its underscore is wrong. Rename it to `icon`.
         TextInput {
             leading: Some(_icon),
             ..self
@@ -79,8 +81,13 @@ impl<'a> TextInput<'a> {
             .unwrap_or_else(|| finite_or(ui.available_width(), ui.spacing().text_edit_width));
         let inner_width = (outer_width - 2.0 * (space::MD + stroke::BORDER)).max(0.0);
         let inner_height = self.size.height() - 2.0 * stroke::BORDER;
+        // A small box is lower than the smallest button, so the trailing button shrinks to fit.
+        let trailing_side = inner_height.min(size::CONTROL_SM);
+        // The frame makes room for its border when it begins, so the border gets its width
+        // here, and only its colour changes once the focus is known.
         let mut frame = egui::Frame::NONE
             .fill(color::RAISED)
+            .stroke(Stroke::new(stroke::BORDER, color::BORDER))
             .corner_radius(radius::MD)
             .inner_margin(Margin::from(egui::vec2(space::MD, 0.0)))
             .begin(ui);
@@ -104,7 +111,7 @@ impl<'a> TextInput<'a> {
                     }
                     let after = self
                         .trailing
-                        .map_or(0.0, |_| size::CONTROL_SM + ui.spacing().item_spacing.x);
+                        .map_or(0.0, |_| trailing_side + ui.spacing().item_spacing.x);
                     let mut edit = egui::TextEdit::singleline(self.text)
                         .id_salt(self.id_salt)
                         .font(TextRole::Body.font())
@@ -118,18 +125,16 @@ impl<'a> TextInput<'a> {
                     }
                     let response = ui.add(edit);
                     if let Some((icon, label)) = self.trailing {
-                        trailing_clicked = ui.add(Button::icon_only(icon, label)).clicked();
+                        let button = Button::icon_only(icon, label).height(trailing_side);
+                        trailing_clicked = ui.add(button).clicked();
                     }
                     response
                 },
             )
             .inner;
-        let edge = if response.has_focus() {
-            color::FOCUS
-        } else {
-            color::BORDER
-        };
-        frame.frame.stroke = Stroke::new(stroke::BORDER, edge);
+        if response.has_focus() {
+            frame.frame.stroke.color = color::FOCUS;
+        }
         frame.end(ui);
 
         ui.ctx()
@@ -158,6 +163,7 @@ pub struct Dropdown<'a, S> {
 
 impl<'a, S: AsRef<str>> Dropdown<'a, S> {
     pub fn new(id_salt: &'a str, label: &'a str, options: &'a [S]) -> Self {
+        // SMELL: `id_salt` and `label` are both `&str`, so a call that swaps them still compiles.
         Dropdown {
             id_salt,
             label,
@@ -181,6 +187,7 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
     }
 
     pub fn size(self, _size: ControlSize) -> Self {
+        // SMELL: `_size` is used, so its underscore is wrong. Rename it to `size`.
         Dropdown {
             size: _size,
             ..self
@@ -239,6 +246,8 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
 
     /// The width that shows the longest choice, or the placeholder, in full.
     fn widest(&self, ui: &egui::Ui) -> f32 {
+        // SMELL: this lays out every choice on every frame. A dropdown with hundreds of
+        // choices must be given a `width` instead.
         let longest = self
             .options
             .iter()
@@ -293,7 +302,7 @@ impl<'a> Slider<'a> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Step {
     Previous,
     Next,
@@ -348,11 +357,17 @@ impl<'a> Stepper<'a> {
                     if ui.add_enabled(is_enabled, button).clicked() {
                         step = Some(Step::Previous);
                     }
-                    let middle = egui::vec2(STEPPER_TEXT_WIDTH, size::CONTROL_SM);
+                    let text_width = TextRole::Label.galley(ui, self.text, color::TEXT).size().x;
+                    let middle = egui::vec2(text_width.max(STEPPER_TEXT_WIDTH), size::CONTROL_SM);
                     ui.allocate_ui_with_layout(
                         middle,
                         egui::Layout::centered_and_justified(egui::Direction::TopDown),
-                        |ui| ui.label(TextRole::Label.rich(self.text)),
+                        |ui| {
+                            // A label in a column wraps at the width it is given, and the room
+                            // may be rounded to a hair less than the text.
+                            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                            ui.label(TextRole::Label.rich(self.text))
+                        },
                     );
                     let (label, is_enabled) = self.next;
                     let button = Button::icon_only(Icon::CARET_RIGHT, label);
@@ -380,6 +395,8 @@ mod tests {
     struct Typed {
         text: String,
         submits: usize,
+        /// The room the box was given, and the room it took.
+        room: Option<(egui::Rect, egui::Rect)>,
     }
 
     #[test]
@@ -388,13 +405,24 @@ mod tests {
         let drawn = Rc::clone(&typed);
         let mut harness = testkit::panel([400.0, 80.0], Shared::default(), move |ui, _cx| {
             let mut typed = drawn.borrow_mut();
+            let given = ui.available_rect_before_wrap();
             let shown = TextInput::new("ask", "Question", &mut typed.text)
                 .placeholder("Ask the books")
                 .icon(Icon::SEARCH)
+                .trailing(Icon::CLOSE, "Clear question")
+                .size(ControlSize::Small)
                 .show(ui);
             typed.submits += usize::from(shown.submitted);
+            typed.room = Some((given, ui.min_rect()));
         });
         harness.run();
+        let (given, taken) = typed.borrow().room.expect("the box was drawn");
+        let asked = egui::vec2(given.width(), ControlSize::Small.height());
+        assert_eq!(
+            taken,
+            egui::Rect::from_min_size(given.min, asked),
+            "the box starts where the layout put it, fills the width and is as high as its size"
+        );
 
         let input = harness.get_by_label("Question");
         input.click();

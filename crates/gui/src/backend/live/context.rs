@@ -2,6 +2,8 @@
 //! turns a backend error into something a person can read.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use graph::{FalkorGraph, GraphStore};
 use ocr::ConvertError;
@@ -10,7 +12,10 @@ use rag_core::{ClaudeCli, ConceptStore, Config, Embedder, GeminiEmbedder, ItemSt
 use rag_ingestion::{ConceptExtractor, EXTRACTION_MODEL, Models, Stores};
 use rag_retrieval::{ANSWER_MODEL, Retriever};
 
-use crate::contract::Failure;
+use crate::contract::{Failure, FailureKind};
+
+/// A store that neither answers nor refuses must not hold a command for ever.
+const CONNECT_LIMIT: Duration = Duration::from_secs(5);
 
 /// Makes the outside services. `RealServices` makes the real ones; a test makes stand-ins.
 pub trait Services: Send + Sync + 'static {
@@ -66,38 +71,88 @@ pub type Kept<S> = Arc<Retriever<<S as Services>::Embedder, <S as Services>::Gra
 pub struct LiveContext<S: Services> {
     config: Config,
     services: S,
+    retriever: tokio::sync::Mutex<Option<(u64, Kept<S>)>>,
+    graph: tokio::sync::Mutex<Option<(u64, Arc<S::Graph>)>>,
+    /// Goes up when a store fails. What was kept in an earlier era is dropped at its next use,
+    /// so a store that comes back is connected again with nothing restarted.
+    era: AtomicU64,
 }
 
 impl<S: Services> LiveContext<S> {
     /// Opens nothing. Every connection is made when a command needs it.
     pub fn new(config: Config, services: S) -> Self {
-        LiveContext { config, services }
+        LiveContext {
+            config,
+            services,
+            retriever: tokio::sync::Mutex::new(None),
+            graph: tokio::sync::Mutex::new(None),
+            era: AtomicU64::new(0),
+        }
     }
 
     pub fn config(&self) -> &Config {
         &self.config
     }
 
-    /// A retriever over the stores and the embedder.
+    /// A retriever over the stores and the embedder. The first call connects and keeps it; the
+    /// later calls share it, until a store fails.
     ///
     /// # Errors
     /// A failure that says which store or key is not ready.
     pub async fn retriever(&self) -> Result<Kept<S>, Failure> {
-        Ok(Arc::new(Retriever {
+        let mut kept = self.retriever.lock().await;
+        let era = self.era.load(Ordering::Acquire);
+        if let Some((built, retriever)) = kept.as_ref()
+            && *built == era
+        {
+            return Ok(Arc::clone(retriever));
+        }
+        let retriever = Arc::new(Retriever {
             embedder: self.services.embedder(&self.config)?,
             items: ItemStore::connect(&self.config).map_err(|error| self.failure(error))?,
             concepts: ConceptStore::connect(&self.config).map_err(|error| self.failure(error))?,
-            graph: self.services.graph(&self.config).await?,
-        }))
+            graph: self.connect_graph().await?,
+        });
+        *kept = Some((era, Arc::clone(&retriever)));
+        Ok(retriever)
     }
 
-    /// The graph alone: a read that needs no embedder, such as the concepts of a page, must not
-    /// fail for a missing Gemini key.
+    /// The graph alone, kept the same way: a read that needs no embedder, such as the concepts
+    /// of a page, must not fail for a missing Gemini key.
     ///
     /// # Errors
     /// A failure that says the graph store is not ready.
     pub async fn graph(&self) -> Result<Arc<S::Graph>, Failure> {
-        Ok(Arc::new(self.services.graph(&self.config).await?))
+        let mut kept = self.graph.lock().await;
+        let era = self.era.load(Ordering::Acquire);
+        if let Some((built, graph)) = kept.as_ref()
+            && *built == era
+        {
+            return Ok(Arc::clone(graph));
+        }
+        let graph = Arc::new(self.connect_graph().await?);
+        *kept = Some((era, Arc::clone(&graph)));
+        Ok(graph)
+    }
+
+    /// Opens the graph, and gives up when it does not answer in time.
+    async fn connect_graph(&self) -> Result<S::Graph, Failure> {
+        match tokio::time::timeout(CONNECT_LIMIT, self.services.graph(&self.config)).await {
+            Ok(connected) => connected.map_err(|failure| self.failure(failure)),
+            Err(_) => {
+                let address = &self.config.falkordb_url;
+                Err(self.failure(
+                    Failure::new(
+                        FailureKind::FalkorDbDown,
+                        format!(
+                            "FalkorDB at {address} did not answer within {} seconds",
+                            CONNECT_LIMIT.as_secs()
+                        ),
+                    )
+                    .with_hint(format!("Start FalkorDB at {address}, then try again.")),
+                ))
+            }
+        }
     }
 
     /// Fresh stores, for one writing job.
@@ -107,7 +162,7 @@ impl<S: Services> LiveContext<S> {
     pub async fn stores(&self) -> Result<Stores<S::Graph>, Failure> {
         Ok(Stores {
             items: ItemStore::connect(&self.config).map_err(|error| self.failure(error))?,
-            graph: self.services.graph(&self.config).await?,
+            graph: self.connect_graph().await?,
             concepts: ConceptStore::connect(&self.config).map_err(|error| self.failure(error))?,
         })
     }
@@ -138,7 +193,15 @@ impl<S: Services> LiveContext<S> {
     }
 
     /// Turns a backend error into a `Failure`. Every kind of work converts its errors through it.
+    /// A store that is down also drops what was kept, so the next command connects again.
     pub fn failure(&self, error: impl Into<Failure>) -> Failure {
-        error.into()
+        let failure = error.into();
+        if matches!(
+            failure.kind,
+            FailureKind::QdrantDown | FailureKind::FalkorDbDown
+        ) {
+            self.era.fetch_add(1, Ordering::AcqRel);
+        }
+        failure
     }
 }

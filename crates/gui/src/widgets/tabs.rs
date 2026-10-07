@@ -1,15 +1,13 @@
 //! The strip of tabs along the top of a window.
 
 use eframe::egui::{
-    self, Align2, Color32, WidgetInfo, WidgetType,
-    accesskit::Role,
-    text::{LayoutJob, TextFormat},
+    self, Align2, Color32, WidgetInfo, WidgetType, accesskit::Role, text::LayoutJob,
 };
 
 use super::look::{Look, focus_ring};
 use crate::theme::{Icon, TextRole, Tone, color, hairline, radius, size, space, stroke};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Tab<'a> {
     pub label: &'a str,
     pub count: Option<usize>,
@@ -41,7 +39,7 @@ pub struct TabStrip<'a> {
     tabs: &'a [Tab<'a>],
     active: usize,
     tone: Tone,
-    compact: bool,
+    is_compact: bool,
     forced: Option<Look>,
 }
 
@@ -51,7 +49,7 @@ impl<'a> TabStrip<'a> {
             tabs,
             active,
             tone: Tone::Blue,
-            compact: false,
+            is_compact: false,
             forced: None,
         }
     }
@@ -63,7 +61,7 @@ impl<'a> TabStrip<'a> {
 
     /// A smaller strip for a narrow column.
     pub fn compact(mut self) -> Self {
-        self.compact = true;
+        self.is_compact = true;
         self
     }
 
@@ -75,7 +73,7 @@ impl<'a> TabStrip<'a> {
 
     /// The index of the tab the person chose. Never the active one.
     pub fn show(self, ui: &mut egui::Ui) -> Option<usize> {
-        let (role, gap, height) = if self.compact {
+        let (role, gap, height) = if self.is_compact {
             (TextRole::Small, space::LG, size::CONTROL_MD)
         } else {
             (TextRole::Label, space::XL, size::TAB)
@@ -91,13 +89,15 @@ impl<'a> TabStrip<'a> {
                 }
             }
         });
+        // In a room with no end, such as a sideways scroll area, the line stops at the last tab.
+        let end = if full_width.is_finite() {
+            start + full_width
+        } else {
+            row.response.rect.right()
+        };
         let painter = ui.painter();
         let y = row.response.rect.bottom();
-        painter.hline(
-            start..=start + full_width,
-            y,
-            hairline(painter, color::HAIRLINE),
-        );
+        painter.hline(start..=end, y, hairline(painter, color::HAIRLINE));
         chosen
     }
 
@@ -158,7 +158,7 @@ impl<'a> TabStrip<'a> {
             if is_active {
                 let mut bar = rect;
                 bar.min.y = rect.bottom() - stroke::UNDERLINE;
-                painter.rect_filled(bar, radius::SM / 4.0, swatch.solid);
+                painter.rect_filled(bar, stroke::UNDERLINE / 2.0, swatch.solid);
             }
             if look.focused {
                 focus_ring(painter, rect, radius::SM);
@@ -179,11 +179,7 @@ impl<'a> TabStrip<'a> {
         job.append(tab.label, 0.0, role.format(tint));
         if let Some(count) = tab.count {
             let tint = if count == 0 { color::TEXT_MUTED } else { tint };
-            let format = TextFormat {
-                color: tint,
-                ..role.format(tint)
-            };
-            job.append(&format!(" ({count})"), 0.0, format);
+            job.append(&format!(" ({count})"), 0.0, role.format(tint));
         }
         ui.painter().layout_job(job)
     }

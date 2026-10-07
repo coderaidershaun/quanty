@@ -1,9 +1,11 @@
-//! Finds the stored items for a question: the nearest ones, and those that the graph leads to.
+//! Finds the stored items for a question: the nearest ones, and those that the graph leads to. A
+//! traced search also gives what each step produced.
 
 mod cited;
 mod expand;
 mod rank;
 mod results;
+mod trace;
 
 use graph::{GraphError, GraphStore};
 use rag_core::{
@@ -13,6 +15,7 @@ use rag_core::{
 
 pub(crate) use results::page_text;
 pub use results::{Reason, SearchHit, SearchResults};
+pub use trace::{SearchTrace, TracedSearch};
 
 // The four numbers below are starting values.
 
@@ -58,7 +61,20 @@ pub struct Retriever<E, G> {
 }
 
 impl<E: Embedder, G: GraphStore> Retriever<E, G> {
-    /// The items for the question, in the order of the steps:
+    /// The items for the question, without the trace of [`Retriever::search_traced`].
+    ///
+    /// # Errors
+    /// The errors of [`Retriever::search_traced`].
+    pub async fn search(
+        &self,
+        question: &str,
+        kind: Option<ItemKind>,
+        wanted: &DocumentLabels,
+    ) -> Result<SearchResults, SearchError> {
+        Ok(self.search_traced(question, kind, wanted).await?.results)
+    }
+
+    /// The items for the question, and what each step produced, in the order of the steps:
     /// 1. the [`RESULTS_PER_QUERY`] items nearest to the question are the seeds;
     /// 2. the seed concepts are the concepts nearest to the question and the concepts that the
     ///    seeds mention;
@@ -83,12 +99,12 @@ impl<E: Embedder, G: GraphStore> Retriever<E, G> {
     /// - [`SearchError::Embed`] when the question cannot be embedded
     /// - [`SearchError::Items`] and [`SearchError::Concepts`] when a collection cannot be searched
     /// - [`SearchError::Graph`] when the graph cannot be read
-    pub async fn search(
+    pub async fn search_traced(
         &self,
         question: &str,
         kind: Option<ItemKind>,
         wanted: &DocumentLabels,
-    ) -> Result<SearchResults, SearchError> {
+    ) -> Result<TracedSearch, SearchError> {
         let documents = if wanted.is_empty() {
             None
         } else {
@@ -101,10 +117,11 @@ impl<E: Embedder, G: GraphStore> Retriever<E, G> {
                 .map(|node| node.id)
                 .collect();
             if carrying.is_empty() {
-                return Ok(SearchResults { hits: Vec::new() });
+                return Ok(nothing_found(Some(0)));
             }
             Some(carrying)
         };
+        let documents_searched = documents.as_ref().map(Vec::len);
         let filter = ItemFilter { kind, documents };
         let vector = self.embedder.embed_query(question).await?;
         let seeds = self
@@ -113,14 +130,42 @@ impl<E: Embedder, G: GraphStore> Retriever<E, G> {
             .await
             .map_err(SearchError::Items)?;
         if seeds.is_empty() {
-            return Ok(SearchResults { hits: Vec::new() });
+            return Ok(nothing_found(documents_searched));
         }
-        let candidates = expand::candidates(&self.concepts, &self.graph, &vector, &seeds).await?;
-        let mut hits =
-            rank::ranked_within_the_cap(&self.items, &vector, &filter, candidates).await?;
+        let expansion = expand::from_seeds(&self.concepts, &self.graph, &vector, &seeds).await?;
+        let candidates = expansion.candidates.len();
+        let ranking =
+            rank::ranked_within_the_cap(&self.items, &vector, &filter, expansion.candidates)
+                .await?;
+        let mut hits = ranking.kept;
+        let kept = hits.len();
         if kind.is_none() {
             cited::pull_in(&self.items, &vector, &mut hits).await?;
         }
-        Ok(SearchResults { hits })
+        Ok(TracedSearch {
+            results: SearchResults { hits },
+            trace: SearchTrace {
+                documents_searched,
+                seeds,
+                question_concepts: expansion.question_concepts,
+                seed_concepts: expansion.seed_concepts,
+                related_concepts: expansion.related_concepts,
+                candidates,
+                ranked: ranking.ranked,
+                capped: ranking.capped,
+                kept,
+            },
+        })
+    }
+}
+
+/// A search that stopped before any step gave an item.
+fn nothing_found(documents_searched: Option<usize>) -> TracedSearch {
+    TracedSearch {
+        results: SearchResults { hits: Vec::new() },
+        trace: SearchTrace {
+            documents_searched,
+            ..SearchTrace::default()
+        },
     }
 }

@@ -276,6 +276,8 @@ fn write_error(path: &Path) -> impl FnOnce(std::io::Error) -> ContentError + '_ 
     }
 }
 
+// SMELL: this file is over 400 lines. The chapter run (run, convert_pages, pages_to_do,
+// cut_page_out) wants a file of its own.
 async fn run<S: PageServices>(
     job: &ChapterJob,
     source_sha256: &str,

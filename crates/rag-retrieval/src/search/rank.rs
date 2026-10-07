@@ -8,6 +8,16 @@ use rag_core::{DocId, Embedding, ItemFilter, ItemHit, ItemId, ItemStore};
 use super::results::{Reason, SearchHit};
 use super::{MAX_RESULTS_PER_DOCUMENT, RESULTS_PER_QUERY, SearchError};
 
+/// What the ranking kept, and what it left out.
+pub(super) struct Ranking {
+    /// How many of the candidates the item store gave back.
+    pub(super) ranked: usize,
+    pub(super) kept: Vec<SearchHit>,
+    /// The items passed over because their document already had [`MAX_RESULTS_PER_DOCUMENT`]
+    /// results, nearest first.
+    pub(super) capped: Vec<ItemHit>,
+}
+
 /// The candidates, nearest to the question first. A candidate is left out when its document
 /// already has [`MAX_RESULTS_PER_DOCUMENT`] results, and the first [`RESULTS_PER_QUERY`] that are
 /// left are kept.
@@ -19,7 +29,7 @@ pub(super) async fn ranked_within_the_cap(
     vector: &Embedding,
     filter: &ItemFilter,
     candidates: BTreeMap<ItemId, Reason>,
-) -> Result<Vec<SearchHit>, SearchError> {
+) -> Result<Ranking, SearchError> {
     let ids: Vec<ItemId> = candidates.keys().copied().collect();
     let ranked = items
         .rank(vector.clone(), &ids, filter)
@@ -28,18 +38,18 @@ pub(super) async fn ranked_within_the_cap(
     Ok(keep_within_the_cap(ranked, candidates))
 }
 
-fn keep_within_the_cap(
-    ranked: Vec<ItemHit>,
-    mut candidates: BTreeMap<ItemId, Reason>,
-) -> Vec<SearchHit> {
+fn keep_within_the_cap(ranked: Vec<ItemHit>, mut candidates: BTreeMap<ItemId, Reason>) -> Ranking {
+    let ranked_count = ranked.len();
     let mut kept_of_document: HashMap<DocId, usize> = HashMap::new();
     let mut kept = Vec::new();
+    let mut capped = Vec::new();
     for item in ranked {
         if kept.len() == RESULTS_PER_QUERY {
             break;
         }
         let in_document = kept_of_document.entry(item.payload.doc_id).or_insert(0);
         if *in_document == MAX_RESULTS_PER_DOCUMENT {
+            capped.push(item);
             continue;
         }
         let Some(reason) = candidates.remove(&item.id) else {
@@ -48,5 +58,9 @@ fn keep_within_the_cap(
         *in_document += 1;
         kept.push(SearchHit { item, reason });
     }
-    kept
+    Ranking {
+        ranked: ranked_count,
+        kept,
+        capped,
+    }
 }

@@ -3,8 +3,8 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use graph::GraphStore;
-use rag_core::{ConceptId, ConceptStore, Embedding, ItemHit, ItemId};
+use graph::{ConceptNode, GraphStore};
+use rag_core::{ConceptHit, ConceptId, ConceptStore, Embedding, ItemHit, ItemId};
 
 use super::results::Reason;
 use super::{MAX_EXPANSION_ITEMS, QUESTION_CONCEPTS, SearchError};
@@ -12,7 +12,20 @@ use super::{MAX_EXPANSION_ITEMS, QUESTION_CONCEPTS, SearchError};
 /// A concept with the name it is shown under.
 type NamedConcept = (ConceptId, String);
 
-/// The seeds and the items that the graph adds, each with the reason it is a candidate.
+/// The candidates of a search, and the concepts that led to them.
+pub(super) struct Expansion {
+    /// The seeds and the items that the graph adds, each with the reason it is a candidate.
+    pub(super) candidates: BTreeMap<ItemId, Reason>,
+    /// The concepts nearest to the question, nearest first.
+    pub(super) question_concepts: Vec<ConceptHit>,
+    /// The concepts that the seeds mention.
+    pub(super) seed_concepts: Vec<ConceptNode>,
+    /// The concepts one `RELATES_TO` edge away from the two lists above.
+    pub(super) related_concepts: Vec<ConceptNode>,
+}
+
+/// The seeds and the items that the graph adds, each with the reason it is a candidate, and the
+/// concepts that led to them.
 ///
 /// The concepts come in this order, each once: the ones nearest to the question, then the ones
 /// that the seeds mention, then the ones one `RELATES_TO` edge away from those. An item that the
@@ -21,26 +34,28 @@ type NamedConcept = (ConceptId, String);
 /// # Errors
 /// - [`SearchError::Concepts`] when the nearest concepts cannot be searched
 /// - [`SearchError::Graph`] when the graph cannot be read
-pub(super) async fn candidates<G: GraphStore>(
+pub(super) async fn from_seeds<G: GraphStore>(
     concepts: &ConceptStore,
     graph: &G,
     vector: &Embedding,
     seeds: &[ItemHit],
-) -> Result<BTreeMap<ItemId, Reason>, SearchError> {
+) -> Result<Expansion, SearchError> {
     let seed_ids: Vec<ItemId> = seeds.iter().map(|seed| seed.id).collect();
     let mut named: Vec<NamedConcept> = Vec::new();
-    let nearest = concepts
+    let question_concepts = concepts
         .nearest(vector.clone(), QUESTION_CONCEPTS)
         .await
         .map_err(SearchError::Concepts)?;
-    for concept in nearest {
-        keep_once(&mut named, concept.id, concept.name);
+    for concept in &question_concepts {
+        keep_once(&mut named, concept.id, &concept.name);
     }
-    for concept in graph.concepts_for_items(&seed_ids).await? {
-        keep_once(&mut named, concept.id, concept.name);
+    let seed_concepts = graph.concepts_for_items(&seed_ids).await?;
+    for concept in &seed_concepts {
+        keep_once(&mut named, concept.id, &concept.name);
     }
-    for concept in graph.related_concepts(&ids_of(&named)).await? {
-        keep_once(&mut named, concept.id, concept.name);
+    let related_concepts = graph.related_concepts(&ids_of(&named)).await?;
+    for concept in &related_concepts {
+        keep_once(&mut named, concept.id, &concept.name);
     }
 
     let mentions = graph
@@ -65,12 +80,17 @@ pub(super) async fn candidates<G: GraphStore>(
             candidates.insert(mention.item, Reason::Concept(named[*place].1.clone()));
         }
     }
-    Ok(candidates)
+    Ok(Expansion {
+        candidates,
+        question_concepts,
+        seed_concepts,
+        related_concepts,
+    })
 }
 
-fn keep_once(named: &mut Vec<NamedConcept>, id: ConceptId, name: String) {
+fn keep_once(named: &mut Vec<NamedConcept>, id: ConceptId, name: &str) {
     if !named.iter().any(|(kept, _)| *kept == id) {
-        named.push((id, name));
+        named.push((id, name.to_owned()));
     }
 }
 

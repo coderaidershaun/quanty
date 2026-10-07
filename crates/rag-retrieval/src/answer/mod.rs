@@ -1,6 +1,7 @@
 //! Writes an answer to a question from the items that a search found. The model names the items
 //! that support each statement by number, and the program prints their documents, pages and
-//! formulas itself, so the model never retypes a title, a page or a formula.
+//! formulas itself, so the model never retypes a title, a page or a formula. The same call also
+//! gives a title, headings and follow-up questions, which are kept but never printed.
 
 mod message;
 mod reply;
@@ -9,7 +10,7 @@ use rag_core::{Llm, LlmError, Question};
 
 use crate::search::SearchResults;
 
-pub use reply::{Answer, Claim};
+pub use reply::{Answer, Claim, Source};
 
 const SYSTEM_PROMPT: &str = include_str!("prompts/answer.md");
 const SCHEMA: &str = include_str!("prompts/answer.schema.json");

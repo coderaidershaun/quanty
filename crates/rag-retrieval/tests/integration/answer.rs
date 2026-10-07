@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use rag_core::{DocId, DocumentLabels, ItemHit, ItemId, ItemKind, ItemPayload};
 use rag_ingestion::testing::StandInLlm;
-use rag_retrieval::{AnswerError, Reason, SearchHit, SearchResults, answer};
+use rag_retrieval::{AnswerError, Reason, SearchHit, SearchResults, Source, answer};
 use serde_json::{Value, json};
 
 const QUESTION: &str = "What is the Black–Scholes equation, and which chart shows the payoff?";
@@ -173,4 +173,107 @@ async fn an_answer_cites_document_and_printed_page_and_keeps_the_latex_of_a_form
         matches!(error, AnswerError::NoSource { claim: 2 }),
         "{error:?}"
     );
+}
+
+fn assert_send<T: Send>(value: T) -> T {
+    value
+}
+
+#[tokio::test]
+async fn an_answer_gives_the_number_of_each_source_a_title_headings_and_follow_up_questions() {
+    let llm = StandInLlm::replying(|_, _| {
+        Ok(json!({
+            "claims": [
+                { "heading": "", "text": "The equation holds for every option.", "sources": [2, 1, 2] },
+                {
+                    "heading": "  Key\nassumptions ",
+                    // Do not write `\\theta` below. The `\t` is a real tab, which is what JSON
+                    // gives when the model writes the command with one backslash.
+                    "text": "The volatility \\( \\sigma \\) and the angle \\( \theta \\) are constant.",
+                    "sources": [3],
+                },
+            ],
+            "title": " The Black–Scholes equation\nand its chart ",
+            "follow_ups": [
+                " How is the Black–Scholes equation solved for a call option? ",
+                "",
+                "What does a long straddle pay at expiration?",
+                "How is the Black–Scholes equation solved for a call option?",
+                "Why does the growth rate of the stock drop out of the Black–Scholes equation?",
+                "How does volatility change the price of a straddle?",
+                "What is a butterfly spread?",
+            ],
+        }))
+    });
+    let results = found_items();
+
+    let written = assert_send(answer(&llm, QUESTION, &results)).await.unwrap();
+
+    let schema: Value = serde_json::from_str(&llm.questions()[0].schema).unwrap();
+    assert_eq!(schema["required"], json!(["claims", "title", "follow_ups"]));
+    assert_eq!(
+        schema["properties"]["claims"]["items"]["required"],
+        json!(["heading", "text", "sources"]),
+        "a field that the schema does not ask for is never sent, and the reader takes that as blank"
+    );
+
+    assert_eq!(
+        written.title.as_deref(),
+        Some("The Black–Scholes equation and its chart")
+    );
+    let numbers = |claim: usize| -> Vec<usize> {
+        written.claims[claim]
+            .sources
+            .iter()
+            .map(|source| source.number)
+            .collect()
+    };
+    assert_eq!(numbers(0), [2, 1], "in the order named, each once");
+    assert_eq!(numbers(1), [3]);
+    for Source { number, payload } in written.claims.iter().flat_map(|claim| &claim.sources) {
+        assert_eq!(payload, &results.hits[number - 1].item.payload);
+    }
+    assert_eq!(written.claims[0].heading, None);
+    assert_eq!(
+        written.claims[1].heading.as_deref(),
+        Some("Key assumptions")
+    );
+    assert_eq!(
+        written.claims[1].text,
+        "The volatility \\( \\sigma \\) and the angle \\( \\theta \\) are constant.",
+        "a tab is the backslash and the t of a LaTeX command that JSON read as one character"
+    );
+    assert_eq!(
+        written.follow_ups,
+        [
+            "How is the Black–Scholes equation solved for a call option?",
+            "What does a long straddle pay at expiration?",
+            "Why does the growth rate of the stock drop out of the Black–Scholes equation?",
+            "How does volatility change the price of a straddle?",
+        ],
+        "blank and repeated questions are left out, and four are kept"
+    );
+    let printed = written.to_string();
+    for unprinted in ["its chart", "Key assumptions", "long straddle pay"] {
+        assert!(!printed.contains(unprinted), "{printed}");
+    }
+    assert!(
+        printed.starts_with(&format!(
+            "The equation holds for every option.\n  source: {NOTES_TITLE}, page 7 (formula (7.3))\n{LATEX}\n  source: {NOTES_TITLE}, page 5 (chunk)\n\n"
+        )),
+        "{printed}"
+    );
+
+    // A reply that holds only claims is an answer with nothing else, and no claim means no title.
+    let bare = replying(json!([{ "text": "A claim.", "sources": [1] }]));
+    let written = answer(&bare, QUESTION, &results).await.unwrap();
+    assert_eq!(written.title, None);
+    assert_eq!(written.claims[0].heading, None);
+    assert!(written.follow_ups.is_empty());
+    let unanswered = StandInLlm::replying(|_, _| {
+        Ok(json!({ "claims": [], "title": "A title", "follow_ups": ["What is a put option?"] }))
+    });
+    let written = answer(&unanswered, QUESTION, &results).await.unwrap();
+    assert_eq!(written.title, None);
+    assert_eq!(written.follow_ups, ["What is a put option?"]);
 }

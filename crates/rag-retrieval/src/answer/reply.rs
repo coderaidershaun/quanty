@@ -1,5 +1,6 @@
 //! Reads and checks what the model replied, and prints the answer. The program, not the model,
-//! writes the document, the printed page and the LaTeX of each source.
+//! writes the document, the printed page and the LaTeX of each source. The title, the headings and
+//! the follow-up questions are read but not printed.
 
 use std::fmt;
 
@@ -10,36 +11,67 @@ use serde_json::Value;
 use super::AnswerError;
 use crate::search::{SearchResults, page_text};
 
-/// What the schema of the reply asks for.
+/// How many follow-up questions an answer keeps. The prompt and the comment on
+/// `Answer::follow_ups` say this number too, so change the three together.
+const MAX_FOLLOW_UPS: usize = 4;
+
+/// What the schema of the reply asks for. Only the claims must be there: a reply without the rest
+/// reads as an answer with no title, no heading and no follow-up question.
 #[derive(Deserialize)]
 struct Reply {
     claims: Vec<ReplyClaim>,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    follow_ups: Vec<String>,
 }
 
 #[derive(Deserialize)]
 struct ReplyClaim {
+    #[serde(default)]
+    heading: String,
     text: String,
     sources: Vec<i64>,
+}
+
+/// An item that a claim rests on.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Source {
+    /// The place of the item in the results that the answer was written from, counted from 1.
+    pub number: usize,
+    pub payload: ItemPayload,
 }
 
 /// One statement of an answer, and the items that it rests on.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Claim {
+    /// The name of the part of the answer that starts at this claim, such as "Key assumptions".
+    /// Most claims have none.
+    pub heading: Option<String>,
+    /// One or two sentences. A symbol in it is LaTeX between `\(` and `\)`.
     pub text: String,
-    pub sources: Vec<ItemPayload>,
+    pub sources: Vec<Source>,
 }
 
 /// An answer written from the items that a search found. It prints each claim with its sources:
 /// the document, the printed page and the kind of each item, the unchanged LaTeX of a formula and
-/// the path of the picture of a figure.
+/// the path of the picture of a figure. The title, the headings and the follow-up questions are
+/// not printed.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Answer {
+    /// A few words that name the answer. `None` when the model gave none, and always when there
+    /// are no claims.
+    pub title: Option<String>,
     /// In reading order. Empty when the items do not answer the question.
     pub claims: Vec<Claim>,
+    /// At most four questions to ask next. The model is told to write each one so that it can be
+    /// asked on its own.
+    pub follow_ups: Vec<String>,
 }
 
-/// The claims of the reply, each with the items that its source numbers name. A source that a
-/// claim names twice is kept once.
+/// The claims of the reply, each with the items that its source numbers name, and the title and
+/// the follow-up questions. A source that a claim names twice is kept once. A title, a heading or
+/// a follow-up question that is blank is left out, and never an error.
 ///
 /// # Errors
 /// - [`AnswerError::Unreadable`] when the reply is not a list of claims
@@ -72,14 +104,63 @@ pub(super) fn read(reply: Value, results: &SearchResults) -> Result<Answer, Answ
         }
         let sources = places
             .into_iter()
-            .map(|place| results.hits[place - 1].item.payload.clone())
+            .map(|number| Source {
+                number,
+                payload: results.hits[number - 1].item.payload.clone(),
+            })
             .collect();
         claims.push(Claim {
-            text: claim.text,
+            heading: one_line(&claim.heading),
+            text: with_backslashes_restored(&claim.text),
             sources,
         });
     }
-    Ok(Answer { claims })
+    let title = if claims.is_empty() {
+        None
+    } else {
+        one_line(&reply.title)
+    };
+    Ok(Answer {
+        title,
+        claims,
+        follow_ups: kept_follow_ups(&reply.follow_ups),
+    })
+}
+
+fn kept_follow_ups(asked: &[String]) -> Vec<String> {
+    let mut kept: Vec<String> = Vec::new();
+    for question in asked.iter().filter_map(|text| one_line(text)) {
+        if kept.len() < MAX_FOLLOW_UPS && !kept.contains(&question) {
+            kept.push(question);
+        }
+    }
+    kept
+}
+
+/// The text on one line, or `None` when it holds no word.
+fn one_line(text: &str) -> Option<String> {
+    let line = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!line.is_empty()).then_some(line)
+}
+
+/// Puts back the backslash of a LaTeX command that the model wrote with one backslash. JSON reads
+/// `\theta` written that way as a tab and `heta`, and does the same with a command that starts
+/// with `b`, `f` or `r`. A sentence holds none of those four control characters for any other
+/// reason.
+// SMELL: a command that starts with `n`, such as `\nu`, arrives as a line break and is not put
+// back, because a line break can also be one that the model meant.
+fn with_backslashes_restored(text: &str) -> String {
+    let mut restored = String::with_capacity(text.len());
+    for character in text.chars() {
+        match character {
+            '\t' => restored.push_str("\\t"),
+            '\u{8}' => restored.push_str("\\b"),
+            '\u{c}' => restored.push_str("\\f"),
+            '\r' => restored.push_str("\\r"),
+            other => restored.push(other),
+        }
+    }
+    restored
 }
 
 impl fmt::Display for Answer {
@@ -93,7 +174,7 @@ impl fmt::Display for Answer {
             }
             formatter.write_str(&claim.text)?;
             for source in &claim.sources {
-                write_source(formatter, source)?;
+                write_source(formatter, &source.payload)?;
             }
         }
         Ok(())

@@ -1,7 +1,9 @@
 //! The saved shape of a converted chapter and of a picture that stands alone: folder and file
-//! names, and the `chapter.json`, `page.json` and `image.json` files that index them. The
-//! converter and the reader both build on it, and it uses neither.
+//! names, and the `chapter.json`, `page.json` and `image.json` files that index them. It also
+//! lists the chapters under a content folder. The converter and the reader both build on it, and
+//! it uses neither.
 
+mod catalogue;
 mod conversion;
 mod figure_image;
 mod index;
@@ -9,6 +11,7 @@ mod piece;
 
 use std::path::{Path, PathBuf};
 
+pub use catalogue::{Catalogue, ChapterEntry};
 pub use conversion::{
     CallRecord, CallStep, Checks, Conversion, MathCheck, PageCategories, Route, RouteReason,
     WholePageFigure, WordMatch,

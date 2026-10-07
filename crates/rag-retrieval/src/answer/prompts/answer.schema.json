@@ -6,14 +6,17 @@
       "items": {
         "type": "object",
         "properties": {
+          "heading": { "type": "string" },
           "text": { "type": "string" },
           "sources": { "type": "array", "items": { "type": "integer" } }
         },
-        "required": ["text", "sources"],
+        "required": ["heading", "text", "sources"],
         "additionalProperties": false
       }
-    }
+    },
+    "title": { "type": "string" },
+    "follow_ups": { "type": "array", "items": { "type": "string" } }
   },
-  "required": ["claims"],
+  "required": ["claims", "title", "follow_ups"],
   "additionalProperties": false
 }

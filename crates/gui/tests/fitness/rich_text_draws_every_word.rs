@@ -90,6 +90,42 @@ fn painted(shape: &egui::Shape, found: &mut Vec<(String, f32)>) {
     }
 }
 
+/// What is wrong with a text laid out in a panel `width` wide, if anything: the words that are
+/// drawn are not `words` in order, or a piece of text ends past the width.
+fn what_went_wrong(written: &str, words: &str, width: f32) -> Option<String> {
+    let written = written.to_owned();
+    let left = Rc::new(Cell::new(0.0));
+    let seen_left = Rc::clone(&left);
+    let mut harness = testkit::panel([width, PANEL_HEIGHT], testkit::asked("q"), move |ui, cx| {
+        seen_left.set(ui.max_rect().left());
+        let text = RichText::new(&written, TextRole::Body);
+        // A text with no citations has nothing to click, and this test copies nothing.
+        drop(rich_text::show(ui, cx.media, &text));
+    });
+    harness.run();
+
+    let mut found = Vec::new();
+    for clipped in &harness.output().shapes {
+        painted(&clipped.shape, &mut found);
+    }
+    let drawn: String = found
+        .iter()
+        .flat_map(|(text, _)| text.chars())
+        .filter(|c| !c.is_whitespace())
+        .collect();
+    if drawn != words {
+        return Some(format!("`{drawn}` was drawn and `{words}` was written"));
+    }
+    found.iter().find_map(|(text, right)| {
+        (*right > left.get() + width + 1.0).then(|| {
+            format!(
+                "`{text}` ends at {right} and the width ends at {}",
+                left.get() + width
+            )
+        })
+    })
+}
+
 proptest! {
     #![proptest_config(ProptestConfig {
         cases: 256,
@@ -102,31 +138,23 @@ proptest! {
         (written, words) in text(),
         width in 60.0f32..600.0,
     ) {
-        let left = Rc::new(Cell::new(0.0));
-        let seen_left = Rc::clone(&left);
-        let mut harness = testkit::panel([width, PANEL_HEIGHT], testkit::asked("q"), move |ui, cx| {
-            seen_left.set(ui.max_rect().left());
-            let text = RichText::new(&written, TextRole::Body);
-            // A text with no citations has nothing to click, and this test copies nothing.
-            drop(rich_text::show(ui, cx.media, &text));
-        });
-        harness.run();
+        if let Some(problem) = what_went_wrong(&written, &words, width) {
+            return Err(TestCaseError::fail(problem));
+        }
+    }
+}
 
-        let mut found = Vec::new();
-        for clipped in &harness.output().shapes {
-            painted(&clipped.shape, &mut found);
-        }
-        let drawn: String = found
-            .iter()
-            .flat_map(|(text, _)| text.chars())
-            .filter(|c| !c.is_whitespace())
-            .collect();
-        prop_assert_eq!(drawn, words);
-        for (text, right) in &found {
-            prop_assert!(
-                *right <= left.get() + width + 1.0,
-                "`{}` ends at {} and the width ends at {}", text, right, left.get() + width
-            );
-        }
+/// A case that the property above found. The last word is wider than its row, and the piece of it
+/// that ends in K was drawn past the width: in one line the K is kerned with the dash after it,
+/// and drawn alone it is not.
+#[test]
+fn a_word_wider_than_its_row_is_cut_inside_the_width() {
+    let written = "e8ñAèdMèA Aü eü ñsè3bñèh ñièuüè 1- uñ2Ea èi1WEññè ü1ü1 5GpV6 e-Eñv ñèèChmñ `aaü–` Wx5èñ0 –C-U-ñüè Mñbpe6ñp rüñAC MèADEñüh –Mè- ZèXMAü-A ie6ñG-ñèY `aAAü0ü–A–ñA A ñ` 0iK2übvü —F0P—-K-";
+    let words: String = written
+        .chars()
+        .filter(|c| *c != '`' && !c.is_whitespace())
+        .collect();
+    if let Some(problem) = what_went_wrong(written, &words, 68.2227) {
+        panic!("{problem}");
     }
 }

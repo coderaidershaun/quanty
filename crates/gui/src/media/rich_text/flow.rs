@@ -4,7 +4,7 @@
 use eframe::egui::{Rect, Vec2, vec2};
 
 use super::atom::{AtomKind, Formula, LineMetrics, Measured};
-use super::breaker::{Fragment, break_line};
+use super::breaker::{Fragment, PieceWidth, break_line};
 use super::place::{CodeFill, Placed, PlacedChip, PlacedMath, Row, RowBox, Run};
 use super::style::TextLook;
 
@@ -38,7 +38,12 @@ impl Flow {
 
 /// Puts the atoms of a measured text in rows no wider than `wrap`, with the rows of one line
 /// under each other and a gap between paragraphs.
-pub(super) fn break_lines(measured: &Measured, wrap: f32, look: &TextLook) -> Flow {
+pub(super) fn break_lines(
+    measured: &Measured,
+    wrap: f32,
+    look: &TextLook,
+    piece_width: PieceWidth<'_>,
+) -> Flow {
     let mut rows: Vec<RowBox> = Vec::new();
     let mut placed = Placed::default();
     let mut y = 0.0;
@@ -47,7 +52,7 @@ pub(super) fn break_lines(measured: &Measured, wrap: f32, look: &TextLook) -> Fl
         if line.starts_paragraph && !rows.is_empty() {
             y += look.paragraph_gap;
         }
-        let mut rows_of_line = break_line(line, wrap);
+        let mut rows_of_line = break_line(line, wrap, piece_width);
         if let Some(marker) = &line.marker {
             rows_of_line[0].insert(0, Fragment::whole(marker, 0.0));
         }
@@ -138,6 +143,11 @@ mod tests {
 
     const GAP: f32 = 5.0;
 
+    /// Ten points for each character, which is how wide the made-up words below are.
+    fn ten_a_character(text: &str, _: &TextFormat) -> f32 {
+        10.0 * text.chars().count() as f32
+    }
+
     fn word(text: &str, width: f32, spaced: bool) -> Atom {
         let chars = text.chars().count();
         let edges = (0..=chars)
@@ -219,7 +229,8 @@ mod tests {
             word("gg", 60.0, true),
             word("hhhh", 40.0, true),
         ];
-        let flow = break_lines(&measured(atoms), 130.0, &text_look(TextRole::Body));
+        let look = text_look(TextRole::Body);
+        let flow = break_lines(&measured(atoms), 130.0, &look, &ten_a_character);
 
         let heights: Vec<f32> = flow.rows.iter().map(|row| row.height).collect();
         assert_eq!(
@@ -262,7 +273,8 @@ mod tests {
     #[test]
     fn a_word_wider_than_its_row_is_cut_and_a_wide_formula_is_made_smaller() {
         let atoms = vec![word("abcdefghij", 100.0, true), formula(200.0, 10.0, 4.0)];
-        let flow = break_lines(&measured(atoms), 35.0, &text_look(TextRole::Body));
+        let look = text_look(TextRole::Body);
+        let flow = break_lines(&measured(atoms), 35.0, &look, &ten_a_character);
         let pieces: Vec<&str> = flow.runs.iter().map(|run| run.job.text.as_str()).collect();
         assert_eq!(pieces, ["abc", "def", "ghi", "j"]);
         let [placed] = flow.maths[..] else {

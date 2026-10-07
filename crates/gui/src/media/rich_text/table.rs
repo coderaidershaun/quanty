@@ -8,7 +8,7 @@ use eframe::egui::{
 use super::Clicked;
 use super::atom::{Measured, Seen};
 use super::flow::{Flow, break_lines};
-use super::measure::{WaitFor, measure};
+use super::measure::{WaitFor, alone_width, measure};
 use super::paint;
 use super::parse::{Parsed, Span};
 use super::parse_table::{ColumnAlign, ParsedTable};
@@ -155,6 +155,7 @@ fn is_any_formula_loading(
 
 /// What every row of a table shares: where its columns are, and what its cells look like.
 struct Grid<'a> {
+    ui: &'a Ui,
     widths: &'a [f32],
     lefts: &'a [f32],
     aligns: &'a [ColumnAlign],
@@ -172,11 +173,12 @@ impl Grid<'_> {
         } else {
             self.body
         };
+        let piece_width = alone_width(self.ui);
         let flows: Vec<Flow> = measured
             .cells
             .iter()
             .zip(self.widths)
-            .map(|(cell, width)| break_lines(cell, *width, cell_look))
+            .map(|(cell, width)| break_lines(cell, *width, cell_look, &piece_width))
             .collect();
         let tallest = flows
             .iter()
@@ -248,6 +250,7 @@ pub(super) fn build(ui: &Ui, math: &mut Math, source: &Source<'_>) -> TableLayou
     let (widths, scrolls) = column_widths(&mins, &maxes, available);
     let lefts = column_lefts(&widths, padding);
     let grid = Grid {
+        ui,
         widths: &widths,
         lefts: &lefts,
         aligns: &table.aligns,

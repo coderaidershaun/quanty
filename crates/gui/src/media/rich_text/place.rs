@@ -4,7 +4,7 @@
 use eframe::egui::{Color32, FontId, Rect, pos2, text::LayoutJob, text::TextFormat, vec2};
 
 use super::atom::{AtomKind, LineMetrics};
-use super::breaker::Fragment;
+use super::breaker::{Fragment, text_between};
 use super::measure::one_row_job;
 use super::style::TextLook;
 
@@ -81,7 +81,7 @@ impl Placed {
         for fragment in fragments {
             match &fragment.atom.kind {
                 AtomKind::Word { text, format, .. } => {
-                    let word = cut_text(text, fragment);
+                    let word = text_between(text, fragment.from, fragment.to);
                     match &mut run {
                         Some(open) if open.accepts(format, fragment) => {
                             open.push(word, format, fragment);
@@ -161,14 +161,6 @@ impl Placed {
             self.runs.push(run.finish(row));
         }
     }
-}
-
-/// The characters of a word that the fragment holds.
-fn cut_text(text: &str, fragment: &Fragment<'_>) -> String {
-    text.chars()
-        .skip(fragment.from)
-        .take(fragment.to - fragment.from)
-        .collect()
 }
 
 /// The words of a run so far.

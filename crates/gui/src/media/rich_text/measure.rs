@@ -95,6 +95,16 @@ pub(super) fn one_row_job(parts: &[(String, TextFormat)]) -> LayoutJob {
     job
 }
 
+/// How wide a piece of text is when it is laid out alone, which is how a piece of a cut word is
+/// drawn. It can be wider than the same characters are in the one line of text that the words
+/// were measured in, because kerning ties each character to the next.
+pub(super) fn alone_width(ui: &Ui) -> impl Fn(&str, &TextFormat) -> f32 + '_ {
+    move |text, format| {
+        let parts = [(text.to_owned(), format.clone())];
+        ui.painter().layout_job(one_row_job(&parts)).size().x
+    }
+}
+
 /// All the words of the text, in the order of the one line of text that they make, and where
 /// each piece sits in it.
 fn in_one_line(lines: &[LinePieces<'_>]) -> (Vec<(String, TextFormat)>, Vec<Slot>) {

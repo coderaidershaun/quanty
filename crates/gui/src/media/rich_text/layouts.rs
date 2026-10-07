@@ -8,7 +8,7 @@ use eframe::egui;
 
 use super::RichText;
 use super::flow::{Flow, break_lines};
-use super::measure::{WaitFor, measure};
+use super::measure::{WaitFor, alone_width, measure};
 use super::paint;
 use super::parse::{Parsed, parse};
 use super::parse_table::{ParsedTable, parse_table};
@@ -125,7 +125,8 @@ impl Layouts {
         let parsed = self.read(content, text.markdown);
         let look = text_look(text.role);
         let measured = measure(ui, &parsed, text.cites, &look, math, WaitFor::OwnFormulas);
-        let flow = Arc::new(break_lines(&measured, key.width(), &look));
+        let piece_width = alone_width(ui);
+        let flow = Arc::new(break_lines(&measured, key.width(), &look, &piece_width));
         self.stats.layouts_built += 1;
         let used = Used {
             value: Arc::clone(&flow),

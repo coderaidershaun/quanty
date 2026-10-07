@@ -7,9 +7,9 @@ use graph::GraphStore;
 use ocr::content::{CHAPTER_INDEX_FILE, PAGE_IMAGE_FILE, PageIndex, page_folder_name};
 use ocr::{Chapter, ChapterPiece, ContentError, ImageShows, PieceDetail, ReadChapterError};
 
+use super::chapters::chapters_on_disk;
+use super::{LiveContext, Services};
 use crate::backend::Reply;
-use crate::backend::live::library::chapters_on_disk;
-use crate::backend::live::{LiveContext, Services};
 use crate::contract::{
     ChapterLabel, DocId, Event, Failure, FailureKind, ImageRef, PageBox, PageConcept, PagePiece,
     PageView, PieceKind, RequestId,

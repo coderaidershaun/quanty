@@ -6,6 +6,7 @@ use std::path::Path;
 
 use uuid::Uuid;
 
+use super::concepts;
 use super::library::{self, SampleError, title_of};
 use crate::contract::{
     Answer, AnswerBlock, ConceptGraph, DocId, EdgeKind, GraphEdge, GraphNode, ItemId, ItemKind,
@@ -173,7 +174,7 @@ pub(in crate::backend::fake) fn no_document_has_the_labels() -> SearchReply {
 }
 
 fn concept_node(number: u128, kind: NodeKind) -> GraphNode {
-    let concept = library::concept(number);
+    let concept = concepts::concept(number);
     GraphNode {
         id: NodeId::Concept(concept.id),
         kind,
@@ -192,7 +193,7 @@ fn result_node(number: usize, kind: NodeKind, label: &str, detail: Option<&str>)
 }
 
 fn concept_at(number: u128) -> NodeId {
-    NodeId::Concept(library::concept_id(number))
+    NodeId::Concept(concepts::concept_id(number))
 }
 
 fn edge(from: NodeId, to: NodeId, kind: EdgeKind) -> GraphEdge {

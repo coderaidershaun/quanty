@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use eframe::egui;
 
 use super::layout::{self, ShellRects};
+use super::region::region;
 use super::{shortcuts, top_bar};
 use crate::backend::{Backend, Handler};
 use crate::contract::{self, Effect, Intent, StartupFacts};
@@ -209,23 +210,6 @@ pub fn run(handler: impl Handler, facts: StartupFacts, opening: Vec<Intent>) -> 
             Ok(Box::new(app))
         }),
     )
-}
-
-/// Gives `draw` a child ui whose area is exactly `rect`, clipped to it.
-pub(super) fn region(
-    ui: &mut egui::Ui,
-    name: &str,
-    rect: egui::Rect,
-    draw: impl FnOnce(&mut egui::Ui),
-) {
-    let builder = egui::UiBuilder::new()
-        .id_salt(name)
-        .max_rect(rect)
-        .layout(egui::Layout::top_down(egui::Align::Min));
-    ui.scope_builder(builder, |ui| {
-        ui.set_clip_rect(rect);
-        draw(ui);
-    });
 }
 
 fn draw_tab(ui: &mut egui::Ui, rects: &ShellRects, locals: &mut Locals, cx: &mut PanelCx<'_>) {

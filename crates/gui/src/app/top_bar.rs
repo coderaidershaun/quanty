@@ -4,9 +4,7 @@
 use eframe::egui;
 
 use super::layout;
-// SMELL: the shell draws this bar, and this bar uses the shell's `region` to place its parts,
-// so the two files need each other.
-use super::shell::region;
+use super::region::region;
 use crate::contract::{self, Intent, Shortcut};
 use crate::panels::PanelCx;
 use crate::theme::{Icon, Tone};

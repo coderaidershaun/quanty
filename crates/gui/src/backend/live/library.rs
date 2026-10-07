@@ -1,18 +1,74 @@
-//! Joins the stored documents with their chapters on disk and groups them into books.
+//! Lists the stored documents, each joined with its chapter on disk and grouped into books.
+//! Changing the labels of a document and deleting one are not built yet.
 
 use std::collections::HashMap;
 
-use graph::DocumentRecord;
+use graph::{DocumentRecord, GraphStore};
 use ocr::ChapterEntry;
 
-use crate::contract::{Book, Catalogue, ChapterLabel, Document, ItemCounts};
+use super::chapters::chapters_on_disk;
+use super::{LiveContext, Services};
+use crate::backend::Reply;
+use crate::contract::{
+    Book, Catalogue, ChapterLabel, DocId, Document, Event, Failure, ItemCounts, LabelEdit,
+    RequestId,
+};
+
+/// Sends exactly one catalogue, also when it cannot be read, so the window never waits for one.
+pub async fn load_catalogue<S: Services>(cx: &LiveContext<S>, request: RequestId, reply: &Reply) {
+    let result = read_catalogue(cx).await;
+    reply.send(Event::Catalogue { request, result });
+}
+
+/// The stored documents, each with its chapter on disk. Of the stores only the graph is read, so
+/// a vector store that is down does not stop the list.
+async fn read_catalogue<S: Services>(cx: &LiveContext<S>) -> Result<Catalogue, Failure> {
+    let graph = cx.graph().await?;
+    let records = graph
+        .document_records()
+        .await
+        .map_err(|error| cx.failure(error))?;
+    let found = chapters_on_disk(
+        records
+            .iter()
+            .map(|record| (record.node.id, record.chapter_folder.as_deref())),
+        &cx.config().content_folder,
+    );
+    Ok(catalogue_from(records, found))
+}
+
+pub async fn set_labels<S: Services>(
+    _cx: &LiveContext<S>,
+    request: RequestId,
+    edit: &LabelEdit,
+    reply: &Reply,
+) {
+    reply.send(Event::LabelsSaved {
+        request,
+        doc: edit.doc,
+        result: Err(Failure::not_built("changing labels")),
+    });
+}
+
+pub async fn delete<S: Services>(
+    _cx: &LiveContext<S>,
+    request: RequestId,
+    doc: DocId,
+    reply: &Reply,
+) {
+    reply.send(Event::Deleted {
+        request,
+        doc,
+        result: Err(Failure::not_built("deleting a document")),
+    });
+}
 
 /// Groups the stored documents into books. A book is the one the document was stored with, not
 /// the one its chapter on disk names, because an ask that is filtered by a book matches the
 /// stored book. Books come by title with capitals ignored, and the documents without a book
 /// last. Inside a book the chapters come by number, and the documents with no chapter on disk
 /// after them.
-pub(super) fn catalogue_from(
+fn catalogue_from(
     records: Vec<DocumentRecord>,
     mut found: HashMap<rag_core::DocId, ChapterEntry>,
 ) -> Catalogue {
@@ -102,7 +158,6 @@ mod tests {
     use rag_core::{DocumentLabels, Tag};
 
     use super::*;
-    use crate::contract::DocId;
 
     fn id_of(title: &str) -> rag_core::DocId {
         rag_core::DocId::from_source_sha256(title)

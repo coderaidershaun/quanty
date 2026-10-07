@@ -15,7 +15,7 @@ use rag_retrieval::{SearchError, SearchResults, TracedSearch};
 
 use self::results::PieceFacts;
 use crate::backend::Reply;
-use crate::backend::live::library::chapters_on_disk;
+use crate::backend::live::chapters::chapters_on_disk;
 use crate::backend::live::{LiveContext, Services};
 use crate::contract::{AskDraft, AskMode, Event, RequestId, SearchReply};
 

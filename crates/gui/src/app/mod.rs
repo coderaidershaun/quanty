@@ -3,6 +3,7 @@
 
 pub mod launch;
 pub mod layout;
+mod region;
 mod shell;
 mod shortcuts;
 mod top_bar;

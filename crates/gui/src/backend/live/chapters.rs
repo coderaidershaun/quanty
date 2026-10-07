@@ -15,7 +15,7 @@ use rag_core::DocId;
 ///
 /// A document that is found by neither way has no entry. A content folder that cannot be listed,
 /// or a chapter under it that cannot be read, is logged and never fails the lookup.
-pub(in crate::backend::live) fn chapters_on_disk<'a>(
+pub(super) fn chapters_on_disk<'a>(
     documents: impl IntoIterator<Item = (DocId, Option<&'a Path>)>,
     content_root: &Path,
 ) -> HashMap<DocId, ChapterEntry> {

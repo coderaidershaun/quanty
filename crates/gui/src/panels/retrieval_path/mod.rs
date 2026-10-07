@@ -1,12 +1,89 @@
-//! The steps the search took to find the results.
+//! How the results of the ask were found: the steps of the search, with what each produced.
+
+mod row;
+mod steps;
+#[cfg(test)]
+mod tests;
+
+use std::mem::Discriminant;
 
 use eframe::egui;
 
-use crate::panels::{PanelCx, placeholder};
+use crate::contract::{Loadable, SearchReply};
+use crate::panels::PanelCx;
+use crate::state::AskSession;
+use crate::theme::space;
+use crate::widgets;
+use steps::{Body, Step};
 
+/// What the panel keeps between frames: its rows, made again only when the ask or the phase of
+/// its search changes.
 #[derive(Debug, Default)]
-pub struct Local {}
+pub struct Local {
+    /// The ask, and the phase of its search, that `steps` were made for.
+    made_for: Option<(u64, Discriminant<Loadable<SearchReply>>)>,
+    steps: Vec<Step>,
+}
 
-pub fn show(ui: &mut egui::Ui, _local: &mut Local, _cx: &mut PanelCx<'_>) {
-    placeholder(ui, "Retrieval Path");
+impl Local {
+    /// The rows change twice in one ask: waiting, then taken.
+    fn follow(&mut self, ask: &AskSession) {
+        let phase = (ask.generation, std::mem::discriminant(&ask.search));
+        if self.made_for == Some(phase) {
+            return;
+        }
+        self.made_for = Some(phase);
+        self.steps = match &ask.search {
+            Loadable::Loading => steps::waiting(),
+            Loadable::Ready(reply) => steps::taken(&reply.trace),
+            Loadable::Idle | Loadable::Failed(_) => Vec::new(),
+        };
+    }
+}
+
+/// Draws the path into `ui`, which is its whole rectangle. It pushes no intent.
+pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
+    let ask = &cx.shared.ask;
+    local.follow(ask);
+    widgets::panel_frame().show(ui, |ui| {
+        ui.set_min_size(ui.available_size());
+        ui.spacing_mut().item_spacing.y = space::SM;
+        widgets::section_header(ui, steps::TITLE, |ui| {
+            if ask.search.is_loading() {
+                widgets::spinner(ui, steps::SEARCHING);
+            }
+        });
+        match steps::body(ask) {
+            Body::Steps => rows(ui, &local.steps),
+            Body::Empty { icon, title, hint } => {
+                widgets::Placeholder::empty(icon, title).hint(hint).show(ui);
+            }
+            Body::Failed(failure) => {
+                widgets::Placeholder::error(steps::FAILED)
+                    .hint(&failure.hint)
+                    .show(ui)
+                    .response
+                    .on_hover_text(&failure.detail);
+            }
+        }
+    });
+}
+
+/// One row for each step, sharing the height that is left, and a line between each two.
+fn rows(ui: &mut egui::Ui, steps: &[Step]) {
+    let (pitch, density) = row::fit(ui.available_height(), steps.len());
+    let width = ui.available_width();
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        let mut rects = Vec::with_capacity(steps.len());
+        for (index, step) in steps.iter().enumerate() {
+            let size = egui::vec2(width, pitch);
+            let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+            row::show(ui, rect, index + 1, step, density);
+            rects.push(rect);
+        }
+        for pair in rects.windows(2) {
+            row::connect(ui, pair[0], pair[1]);
+        }
+    });
 }

@@ -46,6 +46,12 @@ Seven tools. A tool that costs money says so in its description, and so does thi
 
 An optional argument can be left out or set to `null`. An optional text that is blank counts as left out.
 
+First calls to try, in this order:
+
+1. `health` with no arguments: `healthy` must be `true`.
+2. `list_documents` with no arguments: the documents that are stored, each with its `document_id`.
+3. `search` with `{"question": "What is the Black–Scholes formula for a call option?"}`: then give the `document_id` and `page` of a result to `read_page`.
+
 ### `search`
 
 | Argument | |
@@ -142,6 +148,12 @@ claude mcp add quanty -- sh -c "cd '/path/to/quanty' && exec '/path/to/quanty/ta
 
 # HTTP: start `quanty-mcp --http 8321` yourself, then
 claude mcp add --transport http quanty http://127.0.0.1:8321/mcp
+```
+
+Run in the quanty folder, this form of the first command needs no path typed, because `$PWD` writes the absolute path of the folder into the entry. `--scope user` adds the server for every project, not only the current one:
+
+```bash
+claude mcp add --scope user quanty -- sh -c "cd '$PWD' && exec '$PWD/target/release/quanty-mcp'"
 ```
 
 ### With `.mcp.json`

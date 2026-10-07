@@ -36,7 +36,7 @@ The `claude` CLI must be on your `PATH` and signed in.
 ## Converting a chapter
 
 ```bash
-cargo run --release -p ocr -- --book "Option Volatility and Pricing" chapter-1-sample-pages.pdf
+cargo run --release -p ocr -- --book "Option Volatility and Pricing" samples/chapter-1-sample-pages.pdf
 ```
 
 The file must be named `chapter-<number>-<name>.pdf`. Every page is broken into its pieces (headings, text, formulas, figures, tables and footnotes) and saved under `content/<book-title>/chapter-<number>/page-num-<i>/`, with a `page.json` for each page and a `chapter.json` for the chapter. Each figure also gets its own picture, `NN-figure.png`, cut out of the page beside its `.md` file, and a figure that cannot be cut out keeps the whole page as its picture and is listed in the summary. `--out <folder>` saves somewhere other than `content`. The command only saves files: nothing is put into Qdrant or FalkorDB.
@@ -91,7 +91,7 @@ After the lines about items and points, the summary prints how many concepts wer
 ## Ingesting a whole chapter PDF
 
 ```bash
-cargo run --release -p rag-ingestion --bin rag-ingest -- pdf --book "Option Volatility and Pricing" chapter-1-sample-pages.pdf
+cargo run --release -p rag-ingestion --bin rag-ingest -- pdf --book "Option Volatility and Pricing" samples/chapter-1-sample-pages.pdf
 ```
 
 Does in one run what "Converting a chapter" and "Ingesting a chapter" do in two, with no one in between. The file must be named `chapter-<number>-<name>.pdf`, and `--book` is the title of the book that the chapter is from. A missing `--book`, a file name that does not fit and a path that is not there are each refused with a message before anything is started, and cost nothing. The PDF is converted by `ocr` into the folder that `CONTENT_DIR` names (`content` unless set), under `<book-title>/chapter-<number>/`, exactly as in "Converting a chapter". The converted chapter folder is then ingested with the steps of "Ingesting a chapter".
@@ -184,7 +184,28 @@ The items of step 6 come after the others. They are not counted in the 8 or in t
 cargo run --release -p gui
 ```
 
-The program is `quanty`. It opens one window, the Ask screen: the question with its mode and its book, author and tag filters; the answer with its citations, and the results by kind; the page that a citation stands on, with its figures, formulas, tables and concepts; the concept graph; the steps of the search; and questions to ask next. The keys are listed in the [README](../README.md).
+The program is `quanty`, built as `target/release/quanty`. It opens one window with two tabs, **Ask** and **Ingest**. Ask is one screen of six panels:
+
+| Panel | What it shows |
+| --- | --- |
+| Ask bar | The question, the mode, and the book, author and tag filters |
+| Answer | The written answer with its citations, and the results by kind: all, formulas, figures, tables |
+| Source in Context | The page a citation stands on, with its figures, formulas, tables and concepts |
+| Concept Graph | The concepts of the answer and how they link |
+| Retrieval Path | The path of the search in five rows, with what each step produced |
+| Follow up | Questions to ask next and a box for your own: each is a new search with the same mode and filters |
+
+| Key | What it does |
+| --- | --- |
+| `⌘1`, `⌘3` | Go to Ask, go to Ingest |
+| `/` or `⌘K` | Write a question (`Enter` asks it) |
+| `J`, `K` | Next and previous result |
+| `⌘.` or `Esc` | Stop the search or the answer |
+| `⇧⌘S` | Copy the answer with its citations |
+| `⌘]`, `⌘[` | Next and previous page of the source |
+| `⌘+`, `⌘−`, `⌘0` | Zoom the page while the pointer is over it |
+
+`/`, `J`, `K` and `Esc` do this only while no text box has the keyboard.
 
 It needs what `rag-query --answer` needs: Qdrant and FalkorDB, `EMBEDDING_GEMINI_API_KEY`, and `claude` signed in with `ANTHROPIC_API_KEY` not set. An ask makes one embedding call and one Sonnet call. In the mode **Results only** it makes the embedding call alone. When a service is not ready, the part of the window that needed it says which one and what to do.
 
@@ -194,7 +215,7 @@ A citation opens its page when the chapter's folder is found. The chapter is loo
 
 `--fixture <scene>` runs the whole window on built-in data from `samples/content`, with no store, no model and no cost. `--fixture list` prints the scenes: each is one state of the screen, such as `black-scholes` (a full answer), `stores-down` or `first-run`.
 
-The **Ingest** tab adds one chapter to the library: choose a chapter PDF named `chapter-<number>-<name>.pdf`, choose the book or add a new one, check the chapter, then start. The check is free; a start is paid work, the same as `rag-ingest pdf`.
+The **Ingest** tab adds one chapter to the library: choose a chapter PDF named `chapter-<number>-<name>.pdf`, choose the book or add a new one, check the chapter, then start. The check is free; a start is paid work, the same as `rag-ingest pdf`. Keep the app open while it runs. If it stops, start the same PDF again and it carries on.
 
 Not built yet: the Library page, the notices tray, the help sheet and the health check. Labels are changed and documents are deleted with `rag-ingest`.
 

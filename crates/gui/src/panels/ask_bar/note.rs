@@ -61,7 +61,11 @@ impl<'a> Note<'a> {
                     }
                     Note::LibraryEmpty | Note::Blank => {}
                 }
-                ui.add(egui::Label::new(TextRole::Small.rich(text).color(colour)).truncate());
+                let line =
+                    ui.add(egui::Label::new(TextRole::Small.rich(text).color(colour)).truncate());
+                if let Note::LibraryFailed(failure) = self {
+                    line.on_hover_text(&failure.detail);
+                }
             });
         });
     }

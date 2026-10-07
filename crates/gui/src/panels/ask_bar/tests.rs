@@ -326,6 +326,25 @@ fn a_library_that_is_loading_empty_or_failed_says_so_and_offers_the_way_out() {
 }
 
 #[test]
+fn a_library_that_did_not_load_shows_the_error_while_the_pointer_is_on_its_line() {
+    let failure = sample::failure(FailureKind::QdrantDown);
+    let line = format!("The library did not load. {}", failure.hint);
+    let mut failed = Shared::default();
+    failed.library.catalogue = Loadable::Failed(failure.clone());
+    let mut harness = bar(WIDE, failed);
+    harness.run();
+    harness.get_by_label(&line).hover();
+    harness.run_ok();
+    assert!(
+        harness
+            .query_all_by_label_contains(&failure.detail)
+            .next()
+            .is_some(),
+        "the error behind the hint is not shown"
+    );
+}
+
+#[test]
 fn the_bar_fits_its_rectangle_at_both_window_sizes() {
     let long_title = "Derivatives ".repeat(5).trim_end().to_owned();
     let long_hint = "Start Qdrant and try again. "

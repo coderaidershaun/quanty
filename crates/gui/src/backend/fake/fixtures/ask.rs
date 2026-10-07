@@ -143,6 +143,11 @@ pub(in crate::backend::fake) fn reply_without_concepts(
     found.trace.seed_concepts = Some(Vec::new());
     found.trace.related_concepts = Some(Vec::new());
     found.trace.cited = Some(Vec::new());
+    // With no concept the graph adds no item, so only the nearest items are ranked and the cap
+    // has none to pass over.
+    found.trace.candidates = Some(found.trace.nearest);
+    found.trace.ranked = Some(found.trace.nearest);
+    found.trace.passed_over.clear();
     Ok(found)
 }
 
@@ -299,5 +304,20 @@ pub(in crate::backend::fake) fn answer_without_blocks() -> Answer {
         title: None,
         blocks: Vec::new(),
         follow_ups: follow_ups(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reply_without_concepts;
+    use crate::testkit;
+
+    #[test]
+    fn a_search_that_met_no_concept_adds_nothing_through_the_graph() {
+        let found = reply_without_concepts(&testkit::samples_folder());
+        let trace = found.expect("the sample pages are read").trace;
+        assert_eq!(trace.candidates, Some(trace.nearest));
+        assert_eq!(trace.ranked, Some(trace.nearest));
+        assert!(trace.passed_over.is_empty());
     }
 }

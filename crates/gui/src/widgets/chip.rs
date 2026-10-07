@@ -63,7 +63,7 @@ impl CitationChip {
     fn name_and_paint(&self, ui: &egui::Ui, rect: Rect, response: Response) -> Response {
         response.widget_info(|| {
             let label = format!("Citation {}", self.number);
-            WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), label)
+            WidgetInfo::selected(WidgetType::Button, ui.is_enabled(), self.is_selected, label)
         });
         if ui.is_rect_visible(rect) {
             let look = self.forced.unwrap_or_else(|| Look::of(&response));
@@ -223,7 +223,9 @@ impl egui::Widget for Chip<'_> {
         let (rect, response) = ui.allocate_exact_size(side, egui::Sense::click());
         // SMELL: this says the chip can be used even inside a disabled area. It must say
         // `ui.is_enabled()`, as the citation chip does.
-        response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, self.label));
+        response.widget_info(|| {
+            WidgetInfo::selected(WidgetType::Button, true, self.is_selected, self.label)
+        });
         if ui.is_rect_visible(rect) {
             self.paint(ui, rect, self.forced.unwrap_or_else(|| Look::of(&response)));
             let top = rect.center().y - galley.size().y / 2.0;
@@ -392,4 +394,36 @@ pub fn dot(ui: &mut egui::Ui, tone: Tone) -> Response {
             .circle_filled(rect.center(), size::DOT / 2.0, tone.swatch().solid);
     }
     response
+}
+
+#[cfg(test)]
+mod tests {
+    use eframe::egui::accesskit::Toggled;
+    use egui_kittest::kittest::{NodeT, Queryable};
+
+    use super::{Chip, CitationChip};
+    use crate::state::Shared;
+    use crate::testkit;
+    use crate::widgets::Card;
+
+    #[test]
+    fn a_chosen_chip_and_a_chosen_card_say_so_to_a_screen_reader() {
+        let mut harness = testkit::panel([400.0, 200.0], Shared::default(), |ui, _cx| {
+            ui.add(CitationChip::new(1).selected(true));
+            ui.add(CitationChip::new(2));
+            ui.add(Chip::plain("Volatility").selected(true));
+            Card::new()
+                .selected(true)
+                .clickable("Result 1")
+                .show(ui, |ui| {
+                    ui.label("a result");
+                });
+        });
+        harness.run();
+        let toggled = |name: &str| harness.get_by_label(name).accesskit_node().toggled();
+        assert_eq!(toggled("Citation 1"), Some(Toggled::True));
+        assert_eq!(toggled("Citation 2"), Some(Toggled::False));
+        assert_eq!(toggled("Volatility"), Some(Toggled::True));
+        assert_eq!(toggled("Result 1"), Some(Toggled::True));
+    }
 }

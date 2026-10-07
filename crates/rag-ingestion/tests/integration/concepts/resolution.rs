@@ -10,8 +10,8 @@ use rag_ingestion::{ASK_SCORE, ConceptSummary, Item, ingest_chapter};
 use serde_json::{Value, json};
 
 use super::script::{
-    Comparisons, INTEREST_RATE, Named, PRICE_VARIABILITY, REALISED_VARIANCE, SCRIPT, Scripted, VOL,
-    VOLATILITY, concept_inputs, embedded_text, high_score, middle_score, prompt_file, scripted,
+    INTEREST_RATE, Named, PRICE_VARIABILITY, REALISED_VARIANCE, SCRIPT, Scripted, VOL, VOLATILITY,
+    concept_inputs, embedded_text, high_score, middle_score, prompt_file, scripted,
 };
 use crate::support::{self, concept_points_in, decision_for_mention, decisions_in, mentions_of};
 
@@ -63,7 +63,7 @@ fn assert_decision(line: &Value, item: &Item, name: &str, rule: &str, keys: &[&s
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored concepts::"]
 async fn each_rule_of_resolution_links_or_creates_and_logs_its_decision() {
     let run = scripted("resolution").await;
-    let (models, model) = run.models(Comparisons::Answer);
+    let (models, model) = run.models();
     let (throwaway, stores, items) = (&run.throwaway, &run.stores, &run.items);
 
     let summary = ingest_chapter(&support::intuition_chapter(), &models, stores)
@@ -297,7 +297,7 @@ async fn held_by(scripted: &Scripted) -> Held {
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored concepts::"]
 async fn a_second_ingest_asks_nothing_and_adds_no_node_edge_point_or_alias() {
     let run = scripted("resolution-again").await;
-    let (models, model) = run.models(Comparisons::Answer);
+    let (models, model) = run.models();
     let chapter = support::intuition_chapter();
 
     ingest_chapter(&chapter, &models, &run.stores)

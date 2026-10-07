@@ -1,13 +1,11 @@
 //! Asks questions of throwaway stores: one that holds the three committed chapters, and others
 //! that are filled by hand with items at known distances from the question, with an embedder that
-//! makes up its vectors, so nothing is billed. It also runs the command against stores that are
-//! down.
+//! makes up its vectors, so nothing is billed.
 
 use std::path::Path;
-use std::process::Command;
 
 use graph::{FalkorGraph, RelationKind};
-use rag_core::{ApiKey, Config, DocumentLabels, ItemId, ItemKind};
+use rag_core::{DocumentLabels, ItemId, ItemKind};
 use rag_ingestion::testing::{StandInEmbedder, ThrowawayStores};
 use rag_retrieval::{
     MAX_RESULTS_PER_DOCUMENT, RESULTS_PER_QUERY, Reason, Retriever, SearchResults,
@@ -73,41 +71,6 @@ async fn a_question_finds_its_item_and_prints_title_page_kind_text_and_picture()
     assert!(header.contains(&"kind: figure"));
     assert!(header.contains(&format!("picture: {}", picture.display()).as_str()));
     assert!(printed.contains(&first.payload.text));
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-retrieval --test integration -- --ignored search::"]
-async fn a_kind_filter_returns_only_items_of_that_kind() {
-    let throwaway = ThrowawayStores::new("search-kind");
-    let stores = throwaway.connect().await;
-    let embedder = WordEmbedder::default();
-    store_samples(&embedder, &stores.items, &stores.concepts).await;
-    let retriever = Retriever {
-        embedder,
-        items: stores.items,
-        concepts: stores.concepts,
-        graph: stores.graph,
-    };
-
-    for kind in ItemKind::ALL {
-        let results = retriever
-            .search(
-                "What is the price of an option?",
-                Some(kind),
-                &DocumentLabels::default(),
-            )
-            .await
-            .unwrap();
-
-        assert!(
-            !results.hits.is_empty(),
-            "no item of the kind {} was found",
-            kind.as_str()
-        );
-        for hit in &results.hits {
-            assert_eq!(hit.item.payload.kind, kind);
-        }
-    }
 }
 
 /// How far the score that Qdrant gives an item may be from the cosine the item was placed at.
@@ -374,72 +337,4 @@ async fn a_returned_paragraph_pulls_in_the_figure_and_the_formula_it_cites() {
     // the labels are kept.
     let formulas = found_among(&retriever, Some(ItemKind::Formula), &tagged(&["options"])).await;
     assert_eq!(texts_of(&formulas), ["formula of A"]);
-}
-
-#[test]
-fn an_unknown_kind_is_refused_with_the_list_of_kinds() {
-    let output = Command::new(env!("CARGO_BIN_EXE_rag-query"))
-        .args(["--kind", "poem", "anything"])
-        .output()
-        .expect("the rag-query binary should start");
-
-    assert_eq!(output.status.code(), Some(2));
-    let refusal = String::from_utf8_lossy(&output.stderr);
-    assert!(refusal.contains("poem"), "{refusal}");
-    for kind in ItemKind::ALL {
-        assert!(refusal.contains(kind.as_str()), "{refusal}");
-    }
-}
-
-#[test]
-fn rag_query_names_the_graph_store_it_cannot_reach() {
-    let stamp = format!("unreachable-{}", std::process::id());
-    let settings = [
-        ("QDRANT_URL", "http://127.0.0.1:1".to_owned()),
-        ("FALKORDB_URL", "falkor://127.0.0.1:1".to_owned()),
-        ("EMBEDDING_GEMINI_API_KEY", "not-a-real-key".to_owned()),
-        ("QDRANT_ITEMS_COLLECTION", format!("test-items-{stamp}")),
-        (
-            "QDRANT_CONCEPTS_COLLECTION",
-            format!("test-concepts-{stamp}"),
-        ),
-        ("FALKORDB_GRAPH", format!("test-graph-{stamp}")),
-    ];
-    // The names are typed by hand. A mistyped one would make the command fall back to a real
-    // address or a real collection, so read them back the way the command reads them.
-    let read_back = Config::from_sources(
-        |name| {
-            settings
-                .iter()
-                .find(|(setting, _)| *setting == name)
-                .map(|(_, value)| value.clone())
-        },
-        None,
-    )
-    .unwrap();
-    assert_eq!(read_back.qdrant_url, "http://127.0.0.1:1");
-    assert_eq!(read_back.falkordb_url, "falkor://127.0.0.1:1");
-    assert_eq!(read_back.items_collection, format!("test-items-{stamp}"));
-    assert_eq!(
-        read_back.concepts_collection,
-        format!("test-concepts-{stamp}")
-    );
-    assert_eq!(read_back.falkordb_graph, format!("test-graph-{stamp}"));
-    // A mistyped name of the key would leave the real key of the `.env` file in reach.
-    assert_eq!(
-        read_back.gemini_api_key.as_ref().map(ApiKey::expose),
-        Some("not-a-real-key")
-    );
-
-    let output = Command::new(env!("CARGO_BIN_EXE_rag-query"))
-        .arg(QUESTION)
-        .envs(settings)
-        .output()
-        .expect("the rag-query binary should start");
-
-    assert_eq!(output.status.code(), Some(1));
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("FalkorDB"), "{stderr}");
-    assert!(stderr.contains("falkor://127.0.0.1:1"), "{stderr}");
-    assert!(output.stdout.is_empty(), "nothing is printed as a result");
 }

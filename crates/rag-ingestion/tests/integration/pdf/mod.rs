@@ -3,7 +3,6 @@
 //! calls, the built command is stopped before its first paid call, the stores are throwaway ones
 //! or ports where nothing listens, and the content folder is a temporary one.
 
-mod command;
 mod runs;
 
 use std::collections::BTreeMap;

@@ -61,103 +61,22 @@ fn stand_in_claude_folder() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/stand-in-claude")
 }
 
-/// The key that the command is given for Gemini. It is not a real key, so nothing is billed, and
-/// it only has to exist, so that the command gets as far as the conversion.
-const STAND_IN_GEMINI_KEY: &str = "not-a-real-key";
-
-/// Which `claude` program the `rag-ingest` command under test starts.
-enum ClaudeProgram {
-    /// The committed stand-in, which finds no concept and bills nothing.
-    StandIn,
-    /// The real one, on the subscription.
-    Real,
-}
-
 /// Runs the `rag-ingest` command against a set of throwaway stores.
 pub trait RunRagIngest {
     /// Runs the `rag-ingest` command against these stores and no others, with the stand-in
-    /// `claude` that finds no concept. Every test that runs the command to ingest or to delete
-    /// goes through here.
+    /// `claude` that finds no concept.
     fn rag_ingest(&self, arguments: impl IntoIterator<Item = impl AsRef<OsStr>>) -> Output;
-
-    /// Like [`RunRagIngest::rag_ingest`], but the command starts the real `claude`, so it
-    /// spends usage of the subscription. Only the live tests of concepts call it.
-    fn rag_ingest_asking_claude(
-        &self,
-        arguments: impl IntoIterator<Item = impl AsRef<OsStr>>,
-    ) -> Output;
-
-    /// Runs `rag-ingest pdf` with these arguments after `pdf`, against these stores and no
-    /// others. It is the only way a test starts `pdf` on a real file, and no test starts `pdf`
-    /// through [`RunRagIngest::rag_ingest`] or [`RunRagIngest::rag_ingest_asking_claude`]. A real
-    /// run of `pdf` converts with `claude` and with Jev, which bill for every call, so the guard
-    /// is here and a test cannot leave it out:
-    /// - the command runs in a folder with an empty `.env` file, because the search for a `.env`
-    ///   stops at the first one it finds, so the `.env` of the workspace with its real keys is
-    ///   never read;
-    /// - it gets no Jev key, so the conversion stops before its first page, and it gets no
-    ///   `ANTHROPIC_API_KEY`;
-    /// - the `claude` that it finds first is the stand-in.
-    fn rag_ingest_pdf(&self, arguments: impl IntoIterator<Item = impl AsRef<OsStr>>) -> Output;
 }
 
 impl RunRagIngest for ThrowawayStores {
     fn rag_ingest(&self, arguments: impl IntoIterator<Item = impl AsRef<OsStr>>) -> Output {
-        run_rag_ingest(self, arguments, ClaudeProgram::StandIn)
+        let mut command = Command::new(env!("CARGO_BIN_EXE_rag-ingest"));
+        command.args(arguments).envs(self.command_settings());
+        put_stand_in_claude_first(&mut command, self);
+        command
+            .output()
+            .expect("the rag-ingest binary should start")
     }
-
-    fn rag_ingest_asking_claude(
-        &self,
-        arguments: impl IntoIterator<Item = impl AsRef<OsStr>>,
-    ) -> Output {
-        run_rag_ingest(self, arguments, ClaudeProgram::Real)
-    }
-
-    fn rag_ingest_pdf(&self, arguments: impl IntoIterator<Item = impl AsRef<OsStr>>) -> Output {
-        run_rag_ingest_pdf(self, arguments)
-    }
-}
-
-fn run_rag_ingest(
-    stores: &ThrowawayStores,
-    arguments: impl IntoIterator<Item = impl AsRef<OsStr>>,
-    claude: ClaudeProgram,
-) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_rag-ingest"));
-    command.args(arguments).envs(stores.command_settings());
-    assert_ne!(
-        command.get_args().next(),
-        Some(OsStr::new("pdf")),
-        "`pdf` converts with paid services, so a test starts it through `rag_ingest_pdf` only"
-    );
-    if let ClaudeProgram::StandIn = claude {
-        put_stand_in_claude_first(&mut command, stores);
-    }
-    command
-        .output()
-        .expect("the rag-ingest binary should start")
-}
-
-fn run_rag_ingest_pdf(
-    stores: &ThrowawayStores,
-    arguments: impl IntoIterator<Item = impl AsRef<OsStr>>,
-) -> Output {
-    let working_folder = stores.temporary_folder().join("pdf-command");
-    fs::create_dir_all(&working_folder).expect("the working folder should be made");
-    fs::write(working_folder.join(".env"), "").expect("the empty .env file should be written");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_rag-ingest"));
-    command
-        .arg("pdf")
-        .args(arguments)
-        .current_dir(&working_folder)
-        .envs(stores.command_settings())
-        .env_remove("CONVERTER_JEV_API_KEY")
-        .env_remove("ANTHROPIC_API_KEY")
-        .env("EMBEDDING_GEMINI_API_KEY", STAND_IN_GEMINI_KEY);
-    put_stand_in_claude_first(&mut command, stores);
-    command
-        .output()
-        .expect("the rag-ingest binary should start")
 }
 
 fn put_stand_in_claude_first(command: &mut Command, stores: &ThrowawayStores) {

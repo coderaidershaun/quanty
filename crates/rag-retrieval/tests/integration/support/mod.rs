@@ -6,11 +6,9 @@ mod fixture;
 mod word_embedder;
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
 
 use ocr::read_chapter;
 use rag_core::{ConceptStore, DocumentInput, Embedder, ItemKind, ItemPoint, ItemStore};
-use rag_ingestion::testing::ThrowawayStores;
 use rag_ingestion::{Item, chapter_items};
 
 pub use fixture::{Fixture, Placed, QUESTION};
@@ -112,20 +110,4 @@ pub fn find_item<'a>(items: &'a [Item], title: &str, kind: ItemKind, page: u32) 
                 && item.payload.page == page
         })
         .unwrap_or_else(|| panic!("no {} on page {page} of {title}", kind.as_str()))
-}
-
-/// Runs the real `rag-query` command from the workspace root against these stores and no others,
-/// and prints what it answered, so that one paid run shows everything.
-pub fn rag_query(stores: &ThrowawayStores, arguments: &[&str]) -> Output {
-    let output = Command::new(env!("CARGO_BIN_EXE_rag-query"))
-        .args(arguments)
-        .current_dir(workspace_root())
-        .envs(stores.command_settings())
-        .output()
-        .expect("the rag-query binary should start");
-    println!("--- rag-query {arguments:?}: {}", output.status);
-    println!("{}", String::from_utf8_lossy(&output.stdout));
-    println!("--- its standard error:");
-    println!("{}", String::from_utf8_lossy(&output.stderr));
-    output
 }

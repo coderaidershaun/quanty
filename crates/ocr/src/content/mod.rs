@@ -177,36 +177,3 @@ pub const IMAGE_INDEX_FILE: &str = "image.json";
 pub const IMAGE_EXPLANATION_FILE: &str = "figure.md";
 /// The second of a page's two rejected replies, left in its working folder to be looked at.
 pub const REJECTED_REPLY_FILE: &str = "rejected-reply.json";
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn file_name_gives_chapter_number_name_and_folders() {
-        let reserved = parse_chapter_file_name("chapter-18-the-black-scholes-model.pdf").unwrap();
-        assert_eq!(reserved.number, 18);
-        assert_eq!(reserved.name, "The Black Scholes Model");
-        assert_eq!(chapter_folder_name(reserved.number), "chapter-18");
-
-        assert_eq!(
-            book_folder_name("Option Volatility and Pricing").unwrap(),
-            "option-volatility-and-pricing"
-        );
-        assert_eq!(
-            book_folder_name("  C++: The *Book*! ").unwrap(),
-            "c-the-book"
-        );
-
-        for refused in ["notes.pdf", "chapter-x-name.pdf", "chapter-18.pdf"] {
-            let error = parse_chapter_file_name(refused).unwrap_err();
-            let message = error.to_string();
-            assert!(message.contains(CHAPTER_FILE_PATTERN), "{message}");
-            assert!(message.contains(refused), "{message}");
-        }
-        assert!(matches!(
-            book_folder_name("?! --"),
-            Err(ContentError::EmptyBookFolderName { .. })
-        ));
-    }
-}

@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use rag_core::{DocumentInput, LlmError};
+use rag_core::DocumentInput;
 use rag_ingestion::{ASK_SCORE, Item, LINK_SCORE, Models, Stores};
 use serde_json::{Value, json};
 
@@ -42,36 +42,14 @@ pub(super) fn prompt_file(name: &str) -> String {
     std::fs::read_to_string(path).unwrap()
 }
 
-/// How the model answers a question about two concepts.
-#[derive(Clone, Copy)]
-pub(super) enum Comparisons {
-    /// "Same" for price variability, "different" for anything else.
-    Answer,
-    /// Every question fails, in a way that another question may not.
-    Fail,
-    /// Every question is refused because the usage limit is reached.
-    UsageLimit,
-}
-
 /// Answers each item with the concepts of its place in the script, and a question about two
-/// concepts as `comparisons` says.
-fn scripted_llm(items: &[Item], comparisons: Comparisons) -> StandInLlm {
+/// concepts with "same" for price variability and "different" for anything else.
+fn scripted_llm(items: &[Item]) -> StandInLlm {
     let positions = positions_of(items);
     let same_concept_prompt = prompt_file("same-concept.md");
     StandInLlm::replying_to_questions(move |question, _| {
         if question.system_prompt == same_concept_prompt {
-            return match comparisons {
-                Comparisons::Answer => {
-                    Ok(json!({ "same": question.input.contains("name: price variability") }))
-                }
-                Comparisons::Fail => Err(LlmError::Failed {
-                    exit_code: Some(1),
-                    reason: "Output blocked by content filtering policy".to_owned(),
-                }),
-                Comparisons::UsageLimit => Err(LlmError::UsageLimit {
-                    message: "You've hit your session limit · resets 11:40am".to_owned(),
-                }),
-            };
+            return Ok(json!({ "same": question.input.contains("name: price variability") }));
         }
         let concepts: Vec<Value> = SCRIPT[positions[&question.input]]
             .iter()
@@ -147,11 +125,8 @@ impl Scripted {
     /// The models of one ingest, and the model on its own to read what it was asked. Every call
     /// makes a model and an embedder of its own, and they share the cache folder and the decision
     /// log of the throwaway stores.
-    pub(super) fn models(
-        &self,
-        comparisons: Comparisons,
-    ) -> (Models<StandInEmbedder, StandInLlm>, StandInLlm) {
-        let model = scripted_llm(&self.items, comparisons);
+    pub(super) fn models(&self) -> (Models<StandInEmbedder, StandInLlm>, StandInLlm) {
+        let model = scripted_llm(&self.items);
         let models = self
             .throwaway
             .models_with_embedder(scripted_embedder(), model.clone());

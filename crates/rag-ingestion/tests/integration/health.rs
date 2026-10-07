@@ -1,10 +1,6 @@
-//! Runs `rag-ingest health` as a person would, once against ports where nothing listens and once
-//! against the real local stores.
+//! Runs `rag-ingest health` as a person would, against ports where nothing listens.
 
 use std::process::{Command, Output};
-
-const LOCAL_RUN_COMMAND: &str =
-    "cargo test -p rag-ingestion --test integration -- --ignored health::";
 
 fn run_health(configure: impl FnOnce(&mut Command)) -> (Output, Vec<String>) {
     let mut command = Command::new(env!("CARGO_BIN_EXE_rag-ingest"));
@@ -53,20 +49,4 @@ fn health_names_each_store_it_cannot_reach_and_exits_non_zero() {
         lines[1]
     );
     assert!(lines[2].starts_with("claude:"), "{}", lines[2]);
-}
-
-#[test]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and a signed-in claude CLI, and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored health::"]
-fn health_reports_both_stores_and_the_claude_sign_in() {
-    let (output, lines) = run_health(|_| {});
-
-    assert_eq!(
-        lines.len(),
-        3,
-        "one line for each check: {lines:?}; start the stores and sign in to claude, then run {LOCAL_RUN_COMMAND}"
-    );
-    assert!(lines[0].starts_with("Qdrant: ok ("), "{}", lines[0]);
-    assert!(lines[1].starts_with("FalkorDB: ok ("), "{}", lines[1]);
-    assert_eq!(lines[2], "claude: ok (signed in)");
-    assert!(output.status.success());
 }

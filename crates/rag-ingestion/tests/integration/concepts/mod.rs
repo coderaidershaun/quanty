@@ -3,7 +3,6 @@
 //! nothing is billed. It shows what is asked, what is written, what is kept, and what happens when
 //! the model fails.
 
-mod cache;
 mod extraction;
 mod failures;
 mod resolution;
@@ -40,8 +39,4 @@ fn finding_volatility() -> Value {
         "concepts": [{ "name": "volatility", "definition": "how much a price moves over time" }],
         "relations": [],
     })
-}
-
-fn files_in(folder: &Path) -> usize {
-    std::fs::read_dir(folder).unwrap().count()
 }

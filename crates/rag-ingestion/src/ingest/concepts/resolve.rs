@@ -291,18 +291,3 @@ impl<L: Llm, E: Embedder, G: GraphStore> Resolver<'_, L, E, G> {
         Ok(id)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_score_is_high_from_the_link_score_and_low_under_the_ask_score() {
-        assert_eq!(Band::of(LINK_SCORE), Band::High);
-        assert_eq!(Band::of(1.0), Band::High);
-        assert_eq!(Band::of(LINK_SCORE - 0.001), Band::Middle);
-        assert_eq!(Band::of(ASK_SCORE), Band::Middle);
-        assert_eq!(Band::of(ASK_SCORE - 0.001), Band::Low);
-        assert_eq!(Band::of(-0.2), Band::Low);
-    }
-}

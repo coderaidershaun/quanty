@@ -3,7 +3,6 @@
 
 mod claude_cli;
 mod claude_live;
-mod config;
 mod gemini_live;
 mod gemini_stub;
 mod gemini_wire;

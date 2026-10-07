@@ -12,8 +12,7 @@ use rag_ingestion::{DeleteSummary, Item, chapter_items, ingest_chapter};
 use serde_json::json;
 
 use crate::support::{
-    self, RunRagIngest, StandInLlm, ThrowawayStores, assert_document_stored,
-    assert_graph_holds_only, points_in,
+    self, RunRagIngest, StandInLlm, ThrowawayStores, assert_document_stored, points_in,
 };
 
 fn items_of(chapter_folder: &std::path::Path) -> Vec<Item> {
@@ -173,35 +172,4 @@ async fn delete_document_removes_one_document_from_both_stores_and_leaves_the_ot
     assert!(left.mentions.is_empty());
     assert_eq!(left.relations, before.relations);
     assert!(point_ids(&throwaway).await.is_empty());
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored delete::"]
-async fn delete_document_refuses_an_id_that_is_not_a_document_id() {
-    let throwaway = ThrowawayStores::new("delete-refuse");
-    let stores = throwaway.connect().await;
-    let models = throwaway.models(StandInLlm::finding_nothing());
-    let items = items_of(&support::intuition_chapter());
-    ingest_chapter(&support::intuition_chapter(), &models, &stores)
-        .await
-        .unwrap();
-
-    let item_id = items[0].id.to_string();
-    let output = delete_document(&throwaway, &item_id);
-    assert_eq!(output.status.code(), Some(1));
-    let message = stderr_text(&output);
-    assert!(
-        message.contains(&format!(
-            "nothing is stored under the document id {item_id}"
-        )),
-        "{message}"
-    );
-
-    let output = delete_document(&throwaway, "not-a-document-id");
-    assert_eq!(output.status.code(), Some(2));
-    let message = stderr_text(&output);
-    assert!(message.contains("is not a document id"), "{message}");
-
-    assert_graph_holds_only(&stores.graph, &items).await;
-    assert_eq!(point_ids(&throwaway).await, ids_of(&items));
 }

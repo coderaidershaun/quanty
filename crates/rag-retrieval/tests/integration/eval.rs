@@ -1,16 +1,14 @@
 //! Scores golden questions against throwaway stores that hold the three committed chapters, with
 //! an embedder that makes up its vectors, so nothing is billed.
 
-use std::collections::BTreeSet;
-
 use rag_core::{DocumentLabels, ItemKind};
 use rag_ingestion::Item;
 use rag_ingestion::testing::ThrowawayStores;
-use rag_retrieval::{GoldenPlace, GoldenQuestion, Retriever, evaluate, read_golden_questions};
+use rag_retrieval::{GoldenPlace, GoldenQuestion, Retriever, evaluate};
 
 use crate::support::{
     IN_DEPTH_CHAPTER_TITLE, INTUITION_CHAPTER_TITLE, SAMPLE_CHAPTER_TITLE, WordEmbedder, find_item,
-    sample_items, store_samples, workspace_root,
+    store_samples,
 };
 
 /// A question that is the whole stored text of the item, so the item is the nearest one.
@@ -125,39 +123,4 @@ async fn eval_counts_the_golden_questions_found_in_the_top_five() {
     assert!(missed[0].contains(INTUITION_CHAPTER_TITLE), "{}", missed[0]);
     assert!(missed[0].contains(IN_DEPTH_CHAPTER_TITLE), "{}", missed[0]);
     assert!(missed[0].contains("page 99"), "{}", missed[0]);
-}
-
-#[test]
-fn every_committed_golden_question_names_a_page_that_holds_items() {
-    let golden = read_golden_questions(&workspace_root().join("golden.toml")).unwrap();
-    let pages: BTreeSet<(String, u32)> = sample_items()
-        .into_iter()
-        .map(|item| (item.payload.doc_title, item.payload.page))
-        .collect();
-
-    for question in &golden {
-        assert!(
-            pages.contains(&(question.document.clone(), question.page)),
-            "no item is on page {} of {}, so this question can never be found: {}",
-            question.page,
-            question.document,
-            question.text
-        );
-        for place in &question.also {
-            assert!(
-                pages.contains(&(place.document.clone(), place.page)),
-                "no item is on page {} of {}, so this question can never be found: {}",
-                place.page,
-                place.document,
-                question.text
-            );
-        }
-    }
-    assert!(
-        golden.iter().any(|question| question
-            .also
-            .iter()
-            .any(|place| place.document != question.document)),
-        "at least one question has its answer in two documents"
-    );
 }

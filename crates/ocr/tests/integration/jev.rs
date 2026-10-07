@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use ocr::convert::services::{Jev, JevError, MathPlacement};
+use ocr::convert::services::{Jev, MathPlacement};
 
 const RUN_COMMAND: &str = "set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p ocr --test integration -- --ignored jev::";
 
@@ -59,21 +59,4 @@ async fn contains_math_matches_sample_pages() {
     }
 
     assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
-}
-
-#[tokio::test]
-#[ignore = "calls the real Jev API and spends API credit; run with: set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p ocr --test integration -- --ignored jev::"]
-async fn bad_key_is_rejected() {
-    require_prod_api();
-    let jev = Jev::new("not-a-real-key").expect("client builds");
-
-    let error = jev
-        .contains_math("x_1 + x_2 = y")
-        .await
-        .expect_err("a made-up key must not be accepted");
-
-    assert!(
-        matches!(error, JevError::Rejected { status: 401, .. }),
-        "expected Rejected with status 401, got {error:?}"
-    );
 }

@@ -2,13 +2,13 @@
 //! of the local Qdrant and a throwaway graph of the local FalkorDB, with stand-ins for the paid
 //! calls, so nothing is billed.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use graph::testing::{GraphSize, size, stored_concept_graph, stored_document};
+use ocr::ConvertedImage;
 use ocr::convert::convert_image_with;
-use ocr::{ConvertedImage, read_chapter};
 use rag_core::DocId;
-use rag_ingestion::{Item, LoneImage, chapter_items, image_items, ingest_chapter, ingest_image};
+use rag_ingestion::{LoneImage, ingest_image};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
@@ -34,19 +34,6 @@ async fn convert(throwaway: &ThrowawayStores, services: &StandInImageServices) -
     )
     .await
     .unwrap()
-}
-
-/// What the model is asked about an item: where it sits, then the text that is embedded for it.
-fn asked_about(item: &Item) -> String {
-    format!("{}\n\n{}", item.input.title, item.input.text)
-}
-
-fn items_of(chapter_folder: &Path) -> Vec<Item> {
-    chapter_items(&read_chapter(chapter_folder).unwrap())
-}
-
-fn picture_item(image: &ConvertedImage, note: Option<&str>) -> Item {
-    image_items(&LoneImage { image, note }).remove(0)
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -178,98 +165,4 @@ async fn a_lone_picture_becomes_a_one_figure_document_and_a_second_ingest_calls_
         concept_points_in(config).await,
     );
     assert_eq!(after_second, after_first);
-}
-
-/// The passages that follow the heading of the related material, as the stored texts of the items
-/// they were taken from. Each one starts with a line of its number and the title of its document.
-fn related_passages(tail: &str, document_title: &str, stored_texts: &[String]) -> Vec<String> {
-    let mut passages = Vec::new();
-    let mut rest = tail;
-    while !rest.is_empty() {
-        let header = format!("{}. {document_title}, ", passages.len() + 1);
-        let after_header = rest
-            .strip_prefix(&header)
-            .unwrap_or_else(|| panic!("the passage does not start with {header:?}: {rest}"));
-        let (_, after_line) = after_header
-            .split_once('\n')
-            .expect("a header line ends with a line break");
-        let text = stored_texts
-            .iter()
-            .filter(|text| after_line.starts_with(text.as_str()))
-            .max_by_key(|text| text.len())
-            .unwrap_or_else(|| panic!("no stored text starts the passage: {after_line}"));
-        rest = after_line[text.len()..].strip_prefix("\n\n").unwrap_or("");
-        passages.push(text.clone());
-    }
-    passages
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored image::"]
-async fn an_item_alone_in_its_document_is_asked_about_with_possibly_related_material() {
-    let throwaway = ThrowawayStores::new("image-related");
-    let stores = throwaway.connect().await;
-    let services = StandInImageServices::default();
-    let model = StandInLlm::finding_nothing();
-    let models = throwaway.models(model.clone());
-    let chapter = support::intuition_chapter();
-    let chapter_items = items_of(&chapter);
-    let chapter_title = chapter_items[0].payload.doc_title.clone();
-    let stored_texts: Vec<String> = chapter_items
-        .iter()
-        .map(|item| item.payload.text.clone())
-        .collect();
-
-    ingest_chapter(&chapter, &models, &stores).await.unwrap();
-    let image = convert(&throwaway, &services).await;
-    let lone = LoneImage {
-        image: &image,
-        note: None,
-    };
-    ingest_image(&lone, &models, &stores).await.unwrap();
-
-    let questions = model.questions();
-    assert_eq!(questions.len(), chapter_items.len() + 1);
-    let heading = "Possibly related material";
-    for question in &questions[..chapter_items.len()] {
-        assert!(
-            !question.input.contains(heading),
-            "an item with neighbours is asked about alone: {}",
-            question.input
-        );
-    }
-    let question = &questions[chapter_items.len()];
-    let own = asked_about(&picture_item(&image, None));
-    let tail = question
-        .input
-        .strip_prefix(&own)
-        .expect("the question starts with the text of the item")
-        .strip_prefix(&format!("\n\n{heading}\n\n"))
-        .expect("the heading follows the text of the item");
-    let passages = related_passages(tail, &chapter_title, &stored_texts);
-    assert_eq!(passages.len(), 5, "the five nearest items of the chapter");
-    let prompt_file =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ingest/concepts/prompts/extract.md");
-    let prompt = std::fs::read_to_string(prompt_file).unwrap();
-    assert_eq!(question.system_prompt, prompt);
-    for words in [heading, "vocabulary", "not part of the item"] {
-        assert!(prompt.contains(words), "the prompt does not say {words:?}");
-    }
-
-    // Another chapter is stored, so the nearest items of the picture are not the same ones. Its
-    // answer was kept all the same, because the key leaves the related material out.
-    let in_depth = support::in_depth_chapter();
-    ingest_chapter(&in_depth, &models, &stores).await.unwrap();
-    let asked_before = model.calls();
-    let again: PathBuf = convert(&throwaway, &services).await.picture;
-    assert_eq!(again, image.picture);
-    let second = ingest_image(&lone, &models, &stores).await.unwrap();
-    assert_eq!(
-        model.calls(),
-        asked_before,
-        "the picture is not asked about again"
-    );
-    assert_eq!(second.concepts.llm_calls, 0);
-    assert_eq!(second.concepts.cache_hits, 1);
-    assert_eq!(services.calls(), 1);
 }

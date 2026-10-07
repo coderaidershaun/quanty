@@ -1,5 +1,5 @@
-//! A stand-in for the Gemini embeddings API on a local port, so the wire format, the batching
-//! and the retries can be checked without the network or a key.
+//! A stand-in for the Gemini embeddings API on a local port, so the retries can be checked without
+//! the network or a key.
 
 use std::sync::{Arc, Mutex};
 
@@ -9,8 +9,6 @@ use tokio::net::{TcpListener, TcpStream};
 
 #[derive(Clone)]
 pub struct RecordedRequest {
-    pub path: String,
-    pub api_key: Option<String>,
     pub body: Value,
 }
 
@@ -94,8 +92,6 @@ async fn read_request(socket: &mut TcpStream) -> Option<RecordedRequest> {
         received.extend_from_slice(&chunk[..read]);
     }
     Some(RecordedRequest {
-        path: head.split_whitespace().nth(1)?.to_owned(),
-        api_key: header("x-goog-api-key"),
         body: serde_json::from_slice(&received[head_end..head_end + length]).ok()?,
     })
 }

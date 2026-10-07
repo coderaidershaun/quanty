@@ -1,21 +1,27 @@
 //! The first half of extraction: asks about every item, a few at a time, and keeps each good
 //! answer. A failure of one item never stops the others. A failure that would be the same for
-//! every item stops the run.
+//! every item stops the run. The second half asks its own questions through the same method.
 
 use std::error::Error;
 
 use futures_util::StreamExt;
 use futures_util::stream;
-use rag_core::{ItemId, Llm, LlmError, Question};
+use rag_core::{Embedding, ItemId, ItemStore, Llm, LlmError, Question};
+use serde_json::Value;
 
 use super::cache::{Cache, key_of};
-use super::question::{Extraction, SCHEMA, SYSTEM_PROMPT, input_for};
-use super::{ConceptError, ConceptExtractor, SkippedItem};
+use super::question::{Extraction, SCHEMA, SYSTEM_PROMPT, input_for, related_material};
+use super::{ConceptError, ConceptExtractor, EmbeddedItems, SkippedItem};
 use crate::ingest::items::Item;
 
 const CALLS_AT_A_TIME: usize = 4;
-/// A question that fails is asked once more before its item is skipped.
-const TRIES_FOR_ONE_ITEM: usize = 2;
+/// How many of the stored items nearest to a lone item are added to its question.
+const RELATED_ITEMS_KEPT: usize = 5;
+/// One more is looked at than is kept, because one of them is the item itself, which is already
+/// stored.
+const RELATED_ITEMS_SEARCHED: usize = RELATED_ITEMS_KEPT + 1;
+/// A question that fails is asked once more before it counts as failed.
+const TRIES_FOR_ONE_QUESTION: usize = 2;
 
 /// What the first half found, with the items in the order they came in.
 #[derive(Default)]
@@ -26,34 +32,56 @@ pub(super) struct Answers {
     pub skipped: Vec<SkippedItem>,
 }
 
-struct ItemRead {
-    llm_calls: usize,
-    outcome: Outcome,
+/// How a question was answered, and how many times the model was asked for it.
+pub(super) struct Reading<T> {
+    pub llm_calls: usize,
+    pub outcome: Outcome<T>,
 }
 
-enum Outcome {
-    Cached(Extraction),
-    Asked(Extraction),
-    Skipped(String),
+pub(super) enum Outcome<T> {
+    Cached(T),
+    Asked(T),
+    /// Both tries failed, and this is why the last one did.
+    Failed(String),
     Stopped(LlmError),
+}
+
+/// A question, and the name that its answer is kept under.
+pub(super) struct KeyedQuestion<'a> {
+    pub key: String,
+    pub question: Question<'a>,
 }
 
 impl<L: Llm> ConceptExtractor<L> {
     /// Asks about every item and returns what was found. The answers come back in item order, so
     /// a stop is seen only after every item before it has been answered and kept.
     ///
+    /// An item that is alone in its document is asked about together with the nearest stored items
+    /// of other documents, so that the model names its concepts as they are named elsewhere.
+    ///
     /// # Errors
     /// - [`ConceptError::Stopped`] at the first item whose question failed in a way that would
     ///   fail every other question too. The items after it are not asked.
     /// - [`ConceptError::Cache`] when the cache folder cannot be used
-    pub(super) async fn read_items(&self, items: &[Item]) -> Result<Answers, ConceptError> {
-        let cache = &Cache::open(&self.cache_folder)?;
+    /// - [`ConceptError::RelatedItems`] when the stored items cannot be searched
+    pub(super) async fn read_items(
+        &self,
+        cache: &Cache,
+        embedded: &EmbeddedItems<'_>,
+        stored_items: &ItemStore,
+    ) -> Result<Answers, ConceptError> {
+        let items = embedded.items;
+        let related = match (items, embedded.vectors) {
+            ([item], [vector]) => related_to(item, vector.clone(), stored_items).await?,
+            _ => String::new(),
+        };
+        let related = related.as_str();
         // Every read is made here, before the stream, and none starts until the stream polls it.
         // Do not make them with a closure inside the stream: the compiler then cannot prove that
         // this future is `Send`, and no caller could spawn an ingest.
         let item_reads: Vec<_> = items
             .iter()
-            .map(|item| async move { (item, self.read_one(cache, item).await) })
+            .map(|item| async move { (item, self.read_one(cache, item, related).await) })
             .collect();
         let mut reads = stream::iter(item_reads).buffered(CALLS_AT_A_TIME);
         let mut answers = Answers::default();
@@ -69,7 +97,7 @@ impl<L: Llm> ConceptExtractor<L> {
                     answers.extractions.push((item.id, extraction));
                 }
                 Outcome::Asked(extraction) => answers.extractions.push((item.id, extraction)),
-                Outcome::Skipped(reason) => answers.skipped.push(SkippedItem {
+                Outcome::Failed(reason) => answers.skipped.push(SkippedItem {
                     id: item.id,
                     kind: item.payload.kind,
                     page: item.payload.page,
@@ -88,28 +116,65 @@ impl<L: Llm> ConceptExtractor<L> {
         Ok(answers)
     }
 
-    async fn read_one(&self, cache: &Cache, item: &Item) -> Result<ItemRead, ConceptError> {
+    /// `related` is added to the message after the key is made, so it never changes the key.
+    async fn read_one(
+        &self,
+        cache: &Cache,
+        item: &Item,
+        related: &str,
+    ) -> Result<Reading<Extraction>, ConceptError> {
         let input = input_for(item);
-        let question = Question {
-            system_prompt: SYSTEM_PROMPT,
-            schema: SCHEMA,
-            input: &input,
+        let key = key_of(
+            &self.prompt_version,
+            self.llm.model(),
+            Question {
+                system_prompt: SYSTEM_PROMPT,
+                schema: SCHEMA,
+                input: &input,
+            },
+        );
+        let message = format!("{input}{related}");
+        let asked = KeyedQuestion {
+            key,
+            question: Question {
+                system_prompt: SYSTEM_PROMPT,
+                schema: SCHEMA,
+                input: &message,
+            },
         };
-        let key = key_of(&self.prompt_version, self.llm.model(), question);
-        if let Some(extraction) = cache.get(&key)? {
-            return Ok(ItemRead {
+        self.answer(cache, &asked, Extraction::from_value).await
+    }
+
+    /// The answer kept under the key, or else the model's answer to the question, asked up to
+    /// twice. `read` turns a reply into the answer, and a reply it refuses counts as a failed try.
+    /// A good reply is kept, so the question is not asked again.
+    ///
+    /// # Errors
+    /// [`ConceptError::Cache`] when the cache folder cannot be used.
+    pub(super) async fn answer<T, E: Error>(
+        &self,
+        cache: &Cache,
+        asked: &KeyedQuestion<'_>,
+        read: impl Fn(&Value) -> Result<T, E>,
+    ) -> Result<Reading<T>, ConceptError> {
+        let key = asked.key.as_str();
+        let question = asked.question;
+        if let Some(kept) = cache.get(key)?
+            && let Ok(answer) = read(&kept)
+        {
+            return Ok(Reading {
                 llm_calls: 0,
-                outcome: Outcome::Cached(extraction),
+                outcome: Outcome::Cached(answer),
             });
         }
         let mut llm_calls = 0;
         let mut reason = String::new();
-        for _ in 0..TRIES_FOR_ONE_ITEM {
+        for _ in 0..TRIES_FOR_ONE_QUESTION {
             llm_calls += 1;
-            let answer = match self.llm.ask(question).await {
-                Ok(answer) => answer,
+            let reply = match self.llm.ask(question).await {
+                Ok(reply) => reply,
                 Err(error) if error.stops_the_run() => {
-                    return Ok(ItemRead {
+                    return Ok(Reading {
                         llm_calls,
                         outcome: Outcome::Stopped(error),
                     });
@@ -119,20 +184,20 @@ impl<L: Llm> ConceptExtractor<L> {
                     continue;
                 }
             };
-            match Extraction::from_value(&answer) {
-                Ok(extraction) => {
-                    cache.put(&key, &answer)?;
-                    return Ok(ItemRead {
+            match read(&reply) {
+                Ok(answer) => {
+                    cache.put(key, &reply)?;
+                    return Ok(Reading {
                         llm_calls,
-                        outcome: Outcome::Asked(extraction),
+                        outcome: Outcome::Asked(answer),
                     });
                 }
                 Err(error) => reason = chain_of(&error),
             }
         }
-        Ok(ItemRead {
+        Ok(Reading {
             llm_calls,
-            outcome: Outcome::Skipped(reason),
+            outcome: Outcome::Failed(reason),
         })
     }
 }
@@ -147,4 +212,27 @@ fn chain_of(error: &dyn Error) -> String {
         source = cause.source();
     }
     text
+}
+
+/// The related material for an item that is alone in its document: the passages of the nearest
+/// stored items that belong to other documents. It is empty when there are none.
+async fn related_to(
+    item: &Item,
+    vector: Embedding,
+    stored_items: &ItemStore,
+) -> Result<String, ConceptError> {
+    let hits = stored_items
+        .search(vector, None, RELATED_ITEMS_SEARCHED)
+        .await
+        .map_err(|source| ConceptError::RelatedItems {
+            item: item.id,
+            source,
+        })?;
+    // The item is stored before it is asked about, so its own point is among the nearest.
+    let others: Vec<_> = hits
+        .into_iter()
+        .filter(|hit| hit.payload.doc_id != item.payload.doc_id)
+        .take(RELATED_ITEMS_KEPT)
+        .collect();
+    Ok(related_material(&others))
 }

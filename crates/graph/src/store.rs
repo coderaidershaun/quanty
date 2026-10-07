@@ -21,7 +21,8 @@ pub struct ItemNode {
     pub printed_page: Option<String>,
 }
 
-/// A concept as the graph holds it. It belongs to no document.
+/// A concept as the graph holds it. It belongs to no document. It starts with no aliases, and
+/// only [`GraphStore::add_alias`] adds one.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ConceptNode {
     pub id: ConceptId,
@@ -31,7 +32,16 @@ pub struct ConceptNode {
     pub normalised_name: String,
     /// What the concept is, in one line.
     pub definition: String,
-    pub aliases: Vec<String>,
+}
+
+/// One more name for a stored concept.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ConceptAlias {
+    pub concept: ConceptId,
+    /// The name as the item wrote it.
+    pub name: String,
+    /// The name in the form that names are compared in. The concept is found by it.
+    pub normalised_name: String,
 }
 
 /// An item discusses a concept.
@@ -147,7 +157,7 @@ pub enum GraphError {
     },
 
     #[error(
-        "FalkorDB at {url} answered the request to {action} in the graph {graph} with {found}, which is not the id of a concept"
+        "FalkorDB at {url} answered the request to {action} in the graph {graph} with {found}, which is not a concept (an id, a name, a normalised name and a definition)"
     )]
     UnreadableReply {
         url: String,
@@ -194,7 +204,9 @@ pub trait GraphStore {
     /// [`GraphError::Query`] when the store refuses or cannot be reached.
     fn delete_document(&self, id: DocId) -> impl Future<Output = Result<u64, GraphError>> + Send;
 
-    /// Creates the concept node, or writes its values again. Repeating it changes nothing.
+    /// Creates the concept node with no aliases, or writes its name, normalised name and
+    /// definition again. It leaves the aliases of a stored concept as they are. Repeating it
+    /// changes nothing.
     ///
     /// # Errors
     /// [`GraphError::Query`] when the store refuses or cannot be reached.
@@ -224,15 +236,38 @@ pub trait GraphStore {
         relations: &[Relation],
     ) -> impl Future<Output = Result<(), GraphError>> + Send;
 
-    /// The concept whose normalised name is exactly this text, or `None`. The text is compared as
-    /// it is given, so a name that is not in its normalised form finds nothing.
+    /// Adds the name to the concept. A name is not added when the concept already has its
+    /// normalised form, as its name or as an alias, so repeating it changes nothing. A concept
+    /// that is not in the graph is not created.
+    ///
+    /// # Errors
+    /// [`GraphError::Query`] when the store refuses or cannot be reached.
+    fn add_alias(
+        &self,
+        alias: &ConceptAlias,
+    ) -> impl Future<Output = Result<(), GraphError>> + Send;
+
+    /// The concept that has exactly this text as its normalised name or as one of its normalised
+    /// aliases, or `None`. The text is compared as it is given, so a name that is not in its
+    /// normalised form finds nothing.
     ///
     /// # Errors
     /// - [`GraphError::Query`] when the store refuses or cannot be reached
-    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not the id
-    ///   of a concept
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   concept
     fn find_concept_by_name(
         &self,
         normalised_name: &str,
-    ) -> impl Future<Output = Result<Option<ConceptId>, GraphError>> + Send;
+    ) -> impl Future<Output = Result<Option<ConceptNode>, GraphError>> + Send;
+
+    /// The concept with this id, or `None`.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   concept
+    fn concept(
+        &self,
+        id: ConceptId,
+    ) -> impl Future<Output = Result<Option<ConceptNode>, GraphError>> + Send;
 }

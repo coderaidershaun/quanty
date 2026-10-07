@@ -1,17 +1,24 @@
-//! Runs the real `rag-ingest` command twice on the sample chapter, against the real Gemini API,
-//! a throwaway collection of the local Qdrant and a throwaway graph of the local FalkorDB,
-//! because only that shows that the binary reads its key, finds its collection and its graph,
-//! and stores points and nodes that a second run overwrites. The `claude` program is a stand-in
-//! that finds no concept, so only Gemini bills.
+//! Runs the real `rag-ingest` command twice on the sample chapter, and once on the sample
+//! picture, against the real Gemini API, a throwaway collection of the local Qdrant and a
+//! throwaway graph of the local FalkorDB, because only that shows that the binary reads its key,
+//! finds its collection and its graph, stores points and nodes that a second run overwrites, and
+//! embeds a picture with its text. The `claude` program is a stand-in that finds no concept, and
+//! the picture is converted in this process with a stand-in for Sonnet, so only Gemini bills.
 
 use std::collections::BTreeSet;
+use std::ffi::OsString;
 
 use graph::FalkorGraph;
 use graph::testing::size;
+use ocr::convert::convert_image_with;
 use ocr::read_chapter;
 use rag_ingestion::chapter_items;
 
-use crate::support::{self, ThrowawayStores, points_in, size_of_one_document};
+use crate::support::{
+    self, StandInImageServices, ThrowawayStores, points_in, size_of_one_document,
+};
+
+const NOTE: &str = "A chart from a book on option trading.";
 
 const RUN_COMMAND: &str = "set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p rag-ingestion --test integration -- --ignored ingest_live::";
 
@@ -69,4 +76,43 @@ async fn rag_ingest_fills_a_throwaway_collection_twice_live() {
     let ids_again: BTreeSet<&String> = points_again.iter().map(|(id, _)| id).collect();
     assert_eq!(ids_again, ids);
     assert_eq!(size(&graph).await, graph_size, "a second run adds nothing");
+
+    // The command ingests a picture that was converted before, so no model reads it: Gemini
+    // embeds the picture together with its explanation and the note.
+    convert_image_with(
+        &support::sample_picture(),
+        &config.content_folder,
+        &StandInImageServices::default(),
+    )
+    .await
+    .unwrap();
+    let picture_run = throwaway.rag_ingest([
+        support::sample_picture().into_os_string(),
+        OsString::from("--note"),
+        OsString::from(NOTE),
+    ]);
+    assert!(
+        picture_run.status.success(),
+        "the picture run failed: {}",
+        String::from_utf8_lossy(&picture_run.stderr)
+    );
+    let printed = String::from_utf8_lossy(&picture_run.stdout);
+    assert!(
+        printed.contains("document: volatility-surface.png"),
+        "{printed}"
+    );
+    let points_with_picture = points_in(config).await;
+    assert_eq!(points_with_picture.len(), expected_items + 1);
+    let new_points: Vec<_> = points_with_picture
+        .iter()
+        .filter(|(id, _)| !ids.contains(id))
+        .collect();
+    assert_eq!(new_points.len(), 1, "one point more");
+    let payload = &new_points[0].1;
+    assert_eq!(payload["kind"], "figure");
+    assert_eq!(payload["doc_title"], "volatility-surface.png");
+    assert!(
+        payload["text"].as_str().unwrap().ends_with(NOTE),
+        "{payload}"
+    );
 }

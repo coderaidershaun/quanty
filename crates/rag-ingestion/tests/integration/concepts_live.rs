@@ -25,11 +25,11 @@ fn require_prod_api() {
     );
 }
 
-fn stdout_of(output: &Output) -> String {
+pub(crate) fn stdout_of(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
-fn stderr_of(output: &Output) -> String {
+pub(crate) fn stderr_of(output: &Output) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
 
@@ -66,7 +66,7 @@ fn describe(stored: &StoredConceptGraph) -> String {
 }
 
 /// The number after `claude calls made: ` in the summary, and the number after `cache hits: `.
-fn calls_and_cache_hits(stdout: &str) -> (usize, usize) {
+pub(crate) fn calls_and_cache_hits(stdout: &str) -> (usize, usize) {
     let line = stdout
         .lines()
         .find_map(|line| line.strip_prefix("claude calls made: "))

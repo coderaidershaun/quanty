@@ -10,7 +10,6 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use super::ConceptError;
-use super::question::Extraction;
 
 const FILE_EXTENSION: &str = "json";
 
@@ -18,9 +17,11 @@ pub(super) struct Cache {
     folder: PathBuf,
 }
 
-/// The name that an answer is kept under. It is made from the prompt version, the model and
-/// everything that is sent, so a person who edits the prompt or the schema and forgets to raise
-/// the version still gets fresh answers.
+/// The name that an answer is kept under. It is made from the prompt version, the model, the
+/// prompt, the schema and the input, so a person who edits the prompt or the schema and forgets
+/// to raise the version still gets fresh answers. The caller leaves out of the input what only
+/// helps the asking, such as the related material of an item that is alone in its document. With
+/// that in the name, the same item would be asked about again each time the stores had changed.
 pub(super) fn key_of(prompt_version: &str, model: &str, question: Question<'_>) -> String {
     let mut hasher = Sha256::new();
     for part in [
@@ -61,22 +62,20 @@ impl Cache {
         self.folder.join(key).with_extension(FILE_EXTENSION)
     }
 
-    /// The kept answer, or `None` when there is none. A file that is not JSON, or does not fit
-    /// the reply, counts as no answer: the next good answer overwrites it.
+    /// The kept answer, or `None` when there is none. A file that is not JSON counts as no answer:
+    /// the next good answer overwrites it. The caller checks that the answer fits the reply it
+    /// expects, and counts one that does not fit as no answer too.
     ///
     /// # Errors
     /// [`ConceptError::Cache`] when the file exists but cannot be read.
-    pub(super) fn get(&self, key: &str) -> Result<Option<Extraction>, ConceptError> {
+    pub(super) fn get(&self, key: &str) -> Result<Option<Value>, ConceptError> {
         let path = self.path_of(key);
         let bytes = match fs::read(&path) {
             Ok(bytes) => bytes,
             Err(source) if source.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(source) => return Err(ConceptError::Cache { path, source }),
         };
-        let extraction = serde_json::from_slice::<Value>(&bytes)
-            .ok()
-            .and_then(|value| Extraction::from_value(&value).ok());
-        Ok(extraction)
+        Ok(serde_json::from_slice(&bytes).ok())
     }
 
     /// Keeps the answer exactly as the model gave it. It is written under a temporary name and

@@ -1,8 +1,10 @@
 //! Converts a whole chapter PDF into its folder of pages: cut the pages out, convert them a few
-//! at a time, and write `chapter.json` last. A finished chapter is never converted again.
+//! at a time, and write `chapter.json` last. A finished chapter is never converted again. A
+//! picture that stands alone is converted on its own, without a chapter.
 
 mod checks;
 mod figure;
+mod image;
 mod page;
 mod poppler;
 pub mod reply;
@@ -28,6 +30,7 @@ use page::convert_page;
 use services::{ClaudeError, LiveServices, PageServices, PageSource, ServiceError};
 
 pub use checks::{PieceRef, ReplyFault};
+pub use image::{ConvertedImage, convert_image, convert_image_with};
 pub use page::PageError;
 pub use poppler::PopplerError;
 pub use summary::{
@@ -67,6 +70,27 @@ pub enum ConvertError {
 
     #[error("the outside services could not be started")]
     Services(#[from] ServiceError),
+
+    #[error(
+        "{} is not a picture that can be read: a picture must be a PNG or a JPEG, judging by its file name",
+        path.display()
+    )]
+    NotAPicture { path: PathBuf },
+
+    #[error("could not read the picture {}", path.display())]
+    PictureUnreadable {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("the reply for the picture {} was rejected twice", picture.display())]
+    ImageReplyRejected {
+        picture: PathBuf,
+        /// What was wrong with the second reply.
+        #[source]
+        fault: ReplyFault,
+    },
 
     #[error("page {position} could not be converted (its working folder is {})", folder.display())]
     PageFailed {

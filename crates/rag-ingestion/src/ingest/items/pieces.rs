@@ -75,7 +75,7 @@ fn lead_in<'a>(chapter: &'a Chapter, formula: &ChapterPiece) -> Option<&'a str> 
         .map(|piece| piece.content.as_str())
 }
 
-fn join_blocks<'a>(parts: impl IntoIterator<Item = Option<&'a str>>) -> String {
+pub(super) fn join_blocks<'a>(parts: impl IntoIterator<Item = Option<&'a str>>) -> String {
     parts
         .into_iter()
         .flatten()
@@ -85,7 +85,7 @@ fn join_blocks<'a>(parts: impl IntoIterator<Item = Option<&'a str>>) -> String {
 }
 
 /// The parts that exist, joined with a space: a name and a label, or a label and a caption.
-fn label_line(first: Option<&str>, second: Option<&str>) -> Option<String> {
+pub(super) fn label_line(first: Option<&str>, second: Option<&str>) -> Option<String> {
     let line = [first, second]
         .into_iter()
         .flatten()

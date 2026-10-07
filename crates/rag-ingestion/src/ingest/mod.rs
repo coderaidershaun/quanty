@@ -1,7 +1,7 @@
-//! Takes one converted chapter folder from disk to stored points, graph nodes and concepts: read,
-//! map to items, write the graph, embed, store, extract the concepts. Running it again on the
-//! same chapter writes the same points and the same nodes over themselves, and asks the language
-//! model nothing.
+//! Takes one converted chapter folder, or one picture that stands alone, from disk to stored
+//! points, graph nodes and concepts: read, map to items, write the graph, embed, store, extract
+//! the concepts. Running it again on the same chapter or picture writes the same points and the
+//! same nodes over themselves, and asks the language model nothing.
 
 mod concepts;
 mod items;
@@ -13,10 +13,14 @@ use graph::{DocumentNode, GraphError, GraphStore, ItemNode};
 use ocr::ReadChapterError;
 use rag_core::{DocumentInput, EmbedError, Embedder, ItemPoint, Llm, StoreError};
 
-pub use concepts::{ConceptError, ConceptExtractor, ConceptSummary, EXTRACTION_MODEL, SkippedItem};
-pub use items::{Item, chapter_items};
+pub use concepts::{
+    ASK_SCORE, ConceptError, ConceptExtractor, ConceptSummary, EXTRACTION_MODEL, LINK_SCORE,
+    SkippedItem,
+};
+pub use items::{Item, LoneImage, chapter_items, image_items};
 pub use summary::{IngestSummary, ItemCounts};
 
+use concepts::EmbeddedItems;
 use items::{document_id, document_title};
 
 use crate::stores::Stores;
@@ -33,19 +37,19 @@ pub enum IngestError {
     #[error("could not read the converted chapter")]
     Read(#[from] ReadChapterError),
 
-    #[error("could not embed the items of the chapter")]
+    #[error("could not embed the items of the document")]
     Embed(#[from] EmbedError),
 
-    #[error("could not store the items of the chapter")]
+    #[error("could not store the items of the document")]
     Store(#[from] StoreError),
 
-    #[error("could not write the chapter to the graph")]
+    #[error("could not write the document to the graph")]
     Graph(#[from] GraphError),
 
-    #[error("the chapter made {items} items but the embedder returned {vectors} vectors")]
+    #[error("the document made {items} items but the embedder returned {vectors} vectors")]
     VectorCount { items: usize, vectors: usize },
 
-    #[error("could not extract the concepts of the chapter")]
+    #[error("could not extract the concepts of the document")]
     Concepts(#[from] ConceptError),
 }
 
@@ -55,11 +59,16 @@ pub struct Models<E, L> {
     pub concepts: ConceptExtractor<L>,
 }
 
+struct Document {
+    node: DocumentNode,
+    items: Vec<Item>,
+}
+
 /// Reads the chapter in `chapter_folder`, writes its document and items to the graph, embeds the
 /// items, stores them as points, and then writes the concepts that the items discuss to the
 /// graph.
 ///
-/// The collection is prepared and the graph is written before anything is embedded, so a store
+/// The collections are prepared and the graph is written before anything is embedded, so a store
 /// that is down fails the run before an embedding call is paid for. A run that stops after that
 /// leaves the chapter in the graph with no points yet, and running it again stores them. A point
 /// is never stored without its node. Every stored picture path is absolute.
@@ -76,8 +85,9 @@ pub struct Models<E, L> {
 ///   calls fail
 /// - [`IngestError::VectorCount`] when the embedder returns another number of vectors than
 ///   there were items
-/// - [`IngestError::Concepts`] when extraction stops or cannot use its cache folder or the graph.
-///   An item whose questions fail is not an error: the summary names it.
+/// - [`IngestError::Concepts`] when extraction stops, cannot compare two concepts, or cannot use
+///   its cache folder, its decision log or a store. An item whose questions fail is not an error:
+///   the summary names it.
 pub async fn ingest_chapter<E: Embedder, L: Llm, G: GraphStore>(
     chapter_folder: &Path,
     models: &Models<E, L>,
@@ -91,20 +101,58 @@ pub async fn ingest_chapter<E: Embedder, L: Llm, G: GraphStore>(
             source,
         })?;
     let chapter = ocr::read_chapter(&folder)?;
-    let items = chapter_items(&chapter);
-    let items_by_kind = ItemCounts::of(&items);
-    let document = DocumentNode {
-        id: document_id(&chapter.index),
-        title: document_title(&chapter.index),
+    let document = Document {
+        node: DocumentNode {
+            id: document_id(&chapter.index),
+            title: document_title(&chapter.index),
+        },
+        items: chapter_items(&chapter),
     };
+    ingest_items(document, models, stores).await
+}
+
+/// Ingests a picture that stands alone as a document of one figure, in the same steps and with
+/// the same guarantees as [`ingest_chapter`]. The document id is made from the bytes of the
+/// picture, so the same picture with another note, or with none, writes over the same document.
+/// The note is part of the text that is asked about, so another note asks the model again, and
+/// the mentions that the earlier note led to stay until the document is deleted.
+///
+/// # Errors
+/// The same as [`ingest_chapter`], except that there is no chapter to find or read.
+pub async fn ingest_image<E: Embedder, L: Llm, G: GraphStore>(
+    picture: &LoneImage<'_>,
+    models: &Models<E, L>,
+    stores: &Stores<G>,
+) -> Result<IngestSummary, IngestError> {
+    // SMELL: the stored picture path is absolute, so it stops working when the folder of the
+    // converted picture is moved, until the picture is ingested again.
+    let items = image_items(picture);
+    let document = Document {
+        node: DocumentNode {
+            id: items[0].payload.doc_id,
+            title: items[0].payload.doc_title.clone(),
+        },
+        items,
+    };
+    ingest_items(document, models, stores).await
+}
+
+async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
+    document: Document,
+    models: &Models<E, L>,
+    stores: &Stores<G>,
+) -> Result<IngestSummary, IngestError> {
+    let Document { node, items } = document;
+    let items_by_kind = ItemCounts::of(&items);
     let nodes: Vec<ItemNode> = items.iter().map(item_node).collect();
 
     stores.items.ensure_collection().await?;
+    stores.concepts.ensure_collection().await?;
     // SMELL: nothing removes the item nodes of an earlier run either, with their `NEXT` edges. A
     // chapter that is cut into items differently ends up with two chains of items in the graph,
     // until its document is deleted and ingested again.
-    stores.graph.upsert_document(&document).await?;
-    stores.graph.upsert_items(document.id, &nodes).await?;
+    stores.graph.upsert_document(&node).await?;
+    stores.graph.upsert_items(node.id, &nodes).await?;
 
     let inputs: Vec<DocumentInput> = items.iter().map(|item| item.input.clone()).collect();
     let vectors = models.embedder.embed_document(&inputs).await?;
@@ -117,10 +165,10 @@ pub async fn ingest_chapter<E: Embedder, L: Llm, G: GraphStore>(
 
     let points: Vec<ItemPoint> = items
         .iter()
-        .zip(vectors)
+        .zip(&vectors)
         .map(|(item, vector)| ItemPoint {
             id: item.id,
-            vector,
+            vector: vector.clone(),
             payload: item.payload.clone(),
         })
         .collect();
@@ -133,11 +181,18 @@ pub async fn ingest_chapter<E: Embedder, L: Llm, G: GraphStore>(
     // SMELL: a `claude` that cannot answer at all, because a key is set, it is not signed in or
     // it is not installed, is found only here, after the embedding of the whole chapter was paid
     // for. Running the command again pays for the embedding again.
-    let concepts = models.concepts.extract(&items, &stores.graph).await?;
+    let embedded = EmbeddedItems {
+        items: &items,
+        vectors: &vectors,
+    };
+    let concepts = models
+        .concepts
+        .extract(&embedded, &models.embedder, stores)
+        .await?;
 
     Ok(IngestSummary {
-        doc_id: document.id,
-        doc_title: document.title,
+        doc_id: node.id,
+        doc_title: node.title,
         collection: stores.items.collection().to_owned(),
         items_by_kind,
         points_in_collection,

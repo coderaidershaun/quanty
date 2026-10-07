@@ -1,5 +1,5 @@
 //! The identifier of a concept. A concept has no source to compute an id from, so its id is drawn
-//! at random once and the concept is found again by its name.
+//! at random once and the concept is found again by its name or one of its aliases.
 
 use std::fmt;
 use std::str::FromStr;

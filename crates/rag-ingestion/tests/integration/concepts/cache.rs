@@ -5,8 +5,7 @@ use graph::testing::{size, stored_concept_graph};
 use rag_ingestion::{ConceptSummary, Models, ingest_chapter};
 
 use super::{files_in, finding_volatility, items_of};
-use crate::stand_in_llm::StandInLlm;
-use crate::support::{self, ThrowawayStores};
+use crate::support::{self, StandInLlm, ThrowawayStores};
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored concepts::"]

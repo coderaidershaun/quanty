@@ -5,12 +5,12 @@ use std::collections::BTreeSet;
 
 use graph::testing::{StoredConceptGraph, stored_concept_graph};
 use rag_core::LlmError;
-use rag_ingestion::{ConceptError, IngestError, Models, ingest_chapter};
+use rag_ingestion::{ConceptError, ConceptSummary, IngestError, Models, ingest_chapter};
 use serde_json::json;
 
+use super::script::{Comparisons, SCRIPT, scripted};
 use super::{files_in, finding_volatility, items_of, positions_of};
-use crate::stand_in_llm::StandInLlm;
-use crate::support::{self, ThrowawayStores, assert_graph_holds_only, points_in};
+use crate::support::{self, StandInLlm, ThrowawayStores, assert_graph_holds_only, points_in};
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored concepts::"]
@@ -190,4 +190,99 @@ async fn a_usage_limit_stops_the_run_and_the_next_run_continues_from_the_cache()
         "the chapter must have more items than are asked at once"
     );
     assert_eq!(at_the_limit.calls(), 4, "no item is asked after the stop");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored concepts::"]
+async fn a_comparison_that_cannot_be_made_stops_the_ingest_and_the_next_run_goes_on() {
+    let run = scripted("resolution-stops").await;
+    let chapter = support::intuition_chapter();
+    let m = SCRIPT.len();
+
+    // The model fails twice to compare price variability with volatility. Nothing is guessed.
+    let (models, model) = run.models(Comparisons::Fail);
+    let error = ingest_chapter(&chapter, &models, &run.stores)
+        .await
+        .unwrap_err();
+    match &error {
+        IngestError::Concepts(ConceptError::Comparison {
+            new_name,
+            stored_name,
+            ..
+        }) => assert_eq!(
+            (new_name.as_str(), stored_name.as_str()),
+            ("price variability", "volatility")
+        ),
+        other => panic!("expected the run to stop at the comparison, got {other:?}"),
+    }
+    let message = chain_of(&error);
+    assert!(message.contains("run the same command again"), "{message}");
+    assert_eq!(model.calls(), m + 2, "the comparison is asked twice");
+    assert_eq!(
+        files_in(&run.throwaway.config().concept_cache_folder),
+        m,
+        "the answers about the items are kept and the failed comparison is not"
+    );
+    // What was linked before the stop stays: the first four items, and the alias of the fourth.
+    let stored = stored_concept_graph(&run.stores.graph).await;
+    assert_eq!(stored.concepts.len(), 1);
+    assert_eq!(stored.concepts[0].aliases, ["vol"]);
+    assert_eq!(stored.mentions.len(), 4);
+
+    // A usage limit stops the run too, at the same item, and is never asked again.
+    let (models, model) = run.models(Comparisons::UsageLimit);
+    let error = ingest_chapter(&chapter, &models, &run.stores)
+        .await
+        .unwrap_err();
+    match &error {
+        IngestError::Concepts(ConceptError::Stopped {
+            read,
+            items,
+            source: LlmError::UsageLimit { .. },
+        }) => assert_eq!((*read, *items), (4, m)),
+        other => panic!("expected the run to stop at the usage limit, got {other:?}"),
+    }
+    assert_eq!(
+        model.calls(),
+        1,
+        "no extraction question and one comparison"
+    );
+
+    // The next run goes on from there and ends as an undisturbed run ends.
+    let (models, model) = run.models(Comparisons::Answer);
+    let third = ingest_chapter(&chapter, &models, &run.stores)
+        .await
+        .unwrap();
+    assert_eq!(
+        third.concepts,
+        ConceptSummary {
+            concepts_created: 2,
+            concepts_linked: 6,
+            mentions_written: 7,
+            relations_written: 0,
+            relations_dropped: 0,
+            llm_calls: 2,
+            cache_hits: m,
+            skipped_items: Vec::new(),
+        }
+    );
+    assert_eq!(model.calls(), 2, "only the two comparisons are asked");
+    let stored = stored_concept_graph(&run.stores.graph).await;
+    let concepts: Vec<(&str, &[String])> = stored
+        .concepts
+        .iter()
+        .map(|concept| (concept.normalised_name.as_str(), concept.aliases.as_slice()))
+        .collect();
+    assert_eq!(
+        concepts,
+        [
+            ("interest rate", &[][..]),
+            ("realised variance", &[][..]),
+            (
+                "volatility",
+                &["vol".to_owned(), "price variability".to_owned()][..]
+            ),
+        ]
+    );
+    assert_eq!(stored.mentions.len(), 7);
 }

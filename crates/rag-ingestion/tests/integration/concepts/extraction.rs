@@ -10,8 +10,7 @@ use rag_ingestion::{ConceptSummary, ingest_chapter};
 use serde_json::{Value, json};
 
 use super::{input_of, items_of, positions_of};
-use crate::stand_in_llm::StandInLlm;
-use crate::support::{self, ThrowawayStores};
+use crate::support::{self, StandInLlm, ThrowawayStores};
 
 /// Five ways to write one name: an en dash, a hyphen, a space, an em dash with a full stop, and
 /// another hyphen character with spaces around and inside.

@@ -1,36 +1,56 @@
 //! Reads every item for the concepts it discusses and writes them to the graph: the concepts, the
-//! items that mention them, and the relations between them. Each answer of the model is kept in a
-//! folder, so that the same question is asked once.
+//! items that mention them, and the relations between them. A name that means a stored concept
+//! is linked to it and not made again. Each answer of the model is kept in a folder, so that the
+//! same question is asked once, and each decision about a name is added to a log.
 
 mod ask;
 mod cache;
+mod decision_log;
 mod link;
 mod question;
 mod resolve;
+mod same_concept;
 
 use std::path::PathBuf;
 
 use graph::{GraphError, GraphStore};
-use rag_core::{ItemId, ItemKind, Llm, LlmError};
+use rag_core::{
+    ConceptId, Config, EmbedError, Embedder, Embedding, ItemId, ItemKind, Llm, LlmError, StoreError,
+};
+
+use cache::Cache;
+use decision_log::DecisionLog;
+use resolve::Resolver;
 
 pub use question::EXTRACTION_MODEL;
+pub use resolve::{ASK_SCORE, LINK_SCORE};
 
 use super::items::Item;
+use crate::stores::Stores;
+
+/// The items of one document and the vector of each one, in the same order.
+pub(super) struct EmbeddedItems<'a> {
+    pub items: &'a [Item],
+    pub vectors: &'a [Embedding],
+}
 
 /// Reads items for the concepts they discuss, and keeps every good answer in a folder so that the
 /// same question is asked once.
 pub struct ConceptExtractor<L> {
     llm: L,
     cache_folder: PathBuf,
+    decision_log: PathBuf,
     prompt_version: String,
 }
 
 impl<L: Llm> ConceptExtractor<L> {
-    /// Keeps the answers in `cache_folder`, which is made when it is missing.
-    pub fn new(llm: L, cache_folder: impl Into<PathBuf>) -> Self {
+    /// Keeps the answers in the cache folder of the config and adds the decisions to its decision
+    /// log. Both are made when they are missing.
+    pub fn new(llm: L, config: &Config) -> Self {
         ConceptExtractor {
             llm,
-            cache_folder: cache_folder.into(),
+            cache_folder: config.concept_cache_folder.clone(),
+            decision_log: config.concept_decision_log.clone(),
             prompt_version: question::PROMPT_VERSION.to_owned(),
         }
     }
@@ -43,23 +63,41 @@ impl<L: Llm> ConceptExtractor<L> {
     }
 
     /// Asks about every item, a few at a time, and then writes what was found to the graph in
-    /// item order.
+    /// item order, one concept at a time, so that a later concept sees an earlier one.
     ///
     /// # Errors
-    /// - [`ConceptError::Stopped`] when the question of an item failed in a way that would fail
-    ///   every other question too. Nothing is written to the graph then, and the answers so far
-    ///   are kept.
-    /// - [`ConceptError::Cache`] when the cache folder cannot be used
-    /// - [`ConceptError::Graph`] when the graph cannot be read or written
-    pub(super) async fn extract<G: GraphStore>(
+    /// - [`ConceptError::Stopped`] when a question failed in a way that would fail every other
+    ///   question too. A stop while the items are asked about writes nothing to the graph. A stop
+    ///   while the concepts are linked leaves what was linked before it. The answers so far are
+    ///   kept either way, so the next run goes on from them.
+    /// - [`ConceptError::Comparison`] when the model failed twice to compare two concepts
+    /// - [`ConceptError::Cache`] and [`ConceptError::DecisionLog`] when the cache folder or the
+    ///   decision log cannot be used
+    /// - [`ConceptError::RelatedItems`] when the stored items cannot be searched
+    /// - [`ConceptError::Embed`], [`ConceptError::ConceptStore`], [`ConceptError::Graph`] and
+    ///   [`ConceptError::PointWithoutNode`] when a concept cannot be resolved
+    pub(super) async fn extract<E: Embedder, G: GraphStore>(
         &self,
-        items: &[Item],
-        graph: &G,
+        embedded: &EmbeddedItems<'_>,
+        embedder: &E,
+        stores: &Stores<G>,
     ) -> Result<ConceptSummary, ConceptError> {
-        let answers = self.read_items(items).await?;
-        let mut summary = link::write(graph, &answers.extractions).await?;
-        summary.llm_calls = answers.llm_calls;
-        summary.cache_hits = answers.cache_hits;
+        let cache = Cache::open(&self.cache_folder)?;
+        // Opened before the first question, so that a log that cannot be used stops the run before
+        // anything is paid for.
+        let log = DecisionLog::open(&self.decision_log)?;
+        let answers = self.read_items(&cache, embedded, &stores.items).await?;
+        let resolver = Resolver {
+            extractor: self,
+            cache: &cache,
+            embedder,
+            stores,
+            log: &log,
+        };
+        let mut summary =
+            link::write(&resolver, &answers.extractions, embedded.items.len()).await?;
+        summary.llm_calls += answers.llm_calls;
+        summary.cache_hits += answers.cache_hits;
         summary.skipped_items = answers.skipped;
         Ok(summary)
     }
@@ -76,8 +114,9 @@ pub struct ConceptSummary {
     /// A relation that names a concept that is neither in the same reply nor stored, or that
     /// joins a concept to itself.
     pub relations_dropped: usize,
-    /// Every question that was sent, second tries included.
+    /// Every question that was sent, second tries included, about items and about two concepts.
     pub llm_calls: usize,
+    /// Questions about items and about two concepts that a kept answer settled.
     pub cache_hits: usize,
     pub skipped_items: Vec<SkippedItem>,
 }
@@ -95,13 +134,56 @@ pub struct SkippedItem {
 #[derive(thiserror::Error, Debug)]
 pub enum ConceptError {
     #[error(
-        "concept extraction stopped after {read} of {items} items; the items of the chapter are stored and can be searched, and the answers so far are kept, so run the same command again to go on"
+        "concept extraction stopped after {read} of {items} items; the items of the document are stored and can be searched, and the answers so far are kept, so run the same command again to go on"
     )]
     Stopped {
+        /// How many items were done before the stop.
         read: usize,
         items: usize,
         #[source]
         source: LlmError,
+    },
+
+    #[error(
+        "claude could not say whether {new_name:?} and {stored_name:?} are the same concept ({reason}); nothing was guessed, the items are stored and what was linked so far stays, so run the same command again"
+    )]
+    Comparison {
+        new_name: String,
+        stored_name: String,
+        reason: String,
+    },
+
+    #[error("could not embed the concept {name:?}")]
+    Embed {
+        name: String,
+        #[source]
+        source: EmbedError,
+    },
+
+    #[error("could not read or write the concepts collection")]
+    ConceptStore(#[from] StoreError),
+
+    #[error("could not search the stored items for material related to the item {item}")]
+    RelatedItems {
+        item: ItemId,
+        #[source]
+        source: StoreError,
+    },
+
+    #[error(
+        "the concepts collection {collection} holds the concept {name:?} ({id}) that the graph does not hold; FALKORDB_GRAPH and QDRANT_CONCEPTS_COLLECTION must belong together; if the graph was cleared, remove the collection {collection} too and ingest the documents again"
+    )]
+    PointWithoutNode {
+        collection: String,
+        name: String,
+        id: ConceptId,
+    },
+
+    #[error("could not use the decision log at {}", path.display())]
+    DecisionLog {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
     },
 
     #[error("could not use the answer cache at {}", path.display())]

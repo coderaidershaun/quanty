@@ -56,14 +56,19 @@ impl Ledger {
             CallStep::Transcribe => self.tally.transcribe += 1,
         }
         self.tally.cost_usd += usage.cost_usd;
-        self.records.push(CallRecord {
-            step,
-            model: usage.model.clone(),
-            cost_usd: usage.cost_usd,
-            output_tokens: usage.output_tokens,
-            thinking_tokens: usage.thinking_tokens,
-            seconds: usage.seconds,
-        });
+        self.records.push(call_record(step, usage));
+    }
+}
+
+/// What a paid call leaves in the saved files.
+pub(super) fn call_record(step: CallStep, usage: &CallUsage) -> CallRecord {
+    CallRecord {
+        step,
+        model: usage.model.clone(),
+        cost_usd: usage.cost_usd,
+        output_tokens: usage.output_tokens,
+        thinking_tokens: usage.thinking_tokens,
+        seconds: usage.seconds,
     }
 }
 

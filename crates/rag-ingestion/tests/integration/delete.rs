@@ -11,9 +11,8 @@ use ocr::read_chapter;
 use rag_ingestion::{DeleteSummary, Item, chapter_items, ingest_chapter};
 use serde_json::json;
 
-use crate::stand_in_llm::StandInLlm;
 use crate::support::{
-    self, ThrowawayStores, assert_document_stored, assert_graph_holds_only, points_in,
+    self, StandInLlm, ThrowawayStores, assert_document_stored, assert_graph_holds_only, points_in,
 };
 
 fn items_of(chapter_folder: &std::path::Path) -> Vec<Item> {

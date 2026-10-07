@@ -2,6 +2,7 @@
 //! carries, the text that is sent for an item, and the checks that a reply must pass.
 
 use graph::{RelationKind, UnknownRelationKind};
+use rag_core::ItemHit;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -24,6 +25,34 @@ pub(super) fn input_for(item: &Item) -> String {
         return item.input.text.clone();
     }
     format!("{}\n\n{}", item.input.title, item.input.text)
+}
+
+/// The line that opens the part of a message that holds material from other documents.
+const RELATED_HEADING: &str = "Possibly related material";
+
+/// The part that is added to the message of an item that has no neighbour in its own document: the
+/// passages of the stored items nearest to it, for the model to take its vocabulary from. It is
+/// empty when there are no passages.
+pub(super) fn related_material(hits: &[ItemHit]) -> String {
+    if hits.is_empty() {
+        return String::new();
+    }
+    let passages: Vec<String> = hits
+        .iter()
+        .enumerate()
+        .map(|(index, hit)| {
+            let payload = &hit.payload;
+            format!(
+                "{}. {}, {}, page {}\n{}",
+                index + 1,
+                payload.doc_title,
+                payload.kind.as_str(),
+                payload.page,
+                payload.text
+            )
+        })
+        .collect();
+    format!("\n\n{RELATED_HEADING}\n\n{}", passages.join("\n\n"))
 }
 
 /// What a good reply holds.

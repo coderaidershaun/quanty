@@ -125,6 +125,11 @@ pub enum ReplyFault {
         "{piece} has bounds that cannot be right: {seen}; give left, top, right and bottom as whole numbers from 0 to 1000, measured from the very edges of the page picture, left and right in thousandths of the picture's width from its left edge, top and bottom in thousandths of the picture's height from its top edge, with left less than right, top less than bottom, and at least {MIN_FIGURE_SIDE} between each pair, around the whole figure"
     )]
     BadFigureBounds { piece: PieceRef, seen: &'static str },
+
+    #[error(
+        "the whole picture is one figure, so the reply must hold exactly one figure piece, but it holds {found}; describe the whole picture in that one piece"
+    )]
+    NotOneFigure { found: usize },
 }
 
 fn location(piece: Option<&PieceRef>, field: &str) -> String {

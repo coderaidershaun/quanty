@@ -1,13 +1,15 @@
-//! Shared by the tests of this crate: where the committed chapters are, an embedder that makes
-//! up vectors, and a collection, a graph and a cache folder that are removed when the test ends.
+//! Shared by the tests of this crate: where the samples are, stores and folders that are removed
+//! when the test ends, the stand-ins for the paid calls, and reads of the decision log.
 
-use std::collections::hash_map::DefaultHasher;
+mod decisions;
+mod stand_in_embedder;
+mod stand_in_image_services;
+mod stand_in_llm;
+
 use std::ffi::OsStr;
 use std::fs;
-use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use graph::FalkorGraph;
@@ -17,14 +19,18 @@ use graph::testing::{
 use qdrant_client::qdrant::ScrollPointsBuilder;
 use qdrant_client::qdrant::point_id::PointIdOptions;
 use qdrant_client::{Payload, Qdrant};
-use rag_core::{
-    Config, DocumentInput, EMBEDDING_DIMENSIONS, EmbedError, Embedder, Embedding, ItemStore, Llm,
-};
+use rag_core::{ConceptStore, Config, ItemStore, Llm};
 use rag_ingestion::{ConceptExtractor, Item, Models, Stores};
 use serde_json::Value;
 use tempfile::TempDir;
 
+pub use decisions::{decision_for_mention, decisions_in, mentions_of};
+pub use stand_in_embedder::{StandInEmbedder, first_axis, vector_at};
+pub use stand_in_image_services::{CAPTION, LABEL, StandInImageServices};
+pub use stand_in_llm::StandInLlm;
+
 const THROWAWAY_PREFIX: &str = "test-items-";
+const THROWAWAY_CONCEPTS_PREFIX: &str = "test-concepts-";
 
 /// What the stand-in `claude` prints when the binary runs: no item discusses a concept.
 const STAND_IN_ANSWER: &str = r#"{"type":"result","subtype":"success","is_error":false,"structured_output":{"concepts":[],"relations":[]},"total_cost_usd":0}"#;
@@ -49,62 +55,21 @@ pub fn in_depth_chapter() -> PathBuf {
     content_folder().join("quanty-sample-notes/chapter-2")
 }
 
+/// A chart of a volatility surface, cut from a page of a book on option trading.
+pub fn sample_picture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/images/volatility-surface.png")
+}
+
 fn stand_in_claude_folder() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/stand-in-claude")
 }
 
-/// Keeps every input it is given, and answers each with a vector that depends on the input, so
-/// that different items get different points.
-#[derive(Default)]
-pub struct StandInEmbedder {
-    received: Mutex<Vec<DocumentInput>>,
-}
-
-impl StandInEmbedder {
-    pub fn received(&self) -> Vec<DocumentInput> {
-        self.received.lock().unwrap().clone()
-    }
-}
-
-impl Embedder for StandInEmbedder {
-    async fn embed_document(&self, inputs: &[DocumentInput]) -> Result<Vec<Embedding>, EmbedError> {
-        self.received.lock().unwrap().extend(inputs.iter().cloned());
-        Ok(inputs
-            .iter()
-            .map(|input| unit_vector(&format!("{}|{}|{:?}", input.title, input.text, input.image)))
-            .collect())
-    }
-
-    async fn embed_query(&self, query: &str) -> Result<Embedding, EmbedError> {
-        Ok(unit_vector(query))
-    }
-}
-
-fn unit_vector(seed_text: &str) -> Embedding {
-    let mut hasher = DefaultHasher::new();
-    seed_text.hash(&mut hasher);
-    let mut state = hasher.finish();
-    let numbers: Vec<f32> = (0..EMBEDDING_DIMENSIONS)
-        .map(|_| {
-            state = state
-                .wrapping_mul(6_364_136_223_846_793_005)
-                .wrapping_add(1_442_695_040_888_963_407);
-            (state >> 40) as f32 / (1u64 << 24) as f32 - 0.5
-        })
-        .collect();
-    let norm = numbers
-        .iter()
-        .map(|number| number * number)
-        .sum::<f32>()
-        .sqrt();
-    numbers.into_iter().map(|number| number / norm).collect()
-}
-
-/// A config that stores into a collection, a graph and a cache folder that no one else uses. The
-/// collection and the graph are deleted when this is dropped, and the cache folder goes with a
-/// temporary folder, so they go away also when the test fails. It never names the real
-/// collection, the real graph or the real cache folder, and every store a test touches is reached
-/// through this config and from nowhere else.
+/// A config that stores into two collections, a graph, a cache folder, a decision log and a
+/// content folder that no one else uses. The collections and the graph are deleted when this is
+/// dropped, and the folders and the log go with a temporary folder, so they go away also when the
+/// test fails. It never names a real collection, the real graph, the real cache folder, the real
+/// decision log or the real content folder, and every store a test touches is reached through
+/// this config and from nowhere else.
 pub struct ThrowawayStores {
     config: Config,
     temporary: TempDir,
@@ -125,25 +90,33 @@ impl ThrowawayStores {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let name = format!(
-            "{THROWAWAY_PREFIX}{test_name}-{}-{nanoseconds}",
-            std::process::id()
-        );
+        let stamp = format!("{test_name}-{}-{nanoseconds}", std::process::id());
         let settings = Config::load().expect("the settings should load");
         let graph = ThrowawayGraph::new(&settings, test_name);
         let temporary = tempfile::tempdir().expect("a temporary folder should be made");
         let config = Config {
-            items_collection: name,
+            items_collection: format!("{THROWAWAY_PREFIX}{stamp}"),
+            concepts_collection: format!("{THROWAWAY_CONCEPTS_PREFIX}{stamp}"),
             falkordb_graph: graph.name().to_owned(),
             concept_cache_folder: temporary.path().join("cache"),
+            concept_decision_log: temporary.path().join("concept-decisions.jsonl"),
+            content_folder: temporary.path().join("content"),
             ..settings
         };
-        // The names are copied into the config by hand. Without these three checks, a copy that
-        // is missing would leave the real names in the config, and the tests would write to the
-        // real graph, the real collection and the real cache folder.
+        // The names are copied into the config by hand. Without these checks, a copy that is
+        // missing would leave the real names in the config, and the tests would write to the real
+        // collections, the real graph, the real cache folder, the real decision log and the real
+        // content folder.
         assert_eq!(config.falkordb_graph, graph.name());
         assert!(config.items_collection.starts_with(THROWAWAY_PREFIX));
+        assert!(
+            config
+                .concepts_collection
+                .starts_with(THROWAWAY_CONCEPTS_PREFIX)
+        );
         assert!(config.concept_cache_folder.starts_with(temporary.path()));
+        assert!(config.concept_decision_log.starts_with(temporary.path()));
+        assert!(config.content_folder.starts_with(temporary.path()));
         Self {
             config,
             temporary,
@@ -155,23 +128,33 @@ impl ThrowawayStores {
         &self.config
     }
 
-    /// Both stores, opened with this config.
+    /// The three stores, opened with this config.
     pub async fn connect(&self) -> Stores<FalkorGraph> {
         Stores {
             items: ItemStore::connect(&self.config).expect("the item store should open"),
             graph: FalkorGraph::connect(&self.config)
                 .await
                 .expect("FalkorDB should answer"),
+            concepts: ConceptStore::connect(&self.config).expect("the concept store should open"),
         }
     }
 
     /// Both models of an ingest: an embedder that makes up vectors, and the concept extractor
-    /// with this language model and the cache folder of this config. A test builds its models
-    /// here and nowhere else, so it never names a cache folder by hand.
+    /// with this language model and the cache folder and decision log of this config. A test
+    /// builds its models here and nowhere else, so it never names those paths by hand.
     pub fn models<L: Llm>(&self, llm: L) -> Models<StandInEmbedder, L> {
+        self.models_with_embedder(StandInEmbedder::default(), llm)
+    }
+
+    /// Like [`ThrowawayStores::models`], with an embedder that the test has set up.
+    pub fn models_with_embedder<L: Llm>(
+        &self,
+        embedder: StandInEmbedder,
+        llm: L,
+    ) -> Models<StandInEmbedder, L> {
         Models {
-            embedder: StandInEmbedder::default(),
-            concepts: ConceptExtractor::new(llm, &self.config.concept_cache_folder),
+            embedder,
+            concepts: ConceptExtractor::new(llm, &self.config),
         }
     }
 
@@ -183,7 +166,7 @@ impl ThrowawayStores {
     }
 
     /// Like [`ThrowawayStores::rag_ingest`], but the command starts the real `claude`, so it
-    /// spends usage of the subscription. Only the live concept test calls it.
+    /// spends usage of the subscription. Only the live tests of concepts call it.
     pub fn rag_ingest_asking_claude(
         &self,
         arguments: impl IntoIterator<Item = impl AsRef<OsStr>>,
@@ -203,18 +186,25 @@ impl ThrowawayStores {
                 "QDRANT_ITEMS_COLLECTION",
                 self.config.items_collection.as_str(),
             ),
+            (
+                "QDRANT_CONCEPTS_COLLECTION",
+                self.config.concepts_collection.as_str(),
+            ),
             ("FALKORDB_GRAPH", self.config.falkordb_graph.as_str()),
             (
                 "CONCEPT_CACHE_DIR",
-                self.config
-                    .concept_cache_folder
-                    .to_str()
-                    .expect("the cache folder should be UTF-8"),
+                path_text(&self.config.concept_cache_folder),
             ),
+            (
+                "CONCEPT_DECISION_LOG",
+                path_text(&self.config.concept_decision_log),
+            ),
+            ("CONTENT_DIR", path_text(&self.config.content_folder)),
         ];
         // The setting names are typed by hand. A mistyped name would make the command fall back
-        // to the real collection, the real graph and the real cache folder, so read the names
-        // back the way the command reads them before it starts.
+        // to the real collections, the real graph, the real cache folder, the real decision log
+        // and the real content folder, so read the names back the way the command reads them
+        // before it starts.
         let read_back = Config::from_sources(
             |name| {
                 settings
@@ -226,11 +216,20 @@ impl ThrowawayStores {
         )
         .expect("the settings should read back");
         assert_eq!(read_back.items_collection, self.config.items_collection);
+        assert_eq!(
+            read_back.concepts_collection,
+            self.config.concepts_collection
+        );
         assert_eq!(read_back.falkordb_graph, self.config.falkordb_graph);
         assert_eq!(
             read_back.concept_cache_folder,
             self.config.concept_cache_folder
         );
+        assert_eq!(
+            read_back.concept_decision_log,
+            self.config.concept_decision_log
+        );
+        assert_eq!(read_back.content_folder, self.config.content_folder);
         let mut command = Command::new(env!("CARGO_BIN_EXE_rag-ingest"));
         command.args(arguments).envs(settings);
         if let ClaudeProgram::StandIn = claude {
@@ -253,12 +252,17 @@ impl ThrowawayStores {
 
 impl Drop for ThrowawayStores {
     fn drop(&mut self) {
-        let name = self.config.items_collection.clone();
-        if !name.starts_with(THROWAWAY_PREFIX) {
-            return;
-        }
+        // Only a name with the prefix of a throwaway collection is ever deleted.
+        let collections: Vec<String> = [
+            (&self.config.items_collection, THROWAWAY_PREFIX),
+            (&self.config.concepts_collection, THROWAWAY_CONCEPTS_PREFIX),
+        ]
+        .into_iter()
+        .filter(|(name, prefix)| name.starts_with(prefix))
+        .map(|(name, _)| name.clone())
+        .collect();
         let url = self.config.qdrant_url.clone();
-        let collection = name.clone();
+        let names = collections.join(", ");
         // A new thread with its own runtime, because a drop cannot wait inside the runtime of
         // the test.
         let removed = std::thread::spawn(move || -> anyhow::Result<()> {
@@ -267,32 +271,50 @@ impl Drop for ThrowawayStores {
                 .build()?;
             runtime.block_on(async {
                 let client = Qdrant::from_url(&url).skip_compatibility_check().build()?;
-                client.delete_collection(collection.as_str()).await?;
-                Ok(())
+                let mut result = Ok(());
+                for collection in &collections {
+                    if let Err(error) = client.delete_collection(collection.as_str()).await {
+                        result = Err(error);
+                    }
+                }
+                Ok(result?)
             })
         })
         .join();
         match removed {
             Ok(Ok(())) => {}
             Ok(Err(error)) => {
-                eprintln!("could not remove the throwaway collection {name}: {error:#}");
+                eprintln!("could not remove the throwaway collections {names}: {error:#}");
             }
             Err(_) => eprintln!(
-                "could not remove the throwaway collection {name}: the thread that removes it panicked"
+                "could not remove the throwaway collections {names}: the thread that removes them panicked"
             ),
         }
     }
 }
 
-/// Every point of the collection the config names, as its identifier and its payload.
+fn path_text(path: &Path) -> &str {
+    path.to_str().expect("a throwaway path should be UTF-8")
+}
+
+/// Every point of the items collection the config names, as its identifier and its payload.
 pub async fn points_in(config: &Config) -> Vec<(String, Value)> {
+    points_of(config, &config.items_collection).await
+}
+
+/// Every point of the concepts collection the config names, as its identifier and its payload.
+pub async fn concept_points_in(config: &Config) -> Vec<(String, Value)> {
+    points_of(config, &config.concepts_collection).await
+}
+
+async fn points_of(config: &Config, collection: &str) -> Vec<(String, Value)> {
     let client = Qdrant::from_url(&config.qdrant_url)
         .skip_compatibility_check()
         .build()
         .unwrap();
     let reply = client
         .scroll(
-            ScrollPointsBuilder::new(config.items_collection.as_str())
+            ScrollPointsBuilder::new(collection)
                 .limit(1000)
                 .with_payload(true)
                 .with_vectors(false),

@@ -6,6 +6,8 @@
 mod cache;
 mod extraction;
 mod failures;
+mod resolution;
+mod script;
 
 use std::collections::HashMap;
 use std::path::Path;

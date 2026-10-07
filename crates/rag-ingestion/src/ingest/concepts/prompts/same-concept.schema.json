@@ -1,0 +1,8 @@
+{
+  "type": "object",
+  "properties": {
+    "same": { "type": "boolean" }
+  },
+  "required": ["same"],
+  "additionalProperties": false
+}

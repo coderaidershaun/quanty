@@ -1,14 +1,14 @@
-//! The two index files, `chapter.json` and `page.json`: what each holds and how it is read and
-//! written.
+//! The three index files, `chapter.json`, `page.json` and `image.json`: what each holds and how it
+//! is read and written.
 
 use std::path::{Path, PathBuf};
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use super::conversion::Conversion;
+use super::conversion::{CallRecord, Conversion};
 use super::piece::{PieceEntry, Relationship};
-use super::{CHAPTER_INDEX_FILE, ContentError, PAGE_INDEX_FILE};
+use super::{CHAPTER_INDEX_FILE, ContentError, IMAGE_INDEX_FILE, PAGE_INDEX_FILE};
 
 /// What `chapter.json` holds. `finished` is the last thing written, so a half-converted chapter
 /// is never mistaken for a whole one.
@@ -48,6 +48,23 @@ pub struct PageIndex {
     pub conversion: Option<Conversion>,
 }
 
+/// What `image.json` holds: which picture the folder was made from and what was read from it. It
+/// is the last file written, so a half-converted picture is never mistaken for a whole one.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ImageIndex {
+    pub format_version: u32,
+    /// The file name the picture had.
+    pub source_file: String,
+    pub source_sha256: String,
+    /// The name of the copy of the picture, in the same folder.
+    pub picture: String,
+    pub label: Option<String>,
+    pub caption: Option<String>,
+    pub printed_text: Vec<String>,
+    pub calls: Vec<CallRecord>,
+}
+
 impl ChapterIndex {
     pub fn read(chapter_folder: &Path) -> Result<Self, ContentError> {
         read_json(&chapter_folder.join(CHAPTER_INDEX_FILE))
@@ -66,6 +83,16 @@ impl PageIndex {
 
     pub fn write(&self, page_folder: &Path) -> Result<(), ContentError> {
         write_json(&page_folder.join(PAGE_INDEX_FILE), self)
+    }
+}
+
+impl ImageIndex {
+    pub fn read(image_folder: &Path) -> Result<Self, ContentError> {
+        read_json(&image_folder.join(IMAGE_INDEX_FILE))
+    }
+
+    pub fn write(&self, image_folder: &Path) -> Result<(), ContentError> {
+        write_json(&image_folder.join(IMAGE_INDEX_FILE), self)
     }
 }
 

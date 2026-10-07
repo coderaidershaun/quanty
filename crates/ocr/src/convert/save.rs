@@ -136,7 +136,7 @@ fn piece_parts(piece: &TranscribedPiece, image: Option<FigureImage>) -> (PieceDe
 
 /// The explanation, then one closing line that lists every printed word, so that none is missing
 /// from the text that gets searched even when the explanation paraphrased it.
-fn figure_file(explanation: &str, printed_text: &[String]) -> String {
+pub(super) fn figure_file(explanation: &str, printed_text: &[String]) -> String {
     if printed_text.is_empty() {
         return explanation.to_owned();
     }

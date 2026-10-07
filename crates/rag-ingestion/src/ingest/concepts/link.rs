@@ -4,30 +4,38 @@
 use std::collections::HashMap;
 
 use graph::{GraphError, GraphStore, Mention, Relation};
-use rag_core::{ConceptId, ItemId};
+use rag_core::{ConceptId, Embedder, ItemId, Llm};
 
-use super::ConceptSummary;
 use super::question::Extraction;
-use super::resolve::{Resolved, normalised, resolve};
+use super::resolve::{Resolved, Resolver, normalised};
+use super::{ConceptError, ConceptSummary};
 
 // SMELL: nothing removes the mentions of an earlier run, so after a change of the prompt an item
 // keeps the mentions of the old answers beside the new ones, until its document is deleted and
 // ingested again.
-/// Writes the concepts, mentions and relations of every item. The counts of the returned summary
-/// are those of the graph writes only.
+// SMELL: this function does two jobs for each item in one long loop: it resolves the concepts and
+// collects their mentions, and then it builds the relations. Each job wants a function of its own.
+/// Writes the concepts, mentions and relations of every item. The returned summary counts only
+/// these writes and the questions that resolving the concepts asked. `items` is how many items
+/// the run was given, which a stop reports.
 ///
 /// # Errors
-/// [`GraphError`] when the graph cannot be read or written.
-pub(super) async fn write<G: GraphStore>(
-    graph: &G,
+/// - [`ConceptError::Stopped`] when a question about two concepts fails in a way that would fail
+///   every other question too. What was linked before it stays.
+/// - Every error that [`Resolver::resolve`] returns
+/// - [`ConceptError::Graph`] when the graph cannot be read or written
+pub(super) async fn write<L: Llm, E: Embedder, G: GraphStore>(
+    resolver: &Resolver<'_, L, E, G>,
     extractions: &[(ItemId, Extraction)],
-) -> Result<ConceptSummary, GraphError> {
+    items: usize,
+) -> Result<ConceptSummary, ConceptError> {
+    let graph = &resolver.stores.graph;
     let mut summary = ConceptSummary::default();
-    for (item, extraction) in extractions {
+    for (read, (item, extraction)) in extractions.iter().enumerate() {
         // The concepts of this reply are kept by normalised name, so that a relation finds them
         // without asking the graph.
         let mut names: HashMap<String, ConceptId> = HashMap::new();
-        let mut mentions = Vec::new();
+        let mut mentions: Vec<Mention> = Vec::new();
         for concept in &extraction.concepts {
             let normalised_name = normalised(&concept.name);
             if normalised_name.is_empty() {
@@ -40,7 +48,7 @@ pub(super) async fn write<G: GraphStore>(
             if names.contains_key(&normalised_name) {
                 continue;
             }
-            let id = match resolve(graph, concept).await? {
+            let id = match resolver.resolve(*item, concept, &mut summary).await? {
                 Resolved::Created(id) => {
                     summary.concepts_created += 1;
                     id
@@ -49,13 +57,27 @@ pub(super) async fn write<G: GraphStore>(
                     summary.concepts_linked += 1;
                     id
                 }
+                Resolved::Stopped(source) => {
+                    // SMELL: `read` counts the items whose concepts were written. An item that
+                    // was skipped is in neither count, so the message can name fewer items than
+                    // the run has dealt with.
+                    return Err(ConceptError::Stopped {
+                        read,
+                        items,
+                        source,
+                    });
+                }
             };
             names.insert(normalised_name, id);
-            mentions.push(Mention {
-                item: *item,
-                concept: id,
-                wording: concept.name.clone(),
-            });
+            // Two names of one reply can be one concept, for example when the second became an
+            // alias of the first. The item mentions it once, in the first wording.
+            if !mentions.iter().any(|mention| mention.concept == id) {
+                mentions.push(Mention {
+                    item: *item,
+                    concept: id,
+                    wording: concept.name.clone(),
+                });
+            }
         }
         graph.add_mentions(&mentions).await?;
 
@@ -96,5 +118,6 @@ async fn concept_named<G: GraphStore>(
     if let Some(id) = names.get(&normalised_name) {
         return Ok(Some(*id));
     }
-    graph.find_concept_by_name(&normalised_name).await
+    let stored = graph.find_concept_by_name(&normalised_name).await?;
+    Ok(stored.map(|concept| concept.id))
 }

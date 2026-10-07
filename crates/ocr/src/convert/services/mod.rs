@@ -1,5 +1,6 @@
-//! The four outside calls a page needs, behind one trait so the rest of the run can be tested
-//! with stub answers. The live version is the only place a failed call is tried again.
+//! The four outside calls a page needs, and the one a picture that stands alone needs, each
+//! behind a trait so the rest of the run can be tested with stub answers. The live versions are
+//! the only place a failed call is tried again.
 
 mod categorise;
 mod claude;
@@ -7,7 +8,7 @@ mod jev;
 mod schema;
 mod transcribe;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use super::reply::{CopiedPage, TranscribedPage};
@@ -77,6 +78,20 @@ pub trait PageServices {
         correction: Option<&str>,
     ) -> impl Future<Output = Result<Answer<TranscribedPage>, ServiceError>> + Send;
 }
+
+/// The one paid call a picture that stands alone needs. It retries inside the implementation, so
+/// callers do not.
+pub trait ImageServices {
+    /// A transcription of the picture. `correction` says why the last one was rejected.
+    fn transcribe(
+        &self,
+        picture: &Path,
+        correction: Option<&str>,
+    ) -> impl Future<Output = Result<Answer<TranscribedPage>, ServiceError>> + Send;
+}
+
+/// Sonnet through the `claude` command. It needs no Jev key.
+pub struct LiveImageServices;
 
 /// Haiku and Sonnet through the `claude` command, and Jev over HTTP.
 pub struct LiveServices {
@@ -153,5 +168,15 @@ impl PageServices for LiveServices {
             with_retries(|| transcribe_page_with_picture(&page.pdf, Some(&page.image), correction))
                 .await?,
         )
+    }
+}
+
+impl ImageServices for LiveImageServices {
+    async fn transcribe(
+        &self,
+        picture: &Path,
+        correction: Option<&str>,
+    ) -> Result<Answer<TranscribedPage>, ServiceError> {
+        Ok(with_retries(|| transcribe_page(picture, correction)).await?)
     }
 }

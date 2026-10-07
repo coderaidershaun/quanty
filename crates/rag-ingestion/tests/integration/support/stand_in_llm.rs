@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 /// Long enough for the other questions of a batch to start while this one is still open.
 const ANSWER_DELAY: Duration = Duration::from_millis(20);
 
-type Rule = dyn Fn(&str, usize) -> Result<Value, LlmError> + Send + Sync;
+type Rule = dyn Fn(&AskedQuestion, usize) -> Result<Value, LlmError> + Send + Sync;
 
 /// What a question was made of, as owned text.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,6 +49,16 @@ impl StandInLlm {
     pub fn replying(
         rule: impl Fn(&str, usize) -> Result<Value, LlmError> + Send + Sync + 'static,
     ) -> StandInLlm {
+        StandInLlm::replying_to_questions(move |question, earlier_calls| {
+            rule(&question.input, earlier_calls)
+        })
+    }
+
+    /// Like [`StandInLlm::replying`], and the rule sees the whole question, so it can tell one kind
+    /// of question from another by its prompt.
+    pub fn replying_to_questions(
+        rule: impl Fn(&AskedQuestion, usize) -> Result<Value, LlmError> + Send + Sync + 'static,
+    ) -> StandInLlm {
         StandInLlm {
             model: "stand-in".to_owned(),
             rule: Arc::new(rule),
@@ -83,13 +93,14 @@ impl Llm for StandInLlm {
     }
 
     async fn ask(&self, question: Question<'_>) -> Result<Value, LlmError> {
+        let asked = AskedQuestion {
+            system_prompt: question.system_prompt.to_owned(),
+            schema: question.schema.to_owned(),
+            input: question.input.to_owned(),
+        };
         let earlier_calls = {
             let mut record = self.record.lock().unwrap();
-            record.questions.push(AskedQuestion {
-                system_prompt: question.system_prompt.to_owned(),
-                schema: question.schema.to_owned(),
-                input: question.input.to_owned(),
-            });
+            record.questions.push(asked.clone());
             record.open += 1;
             record.most_open = record.most_open.max(record.open);
             let earlier = record
@@ -102,6 +113,6 @@ impl Llm for StandInLlm {
         };
         tokio::time::sleep(ANSWER_DELAY).await;
         self.record.lock().unwrap().open -= 1;
-        (self.rule)(question.input, earlier_calls)
+        (self.rule)(&asked, earlier_calls)
     }
 }

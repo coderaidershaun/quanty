@@ -2,18 +2,15 @@
 //! for each point. Ingestion writes it and retrieval reads it, so both use this one definition
 //! of the collection.
 
-use std::time::Duration;
-
 use qdrant_client::qdrant::{
-    Condition, CountPointsBuilder, CreateCollectionBuilder, DeletePointsBuilder, Distance, Filter,
-    PointStruct, QueryPointsBuilder, ScoredPoint, UpsertPointsBuilder, VectorParamsBuilder,
-    point_id::PointIdOptions,
+    Condition, CountPointsBuilder, DeletePointsBuilder, Filter, PointStruct, QueryPointsBuilder,
+    ScoredPoint, UpsertPointsBuilder,
 };
 use qdrant_client::{Payload, Qdrant, QdrantError};
 
-use crate::{Config, DocId, EMBEDDING_DIMENSIONS, Embedding, ItemId, ItemKind, ItemPayload};
+use crate::qdrant::{build_client, ensure_collection, point_id_text, request_error};
+use crate::{Config, DocId, Embedding, ItemId, ItemKind, ItemPayload, StoreError};
 
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 /// A group of this many points with their vectors is about a megabyte, well inside a request.
 const UPSERT_GROUP_SIZE: usize = 256;
 
@@ -32,61 +29,6 @@ pub struct ItemStore {
     collection: String,
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum StoreError {
-    // The Qdrant errors are boxed because they are large and every result would carry that size.
-    #[error("could not set up the Qdrant client for {url}")]
-    Connect {
-        url: String,
-        #[source]
-        source: Box<QdrantError>,
-    },
-
-    #[error("could not reach Qdrant at {url}")]
-    Unreachable {
-        url: String,
-        #[source]
-        source: Box<QdrantError>,
-    },
-
-    #[error("Qdrant at {url} failed to {action} in the collection {collection}")]
-    Request {
-        url: String,
-        collection: String,
-        action: &'static str,
-        #[source]
-        source: Box<QdrantError>,
-    },
-
-    #[error("the payload of item {id} could not be written as json")]
-    Payload {
-        id: ItemId,
-        #[source]
-        source: serde_json::Error,
-    },
-
-    #[error("the payload of item {id} is not a json object")]
-    PayloadShape { id: ItemId },
-
-    #[error("a point of the collection {collection} has the id {point}, which is not an item id")]
-    PointId {
-        collection: String,
-        point: String,
-        #[source]
-        source: uuid::Error,
-    },
-
-    #[error(
-        "the payload stored for item {id} in the collection {collection} is not the payload of an item"
-    )]
-    StoredPayload {
-        id: ItemId,
-        collection: String,
-        #[source]
-        source: serde_json::Error,
-    },
-}
-
 impl ItemStore {
     /// Makes no network call, so it works while the store is down. The first call that needs the
     /// store is where a failure shows.
@@ -94,18 +36,8 @@ impl ItemStore {
     /// # Errors
     /// [`StoreError::Connect`] when the address in the config is not a valid URL.
     pub fn connect(config: &Config) -> Result<ItemStore, StoreError> {
-        // Without this the client starts a thread on build, and it prints to standard output when
-        // the store is down, which would end up in the middle of a report.
-        let client = Qdrant::from_url(&config.qdrant_url)
-            .timeout(REQUEST_TIMEOUT)
-            .skip_compatibility_check()
-            .build()
-            .map_err(|source| StoreError::Connect {
-                url: config.qdrant_url.clone(),
-                source: Box::new(source),
-            })?;
         Ok(ItemStore {
-            client,
+            client: build_client(config)?,
             url: config.qdrant_url.clone(),
             collection: config.items_collection.clone(),
         })
@@ -135,24 +67,7 @@ impl ItemStore {
     /// # Errors
     /// [`StoreError::Request`] when Qdrant refuses or cannot be reached.
     pub async fn ensure_collection(&self) -> Result<(), StoreError> {
-        // SMELL: looking and creating are two calls, so two programs that start together can
-        // both try to create the collection, and the second one fails.
-        let exists = self
-            .client
-            .collection_exists(self.collection.as_str())
-            .await
-            .map_err(|source| self.request_error("look for the collection", source))?;
-        if exists {
-            return Ok(());
-        }
-        let vectors = VectorParamsBuilder::new(EMBEDDING_DIMENSIONS as u64, Distance::Cosine);
-        self.client
-            .create_collection(
-                CreateCollectionBuilder::new(self.collection.as_str()).vectors_config(vectors),
-            )
-            .await
-            .map_err(|source| self.request_error("create the collection", source))?;
-        Ok(())
+        ensure_collection(&self.client, &self.url, &self.collection).await
     }
 
     /// Stores the points, replacing any point that has the same identifier, and returns once
@@ -223,12 +138,7 @@ impl ItemStore {
     }
 
     fn request_error(&self, action: &'static str, source: QdrantError) -> StoreError {
-        StoreError::Request {
-            url: self.url.clone(),
-            collection: self.collection.clone(),
-            action,
-            source: Box::new(source),
-        }
+        request_error(&self.url, &self.collection, action, source)
     }
 }
 
@@ -298,11 +208,7 @@ impl ItemStore {
 }
 
 fn item_hit(collection: &str, point: ScoredPoint) -> Result<ItemHit, StoreError> {
-    let id_text = match point.id.and_then(|id| id.point_id_options) {
-        Some(PointIdOptions::Uuid(text)) => text,
-        Some(PointIdOptions::Num(number)) => number.to_string(),
-        None => String::new(),
-    };
+    let id_text = point_id_text(point.id);
     let id = id_text
         .parse::<ItemId>()
         .map_err(|source| StoreError::PointId {

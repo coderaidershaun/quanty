@@ -1,13 +1,13 @@
-//! The saved shape of a converted chapter: folder and file names, and the `chapter.json` and
-//! `page.json` files that index it. The converter and the reader both build on it, and it uses
-//! neither.
+//! The saved shape of a converted chapter and of a picture that stands alone: folder and file
+//! names, and the `chapter.json`, `page.json` and `image.json` files that index them. The
+//! converter and the reader both build on it, and it uses neither.
 
 mod conversion;
 mod figure_image;
 mod index;
 mod piece;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub use conversion::{
     CallRecord, CallStep, Checks, Conversion, MathCheck, PageCategories, Route, RouteReason,
@@ -15,13 +15,17 @@ pub use conversion::{
 };
 pub use figure_image::{FigureImage, ImageShows, PageBox};
 pub(crate) use figure_image::{MIN_FIGURE_SIDE, figure_image_file_name};
-pub use index::{ChapterIndex, PageIndex};
+pub use index::{ChapterIndex, ImageIndex, PageIndex};
 pub use piece::{Cite, CiteKind, PieceDetail, PieceEntry, Relationship, RelationshipKind, Symbol};
 
 /// Bumped whenever a saved shape changes in a way an older reader would misread.
 pub const FORMAT_VERSION: u32 = 1;
 
 const CHAPTER_FILE_PATTERN: &str = "chapter-<number>-<name>.pdf";
+/// The folder under the output root that holds every converted picture that stands alone.
+const IMAGES_FOLDER: &str = "images";
+/// How many hex digits of the picture's SHA-256 name its folder.
+const IMAGE_FOLDER_DIGITS: usize = 16;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ContentError {
@@ -129,6 +133,22 @@ pub fn page_folder_name(page_position: u32) -> String {
     format!("page-num-{page_position}")
 }
 
+/// The folder of a picture that stands alone, as a path from the output root:
+/// `images/<the start of the picture's SHA-256>`. The same bytes always land in the same folder,
+/// whatever the file was called.
+pub fn image_folder(source_sha256: &str) -> PathBuf {
+    let digits = source_sha256
+        .get(..IMAGE_FOLDER_DIGITS)
+        .unwrap_or(source_sha256);
+    Path::new(IMAGES_FOLDER).join(digits)
+}
+
+/// The name of the copy of a picture that stands alone, kept in its folder. The caller gives the
+/// extension in lower case.
+pub fn image_copy_file_name(extension: &str) -> String {
+    format!("picture.{extension}")
+}
+
 /// Where a page is built. The folder is renamed to [`page_folder_name`] when it is complete.
 pub fn partial_page_folder_name(page_position: u32) -> String {
     format!("page-num-{page_position}.partial")
@@ -150,6 +170,11 @@ pub const PAGE_PDF_FILE: &str = "page.pdf";
 pub const PAGE_IMAGE_FILE: &str = "page.png";
 /// The page's text as Poppler read it, saved unchanged. It can hold misread words.
 pub const TEXT_LAYER_FILE: &str = "text-layer.txt";
+/// Says which picture a folder was made from and what was read from it. It is written last, so a
+/// folder that has it was converted whole.
+pub const IMAGE_INDEX_FILE: &str = "image.json";
+/// The explanation of a picture that stands alone, then the words printed on it.
+pub const IMAGE_EXPLANATION_FILE: &str = "figure.md";
 /// The second of a page's two rejected replies, left in its working folder to be looked at.
 pub const REJECTED_REPLY_FILE: &str = "rejected-reply.json";
 

@@ -7,8 +7,7 @@ use std::collections::BTreeSet;
 use ocr::{PieceDetail, read_chapter};
 use rag_ingestion::{chapter_items, ingest_chapter};
 
-use crate::stand_in_llm::StandInLlm;
-use crate::support::{self, ThrowawayStores, assert_graph_holds_only, points_in};
+use crate::support::{self, StandInLlm, ThrowawayStores, assert_graph_holds_only, points_in};
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored ingest::"]

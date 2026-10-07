@@ -1,11 +1,15 @@
-//! Decides what a chapter is stored as: which pieces become items, what each item keeps and
-//! what each one gives the embedder. It reads no file and calls nothing outside.
+//! Decides what a chapter, or a picture that stands alone, is stored as: which pieces become
+//! items, what each item keeps and what each one gives the embedder. It reads no file and calls
+//! nothing outside.
 
 mod chunks;
+mod image;
 mod pieces;
 
 use ocr::{Chapter, ChapterIndex, PieceId, SectionHeading};
 use rag_core::{DocId, DocumentInput, ItemId, ItemKind, ItemPayload};
+
+pub use image::{LoneImage, image_items};
 
 /// Blocks of one item, such as a lead-in and a formula, are told apart by a blank line.
 const BLOCK_SEPARATOR: &str = "\n\n";

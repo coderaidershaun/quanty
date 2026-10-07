@@ -1,15 +1,16 @@
 //! The `rag-ingest` command: checks that the services are ready, ingests one converted chapter
-//! folder, or deletes one document.
+//! folder or one picture that stands alone, or deletes one document.
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::{CommandFactory, Parser, Subcommand};
 use graph::FalkorGraph;
-use rag_core::{ClaudeCli, Config, DocId, GeminiEmbedder, ItemStore};
+use rag_core::{ClaudeCli, ConceptStore, Config, DocId, GeminiEmbedder, ItemStore};
 use rag_ingestion::{
-    ConceptExtractor, EXTRACTION_MODEL, Models, Stores, delete_document, health, ingest_chapter,
+    ConceptExtractor, EXTRACTION_MODEL, IngestSummary, LoneImage, Models, Stores, delete_document,
+    health, ingest_chapter, ingest_image,
 };
 use tracing::Level;
 use tracing_subscriber::filter::Targets;
@@ -24,8 +25,16 @@ struct Cli {
 
     // This help text is an attribute and not a doc comment, because rustdoc takes `<book>` for
     // an HTML tag that is never closed.
-    #[arg(help = "A converted chapter folder, such as content/<book>/chapter-1")]
-    chapter_folder: Option<PathBuf>,
+    #[arg(
+        help = "A converted chapter folder, such as content/<book>/chapter-1, or a PNG or JPEG file that stands alone, such as a chart"
+    )]
+    path: Option<PathBuf>,
+
+    #[arg(
+        long,
+        help = "What you know about the picture. It is added to the explanation of the picture"
+    )]
+    note: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -61,7 +70,7 @@ async fn main() -> ExitCode {
 }
 
 async fn run(cli: Cli) -> Result<ExitCode> {
-    match (cli.command, cli.chapter_folder) {
+    match (cli.command, cli.path) {
         (Some(Command::Health), _) => {
             let config = Config::load().context("could not read the settings")?;
             let report = health::check(&config).await;
@@ -75,7 +84,9 @@ async fn run(cli: Cli) -> Result<ExitCode> {
         (Some(Command::DeleteDocument { document_id }), _) => {
             delete(document_id).await.map(|()| ExitCode::SUCCESS)
         }
-        (None, Some(folder)) => ingest(&folder).await.map(|()| ExitCode::SUCCESS),
+        (None, Some(path)) => ingest(&path, cli.note.as_deref())
+            .await
+            .map(|()| ExitCode::SUCCESS),
         (None, None) => {
             Cli::command()
                 .print_help()
@@ -91,22 +102,68 @@ async fn connect_stores(config: &Config) -> Result<Stores<FalkorGraph>> {
         graph: FalkorGraph::connect(config)
             .await
             .context("could not connect to the graph")?,
+        concepts: ConceptStore::connect(config).context("could not set up the concept store")?,
     })
 }
 
-async fn ingest(folder: &Path) -> Result<()> {
+/// What the person gave `rag-ingest` to ingest.
+enum Source<'a> {
+    Chapter(&'a Path),
+    Picture(&'a Path),
+}
+
+impl<'a> Source<'a> {
+    /// Looks at the path and the note before anything is started, so a mistake costs nothing.
+    fn of(path: &'a Path, note: Option<&str>) -> Result<Source<'a>> {
+        if path.is_dir() {
+            if note.is_some() {
+                bail!(
+                    "--note is for a picture, and {} is a folder; a chapter takes no note",
+                    path.display()
+                );
+            }
+            Ok(Source::Chapter(path))
+        } else if path.is_file() {
+            Ok(Source::Picture(path))
+        } else {
+            bail!(
+                "{} is not there; give a converted chapter folder, such as content/<book>/chapter-1, or a PNG or JPEG file",
+                path.display()
+            )
+        }
+    }
+}
+
+async fn ingest(path: &Path, note: Option<&str>) -> Result<()> {
+    let source = Source::of(path, note)?;
     let config = Config::load().context("could not read the settings")?;
+    // The models are set up before a picture is converted, so a missing key for the embedder
+    // fails before the model that reads the picture is paid for.
     let models = Models {
         embedder: GeminiEmbedder::from_config(&config).context("could not set up the embedder")?,
-        concepts: ConceptExtractor::new(
-            ClaudeCli::new(EXTRACTION_MODEL),
-            &config.concept_cache_folder,
-        ),
+        concepts: ConceptExtractor::new(ClaudeCli::new(EXTRACTION_MODEL), &config),
     };
     let stores = connect_stores(&config).await?;
-    let summary = ingest_chapter(folder, &models, &stores)
-        .await
-        .with_context(|| format!("could not ingest {}", folder.display()))?;
+    let summary: IngestSummary = match source {
+        Source::Chapter(folder) => ingest_chapter(folder, &models, &stores)
+            .await
+            .with_context(|| format!("could not ingest {}", folder.display()))?,
+        Source::Picture(file) => {
+            let image = ocr::convert_image(file, &config.content_folder)
+                .await
+                .with_context(|| format!("could not convert {}", file.display()))?;
+            ingest_image(
+                &LoneImage {
+                    image: &image,
+                    note,
+                },
+                &models,
+                &stores,
+            )
+            .await
+            .with_context(|| format!("could not ingest {}", file.display()))?
+        }
+    };
     println!("{summary}");
     Ok(())
 }

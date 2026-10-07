@@ -70,7 +70,8 @@ impl<'a> Notice<'a> {
         self
     }
 
-    /// The notice as one node named "{title}. {body}", or the title alone.
+    /// Draws the notice. A test or a screen reader finds the whole of it by "{title}. {body}",
+    /// or by the title alone when it has no body.
     pub fn show(self, ui: &mut egui::Ui) -> NoticeResponse {
         let swatch = self.tone.swatch();
         let mut action_clicked = false;
@@ -193,7 +194,8 @@ impl<'a> Placeholder<'a> {
         self
     }
 
-    /// The placeholder as one node named "{title}. {hint}", or the title alone.
+    /// Draws the placeholder. A test or a screen reader finds the whole of it by
+    /// "{title}. {hint}", or by the title alone when it has no hint.
     pub fn show(self, ui: &mut egui::Ui) -> PlaceholderResponse {
         let area = ui.available_size();
         let height = if area.y.is_finite() {
@@ -293,35 +295,4 @@ fn text_height(ui: &egui::Ui, role: TextRole, text: &str, width: f32) -> f32 {
     let mut job = LayoutJob::single_section(text.to_owned(), role.format(color::TEXT));
     job.wrap.max_width = width;
     ui.painter().layout_job(job).size().y
-}
-
-#[cfg(test)]
-mod tests {
-    use egui_kittest::kittest::Queryable;
-
-    use super::*;
-    use crate::state::Shared;
-    use crate::testkit;
-    use crate::widgets::Chip;
-
-    #[test]
-    fn a_notice_a_placeholder_and_a_cut_chip_are_named_by_their_whole_text() {
-        let long = "A chip with a label far too long to fit";
-        let mut harness = testkit::panel([400.0, 300.0], Shared::default(), move |ui, _cx| {
-            Notice::warning("Qdrant is down")
-                .body("Start it and try again.")
-                .dismissable()
-                .show(ui);
-            Placeholder::loading("Loading the page")
-                .hint("This takes a moment.")
-                .show(ui);
-            ui.add(Chip::plain(long).max_width(80.0));
-        });
-        // The spinner asks for a repaint after a delay, so `run` settles with it on screen.
-        harness.run();
-        harness.get_by_label("Qdrant is down. Start it and try again.");
-        harness.get_by_label("Loading the page. This takes a moment.");
-        harness.get_by_label("Dismiss");
-        harness.get_by_label(long);
-    }
 }

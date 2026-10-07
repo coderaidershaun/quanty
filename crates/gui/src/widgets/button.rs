@@ -108,7 +108,7 @@ impl<'a> Button<'a> {
         self
     }
 
-    /// Drawn as chosen. The two solid looks ignore it.
+    /// Draws the button as the chosen one of a group. A primary or a danger button ignores it.
     pub fn selected(mut self, is_selected: bool) -> Self {
         self.is_selected = is_selected;
         self
@@ -137,6 +137,12 @@ impl<'a> Button<'a> {
     pub(super) fn preview(mut self, look: Look) -> Self {
         self.forced = Some(look);
         self
+    }
+
+    /// Whether the button keeps room before its text, for the icon or for the spinner that
+    /// takes its place.
+    fn has_icon_room(&self) -> bool {
+        self.icon.is_some() || self.is_loading
     }
 
     fn colours(&self, look: Look) -> Colours {
@@ -210,7 +216,7 @@ impl<'a> Button<'a> {
         }
 
         let icon_size = self.size.icon();
-        let has_icon = self.icon.is_some() || self.is_loading;
+        let has_icon = self.has_icon_room();
         let text_width = text.as_ref().map_or(0.0, |galley| galley.size().x);
         let gap = if has_icon && text.is_some() {
             space::SM
@@ -252,12 +258,12 @@ impl egui::Widget for Button<'_> {
             Some(galley) => {
                 // SMELL: a button with no icon gets wider while it loads, to make room for
                 // the spinner, so what stands beside it moves.
-                let icon = if self.icon.is_some() || self.is_loading {
+                let icon_room = if self.has_icon_room() {
                     self.size.icon() + space::SM
                 } else {
                     0.0
                 };
-                (galley.size().x + icon + 2.0 * space::LG)
+                (galley.size().x + icon_room + 2.0 * space::LG)
                     .max(MIN_WIDTH_PER_HEIGHT * height)
                     .max(self.min_width)
             }

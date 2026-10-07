@@ -13,6 +13,9 @@ pub fn glow(tone: Tone) -> egui::Shadow {
     }
 }
 
+/// The named colours. `CANVAS` is the window, `PANEL` a panel on it, and `RAISED` a control or a
+/// card on a panel. `BORDER` outlines a control and `HAIRLINE` a panel. Content is `TEXT`, text
+/// that supports it `TEXT_SECONDARY`, and a placeholder or a zero count `TEXT_MUTED`.
 pub mod color {
     use super::Color32;
 
@@ -169,7 +172,8 @@ mod tests {
         assert!(misses.is_empty(), "text that is hard to read: {misses:#?}");
     }
 
-    /// WCAG 2 contrast ratio of two opaque colours.
+    /// How far apart two opaque colours are in brightness, as the WCAG 2 accessibility standard
+    /// counts it.
     fn contrast(first: Color32, second: Color32) -> f32 {
         let (light, dark) = (luminance(first), luminance(second));
         let (light, dark) = if light >= dark {

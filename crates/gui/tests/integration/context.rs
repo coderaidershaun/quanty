@@ -44,6 +44,10 @@ impl Services for CountingServices {
     }
 }
 
+/// The backend moves a task between its threads, so what a context hands out must be able to
+/// cross them. The compiler checks it here.
+fn crosses_threads<T: Send>(_: &T) {}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_context_opens_nothing_until_asked_and_tries_again_after_a_store_failure() {
     let graph_calls = Arc::new(AtomicUsize::new(0));
@@ -53,6 +57,9 @@ async fn a_context_opens_nothing_until_asked_and_tries_again_after_a_store_failu
             graph_calls: Arc::clone(&graph_calls),
         },
     );
+    crosses_threads(&context.retriever());
+    crosses_threads(&context.graph());
+    crosses_threads(&context.stores());
     assert_eq!(
         graph_calls.load(Ordering::SeqCst),
         0,

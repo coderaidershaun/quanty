@@ -8,11 +8,12 @@ use eframe::egui;
 
 use crate::theme::{TextRole, space};
 
-/// The left column of the page, with the colours, the text styles and the icons.
+/// The width of the left column, which holds the colours, the text styles and the icons.
 const TOKENS_WIDTH: f32 = 680.0;
 
 // SMELL: the path already says `gallery`, so `gallery::GalleryState` says it twice. `State` is
 // enough.
+/// What the gallery keeps between frames. Whoever shows the gallery owns it.
 #[derive(Debug, Default)]
 pub struct GalleryState {
     /// The name of the widget that was last used.
@@ -185,7 +186,7 @@ mod tests {
         harness.get_by_label("Step 3");
         harness.get_by_label("Ingested");
         harness.get_by_role_and_label(Role::Label, "Figure (from source)");
-        // The title and the body of a notice and of a placeholder are also nodes of their own.
+        // The title and the body of a notice and of a placeholder are also found on their own.
         for text in [
             "Qdrant is not running",
             "Start it with docker compose up, then try again.",
@@ -200,6 +201,19 @@ mod tests {
             "the text of a stepper stays on one line: {} high",
             step.rect().height()
         );
+        // The actions of a panel header run from right to left, and a stepper among them must
+        // still read previous, text, next.
+        let [previous, text, next] = [
+            (Role::Button, "Previous figure"),
+            (Role::Label, states::HEADER_STEP),
+            (Role::Button, "Next figure"),
+        ]
+        .map(|(role, label)| harness.get_by_role_and_label(role, label).rect());
+        assert!(
+            previous.center().x < text.center().x && text.center().x < next.center().x,
+            "a stepper in a right-to-left row reads previous, text, next: \
+             {previous:?}, {text:?}, {next:?}"
+        );
         let results = harness.get_by_role_and_label(Role::Tab, "Results");
         assert_eq!(
             results.value().as_deref(),
@@ -208,7 +222,7 @@ mod tests {
         );
         let book = harness.get_by_role_and_label(Role::ComboBox, "Book").rect();
         assert!(
-            (book.width() - 160.0).abs() < 0.5,
+            (book.width() - states::BOOK_WIDTH).abs() < 0.5,
             "a dropdown with a width stays that wide: {}",
             book.width()
         );

@@ -95,90 +95,81 @@ const HEALTHY: Script = Script {
     opening: Opening::Asks,
 };
 
-const fn scene(name: &'static str, about: &'static str, rests: bool, script: Script) -> Scene {
-    Scene {
-        name,
-        about,
-        rests,
-        script,
-    }
-}
-
 static SCENES: [Scene; 17] = [
-    scene(
-        "idle",
-        "Healthy, with the three sample chapters and nothing asked.",
-        true,
-        Script {
+    Scene {
+        name: "idle",
+        about: "Healthy, with the three sample chapters and nothing asked.",
+        rests: true,
+        script: Script {
             opening: Opening::Nothing,
             ..HEALTHY
         },
-    ),
-    scene(
-        "black-scholes",
-        "A question asked: the results, then the graph, then the answer.",
-        true,
-        HEALTHY,
-    ),
-    scene(
-        "searching",
-        "A question asked and the search never comes back.",
-        false,
-        Script {
+    },
+    Scene {
+        name: "black-scholes",
+        about: "A question asked: the results, then the graph, then the answer.",
+        rests: true,
+        script: HEALTHY,
+    },
+    Scene {
+        name: "searching",
+        about: "A question asked and the search never comes back.",
+        rests: false,
+        script: Script {
             search: Search::Never,
             ..HEALTHY
         },
-    ),
-    scene(
-        "answering",
-        "The results and the graph are shown and the answer never comes.",
-        false,
-        Script {
+    },
+    Scene {
+        name: "answering",
+        about: "The results and the graph are shown and the answer never comes.",
+        rests: false,
+        script: Script {
             answer: Answer::Never,
             ..HEALTHY
         },
-    ),
-    scene(
-        "no-sources",
-        "A question asked and the search finds nothing.",
-        true,
-        Script {
+    },
+    Scene {
+        name: "no-sources",
+        about: "A question asked and the search finds nothing.",
+        rests: true,
+        script: Script {
             search: Search::Nothing,
             ..HEALTHY
         },
-    ),
-    scene(
-        "no-answer",
-        "Results found, and an answer that says they do not answer the question.",
-        true,
-        Script {
+    },
+    Scene {
+        name: "no-answer",
+        about: "Results found, and an answer that says they do not answer the question.",
+        rests: true,
+        script: Script {
             answer: Answer::NoBlock,
             ..HEALTHY
         },
-    ),
-    scene(
-        "search-failed",
-        "The search fails because the embedding service does not answer.",
-        true,
-        Script {
+    },
+    Scene {
+        name: "search-failed",
+        about: "The search fails because the embedding service does not answer.",
+        rests: true,
+        script: Script {
             search: Search::Fails(FailureKind::EmbeddingFailed),
             ..HEALTHY
         },
-    ),
-    scene(
-        "answer-failed",
-        "The results are shown and the answer fails on the usage limit of claude.",
-        true,
-        Script {
+    },
+    Scene {
+        name: "answer-failed",
+        about: "The results are shown and the answer fails on the usage limit of claude.",
+        rests: true,
+        script: Script {
             answer: Answer::Fails(FailureKind::ClaudeUsageLimit),
             ..HEALTHY
         },
-    ),
-    scene(
-        "stores-down",
-        "Qdrant and FalkorDB are down: the catalogue and every search fail, pages still load.",
-        true,
-        Script {
+    },
+    Scene {
+        name: "stores-down",
+        about: "Qdrant and FalkorDB are down: the catalogue and every search fail, pages still load.",
+        rests: true,
+        script: Script {
             search: Search::Fails(FailureKind::QdrantDown),
             library: Library::Fails(FailureKind::QdrantDown),
             concepts: Concepts::Fails(FailureKind::FalkorDbDown),
@@ -189,12 +180,12 @@ static SCENES: [Scene; 17] = [
             opening: Opening::AsksAndOpensASource,
             ..HEALTHY
         },
-    ),
-    scene(
-        "first-run",
-        "No settings file: an empty library, and every search says the embedding key is missing.",
-        true,
-        Script {
+    },
+    Scene {
+        name: "first-run",
+        about: "No settings file: an empty library, and every search says the embedding key is missing.",
+        rests: true,
+        script: Script {
             search: Search::Fails(FailureKind::EmbeddingKeyMissing),
             library: Library::Empty,
             down: &[
@@ -204,76 +195,76 @@ static SCENES: [Scene; 17] = [
             opening: Opening::Nothing,
             ..HEALTHY
         },
-    ),
-    scene(
-        "empty-library",
-        "Healthy, with no document stored: a question finds nothing.",
-        true,
-        Script {
+    },
+    Scene {
+        name: "empty-library",
+        about: "Healthy, with no document stored: a question finds nothing.",
+        rests: true,
+        script: Script {
             search: Search::Nothing,
             library: Library::Empty,
             opening: Opening::Nothing,
             ..HEALTHY
         },
-    ),
-    scene(
-        "no-labels",
-        "A question asked with a label that no document carries.",
-        true,
-        Script {
+    },
+    Scene {
+        name: "no-labels",
+        about: "A question asked with a label that no document carries.",
+        rests: true,
+        script: Script {
             opening: Opening::AsksWithALabelNoDocumentHas,
             ..HEALTHY
         },
-    ),
-    scene(
-        "source-missing",
-        "The results are shown and the chapter's files cannot be found.",
-        true,
-        Script {
+    },
+    Scene {
+        name: "source-missing",
+        about: "The results are shown and the chapter's files cannot be found.",
+        rests: true,
+        script: Script {
             pages: Pages::SourceMissing,
             concepts: Concepts::Empty,
             opening: Opening::AsksAndOpensASource,
             ..HEALTHY
         },
-    ),
-    scene(
-        "graph-failed",
-        "The results and the answer are shown and the concept graph fails.",
-        true,
-        Script {
+    },
+    Scene {
+        name: "graph-failed",
+        about: "The results and the answer are shown and the concept graph fails.",
+        rests: true,
+        script: Script {
             graph: Graph::Fails(FailureKind::FalkorDbDown),
             down: &[(Service::FalkorDb, FailureKind::FalkorDbDown)],
             ..HEALTHY
         },
-    ),
-    scene(
-        "no-concepts",
-        "Results found, with no concept in the graph to follow.",
-        true,
-        Script {
+    },
+    Scene {
+        name: "no-concepts",
+        about: "Results found, with no concept in the graph to follow.",
+        rests: true,
+        script: Script {
             search: Search::FoundWithoutConcepts,
             graph: Graph::Empty,
             ..HEALTHY
         },
-    ),
-    scene(
-        "results-only",
-        "A question asked for its results alone: no answer is written.",
-        true,
-        Script {
+    },
+    Scene {
+        name: "results-only",
+        about: "A question asked for its results alone: no answer is written.",
+        rests: true,
+        script: Script {
             opening: Opening::AsksForResultsOnly,
             ..HEALTHY
         },
-    ),
-    scene(
-        "gallery",
-        "The widget kit in every state, in the whole window.",
-        false,
-        Script {
+    },
+    Scene {
+        name: "gallery",
+        about: "The widget kit in every state, in the whole window.",
+        rests: false,
+        script: Script {
             opening: Opening::Nothing,
             ..HEALTHY
         },
-    ),
+    },
 ];
 
 /// Every scene, in the order `--fixture list` prints them.

@@ -10,6 +10,8 @@ use crate::theme::{Tone, color, motion, size};
 
 const DOTS: usize = 8;
 const DOT_RADIUS: f32 = 1.5;
+/// The dots stay this far inside the square that the ring is drawn in.
+const RING_INSET: f32 = 0.5;
 const BAR_HEIGHT: f32 = 4.0;
 
 /// A ring of dots. One bright dot moves round it ten times a second, and the dots behind it
@@ -30,7 +32,7 @@ pub(super) fn paint_spinner(ui: &egui::Ui, rect: Rect, bright: Color32) {
     }
     let step = ui.input(|input| (input.time / f64::from(motion::SPINNER_STEP)) as usize);
     let head = step % DOTS;
-    let ring = rect.width().min(rect.height()) / 2.0 - DOT_RADIUS - 0.5;
+    let ring = rect.width().min(rect.height()) / 2.0 - DOT_RADIUS - RING_INSET;
     for dot in 0..DOTS {
         let angle = TAU * dot as f32 / DOTS as f32;
         let centre = rect.center() + ring * egui::vec2(angle.cos(), angle.sin());

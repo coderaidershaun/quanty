@@ -9,16 +9,16 @@ const SLIDER_WIDTH: f32 = 140.0;
 const SLIDER_RAIL_HEIGHT: f32 = 4.0;
 const TOOLTIP_WIDTH: f32 = 320.0;
 const SCROLL_BAR_WIDTH: f32 = 8.0;
-const TOOLTIP_DELAY: f32 = 0.4;
+const TOOLTIP_DELAY_SECONDS: f32 = 0.4;
 const DISABLED_ALPHA: f32 = 0.45;
 const CARET_WIDTH: f32 = 2.0;
 
-/// The same style goes to both egui themes, so the system theme changes nothing.
+/// Sets the whole look. Both egui themes are given it, so a light system theme changes nothing.
 pub(super) fn apply(style: &mut egui::Style) {
     text_styles(style);
     spacing(style);
     style.interaction.selectable_labels = false;
-    style.interaction.tooltip_delay = TOOLTIP_DELAY;
+    style.interaction.tooltip_delay = TOOLTIP_DELAY_SECONDS;
     style.animation_time = motion::FAST;
     visuals(&mut style.visuals);
 }

@@ -53,13 +53,14 @@ impl CitationChip {
         )
     }
 
-    /// Reacts and paints at `rect`. The layout cursor does not move.
+    /// Reacts and paints at `rect`, for a chip inside text that is laid out by hand. The layout
+    /// cursor does not move. Call it after the text is painted, so the chip gets the click.
     pub fn show_at(self, ui: &egui::Ui, rect: egui::Rect, id: egui::Id) -> Response {
         let response = ui.interact(rect, id, egui::Sense::click());
-        self.finish(ui, rect, response)
+        self.name_and_paint(ui, rect, response)
     }
 
-    fn finish(&self, ui: &egui::Ui, rect: Rect, response: Response) -> Response {
+    fn name_and_paint(&self, ui: &egui::Ui, rect: Rect, response: Response) -> Response {
         response.widget_info(|| {
             let label = format!("Citation {}", self.number);
             WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), label)
@@ -100,7 +101,7 @@ impl CitationChip {
 impl egui::Widget for CitationChip {
     fn ui(self, ui: &mut egui::Ui) -> Response {
         let (rect, response) = ui.allocate_exact_size(self.measure(ui), egui::Sense::click());
-        self.finish(ui, rect, response)
+        self.name_and_paint(ui, rect, response)
     }
 }
 
@@ -220,6 +221,8 @@ impl egui::Widget for Chip<'_> {
         let galley = ui.painter().layout_job(job);
         let side = egui::vec2(before + badge + galley.size().x + after, size::CHIP);
         let (rect, response) = ui.allocate_exact_size(side, egui::Sense::click());
+        // SMELL: this says the chip can be used even inside a disabled area. It must say
+        // `ui.is_enabled()`, as the citation chip does.
         response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, self.label));
         if ui.is_rect_visible(rect) {
             self.paint(ui, rect, self.forced.unwrap_or_else(|| Look::of(&response)));
@@ -236,7 +239,8 @@ impl egui::Widget for Chip<'_> {
     }
 }
 
-/// A short status in a tone: "Copied", "Ingested".
+/// A short status in a tone, such as "Copied". It takes no click, and its text is its accessible
+/// name.
 pub struct Badge<'a> {
     text: &'a str,
     tone: Tone,

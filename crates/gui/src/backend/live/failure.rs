@@ -52,8 +52,10 @@ impl Verdict {
 
     fn failure(self, error: &dyn Error) -> Failure {
         let failure = Failure::new(self.kind, chain(error));
-        self.hint
-            .map_or(failure.clone(), |hint| failure.with_hint(hint))
+        match self.hint {
+            Some(hint) => failure.with_hint(hint),
+            None => failure,
+        }
     }
 }
 
@@ -98,6 +100,9 @@ fn store(error: &StoreError) -> Verdict {
     }
 }
 
+// SMELL: a server that answers at the address but is not FalkorDB has no row here, so the person
+// is told that something went wrong inside quanty. They could act on it: another program has
+// that port.
 fn graph(error: &GraphError) -> Verdict {
     match error {
         GraphError::Connect { url, .. }
@@ -136,7 +141,7 @@ fn claude_cli(error: &ClaudeCliError) -> Verdict {
         ClaudeCliError::Start(_) => Verdict::of(Kind::ClaudeMissing),
         ClaudeCliError::NotSignedIn { .. } => Verdict::of(Kind::ClaudeSignedOut),
         ClaudeCliError::TimedOut { seconds } => timed_out(*seconds),
-        #[allow(unreachable_patterns)]
+        #[allow(unreachable_patterns, reason = "every variant has a row today")]
         _ => Verdict::internal(),
     }
 }
@@ -172,7 +177,7 @@ fn poppler(error: &PopplerError) -> Verdict {
         PopplerError::Failed { file, .. }
         | PopplerError::NoPageCount { file }
         | PopplerError::NoPageSize { file } => bad_file(file),
-        #[allow(unreachable_patterns)]
+        #[allow(unreachable_patterns, reason = "every variant has a row today")]
         _ => Verdict::internal(),
     }
 }
@@ -180,7 +185,13 @@ fn poppler(error: &PopplerError) -> Verdict {
 fn content(error: &ContentError) -> Verdict {
     match error {
         ContentError::BadFileName { name } => bad_file(Path::new(name)),
-        ContentError::EmptyBookFolderName { title } => bad_file(Path::new(title)),
+        // The file is fine here: it is the book title that cannot name a folder.
+        ContentError::EmptyBookFolderName { title } => {
+            let hint = format!(
+                "The book title {title:?} has no letter or digit to name its folder with. Change the book title."
+            );
+            Verdict::saying(Kind::BadFile, hint)
+        }
         ContentError::Read { path, .. } | ContentError::Parse { path, .. } => source_missing(path),
         _ => Verdict::internal(),
     }
@@ -251,7 +262,7 @@ fn pdf(error: &PdfError) -> Verdict {
         PdfError::Graph(error) => graph(error),
         PdfError::Store(error) => store(error),
         PdfError::Ingest(error) => ingest(error),
-        #[allow(unreachable_patterns)]
+        #[allow(unreachable_patterns, reason = "every variant has a row today")]
         _ => Verdict::internal(),
     }
 }
@@ -261,7 +272,7 @@ fn delete(error: &DeleteError) -> Verdict {
         DeleteError::Store(error) => store(error),
         DeleteError::Graph(error) => graph(error),
         DeleteError::UnknownDocument { id, .. } => unknown_document(id),
-        #[allow(unreachable_patterns)]
+        #[allow(unreachable_patterns, reason = "every variant has a row today")]
         _ => Verdict::internal(),
     }
 }
@@ -271,7 +282,7 @@ fn relabel(error: &RelabelError) -> Verdict {
         RelabelError::Graph(error) => graph(error),
         RelabelError::Store(error) => store(error),
         RelabelError::UnknownDocument { id } => unknown_document(id),
-        #[allow(unreachable_patterns)]
+        #[allow(unreachable_patterns, reason = "every variant has a row today")]
         _ => Verdict::internal(),
     }
 }
@@ -281,7 +292,7 @@ fn search(error: &SearchError) -> Verdict {
         SearchError::Embed(error) => embed(error),
         SearchError::Items(error) | SearchError::Concepts(error) => store(error),
         SearchError::Graph(error) => graph(error),
-        #[allow(unreachable_patterns)]
+        #[allow(unreachable_patterns, reason = "every variant has a row today")]
         _ => Verdict::internal(),
     }
 }
@@ -444,6 +455,7 @@ mod tests {
         plain(services(ServiceError::Claude(ClaudeError::Spawn(io()))), Kind::ClaudeMissing);
         plain(ConvertError::ApiKeySet, Kind::ClaudeApiKeySet);
         names(ContentError::BadFileName { name: "notes.pdf".to_owned() }, Kind::BadFile, "notes.pdf");
+        names(ContentError::EmptyBookFolderName { title: "?!".to_owned() }, Kind::BadFile, "book title \"?!\"");
         names(ConvertError::SourceUnreadable { path: p("/books/gone.pdf"), source: io() }, Kind::BadFile, "gone.pdf");
         let slow = PageError::Service(ServiceError::Claude(ClaudeError::TimedOut { seconds: 5 }));
         names(ConvertError::PageFailed { position: 4, folder: p("/work"), source: Box::new(slow) }, Kind::PageFailed, "Page 4");

@@ -95,6 +95,8 @@ fn assert_scene(name: &str, shared: &Shared) {
     let nodes = ask.graph.ready().map(|graph| graph.nodes.len());
     let blocks = ask.answer.ready().map(|answer| answer.blocks.len());
     let trace = ask.search.ready().map(|reply| &reply.trace);
+    // With no seed the search stops at its first step, so no later step has a value.
+    let stopped_at_the_first_step = trace.is_some_and(|trace| *trace == Default::default());
     let ok = match name {
         "idle" | "gallery" => documents == Some(3) && ask.search == Loadable::Idle,
         "first-run" | "empty-library" => documents == Some(0) && ask.search == Loadable::Idle,
@@ -103,7 +105,7 @@ fn assert_scene(name: &str, shared: &Shared) {
         "results-only" => results == Some(9) && nodes > Some(0) && ask.answer == Loadable::Idle,
         "searching" => ask.search.is_loading(),
         "answering" => results == Some(9) && ask.answer.is_loading(),
-        "no-sources" => results == Some(0),
+        "no-sources" => results == Some(0) && stopped_at_the_first_step,
         "search-failed" => is_failed(&ask.search, FailureKind::EmbeddingFailed),
         "answer-failed" => {
             results == Some(9) && is_failed(&ask.answer, FailureKind::ClaudeUsageLimit)
@@ -311,9 +313,10 @@ struct PanicsAfterTheResults;
 impl Handler for PanicsAfterTheResults {
     async fn serve(&self, command: Command, reply: Reply) {
         let Command::Ask { request, .. } = command else {
-            // Every other command, such as the catalogue load at start-up, is answered with a
-            // failure, so only the ask is left waiting.
-            for event in command.failed(&Failure::internal("the stand-in does not serve this")) {
+            // Every other command, such as the catalogue load at start-up, is told that the
+            // store is down, so only the ask is left waiting.
+            let down = Failure::new(FailureKind::QdrantDown, "the stand-in has no store");
+            for event in command.failed(&down) {
                 reply.send(event);
             }
             return;
@@ -368,7 +371,11 @@ fn a_backend_that_panics_gives_a_failure_and_never_an_endless_wait() {
     assert!(health.pending.is_none(), "the check is over");
     assert_eq!(health.level(), HealthLevel::Unknown, "no service is down");
 
-    let mut harness = app_on(PanicsAfterTheResults, asks());
+    // The catalogue load said the store is down, so the first results ask for a new check of
+    // the services. Nobody clicks then: it must still be sent, or the app never comes to rest.
+    let mut harness = app_on(PanicsAfterTheResults, Vec::new());
+    testkit::settle(&mut harness);
+    harness.state_mut().push(asks().remove(0));
     testkit::settle(&mut harness);
     let ask = &harness.state().shared().ask;
     assert_eq!(ask.search.ready().map(|reply| reply.results.len()), Some(1));
@@ -391,9 +398,10 @@ fn command_shortcuts_reach_the_reducer() {
     // The keys that raise the Ask bar's cue, and the key that turns a tab.
     let mut harness = testkit::app("idle", DEFAULT_WINDOW);
     testkit::settle(&mut harness);
-    press(&mut harness, command, egui::Key::K);
-    assert_eq!(harness.state().shared().cues.focus_ask_bar, 1);
+    // The plain key goes first: once ⌘K has put the caret in the question box, `/` is text.
     press(&mut harness, none, egui::Key::Slash);
+    assert_eq!(harness.state().shared().cues.focus_ask_bar, 1);
+    press(&mut harness, command, egui::Key::K);
     assert_eq!(harness.state().shared().cues.focus_ask_bar, 2);
     harness.state_mut().push(Intent::OpenTab(Tab::Library));
     harness.run_ok();

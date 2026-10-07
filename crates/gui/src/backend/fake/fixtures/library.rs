@@ -1,5 +1,5 @@
 //! The catalogue and the pages that are read from the committed sample chapters, built as the
-//! live source adapter builds them.
+//! live backend builds them.
 
 use std::path::{Path, PathBuf};
 
@@ -18,8 +18,9 @@ const CHAPTERS: [(u128, &str, &str); 3] = [
     (3, "option-volatility-and-pricing", "chapter-1"),
 ];
 
-/// The author and the tags each sample document carries, in the order of `CHAPTERS`.
-const LABELS: [(Option<&str>, &[&str]); 3] = [
+/// The author and the tags each sample document carries, in the order of `CHAPTERS`. The length
+/// is that of `CHAPTERS`, so a chapter with no row here does not compile.
+const LABELS: [(Option<&str>, &[&str]); CHAPTERS.len()] = [
     (Some("Quanty Team"), &["notes", "options"]),
     (Some("Quanty Team"), &["notes", "black-scholes"]),
     (None, &["book", "volatility"]),
@@ -398,7 +399,7 @@ fn piece_of(folder: &Path, position: u32, entry: PieceFile) -> Result<PagePiece,
     Ok(piece)
 }
 
-/// The page `page` of the sample document `doc`, as the live source adapter builds it.
+/// The page `page` of the sample document `doc`, as the live backend builds it.
 ///
 /// # Errors
 /// [`SampleError::UnknownDocument`] for a document that is not a sample,

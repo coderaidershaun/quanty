@@ -5,7 +5,10 @@ use eframe::egui::{Rect, pos2, vec2};
 
 use crate::theme::{size, space};
 
+/// The smallest window, in points: its width, then its height. Every panel must still work at
+/// the size this leaves it.
 pub const MIN_WINDOW: [f32; 2] = [1180.0, 720.0];
+/// The size the window opens at, in points: its width, then its height.
 pub const DEFAULT_WINDOW: [f32; 2] = [1536.0, 1024.0];
 
 /// The height of the top bar, in points.
@@ -15,6 +18,7 @@ pub const ASK_BAR: f32 = 2.0 * space::MD + size::CONTROL_LG + space::SM + size::
 
 const CLUSTER: [f32; 2] = [132.0, size::CONTROL_LG];
 const TABS_WIDTH: f32 = 300.0;
+const LOGO_WIDTH: f32 = 120.0;
 
 const GUTTER: f32 = space::LG;
 const GAP: f32 = space::MD;
@@ -96,18 +100,18 @@ pub struct TopBarRects {
     pub cluster: Rect,
 }
 
+/// Where the logo, the tabs and the group at the right sit in the top bar.
 pub fn top_bar(bar: Rect) -> TopBarRects {
     let centre = bar.center();
-    let gutter = space::LG;
     TopBarRects {
         logo: Rect::from_min_size(
-            pos2(bar.left() + gutter, centre.y - size::CONTROL_MD / 2.0),
-            vec2(120.0, size::CONTROL_MD),
+            pos2(bar.left() + GUTTER, centre.y - size::CONTROL_MD / 2.0),
+            vec2(LOGO_WIDTH, size::CONTROL_MD),
         ),
         tabs: Rect::from_center_size(centre, vec2(TABS_WIDTH, size::TAB.min(bar.height()))),
         cluster: Rect::from_min_size(
             pos2(
-                bar.right() - gutter - CLUSTER[0],
+                bar.right() - GUTTER - CLUSTER[0],
                 centre.y - CLUSTER[1] / 2.0,
             ),
             vec2(CLUSTER[0], CLUSTER[1]),

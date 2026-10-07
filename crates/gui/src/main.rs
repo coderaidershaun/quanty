@@ -67,7 +67,8 @@ fn log_to_stderr() {
         .with(
             Targets::new()
                 .with_default(Level::WARN)
-                .with_target("rag_core", Level::INFO),
+                .with_target("rag_core", Level::INFO)
+                .with_target("gui", Level::INFO),
         )
         .init();
 }

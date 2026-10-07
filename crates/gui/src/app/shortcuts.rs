@@ -96,8 +96,9 @@ fn chord_pressed(
     if found && pattern == egui::Modifiers::NONE {
         // A plain key also arrives as the text it types. A box that has the focus by the end of
         // this frame would type it.
+        let typed = key.symbol_or_name();
         input.events.retain(
-            |event| !matches!(event, egui::Event::Text(text) if text.eq_ignore_ascii_case(key.symbol_or_name())),
+            |event| !matches!(event, egui::Event::Text(text) if text.eq_ignore_ascii_case(typed)),
         );
     }
     found

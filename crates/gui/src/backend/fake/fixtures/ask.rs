@@ -32,8 +32,9 @@ const fn hit(kind: ItemKind, doc: u128, page: u32, piece: u32) -> Hit {
     }
 }
 
-/// The results in citation order. No document has more than three of the first eight, as the
-/// real search caps them; the ninth is a table that result 4 cites.
+/// The results in citation order: the kind, then the sample document, the page and the piece.
+/// No document has more than three of the first eight, as the real search caps them; the ninth
+/// is a table that result 4 cites.
 const HITS: [Hit; 9] = [
     hit(ItemKind::Formula, 2, 3, 5),
     hit(ItemKind::Formula, 2, 3, 9),
@@ -145,20 +146,12 @@ pub(in crate::backend::fake) fn reply_without_concepts(
     Ok(found)
 }
 
-/// A search that found nothing, after every step of the search ran.
+/// A search that found nothing near the question. The real search stops there, at its first
+/// step, so no later step has a value.
 pub(in crate::backend::fake) fn no_result() -> SearchReply {
     SearchReply {
         results: Vec::new(),
-        trace: RetrievalTrace {
-            nearest: 0,
-            seed_concepts: Some(Vec::new()),
-            related_concepts: Some(Vec::new()),
-            candidates: Some(0),
-            ranked: Some(0),
-            kept: Some(0),
-            cited: Some(Vec::new()),
-            ..RetrievalTrace::default()
-        },
+        trace: RetrievalTrace::default(),
     }
 }
 

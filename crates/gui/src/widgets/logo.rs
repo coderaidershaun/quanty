@@ -10,8 +10,7 @@ const FACETS: usize = 6;
 const MARK_RADIUS: f32 = size::CONTROL_MD / 2.0 - 2.0;
 const HOLE_RADIUS: f32 = MARK_RADIUS / 2.2;
 
-/// A ring of six facets in a hexagon, the top two and the right one magenta and the other three
-/// blue, then the word "quanty" in the title style.
+/// The mark of the app, then its name in the title style.
 pub fn logo(ui: &mut egui::Ui) -> Response {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = space::SM;
@@ -30,6 +29,7 @@ fn paint_mark(ui: &egui::Ui, centre: Pos2) {
         centre + radius * egui::vec2(angle.cos(), angle.sin())
     };
     for facet in 0..FACETS {
+        // Half of the ring is magenta: the two facets at the top and the one at the right.
         let tone = if (facet + 1) % FACETS < FACETS / 2 {
             Tone::Magenta
         } else {

@@ -17,14 +17,15 @@ pub use metrics::{hairline, motion, radius, size, space, stroke};
 pub use palette::{Swatch, Tone, color, glow};
 pub use typography::TextRole;
 
-/// Fonts and style. Call it once, before the first pass: the eframe creation closure.
+/// Sets the fonts and the style of the whole app. Call it once, in the closure that makes the
+/// eframe app, because fonts that are set while a frame is drawn only exist from the next frame.
 pub fn install(ctx: &egui::Context) {
     ctx.set_fonts(fonts::definitions());
     ctx.set_theme(egui::Theme::Dark);
     ctx.all_styles_mut(style::apply);
 }
 
-/// `color::CANVAS`, for `eframe::App::clear_color`.
+/// The colour of the window behind the panels, in the form `eframe::App::clear_color` returns.
 pub fn clear_color() -> [f32; 4] {
     color::CANVAS.to_normalized_gamma_f32()
 }

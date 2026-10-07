@@ -8,8 +8,9 @@ use crate::theme::{TextRole, color, radius, space, stroke};
 /// A confirm sheet is this wide.
 const CONFIRM_WIDTH: f32 = 360.0;
 
-/// A sheet over the window with a dimmed backdrop. Escape, a click on the backdrop, or
-/// `ui.close()` closes it.
+/// A sheet over the window with a dimmed backdrop. It keeps nothing: show it on every frame
+/// while it is open, and stop when `should_close()` of what it returns is true. Escape, a click
+/// on the backdrop and `ui.close()` make it so.
 pub fn modal<R>(
     ctx: &egui::Context,
     id: egui::Id,
@@ -45,6 +46,7 @@ pub struct Confirm<'a> {
 }
 
 impl<'a> Confirm<'a> {
+    /// `id_salt` must be different for each sheet of the window. `title` is the question.
     pub fn new(id_salt: &'a str, title: &'a str) -> Self {
         // SMELL: `id_salt` and `title` are both `&str`, so a call that swaps them still compiles.
         Confirm {
@@ -62,11 +64,13 @@ impl<'a> Confirm<'a> {
         self
     }
 
+    /// The text of the button that says yes. It is "Confirm" when this is not called.
     pub fn confirm_label(mut self, label: &'a str) -> Self {
         self.confirm_label = label;
         self
     }
 
+    /// The text of the button that says no. It is "Cancel" when this is not called.
     pub fn cancel_label(mut self, label: &'a str) -> Self {
         self.cancel_label = label;
         self

@@ -13,7 +13,8 @@ pub fn panel_frame() -> egui::Frame {
         .inner_margin(space::LG)
 }
 
-/// A title at the left and whatever `add_actions` draws at the right.
+/// A title at the left and whatever `add_actions` draws at the right. The actions are laid out
+/// from right to left, so the first one that is drawn is the one at the far right.
 pub fn section_header<R>(
     ui: &mut egui::Ui,
     title: &str,

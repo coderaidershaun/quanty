@@ -170,7 +170,7 @@ pub fn save_png<S>(harness: &mut Harness<'_, S>, name: &str) {
         .expect("the picture is written");
 }
 
-/// The folder of the repository, three levels above this crate's manifest folder.
+/// The folder of the repository, two levels above this crate's manifest folder.
 pub(super) fn repository_root() -> PathBuf {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     manifest

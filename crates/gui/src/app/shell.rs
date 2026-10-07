@@ -92,9 +92,10 @@ impl App {
         self.backend.is_idle() && self.shared.is_at_rest() && self.media.is_idle()
     }
 
-    /// Applies every queued intent, then does what the shared state asked for.
+    /// Applies every queued intent, then does what the shared state asked for. An event from
+    /// the backend can ask for something too, so this runs once even when no intent is queued.
     fn apply(&mut self, ctx: &egui::Context) {
-        while !self.intents.is_empty() {
+        loop {
             let mut intents = std::mem::take(&mut self.intents);
             for intent in intents.drain(..) {
                 self.shared.apply_intent(intent, &mut self.effects);
@@ -114,6 +115,10 @@ impl App {
                 }
             }
             self.effects = effects;
+            // Picking a file queues one more intent.
+            if self.intents.is_empty() {
+                break;
+            }
         }
     }
 
@@ -164,6 +169,9 @@ impl eframe::App for App {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.draw(ui);
+        // egui may lay a frame out twice, and only the first pass gets the input. So the intents
+        // are applied after every pass. Never clear them when a pass is thrown away: that would
+        // lose the click.
         if !self.intents.is_empty() {
             self.apply(ui.ctx());
             ui.ctx().request_repaint();

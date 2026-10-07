@@ -14,7 +14,7 @@ macro_rules! icons {
         impl Icon {
             $(pub const $name: Icon = Icon(egui_phosphor::regular::$glyph);)+
 
-            /// Every icon with its name, for the gallery.
+            /// Every icon with the name it has here, so a screen can show them all.
             pub const ALL: &'static [(&'static str, Icon)] =
                 &[$((stringify!($name), Icon::$name)),+];
         }
@@ -65,7 +65,7 @@ icons! {
 }
 
 impl Icon {
-    /// An icon the list above lacks, from the icon font's own name for it.
+    /// An icon that has no name here, from its constant in `egui_phosphor::regular`.
     pub const fn from_phosphor(glyph: &'static str) -> Self {
         Icon(glyph)
     }
@@ -80,7 +80,7 @@ impl Icon {
         FontId::new(size, ICONS.clone())
     }
 
-    /// For `ui.label`, in the secondary text colour.
+    /// The icon at `size` points in the secondary text colour, ready for `ui.label`.
     pub fn rich(self, size: f32) -> egui::RichText {
         egui::RichText::new(self.0)
             .font(Icon::font(size))

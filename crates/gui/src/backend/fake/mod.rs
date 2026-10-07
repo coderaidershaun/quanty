@@ -284,7 +284,7 @@ impl Fake {
 
     fn source_missing(&self, detail: String) -> Failure {
         Failure::new(FailureKind::SourceMissing, detail).with_hint(format!(
-            "Quanty does not know where this chapter's files are. Put its chapter folder under {}, or ingest its PDF again with rag-ingest pdf.",
+            "quanty does not know where this chapter's pages are. Put its chapter folder inside a book folder under {}, or ingest its PDF again with rag-ingest pdf.",
             self.samples.display()
         ))
     }

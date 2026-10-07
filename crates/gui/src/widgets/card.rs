@@ -13,6 +13,8 @@ const TAG_GLYPH: f32 = 10.0;
 /// The small box of a card tag.
 const TAG_BOX: f32 = 16.0;
 
+/// A raised card around any content. It can carry a tag in its corner and an icon button at its
+/// top right, and the whole card can answer to a click.
 #[derive(Default)]
 pub struct Card<'a> {
     tag: Option<(Kind, &'a str)>,
@@ -22,7 +24,8 @@ pub struct Card<'a> {
     forced: Option<Look>,
 }
 
-/// What a card reports. `action_clicked` is the icon button at its top right.
+/// What a card reports. `inner` is what the contents returned, `response` is the whole card and
+/// holds the click of a clickable one, and `action_clicked` is the icon button at its top right.
 pub struct CardResponse<R> {
     pub inner: R,
     pub response: Response,
@@ -113,6 +116,8 @@ impl<'a> Card<'a> {
             inner
         });
         if let Some(label) = self.clickable {
+            // SMELL: this says the card can be used even inside a disabled area. It must say
+            // `ui.is_enabled()`, as a button does.
             scope
                 .response
                 .widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, label));

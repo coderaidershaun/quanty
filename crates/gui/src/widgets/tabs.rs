@@ -1,4 +1,4 @@
-//! The strip of tabs along the top of a window.
+//! The strip of tabs along the top of a window or of a panel.
 
 use eframe::egui::{
     self, Align2, Color32, WidgetInfo, WidgetType, accesskit::Role, text::LayoutJob,
@@ -7,6 +7,9 @@ use eframe::egui::{
 use super::look::{Look, focus_ring};
 use crate::theme::{Icon, TextRole, Tone, color, hairline, radius, size, space, stroke};
 
+/// One tab of a strip. It shows its label, then its count in brackets when it has one. The
+/// label alone is the accessible name, and a test or a screen reader reads the count as the
+/// value of the tab.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Tab<'a> {
     pub label: &'a str,
@@ -54,6 +57,7 @@ impl<'a> TabStrip<'a> {
         }
     }
 
+    /// The colour of the active tab and of the bar under it. It is blue when this is not called.
     pub fn tone(mut self, tone: Tone) -> Self {
         self.tone = tone;
         self
@@ -122,6 +126,8 @@ impl<'a> TabStrip<'a> {
         let width = icon_room + measured.size().x;
         let (rect, response) =
             ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
+        // egui has no widget type for a tab, so the tab is named as a button and is given its
+        // role afterwards.
         response
             .widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), tab.label));
         ui.ctx().accesskit_node_builder(response.id, |node| {

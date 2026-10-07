@@ -7,6 +7,12 @@ use eframe::egui::{self, Color32, FontFamily, FontId};
 use super::color;
 use super::fonts::{MEDIUM, SEMIBOLD};
 
+/// A formula in a line of text is drawn this much larger than the text, so the small letters of
+/// both are the same height.
+const INLINE_MATH_SCALE: f32 = 1.15;
+
+/// A named text style: a size, a weight and a line height. Each role also has a colour of its
+/// own, the secondary text colour for `Small` and the colour of content for the others.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TextRole {
     Title,
@@ -62,7 +68,7 @@ impl TextRole {
         }
     }
 
-    /// For a section of a layout job.
+    /// The font and the line height of this role in `color`, for one section of a layout job.
     pub fn format(self, color: Color32) -> egui::text::TextFormat {
         egui::text::TextFormat {
             font_id: self.font(),
@@ -72,7 +78,7 @@ impl TextRole {
         }
     }
 
-    /// For `ui.label`, in the colour of the role.
+    /// `text` in this role and in the colour of the role, ready for `ui.label`.
     pub fn rich(self, text: impl Into<String>) -> egui::RichText {
         egui::RichText::new(text)
             .font(self.font())
@@ -96,8 +102,8 @@ impl TextRole {
         FontId::new(self.size() - 1.0, FontFamily::Monospace)
     }
 
-    /// The em of a formula set inline beside this role.
+    /// The font size of a formula that sits in a line of this role.
     pub const fn math_size(self) -> f32 {
-        self.size() * 1.15
+        self.size() * INLINE_MATH_SCALE
     }
 }

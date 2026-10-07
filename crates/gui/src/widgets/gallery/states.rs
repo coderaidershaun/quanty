@@ -1,6 +1,6 @@
-//! The widgets of the gallery, each in every state it can be in. Every demo widget writes its
-//! name to `last_activated` when it is used. Every label on the page is different, so a test
-//! can find one widget by its label.
+//! The widgets of the gallery, each in every state it can be in. A demo widget that is there to
+//! be used writes its name to `last_activated`, so a test can tell which one took the click.
+//! Every label on the page is different, so a test can find one widget by its label.
 
 use eframe::egui::{self, Response};
 
@@ -22,6 +22,10 @@ const BOOKS: [&str; 2] = [
 pub(super) const CUT_CHIP: &str = "A concept chip with a label far too long to fit";
 /// A stepper text wider than the room a short one gets, to show that the stepper grows.
 pub(super) const LONG_STEP: &str = "page 5 of 7";
+/// The text of the stepper in the panel header, where the actions run from right to left.
+pub(super) const HEADER_STEP: &str = "2 of 6";
+/// The width of the dropdown whose choice is too long for it, to show that it stays that wide.
+pub(super) const BOOK_WIDTH: f32 = 160.0;
 const PLACEHOLDER_AREA: egui::Vec2 = egui::vec2(196.0, 170.0);
 
 pub(super) fn show(ui: &mut egui::Ui, state: &mut GalleryState) {
@@ -33,6 +37,7 @@ pub(super) fn show(ui: &mut egui::Ui, state: &mut GalleryState) {
     notices(ui, state);
     placeholders(ui, state);
     progress(ui);
+    panel_header(ui, state);
     confirm(ui, state);
 }
 
@@ -151,7 +156,7 @@ fn inputs(ui: &mut egui::Ui, state: &mut GalleryState) {
         }
         let book = Dropdown::new("gallery-book", "Book", &BOOKS)
             .selected(Some(1))
-            .width(160.0)
+            .width(BOOK_WIDTH)
             .show(ui);
         if book.is_some() {
             state.last_activated = Some("Dropdown::width");
@@ -271,9 +276,9 @@ fn cards(ui: &mut egui::Ui, state: &mut GalleryState) {
         ],
     ] {
         ui.horizontal_top(|ui| {
-            for (label, look, selected) in pair {
+            for (label, look, is_selected) in pair {
                 column(ui, width, 0.0, |ui| {
-                    let mut card = Card::new().clickable(label).selected(selected);
+                    let mut card = Card::new().clickable(label).selected(is_selected);
                     if let Some(look) = look {
                         card = card.preview(look);
                     }
@@ -291,14 +296,14 @@ fn cards(ui: &mut egui::Ui, state: &mut GalleryState) {
 fn chips(ui: &mut egui::Ui, state: &mut GalleryState) {
     section(ui, "Chips, badges and markers");
     ui.horizontal_wrapped(|ui| {
-        for (number, look, selected) in [
+        for (number, look, is_selected) in [
             (1, None, false),
             (2, Some(Look::HOVERED), false),
             (3, None, true),
             (4, Some(Look::FOCUSED), false),
             (12, None, false),
         ] {
-            let mut chip = CitationChip::new(number).selected(selected);
+            let mut chip = CitationChip::new(number).selected(is_selected);
             if let Some(look) = look {
                 chip = chip.preview(look);
             }
@@ -353,13 +358,13 @@ fn chips(ui: &mut egui::Ui, state: &mut GalleryState) {
         ui.add(Badge::new("Copied").tone(Tone::Success).icon(Icon::CHECK));
     });
     ui.horizontal(|ui| {
-        for (number, state) in [
+        for (number, status) in [
             (1, StepState::Done),
             (2, StepState::Done),
             (3, StepState::Active),
             (4, StepState::Pending),
         ] {
-            ui.add(StepMarker::new(number).tone(Tone::Magenta).state(state));
+            ui.add(StepMarker::new(number).tone(Tone::Magenta).state(status));
         }
         ui.add(StepMarker::new(5).state(StepState::Active));
     });
@@ -434,8 +439,18 @@ fn progress(ui: &mut egui::Ui) {
         progress_bar(ui, "Reading the page", 0.4);
         progress_bar(ui, "Ingest finished", 1.0);
     });
+}
+
+fn panel_header(ui: &mut egui::Ui, state: &mut GalleryState) {
     section_header(ui, "A panel header", |ui| {
         ui.add(Button::icon_only(Icon::FIT, "Fit to width"));
+        let paged = Stepper::new(HEADER_STEP)
+            .previous("Previous figure", true)
+            .next("Next figure", true)
+            .show(ui);
+        if paged.is_some() {
+            state.last_activated = Some("Stepper::header");
+        }
     });
     separator(ui);
     ui.add_space(space::SM);

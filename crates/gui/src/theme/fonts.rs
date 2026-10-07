@@ -35,6 +35,7 @@ fn text_family(first: &str) -> Vec<String> {
 /// Every font and family the app draws with. Hack and the emoji fonts come from eframe.
 pub(super) fn definitions() -> FontDefinitions {
     let mut fonts = FontDefinitions::default();
+    // No family below names the text font that egui starts with, so it is not kept.
     fonts.font_data.remove("Ubuntu-Light");
     fonts.font_data.insert("inter-400".into(), inter(400.0));
     fonts.font_data.insert("inter-500".into(), inter(500.0));

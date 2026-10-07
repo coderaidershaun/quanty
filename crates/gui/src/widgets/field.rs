@@ -21,7 +21,9 @@ pub struct TextInput<'a> {
     width: Option<f32>,
 }
 
-/// What a text box reports. `submitted` is Enter while the box has the focus.
+/// What a text box reports. `response` is that of the text itself, so its id is the one that
+/// holds the focus. `submitted` is Enter while the box has the focus, and the box then gives the
+/// focus up.
 pub struct TextInputResponse {
     pub response: Response,
     pub submitted: bool,
@@ -29,6 +31,8 @@ pub struct TextInputResponse {
 }
 
 impl<'a> TextInput<'a> {
+    /// `id_salt` must be different for each box in the same `Ui`, because the focus and the
+    /// cursor are kept under it. `label` is the accessible name.
     pub fn new(id_salt: &'a str, label: &'a str, text: &'a mut String) -> Self {
         // SMELL: `id_salt` and `label` are both `&str`, so a call that swaps them still compiles.
         TextInput {
@@ -149,6 +153,11 @@ impl<'a> TextInput<'a> {
     }
 }
 
+/// `width`, or `fallback` when the room is endless, as it is inside a sideways scroll area.
+fn finite_or(width: f32, fallback: f32) -> f32 {
+    if width.is_finite() { width } else { fallback }
+}
+
 /// A closed box that opens a list of choices. It never keeps the choice: it reports the index
 /// the person picked, and the caller passes the chosen one back in with `selected`.
 pub struct Dropdown<'a, S> {
@@ -162,6 +171,8 @@ pub struct Dropdown<'a, S> {
 }
 
 impl<'a, S: AsRef<str>> Dropdown<'a, S> {
+    /// `id_salt` must be different for each dropdown in the same `Ui`, because the open list is
+    /// kept under it. `label` is the accessible name.
     pub fn new(id_salt: &'a str, label: &'a str, options: &'a [S]) -> Self {
         // SMELL: `id_salt` and `label` are both `&str`, so a call that swaps them still compiles.
         Dropdown {
@@ -308,13 +319,10 @@ pub enum Step {
     Next,
 }
 
-/// `width`, or `fallback` when the room is endless, as it is inside a sideways scroll area.
-fn finite_or(width: f32, fallback: f32) -> f32 {
-    if width.is_finite() { width } else { fallback }
-}
-
 /// The centre text of a stepper is at least this wide, so "p. 9" and "p. 64" do not move it.
 const STEPPER_TEXT_WIDTH: f32 = 48.0;
+/// The size of the two buttons of a stepper, which is also how high the text between them is.
+const STEPPER_SIZE: ControlSize = ControlSize::Small;
 
 /// A pair of previous and next buttons with a short text between them, such as a page number.
 pub struct Stepper<'a> {
@@ -333,16 +341,19 @@ impl<'a> Stepper<'a> {
         }
     }
 
+    /// The accessible name of the button that goes back, and whether it can be pressed.
     pub fn previous(mut self, label: &'a str, is_enabled: bool) -> Self {
         self.previous = (label, is_enabled);
         self
     }
 
+    /// The accessible name of the button that goes on, and whether it can be pressed.
     pub fn next(mut self, label: &'a str, is_enabled: bool) -> Self {
         self.next = (label, is_enabled);
         self
     }
 
+    /// The button the person just pressed.
     pub fn show(self, ui: &mut egui::Ui) -> Option<Step> {
         let mut step = None;
         egui::Frame::NONE
@@ -351,31 +362,48 @@ impl<'a> Stepper<'a> {
             .corner_radius(radius::MD)
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
+                let side = STEPPER_SIZE.height();
+                let text_width = TextRole::Label.galley(ui, self.text, color::TEXT).size().x;
+                let middle = egui::vec2(text_width.max(STEPPER_TEXT_WIDTH), side);
+                let whole = egui::vec2(side + middle.x + side, side);
+                // A row takes the direction of the layout around it, so in a right-to-left
+                // one it would put the next button first. The row stays, to put the stepper
+                // where it always was, and the three parts get a row of their own inside it,
+                // exactly as wide as they are, that always runs from left to right.
+                let left_to_right = egui::Layout::left_to_right(Align::Center);
                 ui.horizontal(|ui| {
-                    let (label, is_enabled) = self.previous;
-                    let button = Button::icon_only(Icon::CARET_LEFT, label);
-                    if ui.add_enabled(is_enabled, button).clicked() {
-                        step = Some(Step::Previous);
-                    }
-                    let text_width = TextRole::Label.galley(ui, self.text, color::TEXT).size().x;
-                    let middle = egui::vec2(text_width.max(STEPPER_TEXT_WIDTH), size::CONTROL_SM);
-                    ui.allocate_ui_with_layout(
-                        middle,
-                        egui::Layout::centered_and_justified(egui::Direction::TopDown),
-                        |ui| {
-                            // A label in a column wraps at the width it is given, and the room
-                            // may be rounded to a hair less than the text.
-                            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-                            ui.label(TextRole::Label.rich(self.text))
-                        },
-                    );
-                    let (label, is_enabled) = self.next;
-                    let button = Button::icon_only(Icon::CARET_RIGHT, label);
-                    if ui.add_enabled(is_enabled, button).clicked() {
-                        step = Some(Step::Next);
-                    }
+                    ui.allocate_ui_with_layout(whole, left_to_right, |ui| {
+                        step = self.show_parts(ui, middle);
+                    });
                 });
             });
+        step
+    }
+
+    /// Draws the previous button, the text and the next button, and says which button was
+    /// pressed.
+    fn show_parts(&self, ui: &mut egui::Ui, middle: egui::Vec2) -> Option<Step> {
+        let mut step = None;
+        let (label, is_enabled) = self.previous;
+        let button = Button::icon_only(Icon::CARET_LEFT, label).size(STEPPER_SIZE);
+        if ui.add_enabled(is_enabled, button).clicked() {
+            step = Some(Step::Previous);
+        }
+        ui.allocate_ui_with_layout(
+            middle,
+            egui::Layout::centered_and_justified(egui::Direction::TopDown),
+            |ui| {
+                // A label in a column wraps at the width it is given, and the room may be
+                // rounded to a hair less than the text.
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                ui.label(TextRole::Label.rich(self.text))
+            },
+        );
+        let (label, is_enabled) = self.next;
+        let button = Button::icon_only(Icon::CARET_RIGHT, label).size(STEPPER_SIZE);
+        if ui.add_enabled(is_enabled, button).clicked() {
+            step = Some(Step::Next);
+        }
         step
     }
 }

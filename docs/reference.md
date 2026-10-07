@@ -34,7 +34,7 @@ The `claude` CLI must be on your `PATH` and signed in.
 ## Converting a chapter
 
 ```bash
-cargo run -p ocr -- --book "Option Volatility and Pricing" chapter-1-sample-pages.pdf
+cargo run --release -p ocr -- --book "Option Volatility and Pricing" chapter-1-sample-pages.pdf
 ```
 
 The file must be named `chapter-<number>-<name>.pdf`. Every page is broken into its pieces (headings, text, formulas, figures, tables and footnotes) and saved under `content/<book-title>/chapter-<number>/page-num-<i>/`, with a `page.json` for each page and a `chapter.json` for the chapter. Each figure also gets its own picture, `NN-figure.png`, cut out of the page beside its `.md` file, and a figure that cannot be cut out keeps the whole page as its picture and is listed in the summary. `--out <folder>` saves somewhere other than `content`. The command only saves files: nothing is put into Qdrant or FalkorDB.
@@ -46,7 +46,7 @@ Later crates read a chapter back, in reading order, with `ocr::read_chapter`.
 ## Checking the stores
 
 ```bash
-cargo run -p rag-ingestion --bin rag-ingest -- health
+cargo run --release -p rag-ingestion --bin rag-ingest -- health
 ```
 
 Prints one line each for Qdrant, FalkorDB and the `claude` sign-in, and exits with 1 when any of them is not ready. The addresses come from `QDRANT_URL` (the gRPC port, default `http://localhost:6334`) and `FALKORDB_URL` (default `falkor://localhost:6379`). The environment wins over `.env`.
@@ -56,7 +56,7 @@ If another program on your machine, such as a Homebrew Redis, already listens on
 ## Ingesting a chapter
 
 ```bash
-cargo run -p rag-ingestion --bin rag-ingest -- samples/content/quanty-sample-notes/chapter-2
+cargo run --release -p rag-ingestion --bin rag-ingest -- samples/content/quanty-sample-notes/chapter-2
 ```
 
 Reads one converted chapter folder with `ocr::read_chapter` and stores its items in a Qdrant collection, `items` unless `QDRANT_ITEMS_COLLECTION` names another. Text becomes chunks of about 300 to 500 tokens that never run past a heading, and a paragraph that a page break cut in two is joined again. Each formula, figure and table is an item of its own. A figure is embedded as its own picture together with its explanation, as one vector, and its payload keeps the path of the picture. Every item carries the book, chapter and section it sits in.
@@ -89,7 +89,7 @@ After the lines about items and points, the summary prints how many concepts wer
 ## Ingesting a whole chapter PDF
 
 ```bash
-cargo run -p rag-ingestion --bin rag-ingest -- pdf --book "Option Volatility and Pricing" chapter-1-sample-pages.pdf
+cargo run --release -p rag-ingestion --bin rag-ingest -- pdf --book "Option Volatility and Pricing" chapter-1-sample-pages.pdf
 ```
 
 Does in one run what "Converting a chapter" and "Ingesting a chapter" do in two, with no one in between. The file must be named `chapter-<number>-<name>.pdf`, and `--book` is the title of the book that the chapter is from. A missing `--book`, a file name that does not fit and a path that is not there are each refused with a message before anything is started, and cost nothing. The PDF is converted by `ocr` into the folder that `CONTENT_DIR` names (`content` unless set), under `<book-title>/chapter-<number>/`, exactly as in "Converting a chapter". The converted chapter folder is then ingested with the steps of "Ingesting a chapter".
@@ -109,7 +109,7 @@ The mark is set by every ingest, of a chapter folder, of a picture or by `pdf`, 
 ## Ingesting a lone picture
 
 ```bash
-cargo run -p rag-ingestion --bin rag-ingest -- chart.png --note "A chart from a book on option trading."
+cargo run --release -p rag-ingestion --bin rag-ingest -- chart.png --note "A chart from a book on option trading."
 ```
 
 A picture that stands alone, such as a chart, is ingested as a document of one figure. The file must be a PNG or a JPEG. `ocr` copies it to `images/<the first 16 hex digits of its SHA-256>/` under the folder that `CONTENT_DIR` names (`content` unless set), asks Sonnet through `claude` to explain it, and saves the explanation, which quotes the words printed on the figure, as `figure.md`, with an `image.json` that says where it came from. Nothing is cut out of the picture. It is not started while `ANTHROPIC_API_KEY` is set, and the command checks `EMBEDDING_GEMINI_API_KEY` before Sonnet is paid. The command then does what it does for a chapter: one `Document` node, named after the file, and one `Item` node, one point that is embedded from the picture together with its explanation, and the concepts of the explanation.
@@ -121,8 +121,8 @@ The document id is made from the SHA-256 of the picture's bytes, as a chapter's 
 ## Labelling a document
 
 ```bash
-cargo run -p rag-ingestion --bin rag-ingest -- samples/content/option-volatility-and-pricing/chapter-1 --author "Sheldon Natenberg" --tag options --tag volatility
-cargo run -p rag-ingestion --bin rag-ingest -- tag <document id> --author "Sheldon Natenberg" --add greeks --remove volatility
+cargo run --release -p rag-ingestion --bin rag-ingest -- samples/content/option-volatility-and-pricing/chapter-1 --author "Sheldon Natenberg" --tag options --tag volatility
+cargo run --release -p rag-ingestion --bin rag-ingest -- tag <document id> --author "Sheldon Natenberg" --add greeks --remove volatility
 ```
 
 A document has three labels: its `book`, its `author` and free `tags`, such as "options". They belong to the document, so every item point of it stores them flat in its payload, as `book`, `author` and `tags`, and the `Document` node has the same three properties. A label that the document does not have is left out, except that the node of a document with no tag keeps `tags` as an empty list. Labels are not embedded and no id is made from them, so a label never changes a document id, an item id or the text that Gemini embeds. A tag is not a concept: nothing in the concept graph changes.
@@ -138,7 +138,7 @@ A document that was stored before labels existed has no `book` until it is inges
 ## Deleting a document
 
 ```bash
-cargo run -p rag-ingestion --bin rag-ingest -- delete-document <document id>
+cargo run --release -p rag-ingestion --bin rag-ingest -- delete-document <document id>
 ```
 
 Removes one document from both stores: its points from the Qdrant collection, and its `Document` node, its `Item` nodes and all their edges from the graph, the `MENTIONS` of its items among them. Other documents are left whole. Concepts, their `RELATES_TO` edges, their points in the concepts collection and their aliases stay, because they belong to no document. The document id is the one that an ingest prints as `document id`. The command prints how many points and nodes it removed, and refuses an id under which neither store holds anything, so an item id or a mistyped id removes nothing.
@@ -148,9 +148,9 @@ Run it again if it stopped half way: it removes what is left. It is also the way
 ## Asking a question
 
 ```bash
-cargo run -p rag-retrieval --bin rag-query -- "What is the Black–Scholes partial differential equation?"
-cargo run -p rag-retrieval --bin rag-query -- --answer "What is the Black–Scholes partial differential equation?"
-cargo run -p rag-retrieval --bin rag-query -- eval
+cargo run --release -p rag-retrieval --bin rag-query -- "What is the Black–Scholes partial differential equation?"
+cargo run --release -p rag-retrieval --bin rag-query -- --answer "What is the Black–Scholes partial differential equation?"
+cargo run --release -p rag-retrieval --bin rag-query -- eval
 ```
 
 The command reads what an ingest wrote: the items collection that `QDRANT_ITEMS_COLLECTION` names (`items` unless set), the concepts collection that `QDRANT_CONCEPTS_COLLECTION` names (`concepts` unless set) and the graph that `FALKORDB_GRAPH` names (`quanty` unless set). Every ingest creates both collections, also when it finds no concept. The command needs `EMBEDDING_GEMINI_API_KEY`, and Gemini bills each question by the token. A store that is down stops the command with a message that names it. FalkorDB is connected to before the question is embedded, so a graph that is down costs nothing.

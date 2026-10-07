@@ -9,7 +9,7 @@ You need Docker, Rust, [Poppler](https://poppler.freedesktop.org/) (`brew instal
 ```bash
 cp .env.example .env    # set CONVERTER_JEV_API_KEY and EMBEDDING_GEMINI_API_KEY
 docker compose up -d    # Qdrant and FalkorDB
-cargo run -p rag-ingestion --bin rag-ingest -- health
+cargo run --release -p rag-ingestion --bin rag-ingest -- health
 ```
 
 `health` must print three `ok` lines. Two things that trip it up:
@@ -22,7 +22,7 @@ cargo run -p rag-ingestion --bin rag-ingest -- health
 One chapter per PDF, named `chapter-<number>-<name>.pdf`.
 
 ```bash
-cargo run -p rag-ingestion --bin rag-ingest -- pdf \
+cargo run --release -p rag-ingestion --bin rag-ingest -- pdf \
   --book "Option Volatility and Pricing" \
   --author "Sheldon Natenberg" --tag options \
   samples/chapter-1-sample-pages.pdf
@@ -36,7 +36,7 @@ This converts every page, stores the items, and links their concepts. `--author`
 ## 3. Ask a question
 
 ```bash
-cargo run -p rag-retrieval --bin rag-query -- "What is the Black–Scholes formula for a call option?"
+cargo run --release -p rag-retrieval --bin rag-query -- "What is the Black–Scholes formula for a call option?"
 ```
 
 | Add | To get |
@@ -54,6 +54,6 @@ cargo run -p rag-retrieval --bin rag-query -- "What is the Black–Scholes formu
 | `rag-ingest delete-document <document id>` | Removes a document from both stores |
 | `rag-query eval` | Scores the questions in `golden.toml` |
 
-Run each as `cargo run -p rag-ingestion --bin rag-ingest -- …` or `cargo run -p rag-retrieval --bin rag-query -- …`. The document id is printed by every ingest.
+Run each as `cargo run --release -p rag-ingestion --bin rag-ingest -- …` or `cargo run --release -p rag-retrieval --bin rag-query -- …`. The document id is printed by every ingest.
 
 Everything else is in [docs/reference.md](docs/reference.md).

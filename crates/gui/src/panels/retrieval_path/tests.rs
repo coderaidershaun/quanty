@@ -171,6 +171,18 @@ fn a_step_not_reached_says_so_and_a_real_zero_is_a_zero() {
     assert_eq!(harness.get_all_by_label("Not reached").count(), 4);
     testkit::save_png(&mut harness, "retrieval-path-no-labels");
 
+    // A filter that some documents carry, and no item of them is near: the filters are the cause.
+    let trace = RetrievalTrace {
+        documents_searched: Some(2),
+        ..RetrievalTrace::default()
+    };
+    let mut harness = path(DEFAULT, found_nothing(trace));
+    harness.run();
+    harness.get_by_label("0 items");
+    harness.get_by_label("No item matches the filters.");
+    assert!(!says(&harness, "The library holds no items"));
+    testkit::save_png(&mut harness, "retrieval-path-no-match");
+
     // Every step ran and found nothing to add: these are zeros, not steps that were missed.
     let trace = RetrievalTrace {
         nearest: 8,

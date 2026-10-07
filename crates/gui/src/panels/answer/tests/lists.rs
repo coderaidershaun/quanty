@@ -15,6 +15,8 @@ use crate::theme::space;
 /// egui spreads one turn of the wheel over a few frames. This many frames end it.
 const WHEEL_FRAMES: usize = 8;
 
+const LONG_TEXT: &str = "The model rests on a short list of assumptions, and each one is a simplification. The stock pays no dividends during the life of the option. Its volatility and the risk-free interest rate are constants. Trading is continuous and costs nothing, and any amount of a share, including a fraction of a share, can be bought or sold short. There is no way to make a risk-free profit. The option is European, so it can be exercised only at expiration.";
+
 #[test]
 fn each_tab_lists_the_results_of_its_kind_under_their_own_numbers() {
     let counts = Listing::of(&found().results).counts;
@@ -48,6 +50,30 @@ fn each_tab_lists_the_results_of_its_kind_under_their_own_numbers() {
             Some(tab),
         );
     }
+
+    // A text that does not fit its three lines ends with `…`, and a short one has none.
+    let mut harness = pane(TALL, answered());
+    harness.run();
+    open_tab(&mut harness, "Results");
+    assert!(harness.query_by_label("…").is_none(), "no text is cut here");
+
+    let mut long = found();
+    long.results[1].text = format!("{LONG_TEXT} {LONG_TEXT}");
+    let shared = testkit::answered(long, sample::concept_graph(), written());
+    let mut harness = pane(TALL, shared.clone());
+    harness.run();
+    open_tab(&mut harness, "Results");
+    let card = harness.get_by_label("Result 2").rect();
+    let mark = harness.get_by_label("…").rect();
+    assert!(
+        card.contains_rect(mark) && (card.right() - mark.right()) < 2.0 * space::LG,
+        "the mark {mark:?} ends the text of the card {card:?}"
+    );
+    assert!(
+        harness.get_by_label("Result 3").rect().top() > mark.bottom(),
+        "the mark is on the last line of the text, and not under it"
+    );
+    look("answer-results-long-text", shared, Some("Results"));
 
     let without_table = SearchReply {
         results: found().results[..4].to_vec(),

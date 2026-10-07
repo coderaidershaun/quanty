@@ -29,9 +29,9 @@ const NO_LABELS_TITLE: &str = "No document has these labels";
 const NO_LABELS_BODY: &str = "Nothing was searched. Clear a filter in the Ask bar and ask again.";
 const NO_SOURCES_TITLE: &str = "No sources found";
 const LABELS_NO_ITEMS_BODY: &str =
-    "The documents with these labels hold no items. Clear a filter and ask again.";
+    "No item in your library matches the filters of this question. Clear a filter, then ask again.";
 const EMPTY_LIBRARY_BODY: &str =
-    "Your library holds no items yet. Add a chapter with rag-ingest, then ask again.";
+    "Your library holds no items yet. Add a chapter on the Ingest tab, then ask again.";
 const RESULTS_ONLY: &str = "Results only: no answer is written, so no questions are suggested. Choose Answer in the Ask bar to get them.";
 
 /// What shows under the box: a message, then the questions to ask next.

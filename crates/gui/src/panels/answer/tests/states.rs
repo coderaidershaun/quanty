@@ -45,6 +45,14 @@ fn each_state_says_what_happened_and_what_to_do() {
         ..SearchReply::default()
     });
 
+    let no_item_matches = testkit::searched(SearchReply {
+        trace: RetrievalTrace {
+            documents_searched: Some(2),
+            ..RetrievalTrace::default()
+        },
+        ..SearchReply::default()
+    });
+
     let mut answer_failed = testkit::searched(found());
     deliver(&mut answer_failed, |request| Event::Answer {
         request,
@@ -73,7 +81,10 @@ fn each_state_says_what_happened_and_what_to_do() {
         State {
             name: "idle-empty-library",
             shared: empty_library,
-            words: ["Your library is empty", "Add a chapter with rag-ingest"],
+            words: [
+                "Your library is empty",
+                "Add a chapter on the Ingest tab, then ask about it here.",
+            ],
             results_stand: false,
         },
         State {
@@ -105,7 +116,16 @@ fn each_state_says_what_happened_and_what_to_do() {
             shared: testkit::searched(SearchReply::default()),
             words: [
                 "No results",
-                "Nothing in your library is close to this question.",
+                "Your library holds no items yet. Add a chapter on the Ingest tab, then ask again.",
+            ],
+            results_stand: false,
+        },
+        State {
+            name: "no-results-filtered",
+            shared: no_item_matches,
+            words: [
+                "No results",
+                "No item in your library matches the filters of this question. Clear a filter, then ask again.",
             ],
             results_stand: false,
         },

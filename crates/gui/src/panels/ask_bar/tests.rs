@@ -301,7 +301,7 @@ fn a_library_that_is_loading_empty_or_failed_says_so_and_offers_the_way_out() {
     testkit::save_png(&mut harness, "ask-bar-library-loading");
 
     let mut harness = bar(WIDE, shared_with(Catalogue { books: Vec::new() }));
-    harness.get_by_label("Your library is empty. Add a chapter with rag-ingest.");
+    harness.get_by_label("Your library is empty. Add a chapter on the Ingest tab.");
     assert!(
         harness
             .query_by_role_and_label(Role::Button, "Ingest a chapter")

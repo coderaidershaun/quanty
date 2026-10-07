@@ -117,15 +117,10 @@ fn figure_room(ui: &egui::Ui) -> egui::Vec2 {
     egui::vec2(ui.available_width(), height)
 }
 
-/// Scrolls the list to the block. The block is centred when it fits in the room, and else its
-/// start is shown.
-pub(super) fn bring_into_view(ui: &egui::Ui, block: &egui::Response) {
-    let align = if block.rect.height() < ui.clip_rect().height() {
-        egui::Align::Center
-    } else {
-        egui::Align::Min
-    };
-    block.scroll_to_me_animation(Some(align), egui::style::ScrollAnimation::none());
+/// Scrolls the list so that the block starts at the top edge of its room, or as near to it as the
+/// end of the list allows. The block is never above the top edge.
+pub(super) fn bring_into_view(block: &egui::Response) {
+    block.scroll_to_me_animation(Some(egui::Align::Min), egui::style::ScrollAnimation::none());
 }
 
 /// True while the person scrolls or presses in the room that is left. Then a piece that was

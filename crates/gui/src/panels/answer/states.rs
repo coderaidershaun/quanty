@@ -9,12 +9,17 @@ use crate::contract::{Failure, Loadable};
 use crate::theme::{Icon, TextRole};
 use crate::widgets::{self, Placeholder};
 
+const NO_ITEMS_HINT: &str =
+    "Your library holds no items yet. Add a chapter on the Ingest tab, then ask again.";
+const NO_ITEM_MATCHES_HINT: &str =
+    "No item in your library matches the filters of this question. Clear a filter, then ask again.";
+
 /// The whole body, for a search that has no result to show.
 pub(super) fn whole(ui: &mut egui::Ui, pane: &Pane<'_, '_>) {
     match pane.phase {
         Phase::Idle | Phase::NoResults if library_is_empty(pane) => {
             Placeholder::empty(Icon::LIBRARY, "Your library is empty")
-                .hint("Add a chapter with rag-ingest, then ask about it here.")
+                .hint("Add a chapter on the Ingest tab, then ask about it here.")
                 .show(ui);
         }
         Phase::Idle => {
@@ -40,7 +45,7 @@ pub(super) fn whole(ui: &mut egui::Ui, pane: &Pane<'_, '_>) {
         }
         Phase::NoResults => {
             Placeholder::empty(Icon::SEARCH, "No results")
-                .hint("Nothing in your library is close to this question.")
+                .hint(why_nothing_was_found(pane))
                 .show(ui);
         }
         Phase::Found { .. } => {}
@@ -103,6 +108,22 @@ fn library_is_empty(pane: &Pane<'_, '_>) -> bool {
         &pane.cx.shared.library.catalogue,
         Loadable::Ready(catalogue) if catalogue.documents().next().is_none()
     )
+}
+
+/// A search has no score limit, so it finds nothing only when the library holds no items or the
+/// filters of the question leave none. A search that had a filter reports how many documents
+/// matched it.
+fn why_nothing_was_found(pane: &Pane<'_, '_>) -> &'static str {
+    let had_a_filter = pane
+        .ask
+        .search
+        .ready()
+        .is_some_and(|reply| reply.trace.documents_searched.is_some());
+    if had_a_filter {
+        NO_ITEM_MATCHES_HINT
+    } else {
+        NO_ITEMS_HINT
+    }
 }
 
 /// A filter that matched no document: the search stopped before it looked at any item.

@@ -1,4 +1,5 @@
-//! The list of results, one card for each, with a preview cut at a fixed height.
+//! The list of results, one card for each, with a preview cut at a fixed height. A text that the
+//! cut takes a part of ends with `…`.
 
 use eframe::egui;
 
@@ -20,6 +21,7 @@ const SCORE_WIDTH: f32 = size::CONTROL_LG;
 /// Rounding to whole pixels can move a row by a hair. This is the room that allows for it.
 const SLACK: f32 = 1.0;
 const SCORE_HELP: &str = "How close the item is to the question. Higher is closer.";
+const CUT_MARK: &str = "…";
 
 /// The results this tab lists, in the order of the search and under their own numbers.
 pub(super) fn list(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, tab: AnswerTab) {
@@ -99,12 +101,57 @@ fn card(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem, row: &Row
         .clickable(&row.open_label)
         .show(ui, |ui| {
             let chip_clicked = head(ui, item, row, is_selected);
-            let preview_clicked = preview(ui, pane, item, row);
-            chip_clicked || preview_clicked
+            let (preview_clicked, cut) = preview(ui, pane, item, row);
+            (chip_clicked || preview_clicked, cut)
         });
-    if card.response.clicked() || card.inner {
+    let (inner_clicked, cut) = card.inner;
+    if card.response.clicked() || inner_clicked {
         pane.select(item.number);
     }
+    if let Some(window) = cut {
+        let is_lit = card.response.hovered() || card.response.is_pointer_button_down_on();
+        mark_cut(ui, window, is_lit);
+    }
+}
+
+/// Puts `…` at the end of the last line of `window`, over a fade of the card's own fill, so a
+/// text that goes on past the box does not look as if it ended there. `is_lit` says the card is
+/// drawn in its hover fill. The mark is drawn after the card, so nothing covers it.
+fn mark_cut(ui: &mut egui::Ui, window: egui::Rect, is_lit: bool) {
+    let fill = if is_lit {
+        color::RAISED_HOVER
+    } else {
+        color::RAISED
+    };
+    let mark = TextRole::Small.rich(CUT_MARK);
+    let width = TextRole::Small.galley(ui, CUT_MARK, fill).size().x;
+    let line = egui::Rect::from_min_max(
+        egui::pos2(
+            window.right() - width,
+            window.bottom() - TextRole::Small.line_height(),
+        ),
+        window.right_bottom(),
+    );
+    let solid_from = line.left() - space::SM;
+    let fade_from = solid_from - space::LG;
+    let top = line.top();
+    let bottom = line.bottom();
+    let mut fade = egui::Mesh::default();
+    for (x, tint) in [
+        (fade_from, egui::Color32::TRANSPARENT),
+        (solid_from, fill),
+        (window.right(), fill),
+    ] {
+        fade.colored_vertex(egui::pos2(x, top), tint);
+        fade.colored_vertex(egui::pos2(x, bottom), tint);
+    }
+    for column in 0..2 {
+        let at = column * 2;
+        fade.add_triangle(at, at + 1, at + 2);
+        fade.add_triangle(at + 1, at + 2, at + 3);
+    }
+    ui.painter().add(fade);
+    ui.put(line, egui::Label::new(mark).selectable(false).extend());
 }
 
 /// The chip, the kind, the place and the score on one line, and the reason under it. Returns
@@ -144,22 +191,28 @@ fn head(ui: &mut egui::Ui, item: &ResultItem, row: &Row, is_selected: bool) -> b
 }
 
 /// The start of the item, cut at a fixed height. Returns true when a picture or a formula in
-/// it was clicked.
-fn preview(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem, row: &Row) -> bool {
+/// it was clicked, and the box of the text when the cut took a part of it.
+fn preview(
+    ui: &mut egui::Ui,
+    pane: &mut Pane<'_, '_>,
+    item: &ResultItem,
+    row: &Row,
+) -> (bool, Option<egui::Rect>) {
     match item.kind {
         ItemKind::Chunk => {
-            clipped(ui, TEXT_PREVIEW, |ui| pane.rich(ui, &small(&item.text)));
-            false
+            let cut = clipped(ui, TEXT_PREVIEW, |ui| pane.rich(ui, &small(&item.text)));
+            (false, cut)
         }
         ItemKind::Formula => {
             if let Some(name) = &item.name {
                 ui.label(TextRole::Small.rich(name));
             }
             let formula = math::MathRef::block(&item.text);
-            math::show(ui, pane.cx.media, &formula).clicked()
+            (math::show(ui, pane.cx.media, &formula).clicked(), None)
         }
         ItemKind::Figure => {
             let mut clicked = false;
+            let mut cut = None;
             ui.horizontal_top(|ui| {
                 if let Some(image) = &item.image {
                     let top_down = egui::Layout::top_down(egui::Align::Min);
@@ -171,7 +224,7 @@ fn preview(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem, row: &
                     });
                 }
                 ui.vertical(|ui| {
-                    clipped(ui, THUMBNAIL.y, |ui| {
+                    cut = clipped(ui, THUMBNAIL.y, |ui| {
                         if let Some(caption) = &item.caption {
                             pane.rich(ui, &small(caption));
                         }
@@ -179,7 +232,7 @@ fn preview(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem, row: &
                     });
                 });
             });
-            clicked
+            (clicked, cut)
         }
         ItemKind::Table => {
             if let Some(caption) = &item.caption {
@@ -188,7 +241,7 @@ fn preview(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem, row: &
             clipped(ui, TABLE_PREVIEW, |ui| {
                 pane.table(ui, &item.text, TextRole::Small);
             });
-            false
+            (false, None)
         }
     }
 }
@@ -198,14 +251,20 @@ fn small(text: &str) -> rich_text::RichText<'_> {
 }
 
 /// Draws `add_contents` in a box at most `max_height` high, cuts what does not fit, and takes
-/// only the room it used. A cut has no ellipsis.
-fn clipped(ui: &mut egui::Ui, max_height: f32, add_contents: impl FnOnce(&mut egui::Ui)) {
+/// only the room it used. Returns the box when something did not fit.
+fn clipped(
+    ui: &mut egui::Ui,
+    max_height: f32,
+    add_contents: impl FnOnce(&mut egui::Ui),
+) -> Option<egui::Rect> {
     let top_left = ui.cursor().min;
     let width = ui.available_width();
     let window = egui::Rect::from_min_size(top_left, egui::vec2(width, max_height));
     let mut child = ui.new_child(egui::UiBuilder::new().id_salt("preview").max_rect(window));
     child.set_clip_rect(window.intersect(ui.clip_rect()));
     add_contents(&mut child);
-    let used = child.min_rect().height().min(max_height);
+    let drawn = child.min_rect().height();
+    let used = drawn.min(max_height);
     ui.advance_cursor_after_rect(egui::Rect::from_min_size(top_left, egui::vec2(width, used)));
+    (drawn > max_height + SLACK).then_some(window)
 }

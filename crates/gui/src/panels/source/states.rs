@@ -5,10 +5,12 @@ use eframe::egui;
 use crate::contract::{Failure, FailureKind, Intent, Loadable};
 use crate::panels::PanelCx;
 use crate::theme::Icon;
-use crate::widgets::{Placeholder, PlaceholderResponse};
+use crate::widgets::{Button, ControlSize, Placeholder, PlaceholderResponse};
 
 /// In a room lower than this a placeholder sits in a scroll area, so none of it is cut off.
 const MIN_ROOM: f32 = 200.0;
+
+const RETRY: &str = "Try again";
 
 pub(super) fn show(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
     match &cx.shared.source.page {
@@ -23,7 +25,7 @@ pub(super) fn show(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
 fn nothing_open(ui: &mut egui::Ui, cx: &PanelCx<'_>) {
     let hint = match cx.shared.library.catalogue.ready() {
         Some(catalogue) if catalogue.documents().next().is_none() => {
-            "The library is empty. Add a chapter with rag-ingest to read it here."
+            "The library is empty. Add a chapter on the Ingest tab to read it here."
         }
         Some(_) => "Select a result, or choose a book above, to see the page it stands on.",
         None => "Select a result to see the page it stands on.",
@@ -39,18 +41,37 @@ fn failed(ui: &mut egui::Ui, failure: &Failure, cx: &mut PanelCx<'_>) {
         FailureKind::SourceMissing => "The page was not found",
         _ => "The page could not be opened",
     };
-    let placeholder = Placeholder::error(title)
-        .hint(&failure.hint)
-        .action("Try again");
-    let shown = whole_area(ui, placeholder);
-    shown.response.on_hover_text(&failure.detail);
-    if let (true, Some(target)) = (shown.action_clicked, cx.shared.source.target) {
+    let placeholder = Placeholder::error(title).hint(&failure.hint);
+    let is_retry_clicked = if ui.available_height() >= MIN_ROOM {
+        let shown = whole_area(ui, placeholder.action(RETRY));
+        shown.response.on_hover_text(&failure.detail);
+        shown.action_clicked
+    } else {
+        retry_below_scrolling_text(ui, placeholder, &failure.detail)
+    };
+    if let (true, Some(target)) = (is_retry_clicked, cx.shared.source.target) {
         cx.intents.push(Intent::OpenSource {
             doc: target.doc,
             page: target.page,
             piece: target.piece,
         });
     }
+}
+
+/// In a small room the button is fixed at the foot, so it is in view whatever the length of the
+/// hint, and only the text above it scrolls.
+fn retry_below_scrolling_text(
+    ui: &mut egui::Ui,
+    placeholder: Placeholder<'_>,
+    detail: &str,
+) -> bool {
+    ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
+        let retry = Button::secondary(RETRY).size(ControlSize::Small);
+        let is_clicked = ui.add(retry).clicked();
+        whole_area(ui, placeholder).response.on_hover_text(detail);
+        is_clicked
+    })
+    .inner
 }
 
 pub(super) fn whole_area(ui: &mut egui::Ui, placeholder: Placeholder<'_>) -> PlaceholderResponse {
@@ -78,9 +99,9 @@ mod tests {
     use crate::state::Shared;
     use crate::testkit::{self, Host, sample};
 
-    /// A hint of 130 characters. It wraps to several lines, so the placeholder under it needs
-    /// more room than the smallest panel gives.
-    const LONG_HINT: &str = "The folder of this chapter is not where the library says it is. Move the folder back, or ingest the chapter again, then try again.";
+    /// A hint with a long folder path in it, as the real one has. It wraps to many lines, so the
+    /// placeholder under it needs more room than the smallest panel gives.
+    const LONG_HINT: &str = "quanty does not know where this chapter's pages are. Put its chapter folder inside a book folder under /Users/someone/Code/quanty/crates/gui/tests/fixtures/samples, or ingest its PDF again with rag-ingest pdf.";
 
     /// True when a spinner that is named for this wait is on screen. A spinner of something else,
     /// such as a formula that is being typeset, does not count.
@@ -115,24 +136,24 @@ mod tests {
         }
     }
 
-    /// A failed page with a long hint in the smallest panel: the button under the hint is not cut
-    /// off. It can be scrolled into view, and then it opens the page again.
-    fn a_long_hint_leaves_the_button_in_reach() {
-        let title = "The page was not found";
+    /// A failed page with a long hint in the smallest panel: the button under the hint is in view
+    /// when the panel opens, and it opens the page again.
+    fn a_long_hint_leaves_the_button_in_view() {
         let mut failure = sample::failure(FailureKind::SourceMissing);
         failure.hint = LONG_HINT.to_owned();
         let mut harness = samples::panel(SMALLEST, failed(failure));
         harness.run();
-        let named = harness.query_all_by_label_contains(title);
-        let placeholder = named.map(|node| node.rect()).reduce(Rect::union);
-        let placeholder = placeholder.expect("the placeholder is drawn");
-        let again = harness.get_by_label("Try again");
-        assert!(placeholder.contains_rect(again.rect()), "{placeholder:?}");
-        again.scroll_to_me();
-        harness.run();
-        let room = samples::panel_room(SMALLEST);
         let again = harness.get_by_label("Try again").rect();
+        let room = samples::panel_room(SMALLEST);
         assert!(room.contains_rect(again), "{again:?} in {room:?}");
+        let named = harness.query_all_by_label_contains("The page was not found");
+        let title = named.map(|node| node.rect()).reduce(Rect::union);
+        let title = title.expect("the placeholder is drawn");
+        assert!(
+            room.top() <= title.top(),
+            "the text starts in view: {title:?}"
+        );
+        testkit::save_png(&mut harness, "source-missing-small");
         harness.get_by_label("Try again").click();
         harness.run();
         assert_eq!(harness.state().intents, vec![open()]);
@@ -156,7 +177,7 @@ mod tests {
         assert!(says(&harness, "No page open"));
         assert!(says(
             &harness,
-            "The library is empty. Add a chapter with rag-ingest to read it here."
+            "The library is empty. Add a chapter on the Ingest tab to read it here."
         ));
         assert!(!says(&harness, "Open Ingest"), "the button is not built");
         testkit::save_png(&mut harness, "source-empty");
@@ -208,7 +229,7 @@ mod tests {
         assert!(says(&harness, FailureKind::Internal.hint()));
         the_pager_of_a_failed_page_is_off(&mut harness);
 
-        a_long_hint_leaves_the_button_in_reach();
+        a_long_hint_leaves_the_button_in_view();
 
         let figure = Sample::FigureTop.piece(PieceKind::Figure);
         let mut gone = samples::page(Sample::FigureTop);

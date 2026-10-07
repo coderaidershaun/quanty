@@ -3,13 +3,17 @@
 use eframe::egui;
 
 use super::Local;
-use crate::contract::Intent;
+use super::books::{self, BookChoice, Offer};
+use crate::contract::{Catalogue, Intent, Loadable};
 use crate::panels::PanelCx;
 use crate::theme::{TextRole, color, space};
 use crate::widgets::{Button, ControlSize, Dropdown, TextInput};
 
-/// The books of the library are offered in a list this wide beside the box of the title.
-const BOOKS_WIDTH: f32 = 240.0;
+/// The button that goes back to the list of books is this wide.
+const BACK_WIDTH: f32 = 200.0;
+
+/// The last row of the list of books.
+const ADD_A_NEW_BOOK: &str = "Add a new book…";
 
 pub(super) const RULE: &str =
     "The file must be named chapter-<number>-<name>.pdf, for example chapter-3-greeks.pdf.";
@@ -54,51 +58,95 @@ fn file_row(ui: &mut egui::Ui, local: &Local, intents: &mut Vec<Intent>) {
             .as_deref()
             .and_then(|pdf| pdf.file_name())
             .map(|name| name.to_string_lossy().into_owned());
-        let shown = match name {
-            Some(name) => TextRole::Body.rich(name),
-            None => TextRole::Body
-                .rich("No file chosen")
-                .color(color::TEXT_MUTED),
+        let (words, tint) = match name {
+            Some(name) => (name, color::TEXT),
+            None => ("No file chosen".to_owned(), color::TEXT_MUTED),
         };
+        // No line height is set: a line taller than the font leaves the words above the middle
+        // of the row.
+        let shown = egui::RichText::new(words)
+            .font(TextRole::Body.font())
+            .color(tint);
         ui.add(egui::Label::new(shown).truncate());
     });
 }
 
-/// The box of the title, with the books of the library beside it when the library has loaded.
+/// The book: a list of the books of the library with `Add a new book…` last, or a box for the
+/// title of a new book. With no book in the library the box shows at once, with the reason.
 fn book_row(ui: &mut egui::Ui, local: &mut Local, cx: &PanelCx<'_>) {
-    caption(ui, "Book title");
-    let titles: Vec<&str> = cx
-        .shared
-        .library
-        .catalogue
-        .ready()
-        .into_iter()
-        .flat_map(|catalogue| &catalogue.books)
-        .filter_map(|book| book.title.as_deref())
-        .collect();
-    let list_width = if titles.is_empty() {
-        0.0
+    caption(ui, "Book");
+    let catalogue = &cx.shared.library.catalogue;
+    let offers = catalogue.ready().map(books::offers).unwrap_or_default();
+    let is_new = matches!(local.book, BookChoice::New(_));
+    if offers.is_empty() {
+        ui.label(TextRole::Small.rich(why_no_list(catalogue)));
+        new_book(ui, local, false);
+    } else if is_new {
+        new_book(ui, local, true);
     } else {
-        BOOKS_WIDTH + ui.spacing().item_spacing.x
+        list(ui, local, &offers);
+    }
+}
+
+/// Why the library offers no book to choose from.
+fn why_no_list(catalogue: &Loadable<Catalogue>) -> &str {
+    match catalogue {
+        Loadable::Idle | Loadable::Loading => "The library is still loading.",
+        Loadable::Failed(failure) => &failure.hint,
+        Loadable::Ready(catalogue) if catalogue.documents().next().is_none() => {
+            "No book is stored yet."
+        }
+        Loadable::Ready(_) => {
+            "No stored document names its book, so there is no list to choose from. Type the book's title."
+        }
+    }
+}
+
+fn list(ui: &mut egui::Ui, local: &mut Local, offers: &[Offer<'_>]) {
+    let mut rows: Vec<&str> = offers.iter().map(|offer| offer.title).collect();
+    rows.push(ADD_A_NEW_BOOK);
+    let chosen = match &local.book {
+        BookChoice::Existing(title) => offers.iter().position(|offer| offer.title == title),
+        _ => None,
+    };
+    let picked = Dropdown::new("ingest_book_list", "Book", &rows)
+        .selected(chosen)
+        .placeholder("Choose a book")
+        .size(ControlSize::Medium)
+        .width(ui.available_width())
+        .show(ui);
+    match picked.map(|index| offers.get(index)) {
+        Some(Some(offer)) => local.choose(offer),
+        Some(None) => local.start_new_book(),
+        None => {}
+    }
+}
+
+/// The box of the title of a new book, with a button back to the list when there is a list.
+fn new_book(ui: &mut egui::Ui, local: &mut Local, has_list: bool) {
+    let mut text = match &local.book {
+        BookChoice::Unchosen => String::new(),
+        BookChoice::Existing(title) | BookChoice::New(title) => title.clone(),
     };
     ui.horizontal(|ui| {
-        let width = (ui.available_width() - list_width).max(0.0);
-        TextInput::new("ingest_book", "Book title", &mut local.book)
-            .placeholder("The book this chapter is from")
-            .width(width)
+        let back = if has_list {
+            BACK_WIDTH + ui.spacing().item_spacing.x
+        } else {
+            0.0
+        };
+        let typed = TextInput::new("ingest_book", "Book title", &mut text)
+            .placeholder("The new book's title")
+            .width((ui.available_width() - back).max(0.0))
             .show(ui);
-        if titles.is_empty() {
-            return;
+        if typed.response.changed() {
+            local.book = BookChoice::New(text);
         }
-        let chosen = titles.iter().position(|title| *title == local.book);
-        let picked = Dropdown::new("ingest_books", "Books in the library", &titles)
-            .selected(chosen)
-            .placeholder("Use a book of the library")
-            .size(ControlSize::Medium)
-            .width(BOOKS_WIDTH)
-            .show(ui);
-        if let Some(index) = picked {
-            local.book = titles[index].to_owned();
+        if has_list
+            && ui
+                .add(Button::secondary("Choose from the library").min_width(BACK_WIDTH))
+                .clicked()
+        {
+            local.book = BookChoice::Unchosen;
         }
     });
 }

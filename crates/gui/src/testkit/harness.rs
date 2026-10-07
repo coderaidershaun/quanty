@@ -110,6 +110,15 @@ pub fn panel(
 /// # Panics
 /// When the scene does not exist or the backend cannot start.
 pub fn app(scene: &str, size: [f32; 2]) -> Harness<'static, App> {
+    app_at(scene, size, PIXELS_PER_POINT)
+}
+
+/// As `app`, drawn at this many pixels for each point. A picture that is kept on disk is drawn at
+/// 1.0, so that it stays small.
+///
+/// # Panics
+/// When the scene does not exist or the backend cannot start.
+pub fn app_at(scene: &str, size: [f32; 2], pixels_per_point: f32) -> Harness<'static, App> {
     let home = repository_root();
     let fake = Fake::scene(scene, &home)
         .unwrap_or_else(|error| panic!("the test cannot start the scene `{scene}`: {error}"))
@@ -121,7 +130,7 @@ pub fn app(scene: &str, size: [f32; 2]) -> Harness<'static, App> {
         fixture: Some(scene.to_owned()),
         anthropic_api_key_set: false,
     };
-    app_on(fake, facts, opening, size)
+    build_app(fake, facts, opening, size, pixels_per_point)
 }
 
 /// The whole app on any backend, with no file dialog. `app` is this on the fake backend.
@@ -134,9 +143,19 @@ pub fn app_on(
     opening: Vec<Intent>,
     size: [f32; 2],
 ) -> Harness<'static, App> {
+    build_app(handler, facts, opening, size, PIXELS_PER_POINT)
+}
+
+fn build_app(
+    handler: impl Handler,
+    facts: StartupFacts,
+    opening: Vec<Intent>,
+    size: [f32; 2],
+    pixels_per_point: f32,
+) -> Harness<'static, App> {
     Harness::builder()
         .with_size(egui::Vec2::from(size))
-        .with_pixels_per_point(PIXELS_PER_POINT)
+        .with_pixels_per_point(pixels_per_point)
         .build_eframe(move |creation| {
             App::new(creation, handler, facts, opening)
                 .expect("the backend's threads start")

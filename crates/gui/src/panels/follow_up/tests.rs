@@ -206,12 +206,12 @@ fn no_sources_names_its_cause_and_what_to_do() {
         (
             "follow-up-labels-no-items",
             found_nothing(Some(2)),
-            "No sources found. The documents with these labels hold no items. Clear a filter and ask again.",
+            "No sources found. No item in your library matches the filters of this question. Clear a filter, then ask again.",
         ),
         (
             "follow-up-no-sources",
             found_nothing(None),
-            "No sources found. Your library holds no items yet. Add a chapter with rag-ingest, then ask again.",
+            "No sources found. Your library holds no items yet. Add a chapter on the Ingest tab, then ask again.",
         ),
         (
             "follow-up-no-answer-bare",
@@ -224,10 +224,12 @@ fn no_sources_names_its_cause_and_what_to_do() {
         harness.run();
         assert!(says(&harness, notice), "{picture} lacks `{notice}`");
         harness.get_by_label("Follow-up question");
-        assert!(
-            !says(&harness, "Ingest"),
-            "{picture} points to a page that is not there"
-        );
+        for part_not_built in ["Ingest a chapter", "Go to Ingest", "Open Ingest"] {
+            assert!(
+                !says(&harness, part_not_built),
+                "{picture} offers `{part_not_built}`, which is not built"
+            );
+        }
         assert_eq!(
             harness.query_all_by_role(Role::Button).count(),
             1,

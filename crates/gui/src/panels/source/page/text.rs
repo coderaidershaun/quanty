@@ -45,7 +45,7 @@ fn list_of_pieces(ui: &mut egui::Ui, cx: &mut TabCx<'_>) {
                         piece::body(ui, piece, cx);
                     });
                 if *cx.reveal == Some(piece.number) {
-                    piece::bring_into_view(ui, &framed.response);
+                    piece::bring_into_view(&framed.response);
                 }
             }
         });

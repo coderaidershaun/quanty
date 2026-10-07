@@ -122,7 +122,7 @@ The window has two tabs, **Ask** and **Ingest**. Ask is one screen of six panels
 
 - `/`, `J`, `K` and `Esc` do this only while no text box has the keyboard.
 - A citation opens its page when the chapter's folder is found: the folder it was ingested from, or the same chapter under `content/`, which is where `rag-ingest pdf` puts it.
-- Add a chapter from the app on the **Ingest** tab (`⌘3`): choose the PDF, give the book's title, check it, then start. The file must be named `chapter-<number>-<name>.pdf`. The check is free; a start is paid work, the same as `rag-ingest pdf` in [step 4](#4-put-a-first-chapter-in): see [Costs](#costs). Keep the app open while it runs; if it stops, start the same PDF again and it carries on.
+- Add a chapter from the app on the **Ingest** tab (`⌘3`): choose the PDF, choose the book or add a new one, check it, then start. The file must be named `chapter-<number>-<name>.pdf`. The check is free; a start is paid work, the same as `rag-ingest pdf` in [step 4](#4-put-a-first-chapter-in): see [Costs](#costs). Keep the app open while it runs; if it stops, start the same PDF again and it carries on.
 - Not built yet: the Library page, the notices tray, the help sheet and the health check. Documents are labelled again and deleted with `rag-ingest`: see [Command line](#command-line).
 
 ## Use it from an agent (MCP)

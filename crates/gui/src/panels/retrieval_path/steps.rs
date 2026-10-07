@@ -93,13 +93,7 @@ fn nearest(trace: &RetrievalTrace) -> Outcome {
             counted(0, "document", "documents"),
             Some("No document has these labels. Nothing was searched.".to_owned()),
         ),
-        (Some(documents), 0) => (
-            items,
-            Some(format!(
-                "No item is stored for the {} with these labels.",
-                counted(documents, "document", "documents")
-            )),
-        ),
+        (Some(_), 0) => (items, Some("No item matches the filters.".to_owned())),
         (None, 0) => (items, Some("The library holds no items.".to_owned())),
         (Some(documents), _) => (
             items,
@@ -409,6 +403,15 @@ mod tests {
             ..RetrievalTrace::default()
         };
         assert_eq!(badges(&no_document)[0].as_deref(), Some("0 documents"));
+
+        let no_item_matches = RetrievalTrace {
+            documents_searched: Some(2),
+            ..RetrievalTrace::default()
+        };
+        assert_eq!(
+            taken(&no_item_matches)[0].line,
+            "No item matches the filters."
+        );
 
         let nothing_found = RetrievalTrace {
             nearest: 8,

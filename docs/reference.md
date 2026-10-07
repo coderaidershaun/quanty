@@ -194,7 +194,9 @@ A citation opens its page when the chapter's folder is found. The chapter is loo
 
 `--fixture <scene>` runs the whole window on built-in data from `samples/content`, with no store, no model and no cost. `--fixture list` prints the scenes: each is one state of the screen, such as `black-scholes` (a full answer), `stores-down` or `first-run`.
 
-Not built yet: the Library and Ingest pages, the notices tray, the help sheet and the health check. Documents are added, labelled and deleted with `rag-ingest`.
+The **Ingest** tab adds one chapter to the library: choose a chapter PDF named `chapter-<number>-<name>.pdf`, choose the book or add a new one, check the chapter, then start. The check is free; a start is paid work, the same as `rag-ingest pdf`.
+
+Not built yet: the Library page, the notices tray, the help sheet and the health check. Labels are changed and documents are deleted with `rag-ingest`.
 
 ## The MCP server
 

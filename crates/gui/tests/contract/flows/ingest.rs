@@ -40,12 +40,14 @@ fn place_of(seen: &Seen, is: fn(&Command) -> bool) -> Option<usize> {
 fn a_checked_chapter_runs_to_done_and_loads_the_catalogue_again() {
     let (mut harness, seen) = open("ingest-ready", DEFAULT_WINDOW);
     assert_eq!(shared(&harness).tab, Tab::Ingest);
-    let form = [
-        "Option Volatility and Pricing",
-        "Sheldon Natenberg",
-        "options, volatility",
-    ];
-    for (name, text) in ["Book title", "Author", "Tags"].into_iter().zip(form) {
+    let book = node(&harness, Role::ComboBox, "Book").value();
+    assert_eq!(book.as_deref(), Some("Option Volatility and Pricing"));
+    assert!(
+        !has(&harness, Role::TextInput, "Book title"),
+        "a book of the library is chosen from the list, not typed"
+    );
+    let form = ["Sheldon Natenberg", "options, volatility"];
+    for (name, text) in ["Author", "Tags"].into_iter().zip(form) {
         assert_eq!(field(&harness, name).as_deref(), Some(text), "{name}");
     }
     assert!(says(&harness, "Chapter 3 · Greeks"));

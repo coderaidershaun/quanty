@@ -16,6 +16,8 @@ use crate::contract::{
 use crate::state::{IngestJob, Shared};
 use crate::testkit::{self, Host, sample};
 
+mod book;
+
 /// The page area of the smallest window.
 const SMALLEST: [f32; 2] = [1148.0, 644.0];
 
@@ -106,6 +108,16 @@ fn press(harness: &mut Harness<'_, Host>, name: &str) -> Vec<Intent> {
     frames(harness)
 }
 
+/// Opens the `Book` list and chooses the row with this text.
+fn choose_book(harness: &mut Harness<'_, Host>, row: &str) {
+    harness
+        .get_by_role_and_label(Role::ComboBox, "Book")
+        .click();
+    harness.run();
+    harness.get_by_role_and_label(Role::Button, row).click();
+    harness.run();
+}
+
 fn type_into(harness: &mut Harness<'_, Host>, field: &str, text: &str) -> Vec<Intent> {
     harness
         .get_by_role_and_label(Role::TextInput, field)
@@ -147,32 +159,27 @@ fn an_empty_form_shows_the_rule_and_the_cost_and_checks_only_a_whole_form() {
         .apply_intent(picked, &mut Vec::new());
     harness.run();
     assert!(says(&harness, "chapter-1-sample-pages.pdf"));
+    let button = harness.get_by_role_and_label(Role::Button, "Choose a PDF");
+    let name = harness.get_by_label("chapter-1-sample-pages.pdf");
+    let (button, name) = (button.rect().center().y, name.rect().center().y);
+    assert!(
+        (button - name).abs() <= 0.5,
+        "the name is centred on the button: {name} against {button}"
+    );
     assert!(is_disabled(&harness, Role::Button, "Check the chapter"));
     assert!(press(&mut harness, "Check the chapter").is_empty());
 
-    // A book of the library fills the title; typing over it changes it.
-    harness.get_by_label("Books in the library").click();
-    harness.run();
-    harness
-        .get_by_role_and_label(Role::Button, "Quanty Sample Notes")
-        .click();
-    harness.run();
-    assert_eq!(
-        harness
-            .get_by_role_and_label(Role::TextInput, "Book title")
-            .value()
-            .as_deref(),
-        Some("Quanty Sample Notes")
+    // A book of the library is chosen from the list, and the check is allowed. A new book is
+    // typed, and its title is trimmed.
+    choose_book(&mut harness, "Quanty Sample Notes");
+    assert!(!is_disabled(&harness, Role::Button, "Check the chapter"));
+    choose_book(&mut harness, "Add a new book…");
+    assert!(is_disabled(&harness, Role::Button, "Check the chapter"));
+    type_into(
+        &mut harness,
+        "Book title",
+        "  Option Volatility and Pricing ",
     );
-    harness
-        .get_by_role_and_label(Role::TextInput, "Book title")
-        .click();
-    harness.run();
-    harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
-    harness
-        .get_by_role_and_label(Role::TextInput, "Book title")
-        .type_text("  Option Volatility and Pricing ");
-    frames(&mut harness);
     type_into(&mut harness, "Tags", "options, , volatility ,");
     testkit::save_png(&mut harness, "ingest-filled");
 

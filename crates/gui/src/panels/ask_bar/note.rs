@@ -11,7 +11,7 @@ use crate::widgets::{self, Button, ControlSize};
 
 const BLANK: &str = "Type a question to ask.";
 const LIBRARY_LOADING: &str = "Loading the library\u{2026}";
-const LIBRARY_EMPTY: &str = "Your library is empty. Add a chapter with rag-ingest.";
+const LIBRARY_EMPTY: &str = "Your library is empty. Add a chapter on the Ingest tab.";
 const LIBRARY_FAILED: &str = "The library did not load. ";
 const TRY_AGAIN: &str = "Try again";
 const SPINNER_LABEL: &str = "Library is loading";

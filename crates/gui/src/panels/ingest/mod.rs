@@ -1,6 +1,7 @@
 //! The panel that adds a chapter PDF to the library: the form, then what the one ingest of the
 //! app is doing.
 
+mod books;
 mod form;
 mod status;
 #[cfg(test)]
@@ -10,7 +11,8 @@ use std::path::PathBuf;
 
 use eframe::egui;
 
-use crate::contract::{IngestRequest, Intent};
+use self::books::{BookChoice, Offer};
+use crate::contract::{Catalogue, IngestRequest, Intent};
 use crate::panels::PanelCx;
 use crate::state::{IngestJob, Shared};
 use crate::widgets;
@@ -22,7 +24,7 @@ const COLUMN_WIDTH: f32 = 720.0;
 #[derive(Debug, Default)]
 pub struct Local {
     pdf: Option<PathBuf>,
-    book: String,
+    book: BookChoice,
     author: String,
     tags: String,
     /// The file picks already copied from the shared state.
@@ -33,7 +35,11 @@ impl Local {
     /// The request the form holds, or `None` until a file is chosen and the book has a title.
     fn draft(&self) -> Option<IngestRequest> {
         let pdf = self.pdf.clone()?;
-        let book = self.book.trim();
+        let book = match &self.book {
+            BookChoice::Unchosen => return None,
+            BookChoice::Existing(title) => title.as_str(),
+            BookChoice::New(text) => text.trim(),
+        };
         if book.is_empty() {
             return None;
         }
@@ -52,11 +58,39 @@ impl Local {
         })
     }
 
-    fn fill_from(&mut self, request: &IngestRequest) {
+    /// True while no file and no book are chosen.
+    fn is_untouched(&self) -> bool {
+        self.pdf.is_none() && self.book == BookChoice::Unchosen
+    }
+
+    /// Takes the file, the author and the tags from `request`. Its book is a book of the library
+    /// when one has exactly that title, and else a new one.
+    fn fill_from(&mut self, request: &IngestRequest, catalogue: Option<&Catalogue>) {
+        let is_in_library =
+            catalogue.is_some_and(|catalogue| books::has_titled(catalogue, &request.book));
         self.pdf = Some(request.pdf.clone());
-        self.book.clone_from(&request.book);
+        self.book = if is_in_library {
+            BookChoice::Existing(request.book.clone())
+        } else {
+            BookChoice::New(request.book.clone())
+        };
         self.author = request.author.clone().unwrap_or_default();
         self.tags = request.tags.join(", ");
+    }
+
+    /// Chooses a book of the library, and takes its author and its tags as the form's own.
+    fn choose(&mut self, offer: &Offer<'_>) {
+        self.book = BookChoice::Existing(offer.title.to_owned());
+        self.author = offer.author.unwrap_or_default().to_owned();
+        self.tags = offer.tags.join(", ");
+    }
+
+    /// Starts a book that the library does not hold: its title is typed, and nothing is carried
+    /// over from the book that was chosen before.
+    fn start_new_book(&mut self) {
+        self.book = BookChoice::New(String::new());
+        self.author.clear();
+        self.tags.clear();
     }
 
     /// Brings the form up to date with the app, and returns the request it now holds. A check
@@ -67,11 +101,20 @@ impl Local {
             self.pdf.clone_from(&shared.cues.picked_pdf);
         }
         let held = request_of(&shared.ingest);
+        let catalogue = &shared.library.catalogue;
         if let Some(request) = held
-            && self.pdf.is_none()
-            && self.book.is_empty()
+            && self.is_untouched()
+            && !catalogue.is_loading()
         {
-            self.fill_from(request);
+            self.fill_from(request, catalogue.ready());
+        }
+        // A book that left the library, after a delete, stays as the title of a new book.
+        if let BookChoice::Existing(title) = &self.book
+            && catalogue
+                .ready()
+                .is_some_and(|catalogue| !books::has_titled(catalogue, title))
+        {
+            self.book = BookChoice::New(title.clone());
         }
         let draft = self.draft();
         let is_checked = matches!(
@@ -81,7 +124,8 @@ impl Local {
                 | IngestJob::CheckFailed { .. }
                 | IngestJob::Finished { .. }
         );
-        if is_checked && held != draft.as_ref() {
+        // An untouched form may still be waiting for the library, so it is not a change.
+        if is_checked && !self.is_untouched() && held != draft.as_ref() {
             intents.push(Intent::ClearIngest);
         }
         draft

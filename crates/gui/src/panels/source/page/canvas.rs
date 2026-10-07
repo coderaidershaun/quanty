@@ -65,12 +65,11 @@ pub(super) fn show(ui: &mut egui::Ui, view: &mut View, shown: &Shown<'_>) {
     painter.rect_filled(page, CornerRadius::ZERO, color::PAGE);
     shown.picture.paint(&painter, page, Color32::WHITE);
     if let Some(figure) = shown.figure {
-        let frame = view::box_rect(page, figure.cut);
-        painter.rect_filled(frame, radius::SM, color::PAGE_HIGHLIGHT);
-        let outline = Stroke::new(stroke::UNDERLINE, Tone::Blue.swatch().solid);
-        painter.rect_stroke(frame, radius::SM, outline, StrokeKind::Inside);
-        let seen = frame.intersect(area);
+        let seen = view::box_rect(page, figure.cut).intersect(area);
         if seen.is_positive() {
+            painter.rect_filled(seen, radius::SM, color::PAGE_HIGHLIGHT);
+            let outline = Stroke::new(stroke::UNDERLINE, Tone::Blue.swatch().solid);
+            painter.rect_stroke(seen, radius::SM, outline, StrokeKind::Inside);
             let mark = ui.interact(seen, response.id.with("highlight"), Sense::hover());
             mark.widget_info(|| {
                 let name = format!("{} on the page", figure.name);

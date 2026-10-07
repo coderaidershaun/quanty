@@ -37,8 +37,9 @@ impl View {
         scale_of(self.step())
     }
 
-    /// The view a new picture opens in: all of it when that is readable, else full size on
-    /// `centre`.
+    /// The view a new picture opens in: all of it when that is readable. Else the smallest
+    /// readable size, on the middle of the picture when `centre` (the main concept) is then in
+    /// sight, so that the cut is shared by both sides, and on `centre` when it is not.
     pub(super) fn opening(world: Rect, canvas: Size, centre: Point) -> View {
         let fits = |step: i8| {
             let scale = scale_of(step);
@@ -50,11 +51,20 @@ impl View {
                 at: world.centre(),
                 zoom_log: f32::from(step) / STEPS_PER_DOUBLING,
             },
-            None => View {
-                at: centre,
-                zoom_log: 0.0,
+            None => {
+                let (half_w, half_h) = (
+                    canvas.w / scale_of(FIT_FLOOR) / 2.0,
+                    canvas.h / scale_of(FIT_FLOOR) / 2.0,
+                );
+                let middle = world.centre();
+                let centre_is_in_sight =
+                    (centre.x - middle.x).abs() <= half_w && (centre.y - middle.y).abs() <= half_h;
+                View {
+                    at: if centre_is_in_sight { middle } else { centre },
+                    zoom_log: f32::from(FIT_FLOOR) / STEPS_PER_DOUBLING,
+                }
+                .held(world, canvas)
             }
-            .held(world, canvas),
         }
     }
 
@@ -193,16 +203,21 @@ mod tests {
         let opened = View::opening(wide, canvas, point(0.0, 75.0));
         assert_eq!((opened.step(), opened.at), (-1, wide.centre()));
 
-        // One that needs more than 71 % opens at 100 % on the centre node, kept over the picture.
+        // One that needs more than 71 % opens at 71 %, on its middle when the centre node is in
+        // sight there, so that the cut is shared by both sides.
         let large = world(800.0, 150.0);
         let opened = View::opening(large, canvas, point(-300.0, 75.0));
-        assert_eq!(
-            opened,
-            View {
-                at: point(-139.0, 75.0),
-                zoom_log: 0.0
-            }
-        );
+        assert_eq!((opened.step(), opened.at), (FIT_FLOOR, large.centre()));
+
+        // When the centre node is out of sight there, it opens on the centre node, kept over the
+        // picture.
+        let dense = world(3000.0, 400.0);
+        let opened = View::opening(dense, canvas, point(-1200.0, 200.0));
+        assert_eq!(opened.step(), FIT_FLOOR);
+        assert!(nothing_is_lost(opened, dense, canvas));
+        let sight = seen(opened, canvas);
+        assert!(sight.min.x <= -1200.0 && -1200.0 <= sight.max.x);
+        assert!((sight.min.x - dense.min.x).abs() < 0.01);
 
         // A pan, a zoom or a smaller window cannot lose the picture, however far it goes.
         let big = world(3000.0, 400.0);
@@ -253,7 +268,7 @@ mod tests {
             )
         };
         let after = start.zoomed(0.5, pointer);
-        assert_eq!(after.step(), 2);
+        assert_eq!(after.step(), 0);
         assert!((under(after).x - under(start).x).abs() < 0.001);
         assert!((under(after).y - under(start).y).abs() < 0.001);
 
@@ -261,7 +276,10 @@ mod tests {
         // rectangle is in sight.
         let far = Rect::from_min_size(point(900.0, 180.0), Size { w: 100.0, h: 40.0 });
         let moved = start.showing(far, canvas);
-        assert_eq!(moved.at, point(1000.0 - canvas.w / 2.0, start.at.y));
+        assert_eq!(
+            moved.at,
+            point(1000.0 - canvas.w / start.scale() / 2.0, start.at.y)
+        );
         let near = Rect::from_min_size(point(-20.0, 190.0), Size { w: 40.0, h: 20.0 });
         assert_eq!(start.showing(near, canvas), start);
     }

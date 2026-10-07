@@ -11,7 +11,7 @@ use crate::contract::{
 };
 use crate::state::Shared;
 
-pub use harness::{Host, app, app_on, panel, save_png, settle, settle_within};
+pub use harness::{Host, app, app_at, app_on, panel, save_png, settle, settle_within};
 
 const QUESTION: &str = "How is the Black–Scholes formula derived?";
 

@@ -331,7 +331,11 @@ mod tests {
             reset_is_off(&harness),
             "an untouched view has nothing to reset"
         );
-        assert_eq!(opening.step(), 0, "a graph this size opens at full size");
+        assert_eq!(
+            opening.step(),
+            -2,
+            "a graph this size opens at the smallest readable size"
+        );
 
         // A drag that starts on a node moves the picture, and does not click the node.
         let on_a_node = harness.get_by_label(&centre_name).rect().center();
@@ -416,11 +420,11 @@ mod tests {
             harness.get_by_label(kind);
         }
 
-        // It opens at full size, with the centre at the middle of the canvas.
+        // It opens at the smallest readable size, with the centre at the middle of the canvas.
         let panel = panel_rect(DEFAULT);
         let nodes = drawn_nodes(&local, &graph);
         assert_eq!(nodes.len(), 36);
-        assert_eq!(local.borrow().view.step(), 0);
+        assert_eq!(local.borrow().view.step(), -2);
         let centre_name = super::canvas::name(nodes[0]);
         let centre = harness.get_by_label(&centre_name).rect().center();
         assert!(

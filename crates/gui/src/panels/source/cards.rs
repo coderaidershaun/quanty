@@ -43,7 +43,7 @@ pub(super) fn show(ui: &mut egui::Ui, tab: SourceTab, cx: &mut TabCx<'_>) {
                     })
                     .inner;
                 if *cx.reveal == Some(piece.number) {
-                    piece::bring_into_view(ui, &shown.response);
+                    piece::bring_into_view(&shown.response);
                 }
             }
         });
@@ -82,6 +82,15 @@ mod tests {
         let tabs = harness.get_by_role_and_label(Role::Tab, "Page").rect();
         let panel = samples::panel_rect(size);
         tabs.bottom() <= node.top() && node.bottom() <= panel.bottom()
+    }
+
+    /// Where the list under the tabs starts.
+    fn list_top(harness: &Harness<'static, Host>) -> f32 {
+        harness
+            .get_by_role_and_label(Role::Tab, "Page")
+            .rect()
+            .bottom()
+            + space::SM
     }
 
     /// True when the card that holds the node ends in view: the margin and the border under the
@@ -128,6 +137,17 @@ mod tests {
         samples::see_pictures(&mut harness);
         let node = harness.get_by_label(&formula.text).rect();
         assert!(is_in_view(&harness, SMALLEST, node), "{node:?}");
+        let top = list_top(&harness);
+        assert!(top <= node.top(), "the piece starts at the top: {node:?}");
+        for piece in samples::page(Sample::Text).pieces {
+            for text in harness.query_all_by_label(&piece.text) {
+                let text = text.rect();
+                assert!(
+                    text.bottom() <= top || top <= text.top(),
+                    "a line is cut at the top: {text:?} against {top}"
+                );
+            }
+        }
         assert!(
             harness
                 .query_all_by_label_contains("This chapter has no page pictures")

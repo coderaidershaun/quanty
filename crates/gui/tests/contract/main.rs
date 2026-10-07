@@ -3,6 +3,7 @@
 
 mod backend_seam;
 mod flows;
+mod look;
 mod media_math;
 mod media_rich_text;
 mod panel_seam;

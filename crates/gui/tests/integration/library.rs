@@ -1,7 +1,7 @@
 //! Checks that the live backend lists the stored documents, each with the chapter that is on
 //! disk for it.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use graph::GraphStore;
 use gui::backend::Reply;
@@ -11,11 +11,9 @@ use gui::contract::{
 };
 use rag_ingestion::{IngestSummary, ingest_chapter};
 
-use crate::support;
+use crate::support::{self, IN_DEPTH, INTUITION, copy_folder, sample_chapter};
 
 const REQUEST: RequestId = RequestId(7);
-const INTUITION: &str = "quanty-sample-notes/chapter-1";
-const IN_DEPTH: &str = "quanty-sample-notes/chapter-2";
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p gui --test integration -- --ignored library::"]
@@ -120,24 +118,5 @@ fn shown(summary: &IngestSummary, number: u32, name: &str, folder: &Path) -> Doc
         },
         ingested_items: Some(counts.total() as u64),
         folder: Some(folder.to_path_buf()),
-    }
-}
-
-/// A committed chapter, as a path that does not depend on where the test runs from.
-fn sample_chapter(chapter: &str) -> PathBuf {
-    let folder = gui::testkit::samples_folder().join(chapter);
-    std::fs::canonicalize(folder).expect("a committed chapter should exist")
-}
-
-fn copy_folder(from: &Path, to: &Path) {
-    std::fs::create_dir_all(to).expect("a folder should be made");
-    for entry in std::fs::read_dir(from).expect("the folder should be listed") {
-        let entry = entry.expect("an entry should be read");
-        let target = to.join(entry.file_name());
-        if entry.path().is_dir() {
-            copy_folder(&entry.path(), &target);
-        } else {
-            std::fs::copy(entry.path(), &target).expect("a file should be copied");
-        }
     }
 }

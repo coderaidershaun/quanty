@@ -1,33 +1,28 @@
 //! Checks that an ask on the live backend finds the stored items and writes the answer.
-// SMELL: this file is over 400 lines, and the limit is 500. The part to move out is the filling of
-// the stores below the tests. `sample_chapter` and `copy_folder` are also written again in other
-// tests of the live backend, so all of these want one shared home.
 
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-
-use graph::{ConceptNode, GraphStore, Mention, Relation, RelationKind};
 use gui::backend::Reply;
 use gui::backend::live::{LiveContext, query};
 use gui::contract::{
     AnswerBlock, AskDraft, AskMode, ConceptId, DocId, EdgeKind, Event, Filters, GraphEdge,
     GraphNode, ItemId, ItemKind, NodeId, NodeKind, Reason, RequestId, ResultItem,
 };
-use ocr::testing::{Scenario, StubServices};
-use rag_core::{Config, ItemKind as StoredKind, LlmError};
-use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores, first_axis, vector_at};
-use rag_ingestion::{Item, chapter_items, ingest_chapter};
+use rag_core::{Config, LlmError};
+use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores};
 use rag_retrieval::RESULTS_PER_QUERY;
 use serde_json::json;
 
-use crate::support::StandInServices;
+use crate::support::{
+    Folders, IN_DEPTH, INTUITION, QUESTION, StandInServices, context_over, context_with, fill,
+};
 
-const QUESTION: &str = "How is a call option priced?";
 const REQUEST: RequestId = RequestId(7);
-const IN_DEPTH: &str = "quanty-sample-notes/chapter-2";
-const INTUITION: &str = "quanty-sample-notes/chapter-1";
-const SAMPLE_PAGES: &str = "option-volatility-and-pricing/chapter-1";
 const TABLE_CAPTION: &str = "How the price of a call and of a put respond when one input rises.";
+/// The folder of Notes chapter 2 is kept by the graph, and Notes chapter 1 lies under the content
+/// folder.
+const FOLDERS: Folders = Folders {
+    stored: IN_DEPTH,
+    copied: INTUITION,
+};
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p gui --test integration -- --ignored query::"]
@@ -42,7 +37,7 @@ async fn an_ask_sends_the_results_with_their_trace_then_the_graph_then_the_answe
             "follow_ups": ["What is a put?"],
         }))
     });
-    let world = fill("query-ask", &answering).await;
+    let world = fill("query-ask", &answering, FOLDERS).await;
 
     let events = ask(&world.cx, AskMode::Answer, Filters::default()).await;
 
@@ -221,7 +216,7 @@ async fn a_results_only_ask_obeys_its_filters_and_a_failed_answer_keeps_the_resu
             message: "the usage limit was reached".to_owned(),
         })
     });
-    let world = fill("query-filters", &answering).await;
+    let world = fill("query-filters", &answering, FOLDERS).await;
     let sample_notes = Filters {
         book: Some("quanty sample notes".to_owned()),
         tags: vec![" ".to_owned()],
@@ -321,163 +316,4 @@ async fn ask(cx: &LiveContext<StandInServices>, mode: AskMode, filters: Filters)
     let (reply, events, _stop) = Reply::collecting();
     assert_send(query::ask(cx, REQUEST, &draft, &reply)).await;
     events.try_iter().collect()
-}
-
-/// Four stored items, from nearest to the question to farthest.
-#[derive(Clone)]
-struct Picks {
-    formula: Item,
-    table: Item,
-    chunk: Item,
-    figure: Item,
-}
-
-impl Picks {
-    fn of_the_samples() -> Picks {
-        Picks {
-            formula: pick(IN_DEPTH, StoredKind::Formula, Some("(2.4)")),
-            table: pick(INTUITION, StoredKind::Table, Some("Table 1-1")),
-            chunk: pick(IN_DEPTH, StoredKind::Chunk, None),
-            figure: pick(SAMPLE_PAGES, StoredKind::Figure, Some("Figure 13-4")),
-        }
-    }
-
-    /// An embedder that puts the question on the first axis and each pick at its own distance
-    /// from it. Every other item gets a made-up vector that is near no pick.
-    fn embedder(&self) -> StandInEmbedder {
-        StandInEmbedder::default()
-            .placing(QUESTION, first_axis())
-            .placing(&self.formula.input.text, vector_at(0.9, 1))
-            .placing(&self.table.input.text, vector_at(0.8, 2))
-            .placing(&self.chunk.input.text, vector_at(0.7, 3))
-            .placing(&self.figure.input.text, vector_at(0.6, 4))
-    }
-}
-
-/// A committed chapter, as a path that does not depend on where the test runs from.
-fn sample_chapter(chapter: &str) -> PathBuf {
-    let folder = gui::testkit::samples_folder().join(chapter);
-    std::fs::canonicalize(folder).expect("a committed chapter should exist")
-}
-
-fn pick(chapter: &str, kind: StoredKind, label: Option<&str>) -> Item {
-    let read = ocr::read_chapter(&sample_chapter(chapter)).expect("the chapter should be read");
-    chapter_items(&read)
-        .into_iter()
-        .find(|item| item.payload.kind == kind && item.payload.label.as_deref() == label)
-        .unwrap_or_else(|| panic!("{chapter} should have a {kind:?} labelled {label:?}"))
-}
-
-fn copy_folder(from: &Path, to: &Path) {
-    std::fs::create_dir_all(to).expect("a folder should be made");
-    for entry in std::fs::read_dir(from).expect("the folder should be listed") {
-        let entry = entry.expect("an entry should be read");
-        let target = to.join(entry.file_name());
-        if entry.path().is_dir() {
-            copy_folder(&entry.path(), &target);
-        } else {
-            std::fs::copy(entry.path(), &target).expect("a file should be copied");
-        }
-    }
-}
-
-/// A context over `stores` whose answers come from `answering`.
-fn context_with(
-    stores: ThrowawayStores,
-    answering: &StandInLlm,
-    embedder: impl Fn() -> StandInEmbedder + Send + Sync + 'static,
-) -> LiveContext<StandInServices> {
-    let config = stores.config().clone();
-    context_over(config, stores, answering, embedder)
-}
-
-/// The same, with the settings of the context given: the graph is still the one of `stores`.
-fn context_over(
-    config: Config,
-    stores: ThrowawayStores,
-    answering: &StandInLlm,
-    embedder: impl Fn() -> StandInEmbedder + Send + Sync + 'static,
-) -> LiveContext<StandInServices> {
-    let answering = answering.clone();
-    let services = StandInServices {
-        stores,
-        embedder: Box::new(embedder),
-        llm: Box::new(move |_model| answering.clone()),
-        pages: Arc::new(StubServices::new(Scenario::SampleChapter)),
-    };
-    LiveContext::new(config, services)
-}
-
-struct World {
-    cx: LiveContext<StandInServices>,
-    picks: Picks,
-    black_scholes: ConceptNode,
-    lemma: ConceptNode,
-}
-
-/// Ingests the three committed chapters into throwaway stores, with the picks placed near the
-/// question, then writes by hand what no stand-in finds: two concepts, what mentions one of
-/// them, and the relation between them. Notes chapter 2 gets the folder the graph keeps, Notes
-/// chapter 1 gets a copy under the content folder only, and the other chapter gets neither.
-async fn fill(name: &str, answering: &StandInLlm) -> World {
-    let stores = ThrowawayStores::new(name);
-    let connected = stores.connect().await;
-    let picks = Picks::of_the_samples();
-    let models = stores.models_with_embedder(picks.embedder(), StandInLlm::finding_nothing());
-    for chapter in [SAMPLE_PAGES, INTUITION, IN_DEPTH] {
-        ingest_chapter(&sample_chapter(chapter), &models, &connected)
-            .await
-            .expect("a sample chapter should be ingested");
-    }
-
-    let concept = |name: &str, definition: &str| ConceptNode {
-        id: rag_core::ConceptId::random(),
-        name: name.to_owned(),
-        normalised_name: name.to_lowercase(),
-        definition: definition.to_owned(),
-    };
-    let black_scholes = concept("Black–Scholes model", "The model of an option's price.");
-    let lemma = concept("Itô's lemma", "How a function of a random walk changes.");
-    let graph = &connected.graph;
-    for concept in [&black_scholes, &lemma] {
-        let stored = graph.upsert_concept(concept).await;
-        stored.expect("a concept should be stored");
-    }
-    let mentioning = |item: &Item| Mention {
-        item: item.id,
-        concept: black_scholes.id,
-        wording: black_scholes.name.clone(),
-    };
-    let mentions = [mentioning(&picks.formula), mentioning(&picks.chunk)];
-    graph
-        .add_mentions(&mentions)
-        .await
-        .expect("the mentions should be stored");
-    let derived = Relation {
-        from: black_scholes.id,
-        to: lemma.id,
-        kind: RelationKind::DerivedFrom,
-        item: picks.formula.id,
-    };
-    graph
-        .add_relations(&[derived])
-        .await
-        .expect("the relation should be stored");
-    graph
-        .set_chapter_folder(picks.formula.payload.doc_id, &sample_chapter(IN_DEPTH))
-        .await
-        .expect("the folder should be stored");
-    let content = &stores.config().content_folder;
-    copy_folder(
-        &sample_chapter(INTUITION),
-        &content.join("quanty-sample-notes/chapter-1"),
-    );
-
-    let placing = picks.clone();
-    World {
-        cx: context_with(stores, answering, move || placing.embedder()),
-        picks,
-        black_scholes,
-        lemma,
-    }
 }

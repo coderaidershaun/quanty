@@ -21,6 +21,8 @@ PDFs are turned into searchable items (text, LaTeX formulas and figures). An LLM
 | `graph` | `GraphStore` trait and FalkorDB implementation |
 | `rag-ingestion` | Chunking, embedding, concept extraction and resolution (`rag-ingest`) |
 | `rag-retrieval` | Vector search, graph expansion, ranking, answers with citations (`rag-query`) |
+| `gui` | The desktop app: a question, its answer with citations, the page each one stands on, the concept graph and the path of the search (`quanty`) |
+| `mcp` | An MCP server, so that an AI agent can search, read pages, get answers and ingest a PDF (`quanty-mcp`) |
 
 ## Getting started
 
@@ -175,3 +177,25 @@ The items of step 6 come after the others. They are not counted in the 8 or in t
 `--book "<title>"`, `--author "<name>"` and `--tag <tag>` look only at items of documents that have those labels, as "Labelling a document" describes them. Each is optional and `--tag` can be repeated. A document must match everything that is given: the book and the author match whatever their capitals, and the document must have every tag given. The filter holds for every item that is printed, the nearest items, the items that the graph adds and the items of step 6, and it works with `--kind` and with `--answer`. When no document matches, the command prints `no items found` and the question is not embedded.
 
 `--answer` asks Sonnet, `claude-sonnet-5-5`, to write an answer from the items that were found. It runs through the `claude` command on your subscription, with no tools, and it is not started while `ANTHROPIC_API_KEY` is set. It makes one call. The model is given the question and the items, numbered: the document, the page, the kind, the label, and the text, the raw LaTeX of a formula, or the explanation of a figure with the path of its picture. It replies with claims, and each claim names the numbers of the items that support it. The command prints only the answer, not the results, and what the call cost goes to standard error. After each claim it prints one line for each source: the title of the document, which holds the chapter, the printed page, and the kind and label of the item. Under the line of a formula it prints the LaTeX exactly as the document has it, and under the line of a figure it prints the path of the picture. The program writes the citations and the LaTeX, not the model, so a title, a page or a formula is never retyped. A reply with a claim that names no source, or an item that was not given, is an error, and the question is not asked again. When nothing is found, the command prints `no items found` and does not ask the model. When the model replies with no claim, the command prints `the stored items do not answer the question`. The prompt and the JSON Schema of the reply are in `crates/rag-retrieval/src/answer/prompts/`.
+
+## The desktop app
+
+```bash
+cargo run --release -p gui
+```
+
+The program is `quanty`. It opens one window, the Ask screen: the question with its mode and its book, author and tag filters; the answer with its citations, and the results by kind; the page that a citation stands on, with its figures, formulas, tables and concepts; the concept graph; the steps of the search; and questions to ask next. The keys are listed in the [README](../README.md).
+
+It needs what `rag-query --answer` needs: Qdrant and FalkorDB, `EMBEDDING_GEMINI_API_KEY`, and `claude` signed in with `ANTHROPIC_API_KEY` not set. An ask makes one embedding call and one Sonnet call. In the mode **Results only** it makes the embedding call alone. When a service is not ready, the part of the window that needed it says which one and what to do.
+
+The program reads `.env`, `content/` and `data/` from its home folder. It finds that folder in this order: the folder given with `--home <folder>`; the folder that `QUANTY_HOME` names; the nearest folder at or above the current one that holds a `.env`; the nearest folder at or above the program's own folder that holds one, which is what a start from Finder uses; and last the current folder, with no `.env`.
+
+A citation opens its page when the chapter's folder is found: the folder that is stored with the document, or else the chapter with the same source file under the content folder. A chapter that was ingested from a folder outside the content folder, and has since no stored folder, shows "The page was not found" with what to do.
+
+`--fixture <scene>` runs the whole window on built-in data from `samples/content`, with no store, no model and no cost. `--fixture list` prints the scenes: each is one state of the screen, such as `black-scholes` (a full answer), `stores-down` or `first-run`.
+
+Not built yet: the Library and Ingest pages, the notices tray, the help sheet and the health check. Documents are added, labelled and deleted with `rag-ingest`.
+
+## The MCP server
+
+`quanty-mcp` lets an AI agent search the stored books, read their pages, get a cited answer and send a chapter PDF to be ingested, over the Model Context Protocol. How to build and start it, its tools and their costs are in [mcp.md](mcp.md).

@@ -6,6 +6,7 @@ use eframe::egui::epaint::text::ByteRangeExt as _;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use gui::contract::Intent;
+use gui::media::math::{MathImage, MathRef, MathState};
 use gui::media::rich_text::{self, Clicked, RichText};
 use gui::testkit::{self, Host};
 use gui::theme::TextRole;
@@ -48,6 +49,29 @@ fn painted(harness: &Harness<'_, Host>) -> Vec<Painted> {
         collect(&clipped.shape, &mut found);
     }
     found
+}
+
+/// Every picture that was painted: its texture and the rectangle it covers on the screen.
+fn pictures(harness: &Harness<'_, Host>) -> Vec<(egui::TextureId, egui::Rect)> {
+    fn collect(shape: &egui::Shape, found: &mut Vec<(egui::TextureId, egui::Rect)>) {
+        match shape {
+            egui::Shape::Mesh(mesh) => found.push((mesh.texture_id, mesh.calc_bounds())),
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| collect(shape, found)),
+            _ => {}
+        }
+    }
+    let mut found = Vec::new();
+    for clipped in &harness.output().shapes {
+        collect(&clipped.shape, &mut found);
+    }
+    found
+}
+
+/// The baseline of a formula picture that was painted in `covered`. The texture has a clear
+/// margin around the box, and the picture may be drawn smaller than it was made.
+fn baseline_of(image: &MathImage, covered: egui::Rect) -> f32 {
+    let scale = covered.height() / image.texture_size.y;
+    covered.bottom() - (image.descent + image.bleed) * scale
 }
 
 /// Every painted section whose words hold `words`.
@@ -300,6 +324,31 @@ fn a_block_is_laid_out_once_more_when_its_formulas_settle() {
         "one more layout, with the formulas"
     );
     let settled = harness.get_by_label(PLAIN).rect();
+
+    // Each formula sits on the baseline of the words in front of it on its line.
+    for latex in ["S", r"\sigma\sqrt{T}", "r"] {
+        let math = MathRef::inline(latex, TextRole::Body);
+        let image = match harness.state_mut().media.math.get(&math) {
+            MathState::Ready(image) => image,
+            other => panic!("`{latex}` should be typeset by now, and it is {other:?}"),
+        };
+        let covered = pictures(&harness)
+            .into_iter()
+            .find_map(|(texture, covered)| (texture == image.texture).then_some(covered))
+            .unwrap_or_else(|| panic!("`{latex}` should be painted"));
+        let box_left = covered.left() + image.bleed;
+        let words = painted(&harness)
+            .into_iter()
+            .filter(|piece| piece.right <= box_left + 1.0)
+            .max_by(|a, b| a.right.total_cmp(&b.right))
+            .unwrap_or_else(|| panic!("`{latex}` should have words in front of it"));
+        let drift = baseline_of(&image, covered) - words.baseline;
+        assert!(
+            drift.abs() <= 0.5,
+            "`{latex}` is {drift} points off the baseline of `{}`",
+            words.text
+        );
+    }
 
     for _ in 0..20 {
         harness.step();

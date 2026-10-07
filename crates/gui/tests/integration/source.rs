@@ -2,7 +2,7 @@
 // SMELL: this file is close to the limit of 500 lines. The test of the concepts on the real
 // stores, with what it writes to them, is the part to move out before another test is added.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use graph::{ConceptNode, DocumentNode, GraphStore, ItemNode, Mention};
 use gui::backend::fake::Fake;
@@ -15,10 +15,10 @@ use gui::contract::{
 };
 use ocr::content::{FORMAT_VERSION, PageIndex, PieceEntry, page_folder_name};
 use ocr::{ChapterIndex, FigureImage, ImageShows, PieceDetail};
-use rag_core::{ConceptId, Config, DocumentLabels, ItemId, ItemKind};
+use rag_core::{ConceptId, DocumentLabels, ItemId, ItemKind};
 use uuid::Uuid;
 
-use crate::support;
+use crate::support::{self, closed, document_of, sample_chapter};
 
 const REQUEST: RequestId = RequestId(7);
 const VOLATILITY: &str = "option-volatility-and-pricing/chapter-1";
@@ -151,8 +151,7 @@ async fn a_document_with_no_folder_is_found_in_the_content_folder() {
     // The content folder is spelled in a way that the pictures must not repeat.
     let cx = closed(&samples.join("..").join("content"));
     let chapter = sample_chapter(VOLATILITY);
-    let index = ChapterIndex::read(&chapter).expect("the chapter index should be read");
-    let doc = rag_core::DocId::from_source_sha256(&index.source_sha256).into();
+    let doc = document_of(&chapter);
     // A folder that was moved since the document was stored is searched for in the same way.
     let moved = samples.join("no-such-book/chapter-1");
 
@@ -356,22 +355,6 @@ async fn a_page_lists_the_concepts_its_items_mention() {
     };
     let expected = [listed(&volatility), listed(&arbitrage)];
     assert_eq!(concepts.expect("the concepts should be read"), expected);
-}
-
-/// A context whose stores are down and whose content folder is `content_folder`.
-fn closed(content_folder: &Path) -> LiveContext<RealServices> {
-    let config = Config {
-        content_folder: content_folder.to_path_buf(),
-        ..support::closed_ports_config()
-    };
-    LiveContext::new(config, RealServices)
-}
-
-/// A committed chapter, as the path that the page carries: ingestion keeps the canonical path of
-/// a chapter folder, and the path of a test does not depend on where it runs from.
-fn sample_chapter(chapter: &str) -> PathBuf {
-    let folder = gui::testkit::samples_folder().join(chapter);
-    std::fs::canonicalize(folder).expect("a committed chapter should exist")
 }
 
 /// The text of a piece file, without its one closing newline.

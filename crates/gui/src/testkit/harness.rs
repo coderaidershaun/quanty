@@ -8,6 +8,7 @@ use eframe::egui;
 use egui_kittest::Harness;
 
 use crate::app::App;
+use crate::backend::Handler;
 use crate::backend::fake::Fake;
 use crate::contract::{Effect, Intent, StartupFacts};
 use crate::media::Media;
@@ -120,11 +121,24 @@ pub fn app(scene: &str, size: [f32; 2]) -> Harness<'static, App> {
         fixture: Some(scene.to_owned()),
         anthropic_api_key_set: false,
     };
+    app_on(fake, facts, opening, size)
+}
+
+/// The whole app on any backend, with no file dialog. `app` is this on the fake backend.
+///
+/// # Panics
+/// When the backend's threads cannot start.
+pub fn app_on(
+    handler: impl Handler,
+    facts: StartupFacts,
+    opening: Vec<Intent>,
+    size: [f32; 2],
+) -> Harness<'static, App> {
     Harness::builder()
         .with_size(egui::Vec2::from(size))
         .with_pixels_per_point(PIXELS_PER_POINT)
         .build_eframe(move |creation| {
-            App::new(creation, fake, facts, opening)
+            App::new(creation, handler, facts, opening)
                 .expect("the backend's threads start")
                 .with_file_picker(|| None)
         })
@@ -135,6 +149,14 @@ pub fn app(scene: &str, size: [f32; 2]) -> Harness<'static, App> {
 /// # Panics
 /// When the app is still busy after five seconds.
 pub fn settle(harness: &mut Harness<'_, App>) {
+    settle_within(harness, SETTLE_LIMIT);
+}
+
+/// As `settle`, with the limit a slow backend needs.
+///
+/// # Panics
+/// When the app is still busy after `limit`.
+pub fn settle_within(harness: &mut Harness<'_, App>, limit: Duration) {
     let started = Instant::now();
     loop {
         // A run that is cut short is not a failure here: the check below says whether the app
@@ -144,8 +166,8 @@ pub fn settle(harness: &mut Harness<'_, App>) {
             return;
         }
         assert!(
-            started.elapsed() < SETTLE_LIMIT,
-            "the app was still busy after {SETTLE_LIMIT:?}"
+            started.elapsed() < limit,
+            "the app was still busy after {limit:?}"
         );
         std::thread::sleep(Duration::from_millis(2));
     }

@@ -3,7 +3,10 @@
 use eframe::egui;
 
 use super::Button;
-use crate::theme::{TextRole, color, radius, space};
+use crate::theme::{TextRole, color, radius, space, stroke};
+
+/// A confirm sheet is this wide.
+const CONFIRM_WIDTH: f32 = 360.0;
 
 /// A sheet over the window with a dimmed backdrop. Escape, a click on the backdrop, or
 /// `ui.close()` closes it.
@@ -17,9 +20,10 @@ pub fn modal<R>(
         .frame(
             egui::Frame::NONE
                 .fill(color::RAISED)
-                .stroke(egui::Stroke::new(1.0, color::BORDER))
+                .stroke(egui::Stroke::new(stroke::BORDER, color::BORDER))
                 .corner_radius(radius::LG)
-                .inner_margin(space::XL),
+                .inner_margin(space::XL)
+                .shadow(ctx.global_style().visuals.popup_shadow),
         )
         .show(ctx, add_contents)
 }
@@ -30,6 +34,7 @@ pub enum Choice {
     Cancelled,
 }
 
+/// A yes-or-no question over the window. Call `show` on every frame until it answers.
 pub struct Confirm<'a> {
     id_salt: &'a str,
     title: &'a str,
@@ -76,11 +81,12 @@ impl<'a> Confirm<'a> {
     pub fn show(self, ctx: &egui::Context) -> Option<Choice> {
         let mut choice = None;
         let sheet = modal(ctx, egui::Id::new(self.id_salt), |ui| {
-            ui.set_width(360.0);
+            ui.set_width(CONFIRM_WIDTH);
             ui.label(TextRole::Heading.rich(self.title));
             if let Some(body) = self.body {
                 ui.label(TextRole::Body.rich(body).color(color::TEXT_SECONDARY));
             }
+            ui.add_space(space::MD);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let confirm = if self.destructive {
                     Button::danger(self.confirm_label)
@@ -99,5 +105,59 @@ impl<'a> Confirm<'a> {
             choice = Some(Choice::Cancelled);
         }
         choice
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::Queryable;
+
+    use super::*;
+    use crate::state::Shared;
+    use crate::testkit::{self, Host};
+
+    /// A harness that shows the dialog until a choice is made, as the app does.
+    fn dialog() -> (Harness<'static, Host>, Rc<Cell<Option<Choice>>>) {
+        let choice = Rc::new(Cell::new(None));
+        let seen = Rc::clone(&choice);
+        let mut harness = testkit::panel([420.0, 300.0], Shared::default(), move |ui, _cx| {
+            if seen.get().is_none() {
+                let sheet = Confirm::new("delete", "Delete this book?")
+                    .body("Its pages are removed from the library.")
+                    .confirm_label("Delete book")
+                    .destructive()
+                    .show(ui.ctx());
+                seen.set(sheet);
+            }
+        });
+        harness.run();
+        (harness, choice)
+    }
+
+    #[test]
+    fn confirm_reports_the_users_choice() {
+        let (mut harness, choice) = dialog();
+        assert_eq!(
+            choice.get(),
+            None,
+            "no choice is made before the person acts"
+        );
+        harness.get_by_label("Delete book").click();
+        harness.run();
+        assert_eq!(choice.get(), Some(Choice::Confirmed));
+
+        let (mut harness, choice) = dialog();
+        harness.key_press(egui::Key::Escape);
+        harness.run();
+        assert_eq!(choice.get(), Some(Choice::Cancelled));
+
+        let (mut harness, choice) = dialog();
+        harness.get_by_label("Cancel").click();
+        harness.run();
+        assert_eq!(choice.get(), Some(Choice::Cancelled));
     }
 }

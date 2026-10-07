@@ -1,14 +1,18 @@
 //! The message strip above content, and the card that fills an area that is empty, loading or
 //! failed.
 
-use eframe::egui::{self, Response, WidgetInfo, WidgetType};
+use eframe::egui::{
+    self, Align, Align2, Layout, Response, Stroke, WidgetInfo, WidgetType, text::LayoutJob, vec2,
+};
 
-use super::{Button, spinner};
-use crate::theme::{Icon, TextRole, Tone, color, radius, space};
+use super::{Button, ControlSize, spinner};
+use crate::theme::{Icon, TextRole, Tone, color, radius, size, space, stroke};
 
+/// A message strip above content: what happened, a line of detail, and what to do about it.
 pub struct Notice<'a> {
     title: &'a str,
     tone: Tone,
+    icon: Icon,
     body: Option<&'a str>,
     action: Option<&'a str>,
     dismissable: bool,
@@ -22,10 +26,11 @@ pub struct NoticeResponse {
 }
 
 impl<'a> Notice<'a> {
-    fn with_tone(title: &'a str, tone: Tone) -> Self {
+    fn with_tone(title: &'a str, tone: Tone, icon: Icon) -> Self {
         Notice {
             title,
             tone,
+            icon,
             body: None,
             action: None,
             dismissable: false,
@@ -33,19 +38,19 @@ impl<'a> Notice<'a> {
     }
 
     pub fn info(title: &'a str) -> Self {
-        Notice::with_tone(title, Tone::Blue)
+        Notice::with_tone(title, Tone::Blue, Icon::INFO)
     }
 
     pub fn success(title: &'a str) -> Self {
-        Notice::with_tone(title, Tone::Success)
+        Notice::with_tone(title, Tone::Success, Icon::SUCCESS)
     }
 
     pub fn warning(title: &'a str) -> Self {
-        Notice::with_tone(title, Tone::Warning)
+        Notice::with_tone(title, Tone::Warning, Icon::WARNING)
     }
 
     pub fn error(title: &'a str) -> Self {
-        Notice::with_tone(title, Tone::Danger)
+        Notice::with_tone(title, Tone::Danger, Icon::ERROR)
     }
 
     pub fn body(mut self, body: &'a str) -> Self {
@@ -72,25 +77,40 @@ impl<'a> Notice<'a> {
         let mut dismissed = false;
         let framed = egui::Frame::NONE
             .fill(swatch.wash)
-            .stroke(egui::Stroke::new(1.0, swatch.edge))
+            .stroke(Stroke::new(stroke::BORDER, swatch.edge))
             .corner_radius(radius::LG)
             .inner_margin(space::LG)
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
-                ui.horizontal(|ui| {
-                    ui.label(TextRole::BodyStrong.rich(self.title).color(swatch.text));
+                ui.horizontal_top(|ui| {
+                    let (_, icon_rect) = ui.allocate_space(egui::Vec2::splat(size::ICON_LG));
+                    ui.painter().text(
+                        icon_rect.center(),
+                        Align2::CENTER_CENTER,
+                        self.icon.glyph(),
+                        Icon::font(size::ICON_LG),
+                        swatch.text,
+                    );
+                    let after = if self.dismissable {
+                        size::CONTROL_SM + ui.spacing().item_spacing.x
+                    } else {
+                        0.0
+                    };
+                    ui.vertical(|ui| {
+                        ui.set_width((ui.available_width() - after).max(0.0));
+                        ui.label(TextRole::BodyStrong.rich(self.title).color(swatch.text));
+                        if let Some(body) = self.body {
+                            ui.label(TextRole::Body.rich(body).color(color::TEXT_SECONDARY));
+                        }
+                        if let Some(label) = self.action {
+                            let button = Button::secondary(label).size(ControlSize::Small);
+                            action_clicked = ui.add(button).clicked();
+                        }
+                    });
                     if self.dismissable {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            dismissed = ui.add(Button::icon_only(Icon::CLOSE, "Dismiss")).clicked();
-                        });
+                        dismissed = ui.add(Button::icon_only(Icon::CLOSE, "Dismiss")).clicked();
                     }
                 });
-                if let Some(body) = self.body {
-                    ui.label(TextRole::Body.rich(body).color(color::TEXT_SECONDARY));
-                }
-                if let Some(label) = self.action {
-                    action_clicked = ui.add(Button::secondary(label)).clicked();
-                }
             });
         let name = match self.body {
             Some(body) => format!("{}. {body}", self.title),
@@ -109,11 +129,19 @@ impl<'a> Notice<'a> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Fill {
-    Empty,
+    Empty(Icon),
     Loading,
     Error,
 }
 
+/// A placeholder is at least this high, so it stays readable in a small panel.
+const PLACEHOLDER_MIN_HEIGHT: f32 = 120.0;
+/// The hint under a placeholder's title is never wider than this.
+const PLACEHOLDER_TEXT_WIDTH: f32 = 360.0;
+/// The room for the icon, or the spinner, above the title.
+const PLACEHOLDER_ICON: f32 = 32.0;
+
+/// What fills a whole area that is empty, loading or failed. It is centred in the room it is given.
 pub struct Placeholder<'a> {
     fill: Fill,
     title: &'a str,
@@ -138,7 +166,7 @@ impl<'a> Placeholder<'a> {
     }
 
     pub fn empty(_icon: Icon, title: &'a str) -> Self {
-        Placeholder::with_fill(Fill::Empty, title)
+        Placeholder::with_fill(Fill::Empty(_icon), title)
     }
 
     pub fn loading(title: &'a str) -> Self {
@@ -161,26 +189,39 @@ impl<'a> Placeholder<'a> {
 
     /// The placeholder as one node named "{title}. {hint}", or the title alone.
     pub fn show(self, ui: &mut egui::Ui) -> PlaceholderResponse {
+        let area = ui.available_size();
+        let height = if area.y.is_finite() {
+            area.y.max(PLACEHOLDER_MIN_HEIGHT)
+        } else {
+            PLACEHOLDER_MIN_HEIGHT
+        };
+        let width = if area.x.is_finite() {
+            area.x
+        } else {
+            PLACEHOLDER_TEXT_WIDTH
+        };
+        let text_width = width.min(PLACEHOLDER_TEXT_WIDTH);
+        let top = ((height - self.content_height(ui, text_width)) / 2.0).max(0.0);
         let mut action_clicked = false;
-        let centred = ui.vertical_centered(|ui| {
-            ui.add_space(space::XL);
-            if self.fill == Fill::Loading {
-                spinner(ui, self.title);
-            }
-            let title_color = if self.fill == Fill::Error {
-                Tone::Danger.swatch().text
-            } else {
-                color::TEXT
-            };
-            ui.label(TextRole::BodyStrong.rich(self.title).color(title_color));
-            if let Some(hint) = self.hint {
-                ui.label(TextRole::Small.rich(hint));
-            }
-            if let Some(label) = self.action {
-                action_clicked = ui.add(Button::secondary(label)).clicked();
-            }
-            ui.add_space(space::XL);
-        });
+        let centred = ui.allocate_ui_with_layout(
+            vec2(width, height),
+            Layout::top_down(Align::Center),
+            |ui| {
+                ui.add_space(top);
+                self.paint_icon(ui);
+                ui.scope(|ui| {
+                    ui.set_max_width(text_width);
+                    ui.label(self.title_text());
+                    if let Some(hint) = self.hint {
+                        ui.label(TextRole::Small.rich(hint));
+                    }
+                });
+                if let Some(label) = self.action {
+                    let button = Button::secondary(label).size(ControlSize::Small);
+                    action_clicked = ui.add(button).clicked();
+                }
+            },
+        );
         let name = match self.hint {
             Some(hint) => format!("{}. {hint}", self.title),
             None => self.title.to_owned(),
@@ -193,6 +234,61 @@ impl<'a> Placeholder<'a> {
             action_clicked,
         }
     }
+
+    fn title_text(&self) -> egui::RichText {
+        let tint = if self.fill == Fill::Error {
+            Tone::Danger.swatch().text
+        } else {
+            color::TEXT
+        };
+        TextRole::BodyStrong.rich(self.title).color(tint)
+    }
+
+    fn paint_icon(&self, ui: &mut egui::Ui) {
+        match self.fill {
+            Fill::Loading => {
+                ui.add_space((PLACEHOLDER_ICON - size::ICON_MD) / 2.0);
+                spinner(ui, self.title);
+                ui.add_space((PLACEHOLDER_ICON - size::ICON_MD) / 2.0);
+            }
+            Fill::Empty(icon) => paint_big_icon(ui, icon, color::TEXT_MUTED),
+            Fill::Error => paint_big_icon(ui, Icon::ERROR, Tone::Danger.swatch().text),
+        }
+    }
+
+    /// The height of everything that is stacked in the middle, to centre it.
+    fn content_height(&self, ui: &egui::Ui, text_width: f32) -> f32 {
+        let gap = ui.spacing().item_spacing.y;
+        let mut heights = vec![
+            PLACEHOLDER_ICON,
+            text_height(ui, TextRole::BodyStrong, self.title, text_width),
+        ];
+        if let Some(hint) = self.hint {
+            heights.push(text_height(ui, TextRole::Small, hint, text_width));
+        }
+        if self.action.is_some() {
+            heights.push(ControlSize::Small.height());
+        }
+        heights.iter().sum::<f32>() + gap * (heights.len() - 1) as f32
+    }
+}
+
+fn paint_big_icon(ui: &mut egui::Ui, icon: Icon, tint: egui::Color32) {
+    let (_, rect) = ui.allocate_space(egui::Vec2::splat(PLACEHOLDER_ICON));
+    ui.painter().text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        icon.glyph(),
+        Icon::font(PLACEHOLDER_ICON),
+        tint,
+    );
+}
+
+/// The height of `text` wrapped at `width`, laid out as a label of `role` lays it out.
+fn text_height(ui: &egui::Ui, role: TextRole, text: &str, width: f32) -> f32 {
+    let mut job = LayoutJob::single_section(text.to_owned(), role.format(color::TEXT));
+    job.wrap.max_width = width;
+    ui.painter().layout_job(job).size().y
 }
 
 #[cfg(test)]

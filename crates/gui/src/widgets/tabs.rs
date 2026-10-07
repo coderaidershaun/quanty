@@ -1,8 +1,13 @@
 //! The strip of tabs along the top of a window.
 
-use eframe::egui::{self, accesskit::Role};
+use eframe::egui::{
+    self, Align2, Color32, WidgetInfo, WidgetType,
+    accesskit::Role,
+    text::{LayoutJob, TextFormat},
+};
 
-use crate::theme::{Icon, TextRole, Tone, size, space};
+use super::look::{Look, focus_ring};
+use crate::theme::{Icon, TextRole, Tone, color, hairline, radius, size, space, stroke};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Tab<'a> {
@@ -31,11 +36,13 @@ impl<'a> Tab<'a> {
     }
 }
 
+/// A row of tabs. It reports the tab that was chosen and keeps no choice of its own.
 pub struct TabStrip<'a> {
     tabs: &'a [Tab<'a>],
     active: usize,
     tone: Tone,
     compact: bool,
+    forced: Option<Look>,
 }
 
 impl<'a> TabStrip<'a> {
@@ -45,6 +52,7 @@ impl<'a> TabStrip<'a> {
             active,
             tone: Tone::Blue,
             compact: false,
+            forced: None,
         }
     }
 
@@ -59,38 +67,124 @@ impl<'a> TabStrip<'a> {
         self
     }
 
+    /// Draws every tab as if the pointer or the keyboard were on it.
+    pub(super) fn preview(mut self, look: Look) -> Self {
+        self.forced = Some(look);
+        self
+    }
+
     /// The index of the tab the person chose. Never the active one.
     pub fn show(self, ui: &mut egui::Ui) -> Option<usize> {
-        let mut chosen = None;
         let (role, gap, height) = if self.compact {
             (TextRole::Small, space::LG, size::CONTROL_MD)
         } else {
             (TextRole::Label, space::XL, size::TAB)
         };
-        ui.horizontal(|ui| {
+        let start = ui.cursor().min.x;
+        let full_width = ui.available_width();
+        let mut chosen = None;
+        let row = ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = gap;
-            ui.set_min_height(height);
             for (index, tab) in self.tabs.iter().enumerate() {
-                let is_active = index == self.active;
-                let color = if is_active {
-                    self.tone.swatch().text
-                } else {
-                    crate::theme::color::TEXT_SECONDARY
-                };
-                let text = match tab.count {
-                    Some(count) => format!("{} ({count})", tab.label),
-                    None => tab.label.to_owned(),
-                };
-                let response = ui.selectable_label(is_active, role.rich(text).color(color));
-                ui.ctx().accesskit_node_builder(response.id, |node| {
-                    node.set_role(Role::Tab);
-                    node.set_label(tab.label);
-                });
-                if response.clicked() && !is_active {
+                if self.show_tab(ui, tab, index == self.active, role, height) {
                     chosen = Some(index);
                 }
             }
         });
+        let painter = ui.painter();
+        let y = row.response.rect.bottom();
+        painter.hline(
+            start..=start + full_width,
+            y,
+            hairline(painter, color::HAIRLINE),
+        );
         chosen
+    }
+
+    /// Draws one tab and says whether it was clicked and is not the active one.
+    fn show_tab(
+        &self,
+        ui: &mut egui::Ui,
+        tab: &Tab<'_>,
+        is_active: bool,
+        role: TextRole,
+        height: f32,
+    ) -> bool {
+        let swatch = self.tone.swatch();
+        let icon_size = size::ICON_MD;
+        let icon_room = if tab.icon.is_some() {
+            icon_size + space::SM
+        } else {
+            0.0
+        };
+        // The colour does not change the width, so any colour measures the text.
+        let measured = self.galley(ui, tab, role, color::TEXT);
+        let width = icon_room + measured.size().x;
+        let (rect, response) =
+            ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
+        response
+            .widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), tab.label));
+        ui.ctx().accesskit_node_builder(response.id, |node| {
+            node.set_role(Role::Tab);
+            node.set_selected(is_active);
+            if let Some(count) = tab.count {
+                node.set_value(count.to_string());
+            }
+        });
+        if ui.is_rect_visible(rect) {
+            let look = self.forced.unwrap_or_else(|| Look::of(&response));
+            let tint = if is_active {
+                swatch.text
+            } else if look.hovered || look.pressed {
+                color::TEXT
+            } else {
+                color::TEXT_SECONDARY
+            };
+            let painter = ui.painter();
+            let mut x = rect.left();
+            if let Some(icon) = tab.icon {
+                painter.text(
+                    egui::pos2(x + icon_size / 2.0, rect.center().y),
+                    Align2::CENTER_CENTER,
+                    icon.glyph(),
+                    Icon::font(icon_size),
+                    tint,
+                );
+                x += icon_room;
+            }
+            let galley = self.galley(ui, tab, role, tint);
+            let top = rect.center().y - galley.size().y / 2.0;
+            painter.galley(egui::pos2(x, top), galley, tint);
+            if is_active {
+                let mut bar = rect;
+                bar.min.y = rect.bottom() - stroke::UNDERLINE;
+                painter.rect_filled(bar, radius::SM / 4.0, swatch.solid);
+            }
+            if look.focused {
+                focus_ring(painter, rect, radius::SM);
+            }
+        }
+        response.clicked() && !is_active
+    }
+
+    /// The label, and after it the count in brackets. A count of zero is muted.
+    fn galley(
+        &self,
+        ui: &egui::Ui,
+        tab: &Tab<'_>,
+        role: TextRole,
+        tint: Color32,
+    ) -> std::sync::Arc<egui::Galley> {
+        let mut job = LayoutJob::default();
+        job.append(tab.label, 0.0, role.format(tint));
+        if let Some(count) = tab.count {
+            let tint = if count == 0 { color::TEXT_MUTED } else { tint };
+            let format = TextFormat {
+                color: tint,
+                ..role.format(tint)
+            };
+            job.append(&format!(" ({count})"), 0.0, format);
+        }
+        ui.painter().layout_job(job)
     }
 }

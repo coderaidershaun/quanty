@@ -1,14 +1,23 @@
 //! The small tokens that sit in text and beside it: citation numbers, kind chips, badges, step
 //! markers and the legend dot.
 
-use eframe::egui::{self, Response, WidgetInfo, WidgetType};
+use eframe::egui::{
+    self, Align2, Rect, Response, Stroke, StrokeKind, WidgetInfo, WidgetType, pos2, text::LayoutJob,
+};
 
-use crate::theme::{Icon, Kind, TextRole, Tone, color, radius, size, space};
+use super::look::{Look, focus_ring};
+use crate::theme::{Icon, Kind, TextRole, Tone, color, glow, radius, size, space, stroke};
+
+/// The icon inside the round badge of a kind chip.
+const CHIP_GLYPH: f32 = 10.0;
+/// The round badge of a kind chip.
+const CHIP_BADGE: f32 = 16.0;
 
 /// The number of a source, as a clickable chip. Its accessible name is "Citation {n}".
 pub struct CitationChip {
     number: usize,
     selected: bool,
+    forced: Option<Look>,
 }
 
 impl CitationChip {
@@ -16,11 +25,18 @@ impl CitationChip {
         CitationChip {
             number,
             selected: false,
+            forced: None,
         }
     }
 
     pub const fn selected(mut self, is_selected: bool) -> Self {
         self.selected = is_selected;
+        self
+    }
+
+    /// Draws the chip as if the pointer or the keyboard were on it.
+    pub(super) const fn preview(mut self, look: Look) -> Self {
+        self.forced = Some(look);
         self
     }
 
@@ -43,33 +59,37 @@ impl CitationChip {
         self.finish(ui, rect, response)
     }
 
-    fn finish(&self, ui: &egui::Ui, rect: egui::Rect, response: Response) -> Response {
+    fn finish(&self, ui: &egui::Ui, rect: Rect, response: Response) -> Response {
         let label = format!("Citation {}", self.number);
         response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), &label));
         if ui.is_rect_visible(rect) {
-            let swatch = Tone::Blue.swatch();
+            let look = self.forced.unwrap_or_else(|| Look::of(&response));
+            let blue = Tone::Blue.swatch();
             let (fill, text) = if self.selected {
-                (swatch.solid, swatch.on_solid)
-            } else if response.hovered() {
-                (swatch.edge, color::TEXT)
+                (blue.solid, blue.on_solid)
+            } else if look.hovered {
+                (blue.edge, color::TEXT)
             } else {
-                (swatch.wash, color::TEXT)
+                (blue.wash, color::TEXT)
             };
-            let painter = ui.painter_at(rect);
-            painter.rect_filled(rect, radius::SM, fill);
-            painter.rect_stroke(
+            let painter = ui.painter();
+            painter.rect(
                 rect,
                 radius::SM,
-                egui::Stroke::new(1.0, swatch.edge),
-                egui::StrokeKind::Inside,
+                fill,
+                Stroke::new(stroke::BORDER, blue.edge),
+                StrokeKind::Inside,
             );
             painter.text(
                 rect.center(),
-                egui::Align2::CENTER_CENTER,
+                Align2::CENTER_CENTER,
                 self.number.to_string(),
                 TextRole::Micro.font(),
                 text,
             );
+            if look.focused {
+                focus_ring(painter, rect, radius::SM);
+            }
         }
         response
     }
@@ -88,6 +108,7 @@ pub struct Chip<'a> {
     kind: Option<Kind>,
     selected: bool,
     max_width: f32,
+    forced: Option<Look>,
 }
 
 impl<'a> Chip<'a> {
@@ -97,6 +118,7 @@ impl<'a> Chip<'a> {
             kind: Some(kind),
             selected: false,
             max_width: f32::INFINITY,
+            forced: None,
         }
     }
 
@@ -106,6 +128,7 @@ impl<'a> Chip<'a> {
             kind: None,
             selected: false,
             max_width: f32::INFINITY,
+            forced: None,
         }
     }
 
@@ -119,44 +142,89 @@ impl<'a> Chip<'a> {
         self.max_width = width;
         self
     }
+
+    /// Draws the chip as if the pointer or the keyboard were on it.
+    pub(super) fn preview(mut self, look: Look) -> Self {
+        self.forced = Some(look);
+        self
+    }
+
+    /// Space before the text, space after it, and the round badge in between, if any.
+    fn padding(&self) -> (f32, f32, f32) {
+        match self.kind {
+            Some(_) => (space::XS, space::SM, CHIP_BADGE + space::SM),
+            None => (space::MD, space::MD, 0.0),
+        }
+    }
+
+    fn paint(&self, ui: &egui::Ui, rect: Rect, look: Look) {
+        let painter = ui.painter();
+        let (fill, edge, corner) = match self.kind {
+            Some(kind) => {
+                let swatch = kind.tone().swatch();
+                let edge = if self.selected {
+                    Stroke::new(stroke::EDGE, swatch.solid)
+                } else if look.hovered {
+                    Stroke::new(stroke::BORDER, swatch.solid)
+                } else {
+                    Stroke::new(stroke::BORDER, swatch.edge)
+                };
+                if self.selected {
+                    painter.add(glow(kind.tone()).as_shape(rect, radius::MD));
+                }
+                (swatch.wash, edge, radius::MD)
+            }
+            None if self.selected => {
+                let blue = Tone::Blue.swatch();
+                (blue.wash, Stroke::new(stroke::EDGE, blue.solid), radius::XL)
+            }
+            None => {
+                let fill = if look.hovered {
+                    color::RAISED_HOVER
+                } else {
+                    color::RAISED
+                };
+                (fill, Stroke::new(stroke::BORDER, color::BORDER), radius::XL)
+            }
+        };
+        painter.rect(rect, corner, fill, edge, StrokeKind::Inside);
+        if look.focused {
+            focus_ring(painter, rect, corner);
+        }
+        if let Some(kind) = self.kind {
+            let swatch = kind.tone().swatch();
+            let centre = pos2(rect.left() + space::XS + CHIP_BADGE / 2.0, rect.center().y);
+            painter.circle_filled(centre, CHIP_BADGE / 2.0, swatch.solid);
+            painter.text(
+                centre,
+                Align2::CENTER_CENTER,
+                kind.icon().glyph(),
+                Icon::font(CHIP_GLYPH),
+                swatch.on_solid,
+            );
+        }
+    }
 }
 
 impl egui::Widget for Chip<'_> {
     fn ui(self, ui: &mut egui::Ui) -> Response {
-        let tone = self.kind.map_or(Tone::Neutral, Kind::tone);
-        let swatch = tone.swatch();
-        let padding = 2.0 * space::SM;
-        let mut job = egui::text::LayoutJob::single_section(
-            self.label.to_owned(),
-            TextRole::Small.format(color::TEXT),
-        );
+        let (before, after, badge) = self.padding();
+        let mut job =
+            LayoutJob::single_section(self.label.to_owned(), TextRole::Small.format(color::TEXT));
         job.wrap.max_rows = 1;
         job.wrap.overflow_character = Some('…');
-        job.wrap.max_width = (self.max_width - padding).max(0.0);
+        job.wrap.max_width = (self.max_width - before - badge - after).max(0.0);
         job.break_on_newline = false;
         let galley = ui.painter().layout_job(job);
-        let size = egui::vec2(galley.size().x + padding, size::CHIP);
-        let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+        let side = egui::vec2(before + badge + galley.size().x + after, size::CHIP);
+        let (rect, response) = ui.allocate_exact_size(side, egui::Sense::click());
         response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, self.label));
         if ui.is_rect_visible(rect) {
-            let outline = if self.selected || response.hovered() {
-                swatch.solid
-            } else {
-                swatch.edge
-            };
-            let painter = ui.painter_at(rect);
-            painter.rect_filled(rect, radius::MD, swatch.wash);
-            painter.rect_stroke(
-                rect,
-                radius::MD,
-                egui::Stroke::new(1.0, outline),
-                egui::StrokeKind::Inside,
-            );
-            let at = egui::pos2(
-                rect.left() + space::SM,
-                rect.center().y - galley.size().y / 2.0,
-            );
-            painter.galley(at, galley.clone(), color::TEXT);
+            self.paint(ui, rect, self.forced.unwrap_or_else(|| Look::of(&response)));
+            let top = rect.center().y - galley.size().y / 2.0;
+            let left = rect.left() + before + badge;
+            ui.painter()
+                .galley(pos2(left, top), galley.clone(), color::TEXT);
         }
         if galley.elided {
             response.on_hover_text(self.label)
@@ -170,6 +238,7 @@ impl egui::Widget for Chip<'_> {
 pub struct Badge<'a> {
     text: &'a str,
     tone: Tone,
+    icon: Option<Icon>,
 }
 
 impl<'a> Badge<'a> {
@@ -177,6 +246,7 @@ impl<'a> Badge<'a> {
         Badge {
             text,
             tone: Tone::Neutral,
+            icon: None,
         }
     }
 
@@ -185,18 +255,51 @@ impl<'a> Badge<'a> {
         self
     }
 
+    /// An icon before the text.
     pub const fn icon(self, _icon: Icon) -> Self {
-        self
+        Badge {
+            icon: Some(_icon),
+            ..self
+        }
     }
 }
 
 impl egui::Widget for Badge<'_> {
     fn ui(self, ui: &mut egui::Ui) -> Response {
-        ui.label(
-            TextRole::Small
-                .rich(self.text)
-                .color(self.tone.swatch().text),
-        )
+        let swatch = self.tone.swatch();
+        let galley = TextRole::Small.galley(ui, self.text, swatch.text);
+        let icon_room = if self.icon.is_some() {
+            size::ICON_SM + space::XS
+        } else {
+            0.0
+        };
+        let side = egui::vec2(icon_room + galley.size().x + 2.0 * space::SM, size::BADGE);
+        let (rect, response) = ui.allocate_exact_size(side, egui::Sense::hover());
+        response.widget_info(|| WidgetInfo::labeled(WidgetType::Label, true, self.text));
+        if ui.is_rect_visible(rect) {
+            let painter = ui.painter();
+            painter.rect(
+                rect,
+                radius::MD,
+                swatch.wash,
+                Stroke::new(stroke::BORDER, swatch.edge),
+                StrokeKind::Inside,
+            );
+            let mut x = rect.left() + space::SM;
+            if let Some(icon) = self.icon {
+                painter.text(
+                    pos2(x + size::ICON_SM / 2.0, rect.center().y),
+                    Align2::CENTER_CENTER,
+                    icon.glyph(),
+                    Icon::font(size::ICON_SM),
+                    swatch.text,
+                );
+                x += icon_room;
+            }
+            let top = rect.center().y - galley.size().y / 2.0;
+            painter.galley(pos2(x, top), galley, swatch.text);
+        }
+        response
     }
 }
 
@@ -242,25 +345,27 @@ impl egui::Widget for StepMarker {
         response.widget_info(|| WidgetInfo::labeled(WidgetType::Label, true, &label));
         if ui.is_rect_visible(rect) {
             let swatch = self.tone.swatch();
-            let painter = ui.painter_at(rect);
-            let radius = size::STEP / 2.0;
+            let painter = ui.painter();
             let text = match self.state {
                 StepState::Pending => {
                     painter.circle_stroke(
                         rect.center(),
-                        radius,
-                        egui::Stroke::new(1.0, color::BORDER),
+                        size::STEP / 2.0 - stroke::BORDER / 2.0,
+                        Stroke::new(stroke::BORDER, color::BORDER),
                     );
                     color::TEXT_MUTED
                 }
                 StepState::Done | StepState::Active => {
-                    painter.circle_filled(rect.center(), radius, swatch.solid);
+                    if self.state == StepState::Active {
+                        painter.add(glow(self.tone).as_shape(rect, size::STEP / 2.0));
+                    }
+                    painter.circle_filled(rect.center(), size::STEP / 2.0, swatch.solid);
                     swatch.on_solid
                 }
             };
             painter.text(
                 rect.center(),
-                egui::Align2::CENTER_CENTER,
+                Align2::CENTER_CENTER,
                 self.number.to_string(),
                 TextRole::Label.font(),
                 text,

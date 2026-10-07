@@ -14,7 +14,7 @@ use rag_core::{
 pub(crate) use results::page_text;
 pub use results::{Reason, SearchHit, SearchResults};
 
-// The four numbers below are starting values. They are tuned by asking the golden questions.
+// The four numbers below are starting values.
 
 /// How many results a question gives. It is also how many of the nearest items the search starts
 /// from.

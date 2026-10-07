@@ -2,6 +2,5 @@
 //! local Qdrant and the local FalkorDB.
 
 mod answer;
-mod eval;
 mod search;
 mod support;

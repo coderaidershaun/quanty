@@ -17,14 +17,7 @@ pub use word_embedder::WordEmbedder;
 /// The title that every item of the sample chapter of the book carries.
 pub const SAMPLE_CHAPTER_TITLE: &str = "Option Volatility and Pricing, chapter 1: Sample Pages";
 
-/// The title that every item of the hand-written chapter on the model in depth carries.
-pub const IN_DEPTH_CHAPTER_TITLE: &str = "Quanty Sample Notes, chapter 2: Black Scholes In Depth";
-
-/// The title that every item of the hand-written intuition chapter carries.
-pub const INTUITION_CHAPTER_TITLE: &str =
-    "Quanty Sample Notes, chapter 1: Options Pricing Intuition";
-
-/// The folder of the workspace, where `golden.toml` is.
+/// The folder of the workspace.
 pub fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }

@@ -1,37 +1,26 @@
 //! The `rag-query` command: asks the stored items a question and prints what it finds or an
-//! answer written from it, or asks the golden questions and scores them.
+//! answer written from it.
 
-use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result};
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::{CommandFactory, Parser};
 use graph::FalkorGraph;
 use rag_core::{
     ClaudeCli, ConceptStore, Config, DocumentLabels, GeminiEmbedder, ItemKind, ItemStore, Tag,
 };
-use rag_retrieval::{
-    ANSWER_MODEL, Retriever, SearchResults, answer, evaluate, read_golden_questions,
-};
+use rag_retrieval::{ANSWER_MODEL, Retriever, SearchResults, answer};
 use tracing_subscriber::filter::{LevelFilter, Targets};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-const GOLDEN_FILE: &str = "golden.toml";
-
 #[derive(Parser)]
-#[command(name = "rag-query", args_conflicts_with_subcommands = true)]
+#[command(name = "rag-query")]
 struct Cli {
-    #[command(subcommand)]
-    command: Option<Command>,
-
     /// The question to ask
     question: Option<String>,
 
     /// Look only at items of this kind
-    // SMELL: `rag-query --kind <kind> eval` and `rag-query --answer eval` are not refused, and
-    // neither is `eval` after `--book`, `--author` or `--tag`. After an option the word `eval` is
-    // taken as the question, so it is searched for and the golden questions are not asked.
     #[arg(long)]
     kind: Option<ItemKind>,
 
@@ -51,12 +40,6 @@ struct Cli {
     /// Write an answer from the items found, with its sources
     #[arg(long)]
     answer: bool,
-}
-
-#[derive(Subcommand)]
-enum Command {
-    /// Ask every question in golden.toml and print how many are found in the top results
-    Eval,
 }
 
 #[tokio::main]
@@ -86,15 +69,14 @@ async fn run(cli: Cli) -> Result<ExitCode> {
         author: cli.author,
         tags: cli.tags.into_iter().collect(),
     };
-    match (cli.command, cli.question) {
-        (Some(Command::Eval), _) => eval().await.map(|()| ExitCode::SUCCESS),
-        (None, Some(question)) if cli.answer => answer_question(&question, cli.kind, &wanted)
+    match cli.question {
+        Some(question) if cli.answer => answer_question(&question, cli.kind, &wanted)
             .await
             .map(|()| ExitCode::SUCCESS),
-        (None, Some(question)) => ask(&question, cli.kind, &wanted)
+        Some(question) => ask(&question, cli.kind, &wanted)
             .await
             .map(|()| ExitCode::SUCCESS),
-        (None, None) => {
+        None => {
             Cli::command()
                 .print_help()
                 .context("could not print the help text")?;
@@ -154,19 +136,5 @@ async fn answer_question(
         .await
         .context("could not write an answer")?;
     println!("{written}");
-    Ok(())
-}
-
-async fn eval() -> Result<()> {
-    let golden = read_golden_questions(Path::new(GOLDEN_FILE)).with_context(|| {
-        format!(
-            "could not load {GOLDEN_FILE} from the current folder; run eval from the workspace root"
-        )
-    })?;
-    let retriever = retriever().await.context("could not get ready to search")?;
-    let report = evaluate(&golden, &retriever)
-        .await
-        .context("could not ask the golden questions")?;
-    println!("{report}");
     Ok(())
 }

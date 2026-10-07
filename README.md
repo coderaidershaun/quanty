@@ -52,7 +52,6 @@ cargo run --release -p rag-retrieval --bin rag-query -- "What is the Black–Sch
 | `rag-ingest <picture.png> --note "<what it is>"` | Ingests a chart on its own |
 | `rag-ingest tag <document id> --add <tag> --remove <tag>` | Changes the tags of a stored document |
 | `rag-ingest delete-document <document id>` | Removes a document from both stores |
-| `rag-query eval` | Scores the questions in `golden.toml` |
 
 Run each as `cargo run --release -p rag-ingestion --bin rag-ingest -- …` or `cargo run --release -p rag-retrieval --bin rag-query -- …`. The document id is printed by every ingest.
 

@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use graph::{DocumentNode, GraphError, GraphStore, ItemNode};
 use ocr::ReadChapterError;
-use rag_core::{DocumentInput, EmbedError, Embedder, ItemPoint, Llm, StoreError};
+use rag_core::{DocumentInput, DocumentLabels, EmbedError, Embedder, ItemPoint, Llm, StoreError};
 
 pub use concepts::{
     ASK_SCORE, ConceptError, ConceptExtractor, ConceptSummary, EXTRACTION_MODEL, LINK_SCORE,
@@ -23,6 +23,7 @@ pub use summary::{IngestSummary, ItemCounts};
 use concepts::EmbeddedItems;
 use items::{document_id, document_title};
 
+use crate::labels::stored_node;
 use crate::stores::Stores;
 
 #[derive(thiserror::Error, Debug)]
@@ -43,7 +44,7 @@ pub enum IngestError {
     #[error("could not store the items of the document")]
     Store(#[from] StoreError),
 
-    #[error("could not write the document to the graph")]
+    #[error("could not read or write the document in the graph")]
     Graph(#[from] GraphError),
 
     #[error("the document made {items} items but the embedder returned {vectors} vectors")]
@@ -78,6 +79,10 @@ struct Document {
 /// limit or is not signed in, keeps the answers it has so far, and running the same command again
 /// goes on from them.
 ///
+/// The document node and every point carry the labels of the document: the book of the chapter,
+/// and the author and the tags that the stored node already has, so an ingest never removes one.
+/// The labels are not embedded.
+///
 /// The document node carries a mark that it is ingested whole, with the number of its items. It
 /// is taken away when the run starts and set as the very last step, and only when no item was
 /// skipped, so the mark is never there for a run that stopped or skipped an item.
@@ -109,6 +114,10 @@ pub async fn ingest_chapter<E: Embedder, L: Llm, G: GraphStore>(
         node: DocumentNode {
             id: document_id(&chapter.index),
             title: document_title(&chapter.index),
+            labels: DocumentLabels {
+                book: Some(chapter.index.book_title.clone()),
+                ..DocumentLabels::default()
+            },
         },
         items: chapter_items(&chapter),
     };
@@ -135,6 +144,7 @@ pub async fn ingest_image<E: Embedder, L: Llm, G: GraphStore>(
         node: DocumentNode {
             id: items[0].payload.doc_id,
             title: items[0].payload.doc_title.clone(),
+            labels: DocumentLabels::default(),
         },
         items,
     };
@@ -146,7 +156,19 @@ async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
     models: &Models<E, L>,
     stores: &Stores<G>,
 ) -> Result<IngestSummary, IngestError> {
-    let Document { node, items } = document;
+    let Document {
+        mut node,
+        mut items,
+    } = document;
+    // An ingest never removes a label that was set after an earlier one: the author and the tags
+    // are the ones the stored document has, and only the book is the one of this run.
+    if let Some(stored) = stored_node(node.id, stores).await? {
+        node.labels.author = stored.labels.author;
+        node.labels.tags = stored.labels.tags;
+    }
+    for item in &mut items {
+        item.payload.document_labels = node.labels.clone();
+    }
     let items_by_kind = ItemCounts::of(&items);
     let nodes: Vec<ItemNode> = items.iter().map(item_node).collect();
 

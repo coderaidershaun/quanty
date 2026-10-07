@@ -3,7 +3,7 @@
 //! and FalkorDB. Only real embeddings show that a question lands near the item that answers it,
 //! and only the real command shows that the key, the stores and the printed lines work together.
 
-use rag_core::{GeminiEmbedder, ItemKind};
+use rag_core::{DocumentLabels, GeminiEmbedder, ItemKind};
 use rag_ingestion::testing::ThrowawayStores;
 use rag_retrieval::{Retriever, read_golden_questions};
 
@@ -41,9 +41,15 @@ async fn sample_chapters_answer_a_formula_and_a_chart_question_and_eval_prints_i
         graph: stores.graph,
     };
 
-    let equation = retriever.search(EQUATION_QUESTION, None).await.unwrap();
+    let equation = retriever
+        .search(EQUATION_QUESTION, None, &DocumentLabels::default())
+        .await
+        .unwrap();
     println!("--- {EQUATION_QUESTION}\n{equation}\n");
-    let chart = retriever.search(CHART_QUESTION, None).await.unwrap();
+    let chart = retriever
+        .search(CHART_QUESTION, None, &DocumentLabels::default())
+        .await
+        .unwrap();
     println!("--- {CHART_QUESTION}\n{chart}\n");
     let asked = rag_query(&throwaway, &[EQUATION_QUESTION]);
     let evaluated = rag_query(&throwaway, &["eval"]);

@@ -5,10 +5,13 @@
 use std::collections::BTreeSet;
 
 use ocr::{PieceDetail, read_chapter};
-use rag_ingestion::{Item, chapter_items, ingest_chapter};
+use rag_ingestion::{Item, LabelChange, chapter_items, ingest_chapter, relabel};
 use serde_json::{Value, json};
 
-use crate::support::{self, StandInLlm, ThrowawayStores, assert_graph_holds_only, points_in};
+use crate::support::{
+    self, SAMPLE_BOOK, StandInLlm, ThrowawayStores, assert_graph_holds_only, assert_labelled,
+    points_in,
+};
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored ingest::"]
@@ -88,6 +91,13 @@ async fn ingest_fills_a_throwaway_collection_and_a_second_run_adds_nothing() {
     );
 
     assert_label_and_cites_are_stored_only_where_the_item_has_them(&points, &items);
+    for (_, payload) in &points {
+        assert_eq!(payload["book"], SAMPLE_BOOK);
+        assert!(
+            payload.get("author").is_none() && payload.get("tags").is_none(),
+            "no author and no tag was given: {payload}"
+        );
+    }
 
     let received = models.embedder.received();
     assert_eq!(received.len(), items.len(), "one input for each item");
@@ -115,6 +125,27 @@ async fn ingest_fills_a_throwaway_collection_and_a_second_run_adds_nothing() {
         );
     }
 
+    let labels = LabelChange {
+        author: Some("Sheldon Natenberg".to_owned()),
+        add: ["  Options ", "options", "Volatility"]
+            .map(|tag| tag.parse().unwrap())
+            .into(),
+        remove: Vec::new(),
+    };
+    relabel(summary.doc_id, &labels, &stores).await.unwrap();
+    let labelled = assert_labelled(
+        config,
+        &stores.graph,
+        "Sheldon Natenberg",
+        &["options", "volatility"],
+    )
+    .await;
+    let labelled_ids: BTreeSet<String> = labelled.keys().cloned().collect();
+    assert_eq!(
+        labelled_ids, item_ids,
+        "the points are the ones of the items"
+    );
+
     let again = ingest_chapter(&support::sample_chapter(), &models, &stores)
         .await
         .unwrap();
@@ -126,6 +157,57 @@ async fn ingest_fills_a_throwaway_collection_and_a_second_run_adds_nothing() {
         assert_graph_holds_only(&stores.graph, &items).await,
         stored_document,
         "a second run adds no node and no edge"
+    );
+    assert_eq!(
+        assert_labelled(
+            config,
+            &stores.graph,
+            "Sheldon Natenberg",
+            &["options", "volatility"]
+        )
+        .await,
+        labelled,
+        "a second run keeps the labels that were set in between"
+    );
+    let received = models.embedder.received();
+    assert_eq!(received.len(), 2 * items.len(), "labelling embeds nothing");
+    assert_eq!(
+        received[..items.len()],
+        received[items.len()..],
+        "labels do not change what is embedded"
+    );
+
+    relabel(summary.doc_id, &labels, &stores).await.unwrap();
+    assert_eq!(
+        assert_labelled(
+            config,
+            &stores.graph,
+            "Sheldon Natenberg",
+            &["options", "volatility"]
+        )
+        .await,
+        labelled,
+        "the same labels again change nothing"
+    );
+
+    let other = LabelChange {
+        author: Some("Another Author".to_owned()),
+        add: vec!["Greeks".parse().unwrap()],
+        remove: Vec::new(),
+    };
+    relabel(summary.doc_id, &other, &stores).await.unwrap();
+    let changed = assert_labelled(
+        config,
+        &stores.graph,
+        "Another Author",
+        &["greeks", "options", "volatility"],
+    )
+    .await;
+    assert_eq!(changed.keys().cloned().collect::<BTreeSet<_>>(), stored_ids);
+    assert_eq!(
+        assert_graph_holds_only(&stores.graph, &items).await,
+        stored_document,
+        "other labels add no node and no edge"
     );
 }
 

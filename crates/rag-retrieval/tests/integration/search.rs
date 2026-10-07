@@ -6,10 +6,12 @@
 use std::path::Path;
 use std::process::Command;
 
-use graph::RelationKind;
-use rag_core::{ApiKey, Config, ItemId, ItemKind};
-use rag_ingestion::testing::ThrowawayStores;
-use rag_retrieval::{MAX_RESULTS_PER_DOCUMENT, RESULTS_PER_QUERY, Reason, Retriever};
+use graph::{FalkorGraph, RelationKind};
+use rag_core::{ApiKey, Config, DocumentLabels, ItemId, ItemKind};
+use rag_ingestion::testing::{StandInEmbedder, ThrowawayStores};
+use rag_retrieval::{
+    MAX_RESULTS_PER_DOCUMENT, RESULTS_PER_QUERY, Reason, Retriever, SearchResults,
+};
 
 use crate::support::{
     self, Fixture, Placed, QUESTION, SAMPLE_CHAPTER_TITLE, WordEmbedder, find_item, store_samples,
@@ -31,7 +33,10 @@ async fn a_question_finds_its_item_and_prints_title_page_kind_text_and_picture()
         graph: stores.graph,
     };
 
-    let results = retriever.search(&question, None).await.unwrap();
+    let results = retriever
+        .search(&question, None, &DocumentLabels::default())
+        .await
+        .unwrap();
 
     assert_eq!(embedder.questions(), vec![question.clone()]);
     let ranked: Vec<_> = results
@@ -86,7 +91,11 @@ async fn a_kind_filter_returns_only_items_of_that_kind() {
 
     for kind in ItemKind::ALL {
         let results = retriever
-            .search("What is the price of an option?", Some(kind))
+            .search(
+                "What is the price of an option?",
+                Some(kind),
+                &DocumentLabels::default(),
+            )
             .await
             .unwrap();
 
@@ -103,6 +112,30 @@ async fn a_kind_filter_returns_only_items_of_that_kind() {
 
 /// How far the score that Qdrant gives an item may be from the cosine the item was placed at.
 const SCORE_ERROR: f32 = 0.001;
+
+/// Labels that name nothing but these tags.
+fn tagged(tags: &[&str]) -> DocumentLabels {
+    DocumentLabels {
+        tags: tags.iter().map(|tag| tag.parse().unwrap()).collect(),
+        ..DocumentLabels::default()
+    }
+}
+
+async fn found_among(
+    retriever: &Retriever<StandInEmbedder, FalkorGraph>,
+    kind: Option<ItemKind>,
+    wanted: &DocumentLabels,
+) -> SearchResults {
+    retriever.search(QUESTION, kind, wanted).await.unwrap()
+}
+
+fn texts_of(results: &SearchResults) -> Vec<&str> {
+    results
+        .hits
+        .iter()
+        .map(|hit| hit.item.payload.text.as_str())
+        .collect()
+}
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-retrieval --test integration -- --ignored search::"]
@@ -123,6 +156,18 @@ async fn an_item_of_another_document_comes_back_through_a_shared_concept_and_the
     let c1 = fixture.add(Placed::chunk(document_c, "c1", 0.20));
     let d1 = fixture.add(Placed::chunk(document_d, "d1", 0.10));
     fixture.add(Placed::chunk(document_e, "e1", 0.50));
+    fixture.label(
+        document_a,
+        DocumentLabels {
+            book: Some("Pricing Options".to_owned()),
+            author: Some("Sheldon Natenberg".to_owned()),
+            ..tagged(&["options"])
+        },
+    );
+    fixture.label(document_b, tagged(&["futures"]));
+    fixture.label(document_c, tagged(&["options"]));
+    fixture.label(document_d, tagged(&["futures"]));
+    fixture.label(document_e, tagged(&["rates"]));
     // The three concepts nearest to the question are the put-call parity and the two decoys, so
     // each of the other two concepts can only be reached through the graph.
     let black_scholes = fixture.concept("Black–Scholes model", 0.10);
@@ -143,7 +188,7 @@ async fn an_item_of_another_document_comes_back_through_a_shared_concept_and_the
         graph: stores.graph,
     };
 
-    let results = retriever.search(QUESTION, None).await.unwrap();
+    let results = found_among(&retriever, None, &DocumentLabels::default()).await;
 
     let found: Vec<&str> = results
         .hits
@@ -194,6 +239,34 @@ async fn an_item_of_another_document_comes_back_through_a_shared_concept_and_the
             .any(|line| line == "reached via concept Black–Scholes model"),
         "{block_of_b1}"
     );
+
+    // Document E is behind a1 to a9 and no concept leads to it, so only a seed query that looks at
+    // the labels finds it.
+    let results = found_among(&retriever, None, &tagged(&["rates"])).await;
+    assert_eq!(texts_of(&results), ["e1"]);
+    assert_eq!(results.hits[0].reason, Reason::Nearest);
+    // Documents A and C are tagged `options`. b1 and d1 come through the graph and are left out.
+    let results = found_among(&retriever, None, &tagged(&["options"])).await;
+    assert_eq!(texts_of(&results), ["a1", "a2", "a3", "c1"]);
+    assert_eq!(
+        results.hits[3].reason,
+        Reason::Concept("Itô's lemma".to_owned())
+    );
+    // The book and the author match whatever their capitals.
+    let of_document_a = DocumentLabels {
+        book: Some("pricing options".to_owned()),
+        author: Some("SHELDON NATENBERG".to_owned()),
+        ..DocumentLabels::default()
+    };
+    let results = found_among(&retriever, None, &of_document_a).await;
+    assert_eq!(texts_of(&results), ["a1", "a2", "a3"]);
+    // Every label that is given must fit, and A is not tagged `futures`.
+    let not_document_a = DocumentLabels {
+        book: Some("Pricing Options".to_owned()),
+        ..tagged(&["futures"])
+    };
+    let results = found_among(&retriever, None, &not_document_a).await;
+    assert!(results.hits.is_empty(), "{results}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -225,6 +298,8 @@ async fn a_returned_paragraph_pulls_in_the_figure_and_the_formula_it_cites() {
     ));
     fixture.add(Placed::formula(document_a, "formula of A", 0.04, "(7.3)"));
     fixture.add(Placed::formula(document_b, "formula of B", 0.06, "(7.3)"));
+    fixture.label(document_a, tagged(&["options"]));
+    fixture.label(document_b, tagged(&["futures"]));
     fixture.store_in(&stores).await;
     let retriever = Retriever {
         embedder: Fixture::embedder(),
@@ -233,7 +308,7 @@ async fn a_returned_paragraph_pulls_in_the_figure_and_the_formula_it_cites() {
         graph: stores.graph,
     };
 
-    let results = retriever.search(QUESTION, None).await.unwrap();
+    let results = found_among(&retriever, None, &DocumentLabels::default()).await;
 
     let found: Vec<&str> = results
         .hits
@@ -272,10 +347,12 @@ async fn a_returned_paragraph_pulls_in_the_figure_and_the_formula_it_cites() {
         "{printed}"
     );
 
-    let chunks_only = retriever
-        .search(QUESTION, Some(ItemKind::Chunk))
-        .await
-        .unwrap();
+    let chunks_only = found_among(
+        &retriever,
+        Some(ItemKind::Chunk),
+        &DocumentLabels::default(),
+    )
+    .await;
     let found: Vec<&str> = chunks_only
         .hits
         .iter()
@@ -286,6 +363,17 @@ async fn a_returned_paragraph_pulls_in_the_figure_and_the_formula_it_cites() {
         ["a1", "a2", "a3"],
         "nothing is pulled in with --kind"
     );
+
+    // The labels of A keep what A cites, and nothing of B comes in.
+    let results = found_among(&retriever, None, &tagged(&["options"])).await;
+    assert_eq!(
+        texts_of(&results),
+        ["a1", "a2", "a3", "figure of A", "formula of A"]
+    );
+    // The formula of B is nearer and is a formula, so the result is A's only when both the kind and
+    // the labels are kept.
+    let formulas = found_among(&retriever, Some(ItemKind::Formula), &tagged(&["options"])).await;
+    assert_eq!(texts_of(&formulas), ["formula of A"]);
 }
 
 #[test]

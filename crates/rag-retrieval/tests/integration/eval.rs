@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use rag_core::ItemKind;
+use rag_core::{DocumentLabels, ItemKind};
 use rag_ingestion::Item;
 use rag_ingestion::testing::ThrowawayStores;
 use rag_retrieval::{GoldenPlace, GoldenQuestion, Retriever, evaluate, read_golden_questions};
@@ -99,7 +99,10 @@ async fn eval_counts_the_golden_questions_found_in_the_top_five() {
 
     assert_eq!(report.found(), 1);
     assert_eq!(report.asked(), 2);
-    let results = retriever.search(&golden[0].text, None).await.unwrap();
+    let results = retriever
+        .search(&golden[0].text, None, &DocumentLabels::default())
+        .await
+        .unwrap();
     let place_in_the_top_five = |item: &Item| {
         results
             .hits

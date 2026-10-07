@@ -7,7 +7,7 @@ mod image;
 mod pieces;
 
 use ocr::{Chapter, ChapterIndex, PieceId, SectionHeading};
-use rag_core::{DocId, DocumentInput, ItemId, ItemKind, ItemPayload};
+use rag_core::{DocId, DocumentInput, DocumentLabels, ItemId, ItemKind, ItemPayload};
 
 pub use image::{LoneImage, image_items};
 
@@ -49,6 +49,7 @@ impl Draft {
                 image_path: self.input.image.clone(),
                 label: self.label,
                 cites: self.cites,
+                document_labels: DocumentLabels::default(),
             },
             input: self.input,
         }

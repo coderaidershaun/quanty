@@ -4,7 +4,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use graph::GraphStore;
-use rag_core::Embedder;
+use rag_core::{DocumentLabels, Embedder};
 
 use crate::search::{RESULTS_PER_QUERY, Retriever, SearchError};
 
@@ -167,7 +167,9 @@ pub async fn evaluate<E: Embedder, G: GraphStore>(
 ) -> Result<EvalReport, SearchError> {
     let mut outcomes = Vec::with_capacity(golden.len());
     for question in golden {
-        let results = retriever.search(&question.text, None).await?;
+        let results = retriever
+            .search(&question.text, None, &DocumentLabels::default())
+            .await?;
         let top = &results.hits[..results.hits.len().min(TOP_RESULTS)];
         let found_at = question
             .places()

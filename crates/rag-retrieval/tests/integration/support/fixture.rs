@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 use graph::{
     ConceptNode, DocumentNode, FalkorGraph, GraphStore, ItemNode, Mention, Relation, RelationKind,
 };
-use rag_core::{ConceptId, ConceptPoint, DocId, ItemId, ItemKind, ItemPayload, ItemPoint};
+use rag_core::{
+    ConceptId, ConceptPoint, DocId, DocumentLabels, ItemId, ItemKind, ItemPayload, ItemPoint,
+};
 use rag_ingestion::Stores;
 use rag_ingestion::testing::{StandInEmbedder, first_axis, vector_at};
 
@@ -68,6 +70,7 @@ impl Placed {
 struct FixtureDocument {
     id: DocId,
     title: String,
+    labels: DocumentLabels,
     items: Vec<ItemNode>,
 }
 
@@ -107,9 +110,25 @@ impl Fixture {
         self.documents.push(FixtureDocument {
             id,
             title: title.to_owned(),
+            labels: DocumentLabels::default(),
             items: Vec::new(),
         });
         id
+    }
+
+    /// Gives the document these labels, on its node and on each of its points, those that are
+    /// added later too.
+    pub fn label(&mut self, document: DocId, labels: DocumentLabels) {
+        for point in &mut self.points {
+            if point.payload.doc_id == document {
+                point.payload.document_labels = labels.clone();
+            }
+        }
+        self.documents
+            .iter_mut()
+            .find(|candidate| candidate.id == document)
+            .expect("the document should have been made by this fixture")
+            .labels = labels;
     }
 
     pub fn add(&mut self, placed: Placed) -> ItemId {
@@ -140,6 +159,7 @@ impl Fixture {
                 image_path: placed.picture,
                 label: placed.label,
                 cites: placed.cites,
+                document_labels: document.labels.clone(),
             },
         });
         id
@@ -222,6 +242,7 @@ impl Fixture {
             let node = DocumentNode {
                 id: document.id,
                 title: document.title.clone(),
+                labels: document.labels.clone(),
             };
             let graph = &stores.graph;
             graph.upsert_document(&node).await.unwrap();

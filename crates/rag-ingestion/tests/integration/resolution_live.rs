@@ -14,7 +14,7 @@ use std::process::Output;
 use graph::FalkorGraph;
 use graph::testing::{StoredConcept, StoredConceptGraph, stored_concept_graph};
 use ocr::read_chapter;
-use rag_core::{Config, Embedder, GeminiEmbedder, ItemHit, ItemKind, ItemStore};
+use rag_core::{Config, Embedder, GeminiEmbedder, ItemFilter, ItemHit, ItemKind, ItemStore};
 use rag_ingestion::{Item, chapter_items};
 use serde_json::Value;
 
@@ -177,7 +177,9 @@ async fn nearest_to_question(
     embedder: &GeminiEmbedder,
 ) -> anyhow::Result<Vec<ItemHit>> {
     let vector = embedder.embed_query(QUESTION).await?;
-    Ok(ItemStore::connect(config)?.search(vector, None, 5).await?)
+    Ok(ItemStore::connect(config)?
+        .search(vector, &ItemFilter::default(), 5)
+        .await?)
 }
 
 #[tokio::test(flavor = "multi_thread")]

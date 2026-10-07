@@ -3,13 +3,14 @@
 use std::str::FromStr;
 
 use falkordb::FalkorDBError;
-use rag_core::{ConceptId, DocId, ItemId, ItemKind};
+use rag_core::{ConceptId, DocId, DocumentLabels, ItemId, ItemKind};
 
 /// A document as the graph holds it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DocumentNode {
     pub id: DocId,
     pub title: String,
+    pub labels: DocumentLabels,
 }
 
 /// An item as the graph holds it. Its id is also the id of its point in Qdrant.
@@ -180,7 +181,8 @@ pub enum GraphError {
 /// The graph of documents, items and concepts. Every write can be repeated: a second call with
 /// the same values changes nothing.
 pub trait GraphStore {
-    /// Creates the document node, or updates its title. Repeating it changes nothing.
+    /// Creates the document node, or updates its title and its labels: a label that `document`
+    /// does not have is taken away from the stored node. Repeating it changes nothing.
     ///
     /// # Errors
     /// [`GraphError::Query`] when the store refuses or cannot be reached.
@@ -188,6 +190,15 @@ pub trait GraphStore {
         &self,
         document: &DocumentNode,
     ) -> impl Future<Output = Result<(), GraphError>> + Send;
+
+    /// Every document with its title and its labels, ordered by id. A document that was written
+    /// before labels existed comes back with no labels.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   document
+    fn documents(&self) -> impl Future<Output = Result<Vec<DocumentNode>, GraphError>> + Send;
 
     /// Writes the items of a document: a node for each item, an edge `HAS_ITEM` from the
     /// document to each item, and an edge `NEXT` from each item to the one after it. Creates the

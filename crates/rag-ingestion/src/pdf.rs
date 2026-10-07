@@ -51,6 +51,16 @@ pub struct ChapterPdf<'a, C> {
     pub convert: C,
 }
 
+impl PdfOutcome {
+    /// The document the run was about, whether it was ingested now or before.
+    pub fn doc_id(&self) -> DocId {
+        match self {
+            PdfOutcome::AlreadyIngested { doc_id, .. } => *doc_id,
+            PdfOutcome::Ingested(summary) => summary.ingest.doc_id,
+        }
+    }
+}
+
 impl fmt::Display for PdfSummary {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(formatter, "{}", self.conversion)?;

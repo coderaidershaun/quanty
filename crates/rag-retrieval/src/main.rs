@@ -7,7 +7,9 @@ use std::process::ExitCode;
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand};
 use graph::FalkorGraph;
-use rag_core::{ClaudeCli, ConceptStore, Config, GeminiEmbedder, ItemKind, ItemStore};
+use rag_core::{
+    ClaudeCli, ConceptStore, Config, DocumentLabels, GeminiEmbedder, ItemKind, ItemStore, Tag,
+};
 use rag_retrieval::{
     ANSWER_MODEL, Retriever, SearchResults, answer, evaluate, read_golden_questions,
 };
@@ -27,11 +29,24 @@ struct Cli {
     question: Option<String>,
 
     /// Look only at items of this kind
-    // SMELL: `rag-query --kind <kind> eval` and `rag-query --answer eval` are not refused. After
-    // an option the word `eval` is taken as the question, so it is searched for and the golden
-    // questions are not asked.
+    // SMELL: `rag-query --kind <kind> eval` and `rag-query --answer eval` are not refused, and
+    // neither is `eval` after `--book`, `--author` or `--tag`. After an option the word `eval` is
+    // taken as the question, so it is searched for and the golden questions are not asked.
     #[arg(long)]
     kind: Option<ItemKind>,
+
+    /// Look only at items of documents from this book, whatever its capitals
+    #[arg(long)]
+    book: Option<String>,
+
+    /// Look only at items of documents by this author, whatever its capitals
+    #[arg(long)]
+    author: Option<String>,
+
+    /// Look only at items of documents that have this tag. Repeat it to ask for more tags: a
+    /// document must match every one of the book, the author and the tags that are given
+    #[arg(long = "tag", value_name = "TAG")]
+    tags: Vec<Tag>,
 
     /// Write an answer from the items found, with its sources
     #[arg(long)]
@@ -66,12 +81,19 @@ async fn main() -> ExitCode {
 }
 
 async fn run(cli: Cli) -> Result<ExitCode> {
+    let wanted = DocumentLabels {
+        book: cli.book,
+        author: cli.author,
+        tags: cli.tags.into_iter().collect(),
+    };
     match (cli.command, cli.question) {
         (Some(Command::Eval), _) => eval().await.map(|()| ExitCode::SUCCESS),
-        (None, Some(question)) if cli.answer => answer_question(&question, cli.kind)
+        (None, Some(question)) if cli.answer => answer_question(&question, cli.kind, &wanted)
             .await
             .map(|()| ExitCode::SUCCESS),
-        (None, Some(question)) => ask(&question, cli.kind).await.map(|()| ExitCode::SUCCESS),
+        (None, Some(question)) => ask(&question, cli.kind, &wanted)
+            .await
+            .map(|()| ExitCode::SUCCESS),
         (None, None) => {
             Cli::command()
                 .print_help()
@@ -96,17 +118,21 @@ async fn retriever() -> Result<Retriever<GeminiEmbedder, FalkorGraph>> {
     })
 }
 
-async fn search(question: &str, kind: Option<ItemKind>) -> Result<SearchResults> {
+async fn search(
+    question: &str,
+    kind: Option<ItemKind>,
+    wanted: &DocumentLabels,
+) -> Result<SearchResults> {
     retriever()
         .await
         .context("could not get ready to search")?
-        .search(question, kind)
+        .search(question, kind, wanted)
         .await
         .context("could not search for the question")
 }
 
-async fn ask(question: &str, kind: Option<ItemKind>) -> Result<()> {
-    println!("{}", search(question, kind).await?);
+async fn ask(question: &str, kind: Option<ItemKind>, wanted: &DocumentLabels) -> Result<()> {
+    println!("{}", search(question, kind, wanted).await?);
     Ok(())
 }
 
@@ -114,8 +140,12 @@ async fn ask(question: &str, kind: Option<ItemKind>) -> Result<()> {
 /// from, so the model is not asked.
 // SMELL: a `claude` that cannot start, because it is not signed in or `ANTHROPIC_API_KEY` is set,
 // is found only after the search, so Gemini has billed the question by then.
-async fn answer_question(question: &str, kind: Option<ItemKind>) -> Result<()> {
-    let results = search(question, kind).await?;
+async fn answer_question(
+    question: &str,
+    kind: Option<ItemKind>,
+    wanted: &DocumentLabels,
+) -> Result<()> {
+    let results = search(question, kind, wanted).await?;
     if results.hits.is_empty() {
         println!("{results}");
         return Ok(());

@@ -2,7 +2,7 @@
 //! after the picture's file.
 
 use ocr::ConvertedImage;
-use rag_core::{DocId, DocumentInput, ItemId, ItemKind, ItemPayload};
+use rag_core::{DocId, DocumentInput, DocumentLabels, ItemId, ItemKind, ItemPayload};
 
 use super::pieces::{join_blocks, label_line, printed_label};
 use super::{BLOCK_SEPARATOR, Item};
@@ -41,6 +41,7 @@ pub fn image_items(picture: &LoneImage<'_>) -> Vec<Item> {
             image_path: Some(image.picture.clone()),
             label: printed_label(image.index.label.as_deref()),
             cites: Vec::new(),
+            document_labels: DocumentLabels::default(),
         },
         input: DocumentInput {
             title: doc_title,

@@ -1,18 +1,19 @@
 //! The `rag-ingest` command: checks that the services are ready, ingests one converted chapter
-//! folder or one picture that stands alone, converts and ingests one chapter PDF, or deletes one
-//! document.
+//! folder or one picture that stands alone, converts and ingests one chapter PDF, changes the
+//! labels of one stored document, or deletes one document.
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::builder::NonEmptyStringValueParser;
+use clap::{Args, CommandFactory, Parser, Subcommand};
 use graph::FalkorGraph;
 use ocr::ChapterJob;
-use rag_core::{ApiKey, ClaudeCli, ConceptStore, Config, DocId, GeminiEmbedder, ItemStore};
+use rag_core::{ApiKey, ClaudeCli, ConceptStore, Config, DocId, GeminiEmbedder, ItemStore, Tag};
 use rag_ingestion::{
-    ChapterPdf, ConceptExtractor, EXTRACTION_MODEL, IngestSummary, LoneImage, Models, Stores,
-    delete_document, health, ingest_chapter, ingest_image, ingest_pdf,
+    ChapterPdf, ConceptExtractor, EXTRACTION_MODEL, IngestSummary, LabelChange, LoneImage, Models,
+    Stores, delete_document, health, ingest_chapter, ingest_image, ingest_pdf, relabel,
 };
 use tracing::Level;
 use tracing_subscriber::filter::Targets;
@@ -37,6 +38,33 @@ struct Cli {
         help = "What you know about the picture. It is added to the explanation of the picture"
     )]
     note: Option<String>,
+
+    #[command(flatten)]
+    labels: GivenLabels,
+}
+
+// This struct has no doc comment, because clap would print one as the first line of
+// `rag-ingest --help`.
+#[derive(Args)]
+struct GivenLabels {
+    /// The author of the document. It replaces the author that the document has
+    #[arg(long, value_parser = NonEmptyStringValueParser::new())]
+    author: Option<String>,
+
+    /// A tag to add to the document, such as options. Repeat it to add more. An ingest never
+    /// removes a tag: use `rag-ingest tag --remove` for that
+    #[arg(long = "tag", value_name = "TAG")]
+    tags: Vec<Tag>,
+}
+
+impl From<GivenLabels> for LabelChange {
+    fn from(given: GivenLabels) -> LabelChange {
+        LabelChange {
+            author: given.author,
+            add: given.tags,
+            remove: Vec::new(),
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -54,6 +82,28 @@ enum Command {
         // for an HTML tag that is never closed.
         #[arg(help = "The chapter PDF, named chapter-<number>-<name>.pdf")]
         chapter_pdf: PathBuf,
+
+        #[command(flatten)]
+        labels: GivenLabels,
+    },
+
+    /// Change the author and the tags of a stored document, in both stores, with no embedding and
+    /// no model
+    Tag {
+        /// The document id that an ingest prints, such as 5f3c2a1e-9b04-5d6e-8a17-2c4b7e90f1d3
+        document_id: DocId,
+
+        /// The new author of the document
+        #[arg(long, value_parser = NonEmptyStringValueParser::new())]
+        author: Option<String>,
+
+        /// A tag to add. Repeat it to add more
+        #[arg(long, value_name = "TAG")]
+        add: Vec<Tag>,
+
+        /// A tag to take away. Repeat it to take away more
+        #[arg(long, value_name = "TAG")]
+        remove: Vec<Tag>,
     },
 
     /// Remove one document, with its items, from Qdrant and from the graph
@@ -95,13 +145,38 @@ async fn run(cli: Cli) -> Result<ExitCode> {
                 ExitCode::FAILURE
             })
         }
-        (Some(Command::Pdf { book, chapter_pdf }), _) => convert_and_ingest(&book, &chapter_pdf)
+        (
+            Some(Command::Pdf {
+                book,
+                chapter_pdf,
+                labels,
+            }),
+            _,
+        ) => convert_and_ingest(&book, &chapter_pdf, &labels.into())
             .await
             .map(|()| ExitCode::SUCCESS),
+        (
+            Some(Command::Tag {
+                document_id,
+                author,
+                add,
+                remove,
+            }),
+            _,
+        ) => tag(
+            document_id,
+            &LabelChange {
+                author,
+                add,
+                remove,
+            },
+        )
+        .await
+        .map(|()| ExitCode::SUCCESS),
         (Some(Command::DeleteDocument { document_id }), _) => {
             delete(document_id).await.map(|()| ExitCode::SUCCESS)
         }
-        (None, Some(path)) => ingest(&path, cli.note.as_deref())
+        (None, Some(path)) => ingest(&path, cli.note.as_deref(), &cli.labels.into())
             .await
             .map(|()| ExitCode::SUCCESS),
         (None, None) => {
@@ -158,7 +233,7 @@ impl<'a> Source<'a> {
     }
 }
 
-async fn ingest(path: &Path, note: Option<&str>) -> Result<()> {
+async fn ingest(path: &Path, note: Option<&str>, change: &LabelChange) -> Result<()> {
     let source = Source::of(path, note)?;
     let config = Config::load().context("could not read the settings")?;
     // The models are set up before a picture is converted, so a missing key for the embedder
@@ -186,10 +261,10 @@ async fn ingest(path: &Path, note: Option<&str>) -> Result<()> {
         }
     };
     println!("{summary}");
-    Ok(())
+    write_given_labels(summary.doc_id, change, &stores).await
 }
 
-async fn convert_and_ingest(book: &str, chapter_pdf: &Path) -> Result<()> {
+async fn convert_and_ingest(book: &str, chapter_pdf: &Path, change: &LabelChange) -> Result<()> {
     let config = Config::load().context("could not read the settings")?;
     // Both checks come before anything is set up, so a mistake costs nothing.
     let job = ChapterJob::new(book, chapter_pdf, &config.content_folder).with_context(|| {
@@ -224,6 +299,37 @@ async fn convert_and_ingest(book: &str, chapter_pdf: &Path) -> Result<()> {
     .await
     .with_context(|| format!("could not ingest {}", chapter_pdf.display()))?;
     println!("{outcome}");
+    write_given_labels(outcome.doc_id(), change, &stores).await
+}
+
+/// Labels come after the ingest, so a run that stops in the ingest labels nothing, and the same
+/// command again finishes both.
+async fn write_given_labels(
+    document: DocId,
+    change: &LabelChange,
+    stores: &Stores<FalkorGraph>,
+) -> Result<()> {
+    if change.is_empty() {
+        return Ok(());
+    }
+    write_labels(document, change, stores).await
+}
+
+async fn tag(document: DocId, change: &LabelChange) -> Result<()> {
+    let config = Config::load().context("could not read the settings")?;
+    let stores = connect_stores(&config).await?;
+    write_labels(document, change, &stores).await
+}
+
+async fn write_labels(
+    document: DocId,
+    change: &LabelChange,
+    stores: &Stores<FalkorGraph>,
+) -> Result<()> {
+    let labelled = relabel(document, change, stores)
+        .await
+        .with_context(|| format!("could not label the document {document}"))?;
+    println!("{labelled}");
     Ok(())
 }
 

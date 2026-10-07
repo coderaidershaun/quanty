@@ -5,25 +5,29 @@
 mod decisions;
 mod stand_in_image_services;
 
+use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use graph::FalkorGraph;
 use graph::testing::{GraphSize, StoredDocument, StoredItem, size, stored_document};
+use graph::{FalkorGraph, GraphStore};
 use qdrant_client::qdrant::ScrollPointsBuilder;
 use qdrant_client::qdrant::point_id::PointIdOptions;
 use qdrant_client::{Payload, Qdrant};
-use rag_core::Config;
+use rag_core::{Config, Tag};
 use rag_ingestion::Item;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 pub use decisions::{decision_for_mention, decisions_in, mentions_of};
 pub use rag_ingestion::testing::{
     StandInEmbedder, StandInLlm, ThrowawayStores, first_axis, vector_at,
 };
 pub use stand_in_image_services::{CAPTION, LABEL, StandInImageServices};
+
+/// The title that the sample chapter is converted under.
+pub const SAMPLE_BOOK: &str = "Option Volatility and Pricing";
 
 /// What the stand-in `claude` prints when the binary runs: no item discusses a concept.
 const STAND_IN_ANSWER: &str = r#"{"type":"result","subtype":"success","is_error":false,"structured_output":{"concepts":[],"relations":[]},"total_cost_usd":0}"#;
@@ -252,4 +256,30 @@ pub async fn assert_graph_holds_only(graph: &FalkorGraph, items: &[Item]) -> Sto
     let stored = assert_document_stored(graph, items).await;
     assert_eq!(size(graph).await, size_of_one_document(items.len()));
     stored
+}
+
+/// Checks that every point of the collection carries the book of the sample chapter, this author
+/// and these tags, and that so does the one document node of the graph. Returns the points.
+pub async fn assert_labelled(
+    config: &Config,
+    graph: &FalkorGraph,
+    author: &str,
+    tags: &[&str],
+) -> BTreeMap<String, Value> {
+    let points = points_in(config).await;
+    for (id, payload) in &points {
+        assert_eq!(payload["book"], SAMPLE_BOOK, "{id}");
+        assert_eq!(payload["author"], author, "{id}");
+        assert_eq!(payload["tags"], json!(tags), "{id}");
+    }
+    let nodes = graph.documents().await.unwrap();
+    assert_eq!(nodes.len(), 1);
+    let labels = &nodes[0].labels;
+    assert_eq!(labels.book.as_deref(), Some(SAMPLE_BOOK));
+    assert_eq!(labels.author.as_deref(), Some(author));
+    assert_eq!(
+        labels.tags.iter().map(Tag::as_str).collect::<Vec<_>>(),
+        tags
+    );
+    points.into_iter().collect()
 }

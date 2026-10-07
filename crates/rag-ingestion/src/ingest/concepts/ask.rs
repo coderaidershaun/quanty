@@ -6,7 +6,7 @@ use std::error::Error;
 
 use futures_util::StreamExt;
 use futures_util::stream;
-use rag_core::{Embedding, ItemId, ItemStore, Llm, LlmError, Question};
+use rag_core::{Embedding, ItemFilter, ItemId, ItemStore, Llm, LlmError, Question};
 use serde_json::Value;
 
 use super::cache::{Cache, key_of};
@@ -222,7 +222,7 @@ async fn related_to(
     stored_items: &ItemStore,
 ) -> Result<String, ConceptError> {
     let hits = stored_items
-        .search(vector, None, RELATED_ITEMS_SEARCHED)
+        .search(vector, &ItemFilter::default(), RELATED_ITEMS_SEARCHED)
         .await
         .map_err(|source| ConceptError::RelatedItems {
             item: item.id,

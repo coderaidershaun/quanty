@@ -9,6 +9,8 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::DocumentLabels;
+
 /// Fixed for good: changing it gives every document and item a new identifier.
 const DOCUMENT_NAMESPACE: Uuid = Uuid::from_u128(0x73ca4e6a_716f_46fb_bc79_7c63fc5612d7);
 
@@ -164,4 +166,8 @@ pub struct ItemPayload {
     /// in reading order. Chunks only.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cites: Vec<String>,
+    /// The labels of the document, the same on every item of it. They are stored flat, beside the
+    /// other fields.
+    #[serde(flatten)]
+    pub document_labels: DocumentLabels,
 }

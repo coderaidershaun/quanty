@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use rag_core::{DocId, ItemHit, ItemId, ItemKind, ItemPayload};
+use rag_core::{DocId, DocumentLabels, ItemHit, ItemId, ItemKind, ItemPayload};
 use rag_ingestion::testing::StandInLlm;
 use rag_retrieval::{AnswerError, Reason, SearchHit, SearchResults, answer};
 use serde_json::{Value, json};
@@ -41,6 +41,7 @@ fn payload(document: &str, title: &str, kind: ItemKind, page: &str, text: &str) 
         image_path: None,
         label: None,
         cites: Vec::new(),
+        document_labels: DocumentLabels::default(),
     }
 }
 

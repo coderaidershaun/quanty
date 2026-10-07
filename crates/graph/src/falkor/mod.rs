@@ -94,6 +94,10 @@ impl GraphStore for FalkorGraph {
         writes::upsert_document(self, document).await
     }
 
+    async fn documents(&self) -> Result<Vec<DocumentNode>, GraphError> {
+        reads::documents(self).await
+    }
+
     async fn upsert_items(&self, document: DocId, items: &[ItemNode]) -> Result<(), GraphError> {
         writes::upsert_items(self, document, items).await
     }

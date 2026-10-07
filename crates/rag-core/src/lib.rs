@@ -8,6 +8,7 @@ mod config;
 mod embedder;
 mod item;
 mod item_store;
+mod labels;
 mod llm;
 mod qdrant;
 
@@ -20,6 +21,7 @@ pub use embedder::{
     GeminiEmbedder,
 };
 pub use item::{DocId, ItemId, ItemKind, ItemPayload, ParseDocIdError, UnknownItemKind};
-pub use item_store::{ItemHit, ItemPoint, ItemStore};
+pub use item_store::{ItemFilter, ItemHit, ItemPoint, ItemStore};
+pub use labels::{DocumentLabels, EmptyTag, Tag};
 pub use llm::{Llm, LlmError, Question};
 pub use qdrant::StoreError;

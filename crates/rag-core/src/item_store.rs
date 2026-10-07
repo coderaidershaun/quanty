@@ -3,13 +3,16 @@
 //! of the collection.
 
 use qdrant_client::qdrant::{
-    Condition, CountPointsBuilder, DeletePointsBuilder, Filter, PointStruct, QueryPointsBuilder,
-    ScoredPoint, UpsertPointsBuilder,
+    Condition, CountPointsBuilder, DeletePayloadPointsBuilder, DeletePointsBuilder, Filter,
+    PointStruct, QueryPointsBuilder, ScoredPoint, SetPayloadPointsBuilder, UpsertPointsBuilder,
 };
 use qdrant_client::{Payload, Qdrant, QdrantError};
+use serde_json::{Map, Value};
 
 use crate::qdrant::{build_client, ensure_collection, point_id_text, request_error};
-use crate::{Config, DocId, Embedding, ItemId, ItemKind, ItemPayload, StoreError};
+use crate::{
+    Config, DocId, DocumentLabels, Embedding, ItemId, ItemKind, ItemPayload, StoreError, Tag,
+};
 
 /// A group of this many points with their vectors is about a megabyte, well inside a request.
 const UPSERT_GROUP_SIZE: usize = 256;
@@ -145,6 +148,56 @@ impl ItemStore {
         Ok(count)
     }
 
+    /// Makes `labels` the labels of every point of the document: a label that is there is written,
+    /// and one that is missing is taken off the point. Nothing else of a point changes, and no
+    /// vector is touched. A document with no points is not an error.
+    ///
+    /// # Errors
+    /// [`StoreError::Request`] when Qdrant refuses or cannot be reached.
+    pub async fn set_document_labels(
+        &self,
+        document: DocId,
+        labels: &DocumentLabels,
+    ) -> Result<(), StoreError> {
+        let tags: Vec<&str> = labels.tags.iter().map(Tag::as_str).collect();
+        let fields = [
+            (BOOK_FIELD, labels.book.as_deref().map(Value::from)),
+            (AUTHOR_FIELD, labels.author.as_deref().map(Value::from)),
+            (TAGS_FIELD, (!tags.is_empty()).then(|| Value::from(tags))),
+        ];
+        let mut given = Map::new();
+        let mut left_out = Vec::new();
+        for (field, value) in fields {
+            match value {
+                Some(value) => {
+                    given.insert(field.to_owned(), value);
+                }
+                None => left_out.push(field.to_owned()),
+            }
+        }
+        if !left_out.is_empty() {
+            self.client
+                .delete_payload(
+                    DeletePayloadPointsBuilder::new(self.collection.as_str(), left_out)
+                        .points_selector(points_of(document))
+                        .wait(true),
+                )
+                .await
+                .map_err(|source| self.request_error("remove labels from the document", source))?;
+        }
+        if !given.is_empty() {
+            self.client
+                .set_payload(
+                    SetPayloadPointsBuilder::new(self.collection.as_str(), Payload::from(given))
+                        .points_selector(points_of(document))
+                        .wait(true),
+                )
+                .await
+                .map_err(|source| self.request_error("write labels to the document", source))?;
+        }
+        Ok(())
+    }
+
     fn request_error(&self, action: &'static str, source: QdrantError) -> StoreError {
         request_error(&self.url, &self.collection, action, source)
     }
@@ -184,6 +237,12 @@ const KIND_FIELD: &str = "kind";
 /// of `ItemPayload`.
 const DOC_ID_FIELD: &str = "doc_id";
 
+/// The names of the payload fields that hold the labels of a document. They must match the field
+/// names of `DocumentLabels`.
+const BOOK_FIELD: &str = "book";
+const AUTHOR_FIELD: &str = "author";
+const TAGS_FIELD: &str = "tags";
+
 /// The name of the payload field that holds the printed label of an item. It must match the field
 /// name of `ItemPayload`.
 const LABEL_FIELD: &str = "label";
@@ -193,9 +252,33 @@ const LABEL_FIELD: &str = "label";
 /// two items share.
 const LABELLED_LIMIT: u64 = 32;
 
+/// Which items a search looks at. The default is every item.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ItemFilter {
+    /// Only items of this kind.
+    pub kind: Option<ItemKind>,
+    /// Only items of these documents. `None` is every document, and an empty list is no document,
+    /// so it finds nothing.
+    pub documents: Option<Vec<DocId>>,
+}
+
+impl ItemFilter {
+    fn conditions(&self) -> Vec<Condition> {
+        let of_documents = self.documents.as_ref().map(|documents| {
+            let ids: Vec<String> = documents.iter().map(ToString::to_string).collect();
+            Condition::matches(DOC_ID_FIELD, ids)
+        });
+        self.kind
+            .map(kind_condition)
+            .into_iter()
+            .chain(of_documents)
+            .collect()
+    }
+}
+
 impl ItemStore {
-    /// The `limit` items whose vectors are nearest to `vector`, nearest first, among the items of
-    /// `kind` when one is given. It never creates the collection.
+    /// The `limit` items whose vectors are nearest to `vector`, nearest first, among the items that
+    /// the filter lets through. It never creates the collection.
     ///
     /// # Errors
     /// - [`StoreError::Request`] when Qdrant refuses, cannot be reached, or has no such collection
@@ -204,15 +287,19 @@ impl ItemStore {
     pub async fn search(
         &self,
         vector: Embedding,
-        kind: Option<ItemKind>,
+        filter: &ItemFilter,
         limit: usize,
     ) -> Result<Vec<ItemHit>, StoreError> {
-        let conditions = kind.map(kind_condition).into_iter().collect();
-        self.query("search for items", vector, conditions, limit as u64)
-            .await
+        self.query(
+            "search for items",
+            vector,
+            filter.conditions(),
+            limit as u64,
+        )
+        .await
     }
 
-    /// Every stored item among `ids`, of `kind` when one is given, nearest to `vector` first. An
+    /// Every stored item among `ids` that the filter lets through, nearest to `vector` first. An
     /// id that is not stored is left out. Empty `ids` make no call. It never creates the
     /// collection.
     ///
@@ -224,15 +311,13 @@ impl ItemStore {
         &self,
         vector: Embedding,
         ids: &[ItemId],
-        kind: Option<ItemKind>,
+        filter: &ItemFilter,
     ) -> Result<Vec<ItemHit>, StoreError> {
         if ids.is_empty() {
             return Ok(Vec::new());
         }
         let of_ids = Condition::has_id(ids.iter().map(ToString::to_string));
-        let conditions = std::iter::once(of_ids)
-            .chain(kind.map(kind_condition))
-            .collect();
+        let conditions = std::iter::once(of_ids).chain(filter.conditions()).collect();
         self.query("rank items", vector, conditions, ids.len() as u64)
             .await
     }

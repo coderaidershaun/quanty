@@ -4,11 +4,12 @@
 //! by the next one.
 
 use std::collections::BTreeSet;
+use std::ffi::OsStr;
 
 use graph::GraphStore;
-use graph::testing::stored_document;
+use graph::testing::{size, stored_document};
 use ocr::convert::convert_chapter_with;
-use ocr::testing::Scenario;
+use ocr::testing::{Scenario, sample_pdf};
 use ocr::{ConvertError, read_chapter};
 use rag_core::{DocId, ItemKind, LlmError};
 use rag_ingestion::{
@@ -18,7 +19,10 @@ use rag_ingestion::{
 use super::{
     StandInPdf, at_the_usage_limit, chain_of, finding_volatility, held_by, printed_page_of,
 };
-use crate::support::{StandInLlm, ThrowawayStores, assert_document_stored, points_in};
+use crate::support::{
+    RunRagIngest, SAMPLE_BOOK, StandInLlm, ThrowawayStores, assert_document_stored,
+    assert_labelled, points_in,
+};
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored pdf::"]
@@ -320,4 +324,80 @@ async fn a_document_with_a_skipped_item_or_a_later_stopped_ingest_is_not_taken_a
     assert_eq!(stores.graph.ingested_items(document).await.unwrap(), None);
     let fourth = pdf.ingest(&models, &stores).await.unwrap();
     assert!(matches!(fourth, PdfOutcome::Ingested(_)), "{fourth}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored pdf::"]
+async fn a_stored_document_is_labelled_in_place_by_pdf_and_by_tag_and_nothing_is_called() {
+    let throwaway = ThrowawayStores::new("pdf-labels");
+    let config = throwaway.config();
+    let stores = throwaway.connect().await;
+    let pdf = StandInPdf::new(&throwaway, Scenario::SampleChapter);
+    let models = throwaway.models(StandInLlm::replying(|_, _| Ok(finding_volatility())));
+
+    let first = pdf.ingest(&models, &stores).await.unwrap();
+    let document = first.doc_id().to_string();
+    let points = points_in(config).await;
+    for (_, payload) in &points {
+        assert_eq!(payload["book"], SAMPLE_BOOK, "{payload}");
+    }
+    let point_ids: BTreeSet<String> = points.into_iter().map(|(id, _)| id).collect();
+    let graph_size = size(&stores.graph).await;
+
+    // The built command finds the document stored, so it only writes the labels it was given.
+    let sample = sample_pdf();
+    let output = throwaway.rag_ingest_pdf([
+        OsStr::new("--book"),
+        OsStr::new(SAMPLE_BOOK),
+        OsStr::new("--author"),
+        OsStr::new("Sheldon Natenberg"),
+        OsStr::new("--tag"),
+        OsStr::new("Options"),
+        sample.as_os_str(),
+    ]);
+    let (stdout, stderr) = (text_of(&output.stdout), text_of(&output.stderr));
+    assert_eq!(output.status.code(), Some(0), "{stderr}");
+    assert!(stdout.contains("already ingested"), "{stdout}");
+    assert!(stdout.contains("author: Sheldon Natenberg"), "{stdout}");
+    assert!(stdout.contains("tags: options"), "{stdout}");
+    let labelled = assert_labelled(config, &stores.graph, "Sheldon Natenberg", &["options"]).await;
+    assert_eq!(labelled.into_keys().collect::<BTreeSet<_>>(), point_ids);
+    assert_eq!(size(&stores.graph).await, graph_size);
+
+    let output = throwaway.rag_ingest([
+        "tag",
+        document.as_str(),
+        "--author",
+        "Another Author",
+        "--add",
+        "Greeks",
+        "--remove",
+        "options",
+    ]);
+    assert_eq!(output.status.code(), Some(0), "{}", text_of(&output.stderr));
+    let labelled = assert_labelled(config, &stores.graph, "Another Author", &["greeks"]).await;
+    assert_eq!(labelled.into_keys().collect::<BTreeSet<_>>(), point_ids);
+    assert_eq!(size(&stores.graph).await, graph_size);
+
+    let unknown = DocId::from_source_sha256("a document that no store holds").to_string();
+    let output = throwaway.rag_ingest(["tag", unknown.as_str(), "--add", "options"]);
+    let stderr = text_of(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains(&unknown), "{stderr}");
+    assert_labelled(config, &stores.graph, "Another Author", &["greeks"]).await;
+
+    // The stand-in `claude` adds a line to `calls` each time it runs. The `pdf` command had a
+    // Gemini key that is not a real one and no converter key, so it ended well only because it
+    // embedded and converted nothing.
+    assert!(
+        !throwaway
+            .temporary_folder()
+            .join("stand-in-claude/calls")
+            .exists(),
+        "no model was asked"
+    );
+}
+
+fn text_of(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes).into_owned()
 }

@@ -5,7 +5,7 @@
 use graph::{
     ConceptNode, DocumentNode, GraphStore, ItemMentions, ItemNode, Mention, Relation, RelationKind,
 };
-use rag_core::{ConceptId, DocId, ItemId, ItemKind};
+use rag_core::{ConceptId, DocId, DocumentLabels, ItemId, ItemKind};
 use rag_ingestion::testing::ThrowawayStores;
 
 fn concept(name: &str) -> ConceptNode {
@@ -82,6 +82,7 @@ async fn the_three_reads_follow_mentions_and_one_relation_hop_on_a_throwaway_gra
         let document = DocumentNode {
             id: *id,
             title: (*title).to_owned(),
+            labels: DocumentLabels::default(),
         };
         graph.upsert_document(&document).await.unwrap();
         graph.upsert_items(*id, items).await.unwrap();

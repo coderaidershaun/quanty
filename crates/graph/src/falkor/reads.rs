@@ -1,12 +1,14 @@
-//! The statements that read concepts, the items that mention them, and whether a document is
-//! ingested whole, with the code that runs each one and the row it expects.
+//! The statements that read documents, concepts, the items that mention them, and whether a
+//! document is ingested whole, with the code that runs each one and the row it expects.
 
 use falkordb::FalkorValue;
-use rag_core::{ConceptId, DocId, ItemId};
+use rag_core::{ConceptId, DocId, DocumentLabels, ItemId, Tag};
 
 use super::{FalkorGraph, id_value};
-use crate::store::{ConceptNode, GraphError, ItemMentions};
+use crate::store::{ConceptNode, DocumentNode, GraphError, ItemMentions};
 
+const DOCUMENT_ROW: &str =
+    "a document (an id, a title, a book or null, an author or null and a list of tags or null)";
 const CONCEPT_ROW: &str = "a concept (an id, a name, a normalised name and a definition)";
 const ITEM_ROW: &str =
     "an item with the concepts it mentions (an item id and a list of concept ids)";
@@ -24,6 +26,14 @@ const CONCEPT_BY_ID: &str = "\
 MATCH (c:Concept {id: $id})
 RETURN c.id, c.name, c.normalised_name, c.definition
 LIMIT 1";
+
+// SMELL: this reads every document, and it is read by each ingest, each `tag` and each query that
+// has a label to match. Four documents are nothing, and a large library would need a read by id
+// and a read of the ids that carry given labels.
+const DOCUMENTS: &str = "\
+MATCH (d:Document)
+RETURN d.id, d.title, d.book, d.author, d.tags
+ORDER BY d.id";
 
 const INGESTED_ITEMS: &str = "\
 MATCH (d:Document {id: $id})
@@ -77,6 +87,17 @@ pub(super) async fn concept(
 ) -> Result<Option<ConceptNode>, GraphError> {
     let parameters = vec![("id", id_value(id))];
     read_concept(graph, "read a concept by its id", CONCEPT_BY_ID, parameters).await
+}
+
+pub(super) async fn documents(graph: &FalkorGraph) -> Result<Vec<DocumentNode>, GraphError> {
+    let action = "read the documents";
+    let reply = graph.run(action, DOCUMENTS, Vec::new()).await?;
+    reply
+        .data
+        .into_values_lossy()
+        .map(document_from_row)
+        .collect::<Result<_, _>>()
+        .map_err(|found| unreadable_reply(graph, action, DOCUMENT_ROW, found))
 }
 
 pub(super) async fn ingested_items(
@@ -196,6 +217,52 @@ pub(super) async fn related_concepts(
 
 fn id_list(ids: &[impl ToString + Copy]) -> FalkorValue {
     FalkorValue::Array(ids.iter().copied().map(id_value).collect())
+}
+
+/// Reads a row of an id, a title, a book or null, an author or null and a list of tags or null.
+/// Any other row comes back as the text that the error shows.
+fn document_from_row(row: Vec<FalkorValue>) -> Result<DocumentNode, String> {
+    let row = <[FalkorValue; 5]>::try_from(row).map_err(|row| format!("{row:?}"))?;
+    let [
+        FalkorValue::String(id),
+        FalkorValue::String(title),
+        book,
+        author,
+        tags,
+    ] = row
+    else {
+        return Err(format!("{row:?}"));
+    };
+    let tags = match tags {
+        FalkorValue::None => Vec::new(),
+        FalkorValue::Array(tags) => tags,
+        other => return Err(format!("{other:?}")),
+    };
+    Ok(DocumentNode {
+        id: id.parse().map_err(|_| format!("{id:?}"))?,
+        title,
+        labels: DocumentLabels {
+            book: text_or_null(book)?,
+            author: text_or_null(author)?,
+            tags: tags
+                .into_iter()
+                .map(|tag| match tag {
+                    FalkorValue::String(text) => {
+                        text.parse::<Tag>().map_err(|_| format!("{text:?}"))
+                    }
+                    other => Err(format!("{other:?}")),
+                })
+                .collect::<Result<_, _>>()?,
+        },
+    })
+}
+
+fn text_or_null(value: FalkorValue) -> Result<Option<String>, String> {
+    match value {
+        FalkorValue::None => Ok(None),
+        FalkorValue::String(text) => Ok(Some(text)),
+        other => Err(format!("{other:?}")),
+    }
 }
 
 /// Reads a row of four texts: an id, a name, a normalised name and a definition. Any other row

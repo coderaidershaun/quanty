@@ -15,7 +15,11 @@ use crate::store::{
 /// large: the client waits only a short time for a reply.
 const ROWS_PER_STATEMENT: usize = 200;
 
-const UPSERT_DOCUMENT: &str = "MERGE (d:Document {id: $id}) SET d.title = $title";
+// FalkorDB removes a property that is set to null, so a label that the document does not have is
+// taken away.
+const UPSERT_DOCUMENT: &str = "\
+MERGE (d:Document {id: $id})
+SET d.title = $title, d.book = $book, d.author = $author, d.tags = $tags";
 
 const SET_INGESTED_ITEMS: &str = "MATCH (d:Document {id: $id}) SET d.ingested_items = $items";
 
@@ -75,9 +79,22 @@ pub(super) async fn upsert_document(
     graph: &FalkorGraph,
     document: &DocumentNode,
 ) -> Result<(), GraphError> {
+    let labels = &document.labels;
+    let text_or_null = |text: &Option<String>| match text {
+        Some(text) => FalkorValue::String(text.clone()),
+        None => FalkorValue::None,
+    };
+    let tags = labels
+        .tags
+        .iter()
+        .map(|tag| FalkorValue::String(tag.to_string()))
+        .collect();
     let parameters = vec![
         ("id", id_value(document.id)),
         ("title", FalkorValue::String(document.title.clone())),
+        ("book", text_or_null(&labels.book)),
+        ("author", text_or_null(&labels.author)),
+        ("tags", FalkorValue::Array(tags)),
     ];
     graph
         .run("write the document", UPSERT_DOCUMENT, parameters)

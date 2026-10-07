@@ -6,7 +6,10 @@ mod rank;
 mod results;
 
 use graph::{GraphError, GraphStore};
-use rag_core::{ConceptStore, EmbedError, Embedder, ItemKind, ItemStore, StoreError};
+use rag_core::{
+    ConceptStore, DocId, DocumentLabels, EmbedError, Embedder, ItemFilter, ItemKind, ItemStore,
+    StoreError,
+};
 
 pub(crate) use results::page_text;
 pub use results::{Reason, SearchHit, SearchResults};
@@ -28,7 +31,7 @@ const QUESTION_CONCEPTS: usize = 3;
 // SMELL: when more items than this mention the concepts, the graph keeps the ones that mention the
 // most of them and then the ones with the lowest ids, not the ones nearest to the question. A seed
 // that mentions a concept takes one of these places, and so does an item of another kind when the
-// search is for one kind.
+// search is for one kind, and an item of a document that the labels leave out.
 const MAX_EXPANSION_ITEMS: usize = 50;
 
 #[derive(thiserror::Error, Debug)]
@@ -71,6 +74,11 @@ impl<E: Embedder, G: GraphStore> Retriever<E, G> {
     /// results are the seeds. With a `kind` only items of that kind are looked at, and step 6 is
     /// left out.
     ///
+    /// With `wanted` labels only items of the documents that carry all of them are looked at, in
+    /// every step. A cited item is of the document of the result that cites it, so it is of a
+    /// document that carries them too. When no document carries them there are no results, and
+    /// the question is not embedded.
+    ///
     /// # Errors
     /// - [`SearchError::Embed`] when the question cannot be embedded
     /// - [`SearchError::Items`] and [`SearchError::Concepts`] when a collection cannot be searched
@@ -79,18 +87,37 @@ impl<E: Embedder, G: GraphStore> Retriever<E, G> {
         &self,
         question: &str,
         kind: Option<ItemKind>,
+        wanted: &DocumentLabels,
     ) -> Result<SearchResults, SearchError> {
+        let documents = if wanted.is_empty() {
+            None
+        } else {
+            let carrying: Vec<DocId> = self
+                .graph
+                .documents()
+                .await?
+                .into_iter()
+                .filter(|node| node.labels.carries(wanted))
+                .map(|node| node.id)
+                .collect();
+            if carrying.is_empty() {
+                return Ok(SearchResults { hits: Vec::new() });
+            }
+            Some(carrying)
+        };
+        let filter = ItemFilter { kind, documents };
         let vector = self.embedder.embed_query(question).await?;
         let seeds = self
             .items
-            .search(vector.clone(), kind, RESULTS_PER_QUERY)
+            .search(vector.clone(), &filter, RESULTS_PER_QUERY)
             .await
             .map_err(SearchError::Items)?;
         if seeds.is_empty() {
             return Ok(SearchResults { hits: Vec::new() });
         }
         let candidates = expand::candidates(&self.concepts, &self.graph, &vector, &seeds).await?;
-        let mut hits = rank::ranked_within_the_cap(&self.items, &vector, kind, candidates).await?;
+        let mut hits =
+            rank::ranked_within_the_cap(&self.items, &vector, &filter, candidates).await?;
         if kind.is_none() {
             cited::pull_in(&self.items, &vector, &mut hits).await?;
         }

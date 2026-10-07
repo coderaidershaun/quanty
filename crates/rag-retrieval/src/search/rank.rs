@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use rag_core::{DocId, Embedding, ItemHit, ItemId, ItemKind, ItemStore};
+use rag_core::{DocId, Embedding, ItemFilter, ItemHit, ItemId, ItemStore};
 
 use super::results::{Reason, SearchHit};
 use super::{MAX_RESULTS_PER_DOCUMENT, RESULTS_PER_QUERY, SearchError};
@@ -17,12 +17,12 @@ use super::{MAX_RESULTS_PER_DOCUMENT, RESULTS_PER_QUERY, SearchError};
 pub(super) async fn ranked_within_the_cap(
     items: &ItemStore,
     vector: &Embedding,
-    kind: Option<ItemKind>,
+    filter: &ItemFilter,
     candidates: BTreeMap<ItemId, Reason>,
 ) -> Result<Vec<SearchHit>, SearchError> {
     let ids: Vec<ItemId> = candidates.keys().copied().collect();
     let ranked = items
-        .rank(vector.clone(), &ids, kind)
+        .rank(vector.clone(), &ids, filter)
         .await
         .map_err(SearchError::Items)?;
     Ok(keep_within_the_cap(ranked, candidates))

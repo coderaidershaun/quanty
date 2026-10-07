@@ -2,7 +2,7 @@
 //! ingest.
 
 mod ask;
-mod ingest;
+pub(super) mod ingest;
 mod library;
 
 pub(super) use ask::{

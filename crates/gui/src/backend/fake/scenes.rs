@@ -24,6 +24,7 @@ pub(super) struct Script {
     /// The services a health check finds down, and why.
     pub(super) down: &'static [(Service, FailureKind)],
     pub(super) opening: Opening,
+    pub(super) ingest: Ingest,
 }
 
 /// What the search of an ask comes back with.
@@ -73,6 +74,13 @@ pub(super) enum Concepts {
     Fails(FailureKind),
 }
 
+/// How a started ingest ends. Nothing is stored either way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(super) enum Ingest {
+    Done,
+    Fails(FailureKind),
+}
+
 /// What the scene does when the window opens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum Opening {
@@ -82,6 +90,8 @@ pub(super) enum Opening {
     AsksWithALabelNoDocumentHas,
     /// Asks, and opens page 5 of the third sample chapter, which holds a figure.
     AsksAndOpensASource,
+    /// Opens the Ingest tab and checks the chapter that the form holds.
+    ChecksAChapter,
 }
 
 const HEALTHY: Script = Script {
@@ -93,9 +103,10 @@ const HEALTHY: Script = Script {
     concepts: Concepts::Samples,
     down: &[],
     opening: Opening::Asks,
+    ingest: Ingest::Done,
 };
 
-static SCENES: [Scene; 17] = [
+static SCENES: [Scene; 19] = [
     Scene {
         name: "idle",
         about: "Healthy, with the three sample chapters and nothing asked.",
@@ -253,6 +264,25 @@ static SCENES: [Scene; 17] = [
         rests: true,
         script: Script {
             opening: Opening::AsksForResultsOnly,
+            ..HEALTHY
+        },
+    },
+    Scene {
+        name: "ingest-ready",
+        about: "The Ingest tab, with a chapter checked and ready to start.",
+        rests: true,
+        script: Script {
+            opening: Opening::ChecksAChapter,
+            ..HEALTHY
+        },
+    },
+    Scene {
+        name: "ingest-failed",
+        about: "The Ingest tab, with a chapter checked and a start that fails at a page.",
+        rests: true,
+        script: Script {
+            ingest: Ingest::Fails(FailureKind::PageFailed),
+            opening: Opening::ChecksAChapter,
             ..HEALTHY
         },
     },

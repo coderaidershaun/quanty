@@ -6,8 +6,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use graph::{FalkorGraph, GraphStore};
-use ocr::ConvertError;
 use ocr::convert::services::{LiveServices, PageServices};
+use ocr::{ChapterJob, ConversionSummary, ConvertError};
 use rag_core::{ClaudeCli, ConceptStore, Config, Embedder, GeminiEmbedder, ItemStore, Llm};
 use rag_ingestion::{ConceptExtractor, EXTRACTION_MODEL, Models, Stores};
 use rag_retrieval::{ANSWER_MODEL, Retriever};
@@ -33,6 +33,17 @@ pub trait Services: Send + Sync + 'static {
         &self,
         jev_api_key: Option<&str>,
     ) -> impl Future<Output = Result<Arc<Self::Pages>, ConvertError>> + Send;
+
+    /// Converts the pages of the chapter that are not converted yet. This is the part of an ingest
+    /// that pays for a model call for every page.
+    ///
+    /// # Errors
+    /// The errors of `ocr::convert_chapter_with_jev_key`.
+    fn convert(
+        &self,
+        job: &ChapterJob,
+        jev_api_key: Option<&str>,
+    ) -> impl Future<Output = Result<ConversionSummary, ConvertError>> + Send;
 }
 
 /// The real Gemini embedder, `claude` command, FalkorDB graph, and page converter.
@@ -61,6 +72,14 @@ impl Services for RealServices {
         jev_api_key: Option<&str>,
     ) -> Result<Arc<LiveServices>, ConvertError> {
         Ok(Arc::new(LiveServices::with_jev_key(jev_api_key).await?))
+    }
+
+    async fn convert(
+        &self,
+        job: &ChapterJob,
+        jev_api_key: Option<&str>,
+    ) -> Result<ConversionSummary, ConvertError> {
+        ocr::convert_chapter_with_jev_key(job, jev_api_key).await
     }
 }
 
@@ -175,6 +194,19 @@ impl<S: Services> LiveContext<S> {
     pub async fn page_services(&self) -> Result<Arc<S::Pages>, ConvertError> {
         let key = self.config.jev_api_key.as_ref().map(|key| key.expose());
         self.services.page_services(key).await
+    }
+
+    /// Converts the pages of a chapter that are not converted yet, with the Jev key of the
+    /// settings, so no other code sees the key.
+    ///
+    /// # Errors
+    /// The errors of the conversion, such as a missing key or a page that fails.
+    pub async fn convert_chapter(
+        &self,
+        job: &ChapterJob,
+    ) -> Result<ConversionSummary, ConvertError> {
+        let key = self.config.jev_api_key.as_ref().map(|key| key.expose());
+        self.services.convert(job, key).await
     }
 
     /// The models of an ingest.

@@ -1,5 +1,5 @@
-//! The top bar: the logo, and a strip of tabs once more than one tab is built. It also says
-//! which parts of the app are built, so a shortcut for a part that is not built stays unbound.
+//! The top bar: the logo and the strip of tabs. It also says which parts of the app are built,
+//! so a shortcut for a part that is not built stays unbound.
 
 use eframe::egui;
 
@@ -12,8 +12,9 @@ use crate::panels::PanelCx;
 use crate::theme::{Icon, Tone};
 use crate::widgets::{self, TabStrip};
 
-/// The tabs that have a screen. The strip is drawn only when there is more than one.
-pub(super) const BUILT_TABS: [contract::Tab; 1] = [contract::Tab::Ask];
+/// The tabs that have a screen. The strip draws these, and a shortcut for any other tab stays
+/// unbound.
+pub(super) const BUILT_TABS: [contract::Tab; 2] = [contract::Tab::Ask, contract::Tab::Ingest];
 
 /// False for a shortcut that leads to a part that is not built: a tab that is not in
 /// `BUILT_TABS`, the help sheet and the health check.

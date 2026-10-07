@@ -1,5 +1,5 @@
-//! No key and no control on the Ask screen leads to a part of the app that is not built: not a
-//! page, not the help sheet, not a command whose backend only says it is not built.
+//! No key and no control of the app leads to a part of it that is not built: not a page, not the
+//! help sheet, not a command whose backend only says it is not built.
 
 use std::collections::{HashMap, HashSet};
 
@@ -15,7 +15,7 @@ use gui::testkit;
 use super::recording::{self, Seen};
 use super::{Window, failures, press, shared};
 
-/// Names that no node of the Ask screen may have, because each is a part that is not built.
+/// Names that no node of the app may have, because each is a part that is not built.
 const ABSENT_NAMES: [&str; 7] = [
     "Health",
     "Notices",
@@ -71,6 +71,10 @@ fn assert_start_up_sent_only_its_own_commands(scene: &str, seen: &Seen) {
         .iter()
         .filter(|intent| matches!(intent, Intent::OpenSource { .. }))
         .count();
+    let checks = opening
+        .iter()
+        .filter(|intent| matches!(intent, Intent::CheckIngest(_)))
+        .count();
     let counted = |is: fn(&Command) -> bool| seen.count(is);
     assert_eq!(
         counted(|c| matches!(c, Command::LoadCatalogue { .. })),
@@ -88,8 +92,13 @@ fn assert_start_up_sent_only_its_own_commands(scene: &str, seen: &Seen) {
         "`{scene}`"
     );
     assert_eq!(
+        counted(|c| matches!(c, Command::Preflight { .. })),
+        checks,
+        "`{scene}`"
+    );
+    assert_eq!(
         seen.all().len(),
-        1 + asks + pages,
+        1 + asks + pages + checks,
         "`{scene}` sent a command that its opening does not ask for: {:?}",
         seen.all()
     );
@@ -214,21 +223,50 @@ fn assert_each_health_check_follows_an_ask(scene: &str, seen: &Seen) {
     }
 }
 
+/// A scene that opens with a check may start an ingest after it; any other scene has no file to
+/// check, because a test picks none.
+fn assert_ingest_commands_follow_a_check(scene: &str, seen: &Seen) {
+    let opens_with_a_check = Fake::scene(scene, &testkit::samples_folder())
+        .unwrap_or_else(|error| panic!("scene `{scene}`: {error}"))
+        .opening()
+        .iter()
+        .any(|intent| matches!(intent, Intent::CheckIngest(_)));
+    let mut checked = false;
+    for command in seen.all() {
+        match command {
+            Command::Preflight { .. } => {
+                assert!(
+                    opens_with_a_check,
+                    "`{scene}` checked a chapter with no file"
+                );
+                checked = true;
+            }
+            Command::Ingest { .. } => assert!(
+                checked,
+                "`{scene}` started an ingest that no check came before"
+            ),
+            _ => {}
+        }
+    }
+}
+
 fn assert_nothing_unbuilt_was_reached(harness: &Window, scene: &str, seen: &Seen) {
     for command in seen.all() {
         assert!(
             !matches!(
                 command,
-                Command::SetLabels { .. }
-                    | Command::DeleteDocument { .. }
-                    | Command::Preflight { .. }
-                    | Command::Ingest { .. }
+                Command::SetLabels { .. } | Command::DeleteDocument { .. }
             ),
             "`{scene}` sent {command:?}, a command of a part that is not built"
         );
     }
+    assert_ingest_commands_follow_a_check(scene, seen);
     let shared = shared(harness);
-    assert_eq!(shared.tab, Tab::Ask, "`{scene}` left the Ask screen");
+    assert!(
+        matches!(shared.tab, Tab::Ask | Tab::Ingest),
+        "`{scene}` left the two screens that are built: {:?}",
+        shared.tab
+    );
     assert!(!shared.help_open, "`{scene}` opened the help sheet");
     assert_eq!(shared.quit, Quit::No);
     let not_built = Failure::not_built("anything").hint;
@@ -258,13 +296,20 @@ fn assert_nothing_unbuilt_was_reached(harness: &Window, scene: &str, seen: &Seen
             "`{scene}` has a node named `{name}`"
         );
     }
-    for name in ["Library", "Ingest"] {
+    assert!(
+        harness
+            .query_all_by_role_and_label(Role::Tab, "Library")
+            .next()
+            .is_none(),
+        "`{scene}` has a tab named `Library`"
+    );
+    for name in ["Ask", "Ingest"] {
         assert!(
             harness
                 .query_all_by_role_and_label(Role::Tab, name)
                 .next()
-                .is_none(),
-            "`{scene}` has a tab named `{name}`"
+                .is_some(),
+            "`{scene}` has no tab named `{name}`"
         );
     }
 }
@@ -294,13 +339,16 @@ fn every_key_and_control_of(scene: &str) {
     );
 
     press_every_control(&mut harness, scene);
-    press_every_row_of_every_list(&mut harness);
+    for tab in ["Ask", "Ingest"] {
+        click_if_still_there(&mut harness, Role::Tab, tab, 0);
+        press_every_row_of_every_list(&mut harness);
+    }
     assert_nothing_unbuilt_was_reached(&harness, scene, &seen);
     assert_each_health_check_follows_an_ask(scene, &seen);
 }
 
 #[test]
-fn nothing_on_the_ask_screen_leads_to_a_part_that_is_not_built() {
+fn nothing_in_the_app_leads_to_a_part_that_is_not_built() {
     for scene in fake::scenes().iter().filter(|scene| scene.rests) {
         every_key_and_control_of(scene.name);
     }

@@ -190,7 +190,7 @@ It needs what `rag-query --answer` needs: Qdrant and FalkorDB, `EMBEDDING_GEMINI
 
 The program reads `.env`, `content/` and `data/` from its home folder. It finds that folder in this order: the folder given with `--home <folder>`; the folder that `QUANTY_HOME` names; the nearest folder at or above the current one that holds a `.env`; the nearest folder at or above the program's own folder that holds one, which is what a start from Finder uses; and last the current folder, with no `.env`.
 
-A citation opens its page when the chapter's folder is found: the folder that is stored with the document, or else the chapter with the same source file under the content folder. A chapter that was ingested from a folder outside the content folder, and has since no stored folder, shows "The page was not found" with what to do.
+A citation opens its page when the chapter's folder is found. The chapter is looked for under the content folder, by its source file; a folder that is stored with the document is used first, when there is one. A chapter that is found in neither way shows "The page was not found" with what to do: this is what a chapter that was ingested from a folder outside the content folder shows.
 
 `--fixture <scene>` runs the whole window on built-in data from `samples/content`, with no store, no model and no cost. `--fixture list` prints the scenes: each is one state of the screen, such as `black-scholes` (a full answer), `stores-down` or `first-run`.
 

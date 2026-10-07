@@ -6,3 +6,4 @@ mod flows;
 mod media_math;
 mod media_rich_text;
 mod panel_seam;
+mod sample_pages;

@@ -6,8 +6,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use graph::FalkorGraph;
 use gui::backend::live::{LiveContext, RealServices, Services};
 use gui::contract::{Failure, FailureKind};
-use ocr::ConvertError;
 use ocr::convert::services::LiveServices;
+use ocr::{ChapterJob, ConversionSummary, ConvertError};
 use rag_core::{ClaudeCli, GeminiEmbedder};
 
 use super::support;
@@ -41,6 +41,14 @@ impl Services for CountingServices {
         jev_api_key: Option<&str>,
     ) -> Result<Arc<LiveServices>, ConvertError> {
         RealServices.page_services(jev_api_key).await
+    }
+
+    async fn convert(
+        &self,
+        job: &ChapterJob,
+        jev_api_key: Option<&str>,
+    ) -> Result<ConversionSummary, ConvertError> {
+        RealServices.convert(job, jev_api_key).await
     }
 }
 

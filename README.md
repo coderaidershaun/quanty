@@ -94,12 +94,12 @@ To look at the app with no store, no model and no cost, run it on built-in data:
 
 ```bash
 cargo run --release -p gui -- --fixture black-scholes   # a question with its full answer, as in the picture
-cargo run --release -p gui -- --fixture list            # names the 17 scenes, such as stores-down and first-run
+cargo run --release -p gui -- --fixture list            # names the 19 scenes, such as stores-down and ingest-ready
 ```
 
 What an ask costs depends on the mode beside the question. In the mode **Answer** it costs one Gemini embedding call and one Sonnet call on your `claude` subscription. In the mode **Results only** no answer is written, and it costs the embedding call alone.
 
-The window is one screen of six panels:
+The window has two tabs, **Ask** and **Ingest**. Ask is one screen of six panels:
 
 | Panel | What it shows |
 | --- | --- |
@@ -112,6 +112,7 @@ The window is one screen of six panels:
 
 | Key | What it does |
 | --- | --- |
+| `⌘1`, `⌘3` | Go to Ask, go to Ingest |
 | `/` or `⌘K` | Write a question (`Enter` asks it) |
 | `J`, `K` | Next and previous result |
 | `⌘.` or `Esc` | Stop the search or the answer |
@@ -121,8 +122,8 @@ The window is one screen of six panels:
 
 - `/`, `J`, `K` and `Esc` do this only while no text box has the keyboard.
 - A citation opens its page when the chapter's folder is found: the folder it was ingested from, or the same chapter under `content/`, which is where `rag-ingest pdf` puts it.
-- Add a chapter from the app: not built yet. Use `rag-ingest pdf`, as in [step 4](#4-put-a-first-chapter-in). <!-- ingest-tab -->
-- Also not built yet: the Library page, the notices tray, the help sheet and the health check. Documents are labelled and deleted with `rag-ingest`: see [Command line](#command-line).
+- Add a chapter from the app on the **Ingest** tab (`⌘3`): choose the PDF, give the book's title, check it, then start. The file must be named `chapter-<number>-<name>.pdf`. The check is free; a start is paid work, the same as `rag-ingest pdf` in [step 4](#4-put-a-first-chapter-in): see [Costs](#costs). Keep the app open while it runs; if it stops, start the same PDF again and it carries on.
+- Not built yet: the Library page, the notices tray, the help sheet and the health check. Documents are labelled again and deleted with `rag-ingest`: see [Command line](#command-line).
 
 ## Use it from an agent (MCP)
 

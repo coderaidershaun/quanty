@@ -200,7 +200,14 @@ pub fn run(handler: impl Handler, facts: StartupFacts, opening: Vec<Intent>) -> 
     eframe::run_native(
         "quanty",
         options,
-        Box::new(move |creation| Ok(Box::new(App::new(creation, handler, facts, opening)?))),
+        Box::new(move |creation| {
+            let app = App::new(creation, handler, facts, opening)?.with_file_picker(|| {
+                rfd::FileDialog::new()
+                    .add_filter("PDF", &["pdf"])
+                    .pick_file()
+            });
+            Ok(Box::new(app))
+        }),
     )
 }
 

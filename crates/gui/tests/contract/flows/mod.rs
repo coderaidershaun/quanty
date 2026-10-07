@@ -1,10 +1,12 @@
 //! Checks the flows that cross two parts of the app, on the whole app: a choice made in one
 //! panel shows in the others, a follow-up starts a new ask, a source page turns, a service that
-//! is down is named, and no control leads to a part that is not built.
+//! is down is named, a chapter is added from the Ingest page, and no control leads to a part that
+//! is not built.
 
 mod dead_controls;
 mod failures;
 mod follow_up;
+mod ingest;
 mod recording;
 mod selection;
 mod source;
@@ -15,7 +17,7 @@ use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_kittest::{Harness, Node};
 use gui::app::App;
 use gui::app::layout::{self, ShellRects};
-use gui::state::Shared;
+use gui::state::{IngestJob, Shared};
 use gui::testkit;
 
 type Window = Harness<'static, App>;
@@ -120,9 +122,18 @@ fn node_in<'a>(
         .find(|node| area.contains(node.rect().center()))
 }
 
-/// Every failure that the shared state holds: the three slots of the ask, the two of Source and
-/// the catalogue.
+/// Every failure that the shared state holds: the three slots of the ask, the two of Source, the
+/// catalogue, and the ones that the ingest of the Ingest page shows.
 fn failures(shared: &Shared) -> Vec<&gui::contract::Failure> {
+    let ingest: Vec<&gui::contract::Failure> = match &shared.ingest {
+        IngestJob::CheckFailed { failure, .. } => vec![failure],
+        IngestJob::Checked { preflight, .. } => preflight.blockers.iter().collect(),
+        IngestJob::Finished {
+            result: Err(failure),
+            ..
+        } => vec![failure],
+        _ => Vec::new(),
+    };
     [
         shared.ask.search.failure(),
         shared.ask.graph.failure(),
@@ -133,5 +144,6 @@ fn failures(shared: &Shared) -> Vec<&gui::contract::Failure> {
     ]
     .into_iter()
     .flatten()
+    .chain(ingest)
     .collect()
 }

@@ -9,11 +9,12 @@ use std::time::Duration;
 
 use super::{Handler, Reply};
 use crate::contract::{
-    AskDraft, AskMode, Catalogue, Command, DocId, Event, Failure, FailureKind, Filters, Intent,
-    RequestId, Service, ServiceState,
+    AskDraft, AskMode, Catalogue, Command, DocId, Event, Failure, FailureKind, Filters,
+    IngestOutcome, IngestProgress, IngestRequest, IngestStage, Intent, RequestId, Service,
+    ServiceState, Tab,
 };
 
-use scenes::{Answer, Concepts, Graph, Library, Opening, Pages, Search};
+use scenes::{Answer, Concepts, Graph, Ingest, Library, Opening, Pages, Search};
 pub use scenes::{Scene, scenes};
 
 const QDRANT_URL: &str = "http://localhost:6334";
@@ -25,6 +26,8 @@ const SEARCH_WAIT: Duration = Duration::from_millis(400);
 const GRAPH_WAIT: Duration = Duration::from_millis(150);
 const ANSWER_WAIT: Duration = Duration::from_millis(1500);
 const PAGE_WAIT: Duration = Duration::from_millis(100);
+const PREFLIGHT_WAIT: Duration = Duration::from_millis(300);
+const INGEST_WAIT: Duration = Duration::from_millis(1500);
 
 /// The label that no sample document carries.
 const MISSING_LABEL: &str = "no-such-tag";
@@ -129,6 +132,10 @@ impl Fake {
                     page: 5,
                     piece: None,
                 },
+            ],
+            Opening::ChecksAChapter => vec![
+                Intent::OpenTab(Tab::Ingest),
+                Intent::CheckIngest(fixtures::ingest::request()),
             ],
         }
     }
@@ -282,6 +289,37 @@ impl Fake {
         });
     }
 
+    async fn preflight(&self, request: RequestId, ingest: &IngestRequest, reply: &Reply) {
+        self.wait(PREFLIGHT_WAIT).await;
+        reply.send(Event::Preflight {
+            request,
+            result: fixtures::ingest::preflight(ingest),
+        });
+    }
+
+    /// Plays the two moments of a real ingest and then its end. It stores nothing.
+    async fn ingest(&self, request: RequestId, ingest: &IngestRequest, reply: &Reply) {
+        for stage in [IngestStage::Converting, IngestStage::WritingGraph] {
+            self.wait(INGEST_WAIT).await;
+            reply.send(Event::IngestProgress {
+                request,
+                progress: IngestProgress {
+                    stage,
+                    done: None,
+                    total: None,
+                    pages_failed: 0,
+                    cost_usd: 0.0,
+                },
+            });
+        }
+        self.wait(INGEST_WAIT).await;
+        let result = match self.scene.script.ingest {
+            Ingest::Done => Ok(IngestOutcome::Ingested(fixtures::ingest::report(ingest))),
+            Ingest::Fails(kind) => Err(self.failure(kind)),
+        };
+        reply.send(Event::IngestFinished { request, result });
+    }
+
     fn source_missing(&self, detail: String) -> Failure {
         Failure::new(FailureKind::SourceMissing, detail).with_hint(format!(
             "quanty does not know where this chapter's pages are. Put its chapter folder inside a book folder under {}, or ingest its PDF again with rag-ingest pdf.",
@@ -335,6 +373,10 @@ impl Handler for Fake {
                 reply.send(Event::Catalogue { request, result });
             }
             Command::CheckHealth { request } => self.check_health(request, &reply),
+            Command::Preflight { request, ingest } => {
+                self.preflight(request, &ingest, &reply).await;
+            }
+            Command::Ingest { request, ingest } => self.ingest(request, &ingest, &reply).await,
             Command::Cancel(_) => {}
             other => {
                 let failure = Failure::not_built("this command of the fake backend");

@@ -9,7 +9,7 @@ use graph::{ConceptNode, FalkorGraph, GraphStore, Mention, Relation, RelationKin
 use gui::backend::live::{LiveContext, RealServices, Services};
 use gui::contract::{DocId, Failure};
 use ocr::testing::{Scenario, StubServices};
-use ocr::{ChapterIndex, ConvertError};
+use ocr::{ChapterIndex, ChapterJob, ConversionSummary, ConvertError};
 use rag_core::{ApiKey, Config, ItemKind};
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores, first_axis, vector_at};
 use rag_ingestion::{Item, chapter_items, ingest_chapter};
@@ -53,20 +53,94 @@ impl Services for StandInServices {
     ) -> Result<Arc<StubServices>, ConvertError> {
         Ok(Arc::clone(&self.pages))
     }
+
+    async fn convert(
+        &self,
+        job: &ChapterJob,
+        _jev_api_key: Option<&str>,
+    ) -> Result<ConversionSummary, ConvertError> {
+        ocr::convert::convert_chapter_with(job, &*self.pages).await
+    }
 }
 
 /// A context over throwaway stores. The embedder makes up its vectors, the model finds no
 /// concept, and the page services are stubs of the sample chapter.
 pub fn context(test_name: &str) -> LiveContext<StandInServices> {
+    context_and_pages(test_name, Scenario::SampleChapter).0
+}
+
+/// The same, with pages converted as `scenario` says, and the stub pages, so a test can read the
+/// calls they got.
+pub fn context_and_pages(
+    test_name: &str,
+    scenario: Scenario,
+) -> (LiveContext<StandInServices>, Arc<StubServices>) {
     let stores = ThrowawayStores::new(test_name);
     let config = stores.config().clone();
+    let pages = Arc::new(StubServices::new(scenario));
     let services = StandInServices {
         stores,
         embedder: Box::new(StandInEmbedder::default),
         llm: Box::new(|_model| StandInLlm::finding_nothing()),
-        pages: Arc::new(StubServices::new(Scenario::SampleChapter)),
+        pages: Arc::clone(&pages),
     };
-    LiveContext::new(config, services)
+    (LiveContext::new(config, services), pages)
+}
+
+/// Stand-ins for the paid services, and a graph that is the real one at the address of the
+/// settings. With `closed_ports_config` the graph always refuses.
+pub struct StandInsOnClosedPorts {
+    pub pages: Arc<StubServices>,
+}
+
+impl Services for StandInsOnClosedPorts {
+    type Embedder = StandInEmbedder;
+    type Llm = StandInLlm;
+    type Graph = FalkorGraph;
+    type Pages = StubServices;
+
+    fn embedder(&self, _config: &Config) -> Result<StandInEmbedder, Failure> {
+        Ok(StandInEmbedder::default())
+    }
+
+    fn llm(&self, _model: &str) -> StandInLlm {
+        StandInLlm::finding_nothing()
+    }
+
+    async fn graph(&self, config: &Config) -> Result<FalkorGraph, Failure> {
+        Ok(FalkorGraph::connect(config).await?)
+    }
+
+    async fn page_services(
+        &self,
+        _jev_api_key: Option<&str>,
+    ) -> Result<Arc<StubServices>, ConvertError> {
+        Ok(Arc::clone(&self.pages))
+    }
+
+    async fn convert(
+        &self,
+        job: &ChapterJob,
+        _jev_api_key: Option<&str>,
+    ) -> Result<ConversionSummary, ConvertError> {
+        ocr::convert::convert_chapter_with(job, &*self.pages).await
+    }
+}
+
+/// A context with stand-in pages whose stores nothing listens on, and the stub pages, so a test
+/// can show that no page was converted.
+pub fn closed_with_stub_pages(
+    content_folder: &Path,
+) -> (LiveContext<StandInsOnClosedPorts>, Arc<StubServices>) {
+    let config = Config {
+        content_folder: content_folder.to_path_buf(),
+        ..closed_ports_config()
+    };
+    let pages = Arc::new(StubServices::new(Scenario::SampleChapter));
+    let services = StandInsOnClosedPorts {
+        pages: Arc::clone(&pages),
+    };
+    (LiveContext::new(config, services), pages)
 }
 
 /// A config whose Qdrant and FalkorDB addresses nothing listens on, so a store is always down.

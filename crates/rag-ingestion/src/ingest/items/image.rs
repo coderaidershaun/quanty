@@ -4,7 +4,7 @@
 use ocr::ConvertedImage;
 use rag_core::{DocId, DocumentInput, ItemId, ItemKind, ItemPayload};
 
-use super::pieces::{join_blocks, label_line};
+use super::pieces::{join_blocks, label_line, printed_label};
 use super::{BLOCK_SEPARATOR, Item};
 
 /// A picture that stands alone, and what the person who added it said about it.
@@ -39,6 +39,8 @@ pub fn image_items(picture: &LoneImage<'_>) -> Vec<Item> {
             kind: ItemKind::Figure,
             text: explanation,
             image_path: Some(image.picture.clone()),
+            label: printed_label(image.index.label.as_deref()),
+            cites: Vec::new(),
         },
         input: DocumentInput {
             title: doc_title,

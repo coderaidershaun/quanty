@@ -4,13 +4,13 @@
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use rag_core::{DocumentInput, EMBEDDING_DIMENSIONS, EmbedError, Embedder, Embedding};
 
 /// Keeps every input it is given, and answers each with a vector that depends on the input, so
-/// that different items get different points. An input whose text was placed gets the vector it
-/// was placed at.
+/// that different items get different points. An input or a question whose text was placed gets
+/// the vector it was placed at.
 #[derive(Default)]
 pub struct StandInEmbedder {
     received: Mutex<Vec<DocumentInput>>,
@@ -19,10 +19,16 @@ pub struct StandInEmbedder {
 
 impl StandInEmbedder {
     pub fn received(&self) -> Vec<DocumentInput> {
-        self.received.lock().unwrap().clone()
+        self.locked_inputs().clone()
     }
 
-    /// Every input whose text is exactly `text` gets `vector`.
+    fn locked_inputs(&self) -> MutexGuard<'_, Vec<DocumentInput>> {
+        self.received
+            .lock()
+            .expect("the lock of the received inputs should not be poisoned")
+    }
+
+    /// Every input and every question whose text is exactly `text` gets `vector`.
     pub fn placing(mut self, text: &str, vector: Embedding) -> StandInEmbedder {
         self.placed.insert(text.to_owned(), vector);
         self
@@ -31,7 +37,7 @@ impl StandInEmbedder {
 
 impl Embedder for StandInEmbedder {
     async fn embed_document(&self, inputs: &[DocumentInput]) -> Result<Vec<Embedding>, EmbedError> {
-        self.received.lock().unwrap().extend(inputs.iter().cloned());
+        self.locked_inputs().extend(inputs.iter().cloned());
         Ok(inputs
             .iter()
             .map(|input| match self.placed.get(&input.text) {
@@ -42,7 +48,10 @@ impl Embedder for StandInEmbedder {
     }
 
     async fn embed_query(&self, query: &str) -> Result<Embedding, EmbedError> {
-        Ok(unit_vector(query))
+        Ok(match self.placed.get(query) {
+            Some(vector) => vector.clone(),
+            None => unit_vector(query),
+        })
     }
 }
 

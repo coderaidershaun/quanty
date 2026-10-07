@@ -13,7 +13,7 @@ use graph::testing::{StoredConceptGraph, size, stored_concept_graph};
 use ocr::read_chapter;
 use rag_ingestion::chapter_items;
 
-use crate::support::{self, ThrowawayStores};
+use crate::support::{self, RunRagIngest, ThrowawayStores};
 
 const RUN_COMMAND: &str = "set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p rag-ingestion --test integration -- --ignored concepts_live:: --nocapture";
 

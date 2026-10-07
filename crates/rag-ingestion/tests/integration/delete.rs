@@ -12,7 +12,8 @@ use rag_ingestion::{DeleteSummary, Item, chapter_items, ingest_chapter};
 use serde_json::json;
 
 use crate::support::{
-    self, StandInLlm, ThrowawayStores, assert_document_stored, assert_graph_holds_only, points_in,
+    self, RunRagIngest, StandInLlm, ThrowawayStores, assert_document_stored,
+    assert_graph_holds_only, points_in,
 };
 
 fn items_of(chapter_folder: &std::path::Path) -> Vec<Item> {

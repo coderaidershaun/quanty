@@ -11,7 +11,7 @@ pub(super) fn piece_draft(
     piece: &ChapterPiece,
     doc_title: &str,
 ) -> Option<Draft> {
-    let (kind, text, image) = match &piece.detail {
+    let (kind, text, image, label) = match &piece.detail {
         PieceDetail::Formula {
             label,
             name,
@@ -27,7 +27,7 @@ pub(super) fn piece_draft(
                 Some(statement),
                 symbols.as_deref(),
             ]);
-            (ItemKind::Formula, text, None)
+            (ItemKind::Formula, text, None, label)
         }
         PieceDetail::Table {
             label,
@@ -36,7 +36,7 @@ pub(super) fn piece_draft(
         } => {
             let heading = label_line(label.as_deref(), caption.as_deref());
             let text = join_blocks([heading.as_deref(), Some(summary), Some(&piece.content)]);
-            (ItemKind::Table, text, None)
+            (ItemKind::Table, text, None, label)
         }
         PieceDetail::Figure { label, caption, .. } => {
             let heading = label_line(label.as_deref(), caption.as_deref());
@@ -45,7 +45,7 @@ pub(super) fn piece_draft(
                 .figure_image
                 .as_ref()
                 .map(|picture| picture.path.clone());
-            (ItemKind::Figure, text, picture)
+            (ItemKind::Figure, text, picture, label)
         }
         _ => return None,
     };
@@ -54,12 +54,20 @@ pub(super) fn piece_draft(
         printed_page: piece.printed_page_number.clone(),
         kind,
         text: piece.content.clone(),
+        label: printed_label(label.as_deref()),
+        cites: Vec::new(),
         input: DocumentInput {
             title: context_line(doc_title, &piece.section),
             text,
             image,
         },
     })
+}
+
+/// The label as printed, or `None` when there is none or it is blank.
+pub(super) fn printed_label(label: Option<&str>) -> Option<String> {
+    let label = label?.trim();
+    (!label.is_empty()).then(|| label.to_owned())
 }
 
 /// The whole text piece that introduces the formula. When several do, the latest one is the one

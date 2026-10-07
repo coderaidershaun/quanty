@@ -20,7 +20,7 @@ use serde_json::Value;
 
 use crate::concepts_live::{calls_and_cache_hits, stderr_of, stdout_of};
 use crate::support::{
-    self, ThrowawayStores, decision_for_mention, decisions_in, mentions_of, points_in,
+    self, RunRagIngest, ThrowawayStores, decision_for_mention, decisions_in, mentions_of, points_in,
 };
 
 const RUN_COMMAND: &str = "set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p rag-ingestion --test integration -- --ignored resolution_live:: --nocapture";

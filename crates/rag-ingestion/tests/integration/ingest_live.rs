@@ -15,7 +15,7 @@ use ocr::read_chapter;
 use rag_ingestion::chapter_items;
 
 use crate::support::{
-    self, StandInImageServices, ThrowawayStores, points_in, size_of_one_document,
+    self, RunRagIngest, StandInImageServices, ThrowawayStores, points_in, size_of_one_document,
 };
 
 const NOTE: &str = "A chart from a book on option trading.";

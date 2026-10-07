@@ -1,23 +1,22 @@
 //! Asks the three committed chapters questions with the real Gemini embedder, once in this
-//! process and once through the real `rag-query` command, in a throwaway collection of the local
-//! Qdrant. Only real embeddings show that a question lands near the item that answers it, and
-//! only the real command shows that the key, the collection and the printed lines work together.
+//! process and once through the real `rag-query` command, in throwaway stores of the local Qdrant
+//! and FalkorDB. Only real embeddings show that a question lands near the item that answers it,
+//! and only the real command shows that the key, the stores and the printed lines work together.
 
-use std::process::{Command, Output};
-
-use rag_core::{Config, GeminiEmbedder, ItemKind, ItemStore};
+use rag_core::{GeminiEmbedder, ItemKind};
+use rag_ingestion::testing::ThrowawayStores;
 use rag_retrieval::{Retriever, read_golden_questions};
 
 use crate::support::{
-    self, IN_DEPTH_CHAPTER_TITLE, SAMPLE_CHAPTER_TITLE, ThrowawayCollection, store_samples,
-    workspace_root,
+    self, IN_DEPTH_CHAPTER_TITLE, SAMPLE_CHAPTER_TITLE, rag_query, store_samples, workspace_root,
 };
 
 const RUN_COMMAND: &str = "set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p rag-retrieval --test integration -- --ignored live:: --nocapture";
 
-const EQUATION_QUESTION: &str = "What is the Black–Scholes partial differential equation?";
+pub(crate) const EQUATION_QUESTION: &str =
+    "What is the Black–Scholes partial differential equation?";
 const CHART_QUESTION: &str = "Which chart compares the theoretical profit or loss of a short straddle, a ratio spread and a long butterfly?";
-const EQUATION_LATEX: &str = r"\frac{\partial V}{\partial t} + \frac{1}{2}\sigma^2 S^2 \frac{\partial^2 V}{\partial S^2} + r S \frac{\partial V}{\partial S} - r V = 0";
+pub(crate) const EQUATION_LATEX: &str = r"\frac{\partial V}{\partial t} + \frac{1}{2}\sigma^2 S^2 \frac{\partial^2 V}{\partial S^2} + r S \frac{\partial V}{\partial S} - r V = 0";
 
 fn require_prod_api() {
     assert_eq!(
@@ -27,45 +26,34 @@ fn require_prod_api() {
     );
 }
 
-/// Runs the real command from the workspace root, against the throwaway collection, and prints
-/// what it answered, so that one paid run shows everything.
-fn run_rag_query(config: &Config, arguments: &[&str]) -> Output {
-    let output = Command::new(env!("CARGO_BIN_EXE_rag-query"))
-        .args(arguments)
-        .current_dir(workspace_root())
-        .env("QDRANT_ITEMS_COLLECTION", &config.items_collection)
-        .output()
-        .expect("the rag-query binary should start");
-    println!("--- rag-query {arguments:?}: {}", output.status);
-    println!("{}", String::from_utf8_lossy(&output.stdout));
-    println!("--- its standard error:");
-    println!("{}", String::from_utf8_lossy(&output.stderr));
-    output
-}
-
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "calls the real Gemini API and spends API credit; run with: set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p rag-retrieval --test integration -- --ignored live:: --nocapture"]
 async fn sample_chapters_answer_a_formula_and_a_chart_question_and_eval_prints_its_score_live() {
     require_prod_api();
-    let throwaway = ThrowawayCollection::new("search-live");
-    let config = throwaway.config();
-    let embedder = GeminiEmbedder::from_config(config).unwrap();
-    let store = ItemStore::connect(config).unwrap();
-    store_samples(&embedder, &store).await;
-    let retriever = Retriever::new(embedder, store);
+    let throwaway = ThrowawayStores::new("search-live");
+    let stores = throwaway.connect().await;
+    let embedder = GeminiEmbedder::from_config(throwaway.config()).unwrap();
+    store_samples(&embedder, &stores.items, &stores.concepts).await;
+    let retriever = Retriever {
+        embedder,
+        items: stores.items,
+        concepts: stores.concepts,
+        graph: stores.graph,
+    };
 
-    let equation = retriever.search(EQUATION_QUESTION, None, 5).await.unwrap();
+    let equation = retriever.search(EQUATION_QUESTION, None).await.unwrap();
     println!("--- {EQUATION_QUESTION}\n{equation}\n");
-    let chart = retriever.search(CHART_QUESTION, None, 5).await.unwrap();
+    let chart = retriever.search(CHART_QUESTION, None).await.unwrap();
     println!("--- {CHART_QUESTION}\n{chart}\n");
-    let asked = run_rag_query(config, &[EQUATION_QUESTION]);
-    let evaluated = run_rag_query(config, &["eval"]);
+    let asked = rag_query(&throwaway, &[EQUATION_QUESTION]);
+    let evaluated = rag_query(&throwaway, &["eval"]);
 
     assert!(
         equation.hits.iter().any(|hit| {
-            hit.payload.kind == ItemKind::Formula
-                && hit.payload.doc_title == IN_DEPTH_CHAPTER_TITLE
-                && hit.payload.text == EQUATION_LATEX
+            let payload = &hit.item.payload;
+            payload.kind == ItemKind::Formula
+                && payload.doc_title == IN_DEPTH_CHAPTER_TITLE
+                && payload.text == EQUATION_LATEX
         }),
         "the equation is not among the results:\n{equation}"
     );
@@ -85,9 +73,10 @@ async fn sample_chapters_answer_a_formula_and_a_chart_question_and_eval_prints_i
     assert!(picture.is_file());
     assert!(
         chart.hits.iter().any(|hit| {
-            hit.payload.kind == ItemKind::Figure
-                && hit.payload.doc_title == SAMPLE_CHAPTER_TITLE
-                && hit.payload.image_path.as_deref() == Some(picture.as_path())
+            let payload = &hit.item.payload;
+            payload.kind == ItemKind::Figure
+                && payload.doc_title == SAMPLE_CHAPTER_TITLE
+                && payload.image_path.as_deref() == Some(picture.as_path())
         }),
         "the chart is not among the results:\n{chart}"
     );

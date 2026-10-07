@@ -1,10 +1,13 @@
-//! Maps converted chapters to items and checks what each item stores and what it gives the
-//! embedder.
+//! The sample chapter and the two authored chapters, mapped whole: identifiers, reading order,
+//! what a formula, a figure and a table store and give the embedder, and labels and cites.
 
-use ocr::{Chapter, ChapterPiece, PieceDetail, PieceId, RelationshipKind, read_chapter};
+use std::collections::BTreeSet;
+
+use ocr::{Chapter, ChapterPiece, CiteKind, PieceDetail, RelationshipKind, read_chapter};
 use rag_core::{DocId, ItemId, ItemKind};
 use rag_ingestion::{Item, chapter_items};
 
+use super::{content_of, of_kind};
 use crate::support;
 
 fn pieces_of(chapter: &Chapter, wanted: fn(&PieceDetail) -> bool) -> Vec<&ChapterPiece> {
@@ -29,13 +32,6 @@ fn is_table(detail: &PieceDetail) -> bool {
 
 fn is_heading(detail: &PieceDetail) -> bool {
     matches!(detail, PieceDetail::Heading { .. })
-}
-
-fn of_kind(items: &[Item], kind: ItemKind) -> Vec<&Item> {
-    items
-        .iter()
-        .filter(|item| item.payload.kind == kind)
-        .collect()
 }
 
 const SAMPLE_TITLE: &str = "Option Volatility and Pricing, chapter 1: Sample Pages";
@@ -91,6 +87,27 @@ fn sample_chapter_maps_to_items_of_all_four_kinds_in_reading_order() {
     assert_tables_embed_their_summary_and_body(&chapter, &tables);
     assert_figures_carry_their_own_picture(&chapter, &figures);
     assert_items_keep_both_page_numbers_and_their_section(&items);
+    assert_labels_and_cites_follow_the_pieces(
+        &chapter,
+        &items,
+        &[
+            "Figure 7-2",
+            "Figure 7-3",
+            "(7.3)",
+            "(7.4)",
+            "Figure 13-4",
+            "Figure 13-16",
+            "Figure 24-12",
+        ],
+        &[
+            "(4.18)",
+            "(4.20)",
+            "(7.2)",
+            "Figure 13-3",
+            "Figure 24-12",
+            "Figure 24-13",
+        ],
+    );
 }
 
 fn assert_identifiers_follow_the_stored_scheme(chapter: &Chapter, items: &[Item]) {
@@ -204,126 +221,60 @@ fn assert_items_keep_both_page_numbers_and_their_section(items: &[Item]) {
     );
 }
 
-fn content_of(chapter: &Chapter, page: u32, number: u32) -> &str {
-    &chapter.piece(PieceId { page, number }).unwrap().content
-}
-
-fn estimated_tokens(text: &str) -> usize {
-    text.chars().count().div_ceil(4)
-}
-
-#[test]
-fn chunks_stay_inside_one_section_and_inside_the_token_limit() {
-    let chapter = read_chapter(&support::sample_chapter()).unwrap();
-    let items = chapter_items(&chapter);
-    let chunks = of_kind(&items, ItemKind::Chunk);
-
-    let delta: Vec<&&Item> = chunks
+/// A formula, a figure or a table keeps the label it is printed with, and a chunk keeps the
+/// labels of the figures, tables and equations that its text points at, each once. A footnote
+/// marker is not one of them. `printed_labels` are the labels of the items that have one, and
+/// `cited_labels` those of the chunks, each list in reading order.
+fn assert_labels_and_cites_follow_the_pieces(
+    chapter: &Chapter,
+    items: &[Item],
+    printed_labels: &[&str],
+    cited_labels: &[&str],
+) {
+    let labelled: Vec<&str> = items
         .iter()
-        .filter(|chunk| chunk.payload.text.contains(content_of(&chapter, 3, 5)))
+        .filter_map(|item| item.payload.label.as_deref())
         .collect();
-    assert_eq!(delta.len(), 1);
-    for neighbour in [content_of(&chapter, 3, 3), content_of(&chapter, 3, 7)] {
-        assert!(
-            !delta[0].payload.text.contains(neighbour),
-            "the section of the delta shares a chunk with {neighbour}"
-        );
+    assert_eq!(labelled, printed_labels);
+    for item in items {
+        match item.payload.kind {
+            ItemKind::Chunk => assert!(item.payload.label.is_none()),
+            _ => assert!(item.payload.cites.is_empty()),
+        }
     }
 
-    let first_section_chunks = chunks
+    let chunks = of_kind(items, ItemKind::Chunk);
+    let cited: Vec<&str> = chunks
         .iter()
-        .filter(|chunk| chunk.payload.page == 1)
-        .count();
-    assert!(
-        first_section_chunks > 1,
-        "five paragraphs under one heading are more than 500 tokens, so they are split"
-    );
-
-    for piece in chapter
-        .pieces
-        .iter()
-        .filter(|piece| matches!(piece.detail, PieceDetail::Text { .. }))
-    {
-        let holders = chunks
-            .iter()
-            .filter(|chunk| chunk.payload.text.contains(&piece.content))
-            .count();
-        assert_eq!(
-            holders, 1,
-            "text piece {:?} is in {holders} chunks",
-            piece.id
-        );
-    }
+        .flat_map(|chunk| chunk.payload.cites.iter().map(String::as_str))
+        .collect();
+    assert_eq!(cited, cited_labels);
     for chunk in &chunks {
-        assert!(estimated_tokens(&chunk.input.text) <= 500);
-    }
-}
-
-#[test]
-fn a_paragraph_split_by_a_page_break_is_rejoined_only_when_both_flags_are_set() {
-    let chapter = read_chapter(&support::sample_chapter()).unwrap();
-    let items = chapter_items(&chapter);
-    let chunks = of_kind(&items, ItemKind::Chunk);
-    let joined_by_a_space = |(first_page, first_number), (second_page, second_number)| {
-        let joined = format!(
-            "{} {}",
-            content_of(&chapter, first_page, first_number),
-            content_of(&chapter, second_page, second_number)
+        let once: BTreeSet<&String> = chunk.payload.cites.iter().collect();
+        assert_eq!(
+            once.len(),
+            chunk.payload.cites.len(),
+            "{:?}",
+            chunk.payload.cites
         );
-        chunks
+    }
+    for piece in &chapter.pieces {
+        let PieceDetail::Text { cites } = &piece.detail else {
+            continue;
+        };
+        let holder = chunks
             .iter()
-            .any(|chunk| chunk.payload.text.contains(&joined))
-    };
-
-    assert!(
-        joined_by_a_space((6, 9), (7, 1)),
-        "page 6 ends and page 7 starts in the middle of one sentence"
-    );
-    assert!(
-        !joined_by_a_space((2, 7), (3, 3)),
-        "page 3 starts mid-sentence but page 2 does not end that way"
-    );
-    assert!(
-        !joined_by_a_space((4, 9), (5, 2)),
-        "page 4 ends mid-sentence but page 5 does not start that way"
-    );
-}
-
-#[test]
-fn a_footnote_joins_the_chunk_of_its_paragraph_or_stands_alone() {
-    let sample = read_chapter(&support::sample_chapter()).unwrap();
-    let sample_items = chapter_items(&sample);
-    let footnote = content_of(&sample, 2, 9);
-    let holders: Vec<&Item> = sample_items
-        .iter()
-        .filter(|item| item.payload.text.contains(footnote))
-        .collect();
-    assert_eq!(holders.len(), 1, "the footnote is in exactly one item");
-    assert_eq!(holders[0].payload.kind, ItemKind::Chunk);
-    assert!(
-        holders[0].payload.text.contains(content_of(&sample, 2, 6)),
-        "the paragraph that carries the marker is in the same chunk"
-    );
-    assert!(
-        holders[0]
-            .payload
-            .text
-            .contains(&format!("[^1]: {footnote}"))
-    );
-
-    let intuition = read_chapter(&support::intuition_chapter()).unwrap();
-    let intuition_items = chapter_items(&intuition);
-    let table_footnote = content_of(&intuition, 2, 6);
-    let alone: Vec<&Item> = intuition_items
-        .iter()
-        .filter(|item| item.payload.text.contains(table_footnote))
-        .collect();
-    assert_eq!(alone.len(), 1);
-    assert_eq!(alone[0].payload.kind, ItemKind::Chunk);
-    assert_eq!(
-        alone[0].payload.text, table_footnote,
-        "a footnote of a table has no paragraph to join, so it is a chunk by itself"
-    );
+            .find(|chunk| chunk.payload.text.contains(&piece.content))
+            .expect("every text piece is in a chunk");
+        for cite in cites.iter().filter(|cite| cite.kind != CiteKind::Footnote) {
+            assert!(
+                holder.payload.cites.contains(&cite.label),
+                "the chunk of {:?} does not keep {}",
+                piece.id,
+                cite.label
+            );
+        }
+    }
 }
 
 #[test]
@@ -380,5 +331,18 @@ fn authored_chapters_read_back_and_the_in_depth_one_gives_the_black_scholes_form
         of_kind(&intuition_items, ItemKind::Chunk)
             .iter()
             .any(|chunk| chunk.payload.text.contains("Black–Scholes"))
+    );
+
+    assert_labels_and_cites_follow_the_pieces(
+        &intuition,
+        &intuition_items,
+        &["(1.1)", "(1.2)", "Table 1-1"],
+        &["Table 1-1"],
+    );
+    assert_labels_and_cites_follow_the_pieces(
+        &in_depth,
+        &in_depth_items,
+        &["(2.1)", "(2.2)", "(2.3)", "(2.4)", "(2.5)", "(2.6)"],
+        &["(2.4)", "(2.5)"],
     );
 }

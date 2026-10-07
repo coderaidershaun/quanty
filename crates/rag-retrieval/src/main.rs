@@ -1,16 +1,20 @@
-//! The `rag-query` command: asks the stored items a question, or asks the golden questions and
-//! scores them.
+//! The `rag-query` command: asks the stored items a question and prints what it finds or an
+//! answer written from it, or asks the golden questions and scores them.
 
 use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand};
-use rag_core::{Config, GeminiEmbedder, ItemKind, ItemStore};
-use rag_retrieval::{Retriever, evaluate, read_golden_questions};
-use tracing_subscriber::filter::LevelFilter;
+use graph::FalkorGraph;
+use rag_core::{ClaudeCli, ConceptStore, Config, GeminiEmbedder, ItemKind, ItemStore};
+use rag_retrieval::{
+    ANSWER_MODEL, Retriever, SearchResults, answer, evaluate, read_golden_questions,
+};
+use tracing_subscriber::filter::{LevelFilter, Targets};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
-const RESULTS_SHOWN: usize = 5;
 const GOLDEN_FILE: &str = "golden.toml";
 
 #[derive(Parser)]
@@ -23,10 +27,15 @@ struct Cli {
     question: Option<String>,
 
     /// Look only at items of this kind
-    // SMELL: `rag-query --kind <kind> eval` is not refused. After an option the word `eval` is
-    // taken as the question, so it is searched for and the golden questions are not asked.
+    // SMELL: `rag-query --kind <kind> eval` and `rag-query --answer eval` are not refused. After
+    // an option the word `eval` is taken as the question, so it is searched for and the golden
+    // questions are not asked.
     #[arg(long)]
     kind: Option<ItemKind>,
+
+    /// Write an answer from the items found, with its sources
+    #[arg(long)]
+    answer: bool,
 }
 
 #[derive(Subcommand)]
@@ -37,9 +46,15 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    tracing_subscriber::fmt()
-        .with_max_level(LevelFilter::WARN)
-        .with_writer(std::io::stderr)
+    // `rag_core` logs what each `claude` question cost, so a person sees what an answer cost as it
+    // happens.
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+        .with(
+            Targets::new()
+                .with_default(LevelFilter::WARN)
+                .with_target("rag_core", LevelFilter::INFO),
+        )
         .init();
     match run(Cli::parse()).await {
         Ok(code) => code,
@@ -53,6 +68,9 @@ async fn main() -> ExitCode {
 async fn run(cli: Cli) -> Result<ExitCode> {
     match (cli.command, cli.question) {
         (Some(Command::Eval), _) => eval().await.map(|()| ExitCode::SUCCESS),
+        (None, Some(question)) if cli.answer => answer_question(&question, cli.kind)
+            .await
+            .map(|()| ExitCode::SUCCESS),
         (None, Some(question)) => ask(&question, cli.kind).await.map(|()| ExitCode::SUCCESS),
         (None, None) => {
             Cli::command()
@@ -63,20 +81,49 @@ async fn run(cli: Cli) -> Result<ExitCode> {
     }
 }
 
-fn retriever() -> Result<Retriever<GeminiEmbedder>> {
+async fn retriever() -> Result<Retriever<GeminiEmbedder, FalkorGraph>> {
     let config = Config::load().context("could not read the settings")?;
-    let embedder = GeminiEmbedder::from_config(&config).context("could not set up the embedder")?;
-    let store = ItemStore::connect(&config).context("could not set up the item store")?;
-    Ok(Retriever::new(embedder, store))
+    // The graph is connected first, so a store that is down stops the command before anything is
+    // embedded and billed.
+    let graph = FalkorGraph::connect(&config)
+        .await
+        .context("could not connect to the graph")?;
+    Ok(Retriever {
+        embedder: GeminiEmbedder::from_config(&config).context("could not set up the embedder")?,
+        items: ItemStore::connect(&config).context("could not set up the item store")?,
+        concepts: ConceptStore::connect(&config).context("could not set up the concept store")?,
+        graph,
+    })
+}
+
+async fn search(question: &str, kind: Option<ItemKind>) -> Result<SearchResults> {
+    retriever()
+        .await
+        .context("could not get ready to search")?
+        .search(question, kind)
+        .await
+        .context("could not search for the question")
 }
 
 async fn ask(question: &str, kind: Option<ItemKind>) -> Result<()> {
-    let results = retriever()
-        .context("could not get ready to search")?
-        .search(question, kind, RESULTS_SHOWN)
+    println!("{}", search(question, kind).await?);
+    Ok(())
+}
+
+/// Prints the answer and nothing else. When nothing is found there is nothing to write an answer
+/// from, so the model is not asked.
+// SMELL: a `claude` that cannot start, because it is not signed in or `ANTHROPIC_API_KEY` is set,
+// is found only after the search, so Gemini has billed the question by then.
+async fn answer_question(question: &str, kind: Option<ItemKind>) -> Result<()> {
+    let results = search(question, kind).await?;
+    if results.hits.is_empty() {
+        println!("{results}");
+        return Ok(());
+    }
+    let written = answer(&ClaudeCli::new(ANSWER_MODEL), question, &results)
         .await
-        .context("could not search for the question")?;
-    println!("{results}");
+        .context("could not write an answer")?;
+    println!("{written}");
     Ok(())
 }
 
@@ -86,7 +133,7 @@ async fn eval() -> Result<()> {
             "could not load {GOLDEN_FILE} from the current folder; run eval from the workspace root"
         )
     })?;
-    let retriever = retriever().context("could not get ready to search")?;
+    let retriever = retriever().await.context("could not get ready to search")?;
     let report = evaluate(&golden, &retriever)
         .await
         .context("could not ask the golden questions")?;

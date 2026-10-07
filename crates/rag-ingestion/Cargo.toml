@@ -13,17 +13,23 @@ clap.workspace = true
 futures-util.workspace = true
 graph.workspace = true
 ocr.workspace = true
+qdrant-client = { workspace = true, optional = true }
 rag-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+tempfile = { workspace = true, optional = true }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
+[features]
+testing = ["dep:qdrant-client", "dep:tempfile", "graph/testing"]
+
 [dev-dependencies]
 graph = { workspace = true, features = ["testing"] }
 qdrant-client.workspace = true
+rag-ingestion = { workspace = true, features = ["testing"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }

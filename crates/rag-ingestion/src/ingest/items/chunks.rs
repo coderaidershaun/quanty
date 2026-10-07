@@ -1,7 +1,7 @@
 //! The text and footnote pieces, packed into chunks that stay inside one section and under a
 //! size limit.
 
-use ocr::{Chapter, ChapterPiece, PieceDetail, PieceId, RelationshipKind};
+use ocr::{Chapter, ChapterPiece, Cite, CiteKind, PieceDetail, PieceId, RelationshipKind};
 use rag_core::{DocumentInput, ItemKind};
 
 use super::{BLOCK_SEPARATOR, Draft, context_line};
@@ -15,6 +15,32 @@ fn estimated_tokens(text: &str) -> usize {
     text.chars().count().div_ceil(4)
 }
 
+/// The labels of the figures, tables and equations that a text piece or a footnote points at, as
+/// printed. A footnote marker is not one of them: it points at a note, and a note is not an item.
+// SMELL: no sample chapter has a footnote that cites a figure, a table or an equation, so the cites
+// of a footnote are read here, but no test has seen one kept.
+fn cited_labels(piece: &ChapterPiece) -> impl Iterator<Item = &str> {
+    let cites: &[Cite] = match &piece.detail {
+        PieceDetail::Text { cites } | PieceDetail::Footnote { cites, .. } => cites,
+        _ => &[],
+    };
+    cites
+        .iter()
+        .filter(|cite| match cite.kind {
+            CiteKind::Figure | CiteKind::Table | CiteKind::Equation => true,
+            CiteKind::Footnote => false,
+        })
+        .map(|cite| cite.label.trim())
+        .filter(|label| !label.is_empty())
+}
+
+/// Adds the label unless the list has it, so a list keeps each label once, in reading order.
+fn keep_once(labels: &mut Vec<String>, label: &str) {
+    if !labels.iter().any(|kept| kept == label) {
+        labels.push(label.to_owned());
+    }
+}
+
 /// One paragraph of the chapter as a reader sees it: one text piece, or several that a page
 /// break cut apart.
 struct Paragraph {
@@ -24,17 +50,27 @@ struct Paragraph {
     text: String,
     ends_mid_sentence: bool,
     footnotes: Vec<String>,
+    cites: Vec<String>,
 }
 
 impl Paragraph {
     fn starting_with(piece: &ChapterPiece, doc_title: &str) -> Self {
-        Self {
+        let mut paragraph = Self {
             pieces: vec![piece.id],
             printed_page: piece.printed_page_number.clone(),
             context: context_line(doc_title, &piece.section),
             text: piece.content.clone(),
             ends_mid_sentence: piece.ends_mid_sentence,
             footnotes: Vec::new(),
+            cites: Vec::new(),
+        };
+        paragraph.keep_cites_of(piece);
+        paragraph
+    }
+
+    fn keep_cites_of(&mut self, piece: &ChapterPiece) {
+        for label in cited_labels(piece) {
+            keep_once(&mut self.cites, label);
         }
     }
 
@@ -46,6 +82,7 @@ impl Paragraph {
         self.text.push(' ');
         self.text.push_str(&piece.content);
         self.ends_mid_sentence = piece.ends_mid_sentence;
+        self.keep_cites_of(piece);
     }
 
     fn text_with_footnotes(&self) -> String {
@@ -61,6 +98,7 @@ struct Chunk {
     printed_page: Option<String>,
     context: String,
     text: String,
+    cites: Vec<String>,
 }
 
 impl Chunk {
@@ -72,15 +110,21 @@ impl Chunk {
             printed_page: paragraph.printed_page.clone(),
             context: paragraph.context.clone(),
             text,
+            cites: paragraph.cites.clone(),
         }
     }
 
     fn of_footnote(footnote: &ChapterPiece, doc_title: &str) -> Self {
+        let mut cites = Vec::new();
+        for label in cited_labels(footnote) {
+            keep_once(&mut cites, label);
+        }
         Self {
             first_piece: footnote.id,
             printed_page: footnote.printed_page_number.clone(),
             context: context_line(doc_title, &footnote.section),
             text: footnote.content.clone(),
+            cites,
         }
     }
 
@@ -89,6 +133,8 @@ impl Chunk {
             first_piece: self.first_piece,
             printed_page: self.printed_page,
             kind: ItemKind::Chunk,
+            label: None,
+            cites: self.cites,
             input: DocumentInput {
                 title: self.context,
                 text: self.text.clone(),
@@ -168,6 +214,7 @@ fn attach_footnotes<'a>(
                     None => format!("Footnote: {}", footnote.content),
                 };
                 runs[run][paragraph].footnotes.push(block);
+                runs[run][paragraph].keep_cites_of(footnote);
             }
             None => lone.push(footnote),
         }
@@ -199,6 +246,9 @@ fn pack_into_chunks(run: Vec<Paragraph>) -> Vec<Chunk> {
             Some(chunk) => {
                 chunk.text.push_str(BLOCK_SEPARATOR);
                 chunk.text.push_str(&block);
+                for label in &paragraph.cites {
+                    keep_once(&mut chunk.cites, label);
+                }
             }
             None => chunks.push(Chunk::starting_with(&paragraph, block)),
         }

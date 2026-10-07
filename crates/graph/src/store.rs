@@ -44,6 +44,14 @@ pub struct ConceptAlias {
     pub normalised_name: String,
 }
 
+/// An item, and the concepts it mentions among the ones that were asked about.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ItemMentions {
+    pub item: ItemId,
+    /// In no fixed order.
+    pub concepts: Vec<ConceptId>,
+}
+
 /// An item discusses a concept.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Mention {
@@ -157,13 +165,15 @@ pub enum GraphError {
     },
 
     #[error(
-        "FalkorDB at {url} answered the request to {action} in the graph {graph} with {found}, which is not a concept (an id, a name, a normalised name and a definition)"
+        "FalkorDB at {url} answered the request to {action} in the graph {graph} with {found}, which is not {expected}"
     )]
     UnreadableReply {
         url: String,
         graph: String,
         action: &'static str,
         found: String,
+        /// What the reply should have been, in words that fit after "which is not".
+        expected: &'static str,
     },
 }
 
@@ -270,4 +280,45 @@ pub trait GraphStore {
         &self,
         id: ConceptId,
     ) -> impl Future<Output = Result<Option<ConceptNode>, GraphError>> + Send;
+
+    /// The concepts that at least one of the items mentions, each once. They are ordered by how
+    /// many of the items mention them, the most first, and then by normalised name. An empty
+    /// slice makes no call.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   concept
+    fn concepts_for_items(
+        &self,
+        items: &[ItemId],
+    ) -> impl Future<Output = Result<Vec<ConceptNode>, GraphError>> + Send;
+
+    /// The items that mention at least one of the concepts, each once. Each item comes with the
+    /// concepts it mentions among these. The items are ordered by how many of the concepts they
+    /// mention, the most first, and then by id, and at most `limit` of them come back. An empty
+    /// slice makes no call.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not an
+    ///   item with its concepts
+    fn items_for_concepts(
+        &self,
+        concepts: &[ConceptId],
+        limit: usize,
+    ) -> impl Future<Output = Result<Vec<ItemMentions>, GraphError>> + Send;
+
+    /// The concepts that a `RELATES_TO` edge joins to one of these concepts, in either direction,
+    /// each once, by normalised name. A concept that is among the given ones is not in the
+    /// answer. An empty slice makes no call.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   concept
+    fn related_concepts(
+        &self,
+        concepts: &[ConceptId],
+    ) -> impl Future<Output = Result<Vec<ConceptNode>, GraphError>> + Send;
 }

@@ -156,4 +156,12 @@ pub struct ItemPayload {
     /// The figure's own picture. Figures only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image_path: Option<PathBuf>,
+    /// The label as printed, such as "(7.3)", "Figure 13-4" or "Table 1-1". Formulas, figures and
+    /// tables only, and only those that have one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// The printed labels of the figures, tables and equations that the text points at, each once,
+    /// in reading order. Chunks only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cites: Vec<String>,
 }

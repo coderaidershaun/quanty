@@ -5,7 +5,8 @@
 use std::collections::BTreeSet;
 
 use ocr::{PieceDetail, read_chapter};
-use rag_ingestion::{chapter_items, ingest_chapter};
+use rag_ingestion::{Item, chapter_items, ingest_chapter};
+use serde_json::{Value, json};
 
 use crate::support::{self, StandInLlm, ThrowawayStores, assert_graph_holds_only, points_in};
 
@@ -86,6 +87,8 @@ async fn ingest_fills_a_throwaway_collection_and_a_second_run_adds_nothing() {
             .into()
     );
 
+    assert_label_and_cites_are_stored_only_where_the_item_has_them(&points, &items);
+
     let received = models.embedder.received();
     assert_eq!(received.len(), items.len(), "one input for each item");
     let with_picture: Vec<_> = received
@@ -124,4 +127,34 @@ async fn ingest_fills_a_throwaway_collection_and_a_second_run_adds_nothing() {
         stored_document,
         "a second run adds no node and no edge"
     );
+}
+
+/// A point holds `label` and `cites` where its item has them and leaves the keys out everywhere
+/// else, so a point stored before the two fields existed reads the same as a new one.
+fn assert_label_and_cites_are_stored_only_where_the_item_has_them(
+    points: &[(String, Value)],
+    items: &[Item],
+) {
+    let (mut with_label, mut with_cites) = (0, 0);
+    for (id, payload) in points {
+        let item = items
+            .iter()
+            .find(|item| item.id.to_string() == *id)
+            .expect("every point is an item of the chapter");
+        match &item.payload.label {
+            Some(label) => {
+                assert_eq!(payload["label"], *label);
+                with_label += 1;
+            }
+            None => assert!(payload.get("label").is_none(), "{payload}"),
+        }
+        if item.payload.cites.is_empty() {
+            assert!(payload.get("cites").is_none(), "{payload}");
+        } else {
+            assert_eq!(payload["cites"], json!(item.payload.cites));
+            with_cites += 1;
+        }
+    }
+    assert!(with_label > 0, "the sample chapter has labelled items");
+    assert!(with_cites > 0, "the sample chapter has chunks that cite");
 }

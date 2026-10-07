@@ -2,7 +2,7 @@
 //! it is asked, so that a test sees what was asked, how often and how many at once.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use rag_core::{Llm, LlmError, Question};
@@ -75,15 +75,21 @@ impl StandInLlm {
     }
 
     pub fn questions(&self) -> Vec<AskedQuestion> {
-        self.record.lock().unwrap().questions.clone()
+        self.locked_record().questions.clone()
     }
 
     pub fn calls(&self) -> usize {
-        self.record.lock().unwrap().questions.len()
+        self.locked_record().questions.len()
     }
 
     pub fn most_calls_at_once(&self) -> usize {
-        self.record.lock().unwrap().most_open
+        self.locked_record().most_open
+    }
+
+    fn locked_record(&self) -> MutexGuard<'_, Record> {
+        self.record
+            .lock()
+            .expect("the lock of the record should not be poisoned")
     }
 }
 
@@ -99,7 +105,7 @@ impl Llm for StandInLlm {
             input: question.input.to_owned(),
         };
         let earlier_calls = {
-            let mut record = self.record.lock().unwrap();
+            let mut record = self.locked_record();
             record.questions.push(asked.clone());
             record.open += 1;
             record.most_open = record.most_open.max(record.open);
@@ -112,7 +118,7 @@ impl Llm for StandInLlm {
             before
         };
         tokio::time::sleep(ANSWER_DELAY).await;
-        self.record.lock().unwrap().open -= 1;
+        self.locked_record().open -= 1;
         (self.rule)(&asked, earlier_calls)
     }
 }

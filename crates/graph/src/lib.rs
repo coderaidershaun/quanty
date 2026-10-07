@@ -8,6 +8,6 @@ pub mod testing;
 
 pub use falkor::FalkorGraph;
 pub use store::{
-    ConceptAlias, ConceptNode, DocumentNode, GraphError, GraphStore, ItemNode, Mention, Relation,
-    RelationKind, UnknownRelationKind,
+    ConceptAlias, ConceptNode, DocumentNode, GraphError, GraphStore, ItemMentions, ItemNode,
+    Mention, Relation, RelationKind, UnknownRelationKind,
 };

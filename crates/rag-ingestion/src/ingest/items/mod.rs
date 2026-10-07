@@ -30,6 +30,8 @@ struct Draft {
     printed_page: Option<String>,
     kind: ItemKind,
     text: String,
+    label: Option<String>,
+    cites: Vec<String>,
     input: DocumentInput,
 }
 
@@ -45,6 +47,8 @@ impl Draft {
                 kind: self.kind,
                 text: self.text,
                 image_path: self.input.image.clone(),
+                label: self.label,
+                cites: self.cites,
             },
             input: self.input,
         }

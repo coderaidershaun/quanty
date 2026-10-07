@@ -3,6 +3,9 @@
 # A question counts as found when one of its top 5 results is an item of `document` on `page`.
 # `document` is the document title, as `rag-query` prints it. `page` is the position of the page
 # in the chapter, from 1 (the N of the folder `page-num-N`), not the page number that is printed.
+#
+# A question whose answer is spread over documents has an `also` list of more places, each with a
+# `document` and a `page`. It counts as found when every one of its places is among its top 5.
 
 [[question]]
 text = "What is a call option worth on its expiration date?"
@@ -103,3 +106,9 @@ page = 6
 text = "What does the implied volatility surface of FTSE 100 options look like?"
 document = "Option Volatility and Pricing, chapter 1: Sample Pages"
 page = 7
+
+[[question]]
+text = "Which simple observation does the Black–Scholes model rest on, and what formula does it give for the price of a European call?"
+document = "Quanty Sample Notes, chapter 1: Options Pricing Intuition"
+page = 3
+also = [{ document = "Quanty Sample Notes, chapter 2: Black Scholes In Depth", page = 3 }]

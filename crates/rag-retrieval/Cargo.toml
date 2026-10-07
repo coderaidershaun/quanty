@@ -13,6 +13,7 @@ clap.workspace = true
 graph.workspace = true
 rag-core.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 toml.workspace = true
@@ -20,6 +21,5 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 ocr.workspace = true
-qdrant-client.workspace = true
-rag-ingestion.workspace = true
+rag-ingestion = { workspace = true, features = ["testing"] }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }

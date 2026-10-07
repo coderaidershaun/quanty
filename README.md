@@ -9,7 +9,7 @@ PDFs are turned into searchable items (text, LaTeX formulas and figures). An LLM
 - **Qdrant** stores every vector (items and concepts).
 - **FalkorDB** stores the graph: documents, items and concepts, joined by `HAS_ITEM`, `NEXT`, `MENTIONS` and `RELATES_TO` edges.
 - **Gemini Embedding 2** embeds text, LaTeX and images into one vector space.
-- **Claude** (via `claude -p`) extracts and resolves concepts.
+- **Claude** (via `claude -p`) extracts and resolves concepts, and writes answers.
 - Retrieval finds the closest items by vector search, then follows concepts across documents to pull in related material.
 
 ## Crates
@@ -20,7 +20,7 @@ PDFs are turned into searchable items (text, LaTeX formulas and figures). An LLM
 | `rag-core` | Shared types, IDs, config, `Embedder` and `Llm` traits, Qdrant wrapper |
 | `graph` | `GraphStore` trait and FalkorDB implementation |
 | `rag-ingestion` | Chunking, embedding, concept extraction and resolution (`rag-ingest`) |
-| `rag-retrieval` | Vector search, graph expansion, ranking (`rag-query`) |
+| `rag-retrieval` | Vector search, graph expansion, ranking, answers with citations (`rag-query`) |
 
 ## Getting started
 
@@ -60,6 +60,8 @@ cargo run -p rag-ingestion --bin rag-ingest -- samples/content/quanty-sample-not
 ```
 
 Reads one converted chapter folder with `ocr::read_chapter` and stores its items in a Qdrant collection, `items` unless `QDRANT_ITEMS_COLLECTION` names another. Text becomes chunks of about 300 to 500 tokens that never run past a heading, and a paragraph that a page break cut in two is joined again. Each formula, figure and table is an item of its own. A figure is embedded as its own picture together with its explanation, as one vector, and its payload keeps the path of the picture. Every item carries the book, chapter and section it sits in.
+
+A formula, a figure or a table that has a printed label, such as "(7.3)", "Figure 13-4" or "Table 1-1", stores it in the payload as `label`. A chunk stores the labels of the figures, tables and equations that its text points at as `cites`, each once, in reading order. A footnote marker is not one of them. Both fields are left out of the payload when there is nothing to store. A chapter that was stored before these two fields existed does not have them, so ingest it again to add them. `delete-document` is not needed for this: the ids are the same, so the points are written over.
 
 The ids are computed from the chapter's source hash and the place of the item in the chapter, so running the command again on the same chapter overwrites the same points and adds none. The command needs `EMBEDDING_GEMINI_API_KEY`, and Gemini bills each run by the token.
 
@@ -110,9 +112,30 @@ Run it again if it stopped half way: it removes what is left. It is also the way
 
 ```bash
 cargo run -p rag-retrieval --bin rag-query -- "What is the Black–Scholes partial differential equation?"
+cargo run -p rag-retrieval --bin rag-query -- --answer "What is the Black–Scholes partial differential equation?"
 cargo run -p rag-retrieval --bin rag-query -- eval
 ```
 
-The first command embeds the question, takes the five nearest items from the collection that `QDRANT_ITEMS_COLLECTION` names (`items` unless set) and prints each one with the title of its document, its page (the printed page number where there is one), its kind, its score and its text. A figure also prints the path of its own picture. `--kind` looks only at items of one kind: `chunk`, `formula`, `figure` or `table`, and any other value is refused. The command needs `EMBEDDING_GEMINI_API_KEY`, and Gemini bills each question by the token.
+The command reads what an ingest wrote: the items collection that `QDRANT_ITEMS_COLLECTION` names (`items` unless set), the concepts collection that `QDRANT_CONCEPTS_COLLECTION` names (`concepts` unless set) and the graph that `FALKORDB_GRAPH` names (`quanty` unless set). Every ingest creates both collections, also when it finds no concept. The command needs `EMBEDDING_GEMINI_API_KEY`, and Gemini bills each question by the token. A store that is down stops the command with a message that names it. FalkorDB is connected to before the question is embedded, so a graph that is down costs nothing.
 
-`golden.toml` holds 20 questions about the three sample chapters in `samples/content`, each with the document and the page whose items must come back. `eval` asks them all and prints one line for each, then a last line with the score, in the shape `found in the top 5: <found> of 20`. The score is one number that can be compared from run to run, so a change to retrieval must not lower it. Run `eval` from the workspace root, where `golden.toml` is, after ingesting the three sample chapters.
+The search has six steps, in this order:
+
+1. The question is embedded, and the 8 items nearest to it are the seeds.
+2. The seed concepts are the 3 concepts nearest to the question, and the concepts that the seeds mention.
+3. The graph adds the items that mention a seed concept, and the concepts that are one `RELATES_TO` edge from a seed concept, with the items that mention those. The graph adds at most 50 items.
+4. The seeds and the added items are ranked together by one more query to Qdrant that looks only at those items, so they are all scored by the same cosine to the question.
+5. No document gives more than 3 results, and the first 8 results that are left are kept.
+6. When no `--kind` is given, each figure, table and equation that a result cites by its printed label, such as "Figure 13-4", "Table 7-2" or "(7.3)", is added if it is in the same document and is not in the results yet.
+
+The four numbers of these steps are constants in `crates/rag-retrieval/src/search/mod.rs`. The two that matter most are `RESULTS_PER_QUERY` (8) and `MAX_RESULTS_PER_DOCUMENT` (3). All four are starting values, to be tuned with `eval`. A document gives at most three results in steps 1 to 5, also when it is the only document in the store. An item that is not a seed never scores above a seed, so an item that came in through the graph is shown only where the cap left a place free. When no document has more than three of the eight nearest items, no result comes in through the graph. With no concept in the graph, the results are the nearest items only.
+
+Each result prints the title of its document, its page (the printed page number where there is one), its kind, its label where it has one, its score and its text. A figure also prints the path of its own picture. Two notes can follow the score:
+
+- `reached via concept <name>` marks an item that came in through the graph. The name is the first of the concepts, in the order of the steps above, that the item mentions.
+- `cited by result <n> as <label>` marks an item that was added in step 6 because result `n` cites it.
+
+The items of step 6 come after the others. They are not counted in the 8 or in the 3 of their document, and they are not in score order with the others. A citation finds only the label as it is printed, in the same document: "Fig. 7-2" does not find "Figure 7-2". `--kind` looks only at items of one kind: `chunk`, `formula`, `figure` or `table`, and any other value is refused. With `--kind` nothing is added in step 6.
+
+`--answer` asks Sonnet, `claude-sonnet-5-5`, to write an answer from the items that were found. It runs through the `claude` command on your subscription, with no tools, and it is not started while `ANTHROPIC_API_KEY` is set. It makes one call. The model is given the question and the items, numbered: the document, the page, the kind, the label, and the text, the raw LaTeX of a formula, or the explanation of a figure with the path of its picture. It replies with claims, and each claim names the numbers of the items that support it. The command prints only the answer, not the results, and what the call cost goes to standard error. After each claim it prints one line for each source: the title of the document, which holds the chapter, the printed page, and the kind and label of the item. Under the line of a formula it prints the LaTeX exactly as the document has it, and under the line of a figure it prints the path of the picture. The program writes the citations and the LaTeX, not the model, so a title, a page or a formula is never retyped. A reply with a claim that names no source, or an item that was not given, is an error, and the question is not asked again. When nothing is found, the command prints `no items found` and does not ask the model. When the model replies with no claim, the command prints `the stored items do not answer the question`. The prompt and the JSON Schema of the reply are in `crates/rag-retrieval/src/answer/prompts/`.
+
+`golden.toml` holds 21 questions about the three sample chapters in `samples/content`, each with the document and the page whose items must come back. A question whose answer is in two documents has an `also` list of more places, and counts as found only when all of them come back. `eval` asks them all and prints one line for each, then a last line with the score, in the shape `found in the top 5: <found> of 21`. The score is one number that can be compared from run to run, so a change to retrieval must not lower it. `eval` runs the same search as the command above and looks at the first 5 results of each question. When a search ranks fewer than 5 items, the items of step 6 follow them and are among those 5, so a page that only a cited item is on counts as found. Run `eval` from the workspace root, where `golden.toml` is, after ingesting the three sample chapters.

@@ -14,7 +14,11 @@ use crate::contract::{
 };
 
 const NOTES: &str = "quanty-sample-notes";
+const NOTES_TITLE: &str = "Quanty Sample Notes";
+const NOTES_CHAPTER_2: &str = "Black Scholes In Depth";
 const VOLATILITY: &str = "option-volatility-and-pricing";
+const VOLATILITY_TITLE: &str = "Option Volatility and Pricing";
+const VOLATILITY_CHAPTER: &str = "Sample Pages";
 
 fn id(number: u128) -> Uuid {
     Uuid::from_u128(number)
@@ -30,6 +34,11 @@ fn folder(book: &str, chapter: u32) -> PathBuf {
     samples_folder()
         .join(book)
         .join(format!("chapter-{chapter}"))
+}
+
+/// The title an ingest gives a chapter.
+fn chapter_title(book: &str, chapter: u32, name: &str) -> String {
+    format!("{book}, chapter {chapter}: {name}")
 }
 
 fn result(number: usize, kind: ItemKind, doc: u128, title: &str, text: &str) -> ResultItem {
@@ -54,33 +63,38 @@ fn result(number: usize, kind: ItemKind, doc: u128, title: &str, text: &str) -> 
 }
 
 pub fn search_reply() -> SearchReply {
+    let black_scholes = chapter_title(NOTES_TITLE, 2, NOTES_CHAPTER_2);
     let mut formula = result(
         1,
         ItemKind::Formula,
         2,
-        "Black Scholes In Depth",
+        &black_scholes,
         r"\frac{\partial V}{\partial t} + \tfrac{1}{2}\sigma^2 S^2 \frac{\partial^2 V}{\partial S^2} + rS\frac{\partial V}{\partial S} - rV = 0",
     );
     formula.label = Some("(2.3)".to_owned());
-    formula.book = Some("Quanty Sample Notes".to_owned());
+    formula.book = Some(NOTES_TITLE.to_owned());
     formula.name = Some("Black–Scholes partial differential equation".to_owned());
     let mut assumptions = result(
         2,
         ItemKind::Chunk,
         2,
-        "Black Scholes In Depth",
+        &black_scholes,
         "The model assumes that the stock price follows a geometric Brownian motion with constant volatility.",
     );
     assumptions.reason = Reason::Concept("Black–Scholes model".to_owned());
+    assumptions.book = Some(NOTES_TITLE.to_owned());
     assumptions.page = 1;
+    // A passage can hold several pieces of a page, so it names none.
+    assumptions.piece = None;
     let mut figure = result(
         3,
         ItemKind::Figure,
         3,
-        "Option Volatility And Pricing, chapter 1",
+        &chapter_title(VOLATILITY_TITLE, 1, VOLATILITY_CHAPTER),
         "Three spreads show about the same theoretical profit at an underlying price of 48.40.",
     );
     figure.label = Some("Figure 13-4".to_owned());
+    figure.book = Some(VOLATILITY_TITLE.to_owned());
     figure.page = 5;
     figure.printed_page = Some("233".to_owned());
     figure.image = Some(image(&format!(
@@ -164,9 +178,9 @@ pub fn concept_graph() -> ConceptGraph {
 
 pub fn catalogue() -> Catalogue {
     let document =
-        |number: u128, title: &str, chapter: u32, name: &str, book: &str, pages| Document {
+        |number: u128, book: &str, chapter: u32, name: &str, book_folder: &str, pages| Document {
             id: DocId(id(number)),
-            title: title.to_owned(),
+            title: chapter_title(book, chapter, name),
             chapter: Some(ChapterLabel {
                 number: chapter,
                 name: name.to_owned(),
@@ -181,31 +195,24 @@ pub fn catalogue() -> Catalogue {
                 tables: 0,
             },
             ingested_items: Some(9),
-            folder: Some(folder(book, chapter)),
+            folder: Some(folder(book_folder, chapter)),
         };
     Catalogue {
         books: vec![
             Book {
-                title: Some("Quanty Sample Notes".to_owned()),
+                title: Some(NOTES_TITLE.to_owned()),
                 chapters: vec![
-                    document(1, "Introduction", 1, "Introduction", NOTES, 3),
-                    document(
-                        2,
-                        "Black Scholes In Depth",
-                        2,
-                        "Black Scholes In Depth",
-                        NOTES,
-                        3,
-                    ),
+                    document(1, NOTES_TITLE, 1, "Options Pricing Intuition", NOTES, 3),
+                    document(2, NOTES_TITLE, 2, NOTES_CHAPTER_2, NOTES, 3),
                 ],
             },
             Book {
-                title: Some("Option Volatility And Pricing".to_owned()),
+                title: Some(VOLATILITY_TITLE.to_owned()),
                 chapters: vec![document(
                     3,
-                    "Option Volatility And Pricing, chapter 1",
+                    VOLATILITY_TITLE,
                     1,
-                    "Volatility",
+                    VOLATILITY_CHAPTER,
                     VOLATILITY,
                     7,
                 )],
@@ -219,10 +226,10 @@ pub fn page_view() -> PageView {
     PageView {
         doc: DocId(id(3)),
         page: 5,
-        book: Some("Option Volatility And Pricing".to_owned()),
+        book: Some(VOLATILITY_TITLE.to_owned()),
         chapter: Some(ChapterLabel {
             number: 1,
-            name: "Volatility".to_owned(),
+            name: VOLATILITY_CHAPTER.to_owned(),
         }),
         page_count: 7,
         printed_page: Some("233".to_owned()),
@@ -286,7 +293,7 @@ pub fn preflight() -> Preflight {
     Preflight {
         chapter: ChapterLabel {
             number: 1,
-            name: "Volatility".to_owned(),
+            name: VOLATILITY_CHAPTER.to_owned(),
         },
         pages: Some(7),
         state: Some(ChapterState::New),
@@ -297,7 +304,7 @@ pub fn preflight() -> Preflight {
 pub fn ingest_report() -> IngestReport {
     IngestReport {
         doc: DocId(id(3)),
-        title: "Option Volatility And Pricing, chapter 1".to_owned(),
+        title: chapter_title(VOLATILITY_TITLE, 1, VOLATILITY_CHAPTER),
         pages: 7,
         items: ItemCounts {
             chunks: 12,
@@ -318,4 +325,72 @@ pub fn ingest_report() -> IngestReport {
 
 pub fn failure(kind: FailureKind) -> Failure {
     Failure::new(kind, "a failure made for a test")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::*;
+
+    /// The book title, the chapter and the page count in the index file of a saved chapter.
+    fn saved(folder: &Path) -> (String, ChapterLabel, u32) {
+        let file = folder.join("chapter.json");
+        let index = std::fs::read_to_string(&file)
+            .unwrap_or_else(|error| panic!("cannot read {}: {error}", file.display()));
+        let index: serde_json::Value =
+            serde_json::from_str(&index).expect("the index file of a chapter is JSON");
+        let text = |key: &str| {
+            let value = index[key].as_str();
+            value.expect("the index file has this text").to_owned()
+        };
+        let number = |key: &str| {
+            let value = index[key].as_u64().and_then(|n| u32::try_from(n).ok());
+            value.expect("the index file has this number")
+        };
+        let chapter = ChapterLabel {
+            number: number("chapter-number"),
+            name: text("chapter-name"),
+        };
+        (text("book-title"), chapter, number("page-count"))
+    }
+
+    #[test]
+    fn the_samples_say_what_the_saved_chapters_say() {
+        let catalogue = catalogue();
+        for book in &catalogue.books {
+            for document in &book.chapters {
+                let folder = document.folder.as_deref();
+                let (book_title, chapter, pages) = saved(folder.expect("a sample has a folder"));
+                // An ingest gives a chapter this title.
+                let title = format!("{book_title}, chapter {}: {}", chapter.number, chapter.name);
+                assert_eq!(book.title.as_deref(), Some(book_title.as_str()));
+                assert_eq!(document.title, title);
+                assert_eq!(document.chapter.as_ref(), Some(&chapter));
+                assert_eq!(document.pages, Some(pages));
+            }
+        }
+        let book_of = |doc| catalogue.book_of(doc).and_then(|book| book.title.clone());
+        let stored = |doc| {
+            let document = catalogue.document(doc);
+            document.expect("a sample names a document of the sample catalogue")
+        };
+
+        for result in search_reply().results {
+            assert_eq!(result.doc_title, stored(result.doc).title);
+            assert_eq!(result.book, book_of(result.doc));
+            if result.kind == ItemKind::Chunk {
+                let read_from_a_piece = (result.piece, result.caption, result.name);
+                assert_eq!(read_from_a_piece, (None, None, None));
+            }
+        }
+        let page = page_view();
+        assert_eq!(page.book, book_of(page.doc));
+        assert_eq!(page.chapter, stored(page.doc).chapter);
+        assert_eq!(Some(page.page_count), stored(page.doc).pages);
+        let report = ingest_report();
+        assert_eq!(report.title, stored(report.doc).title);
+        assert_eq!(Some(report.pages), stored(report.doc).pages);
+        assert_eq!(Some(preflight().chapter), stored(report.doc).chapter);
+    }
 }

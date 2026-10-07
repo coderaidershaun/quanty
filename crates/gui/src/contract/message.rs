@@ -121,10 +121,21 @@ impl Command {
     /// sends.
     pub fn failed(&self, failure: &Failure) -> Vec<Event> {
         match self {
-            Command::Ask { request, .. } => vec![Event::Search {
-                request: *request,
-                result: Err(failure.clone()),
-            }],
+            // An ask is answered in three parts, and any of them may still be waited for.
+            Command::Ask { request, .. } => vec![
+                Event::Search {
+                    request: *request,
+                    result: Err(failure.clone()),
+                },
+                Event::Graph {
+                    request: *request,
+                    result: Err(failure.clone()),
+                },
+                Event::Answer {
+                    request: *request,
+                    result: Err(failure.clone()),
+                },
+            ],
             Command::LoadPage { request, .. } => vec![
                 Event::Page {
                     request: *request,

@@ -214,8 +214,9 @@ pub(super) fn push_cancel(effects: &mut Vec<Effect>, request: RequestId) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contract::{IngestOutcome, IngestRequest, NoticeKind};
+    use crate::contract::{AskDraft, Failure, IngestOutcome, IngestRequest, Loadable, NoticeKind};
     use crate::state::IngestJob;
+    use crate::testkit::sample;
 
     fn run(shared: &mut Shared, intent: Intent) -> Vec<Effect> {
         let mut effects = Vec::new();
@@ -316,5 +317,56 @@ mod tests {
         assert!(shared.is_at_rest());
         run(&mut shared, Intent::RefreshCatalogue);
         assert!(!shared.is_at_rest());
+    }
+
+    #[test]
+    fn an_ask_that_fails_after_its_results_ends_the_graph_and_the_answer() {
+        let mut shared = Shared::default();
+        let draft = AskDraft {
+            question: "q".to_owned(),
+            ..AskDraft::default()
+        };
+        let effects = run(&mut shared, Intent::Ask(draft));
+        let [Effect::Send(ask)] = effects.as_slice() else {
+            panic!("expected one command, got {effects:?}");
+        };
+        let request = ask.request();
+        let failure = Failure::internal("the backend stopped");
+        let failed = ask.failed(&failure);
+        assert_eq!(
+            failed,
+            vec![
+                Event::Search {
+                    request,
+                    result: Err(failure.clone()),
+                },
+                Event::Graph {
+                    request,
+                    result: Err(failure.clone()),
+                },
+                Event::Answer {
+                    request,
+                    result: Err(failure.clone()),
+                },
+            ]
+        );
+
+        let found = sample::search_reply();
+        let arrived = Event::Search {
+            request,
+            result: Ok(found.clone()),
+        };
+        shared.apply_event(arrived, &mut Vec::new());
+        for event in failed {
+            shared.apply_event(event, &mut Vec::new());
+        }
+        assert_eq!(
+            shared.ask.search,
+            Loadable::Ready(found),
+            "the results stay"
+        );
+        assert_eq!(shared.ask.graph, Loadable::Failed(failure.clone()));
+        assert_eq!(shared.ask.answer, Loadable::Failed(failure));
+        assert!(shared.is_at_rest());
     }
 }

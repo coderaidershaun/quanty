@@ -69,7 +69,7 @@ impl FailureKind {
                 "The chapter's files are not where they were. Ingest the chapter again."
             }
             FailureKind::Internal => {
-                "Something went wrong inside quanty. Try again; if it stays, open Details."
+                "Something went wrong inside quanty. Try again; if it stays, rest the pointer on this message to read the error."
             }
         }
     }

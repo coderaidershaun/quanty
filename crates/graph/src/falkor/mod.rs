@@ -98,6 +98,18 @@ impl GraphStore for FalkorGraph {
         writes::upsert_items(self, document, items).await
     }
 
+    async fn set_ingested_items(
+        &self,
+        document: DocId,
+        items: Option<u64>,
+    ) -> Result<(), GraphError> {
+        writes::set_ingested_items(self, document, items).await
+    }
+
+    async fn ingested_items(&self, document: DocId) -> Result<Option<u64>, GraphError> {
+        reads::ingested_items(self, document).await
+    }
+
     async fn delete_document(&self, id: DocId) -> Result<u64, GraphError> {
         writes::delete_document(self, id).await
     }

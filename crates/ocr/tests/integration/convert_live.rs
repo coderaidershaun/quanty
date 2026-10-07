@@ -2,10 +2,10 @@
 //! offline can tell whether the flags, schemas and prompts still work together.
 
 use ocr::content::PieceDetail;
+use ocr::testing::{read_json, sample_job};
 use ocr::{convert_chapter, read_chapter};
 
 use crate::read_chapter::assert_sample_chapter;
-use crate::stubs::{read_json, sample_job};
 
 const RUN_COMMAND: &str = "set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p ocr --test integration -- --ignored convert_live::converts_sample_chapter_live --nocapture";
 

@@ -8,5 +8,6 @@ mod image;
 mod ingest;
 mod ingest_live;
 mod items;
+mod pdf;
 mod resolution_live;
 mod support;

@@ -45,6 +45,9 @@ impl ThrowawayStores {
             concept_cache_folder: temporary.path().join("cache"),
             concept_decision_log: temporary.path().join("concept-decisions.jsonl"),
             content_folder: temporary.path().join("content"),
+            // The real key would be copied by `..settings`, and no test may hand it to the
+            // converter, which bills for every call it makes.
+            jev_api_key: None,
             ..settings
         };
         // The names are copied into the config by hand. Without these checks, a copy that is

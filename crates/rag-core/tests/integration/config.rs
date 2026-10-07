@@ -35,6 +35,7 @@ fn environment_wins_over_dotenv_and_stores_fall_back_to_localhost() {
          FALKORDB_URL=falkor://from-dotenv:6379\n\
          FALKORDB_GRAPH=graph-from-dotenv\n\
          EMBEDDING_GEMINI_API_KEY=not-a-real-key\n\
+         CONVERTER_JEV_API_KEY=not-a-real-jev-key\n\
          CONCEPT_CACHE_DIR=cache-from-dotenv\n\
          QDRANT_CONCEPTS_COLLECTION=concepts-from-dotenv\n\
          CONCEPT_DECISION_LOG=log-from-dotenv.jsonl\n\
@@ -62,10 +63,18 @@ fn environment_wins_over_dotenv_and_stores_fall_back_to_localhost() {
         config.gemini_api_key.as_ref().map(|key| key.expose()),
         Some("not-a-real-key")
     );
+    assert_eq!(
+        config.jev_api_key.as_ref().map(|key| key.expose()),
+        Some("not-a-real-jev-key")
+    );
     assert_eq!(config.items_collection, "items", "a blank value is unset");
     assert!(
         !format!("{config:?}").contains("not-a-real-key"),
         "the debug text of a config must not show the key"
+    );
+    assert!(
+        !format!("{config:?}").contains("not-a-real-jev-key"),
+        "the debug text of a config must not show the Jev key"
     );
 
     let config = Config::from_sources(environment_of(&[]), None).unwrap();
@@ -81,6 +90,7 @@ fn environment_wins_over_dotenv_and_stores_fall_back_to_localhost() {
     );
     assert_eq!(config.content_folder, Path::new("content"));
     assert!(config.gemini_api_key.is_none());
+    assert!(config.jev_api_key.is_none());
 
     let config = Config::from_sources(
         environment_of(&[

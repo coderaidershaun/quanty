@@ -17,6 +17,8 @@ const ROWS_PER_STATEMENT: usize = 200;
 
 const UPSERT_DOCUMENT: &str = "MERGE (d:Document {id: $id}) SET d.title = $title";
 
+const SET_INGESTED_ITEMS: &str = "MATCH (d:Document {id: $id}) SET d.ingested_items = $items";
+
 // SMELL: there is no index on `id`, so every `MERGE` reads all the nodes with its label, and a
 // write gets slower as the graph grows. In a very large graph one write would take longer than
 // the client waits for a reply, and the ingest would stop with a failed request.
@@ -79,6 +81,27 @@ pub(super) async fn upsert_document(
     ];
     graph
         .run("write the document", UPSERT_DOCUMENT, parameters)
+        .await?;
+    Ok(())
+}
+
+pub(super) async fn set_ingested_items(
+    graph: &FalkorGraph,
+    document: DocId,
+    items: Option<u64>,
+) -> Result<(), GraphError> {
+    // FalkorDB removes a property that is set to null.
+    let items = match items {
+        Some(count) => FalkorValue::I64(i64::try_from(count).unwrap_or(i64::MAX)),
+        None => FalkorValue::None,
+    };
+    let parameters = vec![("id", id_value(document)), ("items", items)];
+    graph
+        .run(
+            "record whether the document is ingested whole",
+            SET_INGESTED_ITEMS,
+            parameters,
+        )
         .await?;
     Ok(())
 }

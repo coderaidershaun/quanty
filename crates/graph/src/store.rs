@@ -205,6 +205,30 @@ pub trait GraphStore {
         items: &[ItemNode],
     ) -> impl Future<Output = Result<(), GraphError>> + Send;
 
+    /// Records whether the document is ingested whole. `Some(items)` marks it, with the number of
+    /// its items. `None` takes the mark away. A document that is not in the graph is not created.
+    /// Repeating it changes nothing.
+    ///
+    /// # Errors
+    /// [`GraphError::Query`] when the store refuses or cannot be reached.
+    fn set_ingested_items(
+        &self,
+        document: DocId,
+        items: Option<u64>,
+    ) -> impl Future<Output = Result<(), GraphError>> + Send;
+
+    /// The number of items that the document is marked as ingested whole with, or `None` when it
+    /// has no mark or is not in the graph.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   count of items
+    fn ingested_items(
+        &self,
+        document: DocId,
+    ) -> impl Future<Output = Result<Option<u64>, GraphError>> + Send;
+
     /// Removes the document node, its item nodes and every edge of those nodes, the `MENTIONS`
     /// edges of the items among them. Concepts and their `RELATES_TO` edges stay: they belong to
     /// no document. Returns how many nodes it removed. Zero means the graph has no such document,

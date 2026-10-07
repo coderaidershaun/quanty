@@ -1,8 +1,8 @@
-//! The statements that read concepts, and the items that mention them, with the code that runs
-//! each one and the row it expects.
+//! The statements that read concepts, the items that mention them, and whether a document is
+//! ingested whole, with the code that runs each one and the row it expects.
 
 use falkordb::FalkorValue;
-use rag_core::{ConceptId, ItemId};
+use rag_core::{ConceptId, DocId, ItemId};
 
 use super::{FalkorGraph, id_value};
 use crate::store::{ConceptNode, GraphError, ItemMentions};
@@ -10,6 +10,7 @@ use crate::store::{ConceptNode, GraphError, ItemMentions};
 const CONCEPT_ROW: &str = "a concept (an id, a name, a normalised name and a definition)";
 const ITEM_ROW: &str =
     "an item with the concepts it mentions (an item id and a list of concept ids)";
+const INGESTED_ITEMS_ROW: &str = "a count of items or null (one whole number that is not negative)";
 
 // SMELL: there is no index on the normalised name either, and an index could not cover the list
 // of aliases, so each lookup reads every concept node.
@@ -22,6 +23,11 @@ LIMIT 1";
 const CONCEPT_BY_ID: &str = "\
 MATCH (c:Concept {id: $id})
 RETURN c.id, c.name, c.normalised_name, c.definition
+LIMIT 1";
+
+const INGESTED_ITEMS: &str = "\
+MATCH (d:Document {id: $id})
+RETURN d.ingested_items
 LIMIT 1";
 
 // SMELL: a read of a graph that does not exist is not an error. FalkorDB answers with no rows and
@@ -71,6 +77,20 @@ pub(super) async fn concept(
 ) -> Result<Option<ConceptNode>, GraphError> {
     let parameters = vec![("id", id_value(id))];
     read_concept(graph, "read a concept by its id", CONCEPT_BY_ID, parameters).await
+}
+
+pub(super) async fn ingested_items(
+    graph: &FalkorGraph,
+    document: DocId,
+) -> Result<Option<u64>, GraphError> {
+    let action = "read how many items the document was ingested with";
+    let parameters = vec![("id", id_value(document))];
+    let reply = graph.run(action, INGESTED_ITEMS, parameters).await?;
+    match reply.data.into_values_lossy().next() {
+        None => Ok(None),
+        Some(row) => ingested_items_from_row(row)
+            .map_err(|found| unreadable_reply(graph, action, INGESTED_ITEMS_ROW, found)),
+    }
 }
 
 /// The first row of the reply as a concept, or `None` when the reply has no row.
@@ -198,6 +218,19 @@ fn concept_from_row(row: Vec<FalkorValue>) -> Result<ConceptNode, String> {
         normalised_name,
         definition,
     })
+}
+
+/// Reads a row of one value: a count of items, or null for a document that is not marked as
+/// ingested whole. Any other row comes back as the text that the error shows.
+fn ingested_items_from_row(row: Vec<FalkorValue>) -> Result<Option<u64>, String> {
+    let row = <[FalkorValue; 1]>::try_from(row).map_err(|row| format!("{row:?}"))?;
+    match row {
+        [FalkorValue::None] => Ok(None),
+        [FalkorValue::I64(count)] => u64::try_from(count)
+            .map(Some)
+            .map_err(|_| count.to_string()),
+        other => Err(format!("{other:?}")),
+    }
 }
 
 /// Reads a row of an id and a list of ids. Any other row comes back as the text that the error

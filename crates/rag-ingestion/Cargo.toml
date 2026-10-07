@@ -29,6 +29,7 @@ testing = ["dep:qdrant-client", "dep:tempfile", "graph/testing"]
 
 [dev-dependencies]
 graph = { workspace = true, features = ["testing"] }
+ocr = { workspace = true, features = ["testing"] }
 qdrant-client.workspace = true
 rag-ingestion = { workspace = true, features = ["testing"] }
 tempfile.workspace = true

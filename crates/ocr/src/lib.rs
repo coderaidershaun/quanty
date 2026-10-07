@@ -5,11 +5,14 @@
 //! back as a [`Chapter`]. [`convert_image`] converts a picture that stands alone, such as a chart,
 //! into a [`ConvertedImage`]. All of them need only the crate root. `convert::services` and
 //! `convert::reply` hold the paid calls, their errors and the reply types, for a caller that
-//! swaps the paid calls for stand-ins.
+//! swaps the paid calls for stand-ins. The stand-ins and the helpers for the sample chapter are in
+//! `ocr::testing`, behind the cargo feature `testing`.
 
 pub mod content;
 pub mod convert;
 pub mod reader;
+#[cfg(feature = "testing")]
+pub mod testing;
 
 pub use content::{
     ChapterIndex, Cite, CiteKind, ContentError, FigureImage, ImageIndex, ImageShows, PageBox,
@@ -17,7 +20,7 @@ pub use content::{
 };
 pub use convert::{
     ChapterJob, ConversionSummary, ConvertError, ConvertedImage, PageError, PopplerError,
-    convert_chapter, convert_image,
+    convert_chapter, convert_chapter_with_jev_key, convert_image,
 };
 pub use reader::{
     Chapter, ChapterPiece, FigurePicture, PieceId, PieceRelationship, ReadChapterError,

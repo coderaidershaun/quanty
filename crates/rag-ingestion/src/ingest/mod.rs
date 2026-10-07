@@ -78,6 +78,10 @@ struct Document {
 /// limit or is not signed in, keeps the answers it has so far, and running the same command again
 /// goes on from them.
 ///
+/// The document node carries a mark that it is ingested whole, with the number of its items. It
+/// is taken away when the run starts and set as the very last step, and only when no item was
+/// skipped, so the mark is never there for a run that stopped or skipped an item.
+///
 /// # Errors
 /// - [`IngestError::ChapterFolder`] when the folder does not exist
 /// - [`IngestError::Read`] when it is not a finished converted chapter
@@ -152,6 +156,8 @@ async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
     // chapter that is cut into items differently ends up with two chains of items in the graph,
     // until its document is deleted and ingested again.
     stores.graph.upsert_document(&node).await?;
+    // A run that stops after this line must not leave the mark that an earlier run set.
+    stores.graph.set_ingested_items(node.id, None).await?;
     stores.graph.upsert_items(node.id, &nodes).await?;
 
     let inputs: Vec<DocumentInput> = items.iter().map(|item| item.input.clone()).collect();
@@ -189,6 +195,15 @@ async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
         .concepts
         .extract(&embedded, &models.embedder, stores)
         .await?;
+    // An item that was skipped was not read for its concepts, so the document is not whole yet.
+    // Keep this the last step: a step that failed after it would leave the mark on a run that did
+    // not finish.
+    if concepts.skipped_items.is_empty() {
+        stores
+            .graph
+            .set_ingested_items(node.id, Some(items.len() as u64))
+            .await?;
+    }
 
     Ok(IngestSummary {
         doc_id: node.id,

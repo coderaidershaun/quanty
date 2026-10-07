@@ -102,10 +102,11 @@ impl LiveServices {
     /// Sends Jev one short line, so a rejected key stops the run before any page is started.
     ///
     /// # Errors
-    /// - [`ServiceError::Jev`] if `CONVERTER_JEV_API_KEY` is not set or Jev refuses the key
-    pub async fn from_env() -> Result<Self, ServiceError> {
+    /// - [`ServiceError::Jev`] if there is no key or Jev refuses the key
+    pub async fn with_jev_key(jev_api_key: Option<&str>) -> Result<Self, ServiceError> {
+        let jev_api_key = jev_api_key.ok_or(JevError::MissingApiKey)?;
         let services = Self {
-            jev: Jev::from_env()?,
+            jev: Jev::new(jev_api_key)?,
         };
         services.jev_contains_math(KEY_PROBE_TEXT).await?;
         Ok(services)

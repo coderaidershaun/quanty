@@ -9,11 +9,11 @@ use ocr::ConversionSummary;
 use ocr::content::{ContentError, RelationshipKind};
 use ocr::convert::{ConvertError, convert_chapter_with};
 use ocr::reader::{PieceId, read_chapter};
+use ocr::testing::{Call, Scenario, StubServices, page_folder, read_json, sample_job, sample_pdf};
 
 use crate::figure_pictures::{
     assert_figure_pictures_read_back, assert_figures_cut, assert_hard_fallbacks,
 };
-use crate::stubs::{Call, Scenario, StubServices, page_folder, read_json, sample_job, sample_pdf};
 
 const SOFT_HYPHEN: char = '\u{AD}';
 

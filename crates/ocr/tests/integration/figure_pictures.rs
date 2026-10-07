@@ -4,8 +4,7 @@ use std::path::Path;
 
 use ocr::content::ImageShows;
 use ocr::reader::{PieceId, read_chapter};
-
-use crate::stubs::{Call, StubServices, page_folder, read_json};
+use ocr::testing::{Call, StubServices, page_folder, read_json};
 
 /// The figures the run really cuts: the page, the figure's place in that page's `pieces`, the
 /// rectangle the stub gives, and the rectangle `ocr` must draw. Page 2's figure matches

@@ -1,5 +1,6 @@
 //! The `rag-ingest` command: checks that the services are ready, ingests one converted chapter
-//! folder or one picture that stands alone, or deletes one document.
+//! folder or one picture that stands alone, converts and ingests one chapter PDF, or deletes one
+//! document.
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -7,10 +8,11 @@ use std::process::ExitCode;
 use anyhow::{Context, Result, bail};
 use clap::{CommandFactory, Parser, Subcommand};
 use graph::FalkorGraph;
-use rag_core::{ClaudeCli, ConceptStore, Config, DocId, GeminiEmbedder, ItemStore};
+use ocr::ChapterJob;
+use rag_core::{ApiKey, ClaudeCli, ConceptStore, Config, DocId, GeminiEmbedder, ItemStore};
 use rag_ingestion::{
-    ConceptExtractor, EXTRACTION_MODEL, IngestSummary, LoneImage, Models, Stores, delete_document,
-    health, ingest_chapter, ingest_image,
+    ChapterPdf, ConceptExtractor, EXTRACTION_MODEL, IngestSummary, LoneImage, Models, Stores,
+    delete_document, health, ingest_chapter, ingest_image, ingest_pdf,
 };
 use tracing::Level;
 use tracing_subscriber::filter::Targets;
@@ -41,6 +43,18 @@ struct Cli {
 enum Command {
     /// Check that Qdrant and FalkorDB answer and that the claude CLI is signed in
     Health,
+
+    /// Convert one chapter PDF and ingest it, in one run that needs no one
+    Pdf {
+        /// The title of the book that the chapter is from
+        #[arg(long)]
+        book: String,
+
+        // This help text is an attribute and not a doc comment, because rustdoc takes `<number>`
+        // for an HTML tag that is never closed.
+        #[arg(help = "The chapter PDF, named chapter-<number>-<name>.pdf")]
+        chapter_pdf: PathBuf,
+    },
 
     /// Remove one document, with its items, from Qdrant and from the graph
     DeleteDocument {
@@ -81,6 +95,9 @@ async fn run(cli: Cli) -> Result<ExitCode> {
                 ExitCode::FAILURE
             })
         }
+        (Some(Command::Pdf { book, chapter_pdf }), _) => convert_and_ingest(&book, &chapter_pdf)
+            .await
+            .map(|()| ExitCode::SUCCESS),
         (Some(Command::DeleteDocument { document_id }), _) => {
             delete(document_id).await.map(|()| ExitCode::SUCCESS)
         }
@@ -103,6 +120,13 @@ async fn connect_stores(config: &Config) -> Result<Stores<FalkorGraph>> {
             .await
             .context("could not connect to the graph")?,
         concepts: ConceptStore::connect(config).context("could not set up the concept store")?,
+    })
+}
+
+fn set_up_models(config: &Config) -> Result<Models<GeminiEmbedder, ClaudeCli>> {
+    Ok(Models {
+        embedder: GeminiEmbedder::from_config(config).context("could not set up the embedder")?,
+        concepts: ConceptExtractor::new(ClaudeCli::new(EXTRACTION_MODEL), config),
     })
 }
 
@@ -139,10 +163,7 @@ async fn ingest(path: &Path, note: Option<&str>) -> Result<()> {
     let config = Config::load().context("could not read the settings")?;
     // The models are set up before a picture is converted, so a missing key for the embedder
     // fails before the model that reads the picture is paid for.
-    let models = Models {
-        embedder: GeminiEmbedder::from_config(&config).context("could not set up the embedder")?,
-        concepts: ConceptExtractor::new(ClaudeCli::new(EXTRACTION_MODEL), &config),
-    };
+    let models = set_up_models(&config)?;
     let stores = connect_stores(&config).await?;
     let summary: IngestSummary = match source {
         Source::Chapter(folder) => ingest_chapter(folder, &models, &stores)
@@ -165,6 +186,44 @@ async fn ingest(path: &Path, note: Option<&str>) -> Result<()> {
         }
     };
     println!("{summary}");
+    Ok(())
+}
+
+async fn convert_and_ingest(book: &str, chapter_pdf: &Path) -> Result<()> {
+    let config = Config::load().context("could not read the settings")?;
+    // Both checks come before anything is set up, so a mistake costs nothing.
+    let job = ChapterJob::new(book, chapter_pdf, &config.content_folder).with_context(|| {
+        format!(
+            "could not set up the conversion of {}",
+            chapter_pdf.display()
+        )
+    })?;
+    if !chapter_pdf.is_file() {
+        bail!(
+            "{} is not there; give the chapter pdf, named chapter-<number>-<name>.pdf",
+            chapter_pdf.display()
+        );
+    }
+    // The models are set up before any page is converted, so a missing key for the embedder
+    // fails before the first page is paid for.
+    let models = set_up_models(&config)?;
+    let stores = connect_stores(&config).await?;
+    // The key goes to the converter as a value, because the settings never enter the process
+    // environment.
+    let jev_api_key = config.jev_api_key.as_ref().map(ApiKey::expose);
+    let outcome = ingest_pdf(
+        ChapterPdf {
+            job: &job,
+            convert: async |job: &ChapterJob| {
+                ocr::convert_chapter_with_jev_key(job, jev_api_key).await
+            },
+        },
+        &models,
+        &stores,
+    )
+    .await
+    .with_context(|| format!("could not ingest {}", chapter_pdf.display()))?;
+    println!("{outcome}");
     Ok(())
 }
 

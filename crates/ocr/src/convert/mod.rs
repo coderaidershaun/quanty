@@ -146,6 +146,20 @@ impl ChapterJob {
     pub fn chapter_folder(&self) -> PathBuf {
         self.chapter_folder.clone()
     }
+
+    /// The SHA-256 of the chapter PDF as lower-case hex: the value that `chapter.json` keeps as
+    /// `source-sha256`. It reads the whole file.
+    ///
+    /// # Errors
+    /// [`ConvertError::SourceUnreadable`] when the PDF cannot be read.
+    pub fn source_sha256(&self) -> Result<String, ConvertError> {
+        let bytes =
+            std::fs::read(&self.chapter_pdf).map_err(|source| ConvertError::SourceUnreadable {
+                path: self.chapter_pdf.clone(),
+                source,
+            })?;
+        Ok(sha256_hex(&bytes))
+    }
 }
 
 enum Prepared {
@@ -164,13 +178,27 @@ enum Prepared {
 /// - [`ConvertError::Services`] if Jev cannot be reached or refuses its key
 /// - [`ConvertError::PageFailed`] for the lowest page that failed; finished pages stay saved
 pub async fn convert_chapter(job: &ChapterJob) -> Result<ConversionSummary, ConvertError> {
+    let jev_api_key = std::env::var(services::JEV_API_KEY_VARIABLE).ok();
+    convert_chapter_with_jev_key(job, jev_api_key.as_deref()).await
+}
+
+/// Like [`convert_chapter`], with the Jev key given by the caller and not read from the
+/// environment, for a program that keeps its settings out of the process environment. `None` is
+/// an error only when a page is left to convert.
+///
+/// # Errors
+/// The same as [`convert_chapter`]. A key that is `None` gives [`ConvertError::Services`].
+pub async fn convert_chapter_with_jev_key(
+    job: &ChapterJob,
+    jev_api_key: Option<&str>,
+) -> Result<ConversionSummary, ConvertError> {
     if services::api_key_is_set() {
         return Err(ConvertError::ApiKeySet);
     }
     match prepare(job)? {
         Prepared::Finished(summary) => Ok(summary),
         Prepared::ToDo { source_sha256 } => {
-            let services = LiveServices::from_env().await?;
+            let services = LiveServices::with_jev_key(jev_api_key).await?;
             run(job, &source_sha256, &services).await
         }
     }
@@ -200,12 +228,7 @@ fn sha256_hex(bytes: &[u8]) -> String {
 
 /// Reads the PDF and the chapter folder and decides what is left to do. Writes nothing.
 fn prepare(job: &ChapterJob) -> Result<Prepared, ConvertError> {
-    let bytes =
-        std::fs::read(&job.chapter_pdf).map_err(|source| ConvertError::SourceUnreadable {
-            path: job.chapter_pdf.clone(),
-            source,
-        })?;
-    let source_sha256 = sha256_hex(&bytes);
+    let source_sha256 = job.source_sha256()?;
     let saved = match ChapterIndex::read(&job.chapter_folder) {
         Ok(saved) => saved,
         Err(ContentError::Read { source, .. }) if source.kind() == std::io::ErrorKind::NotFound => {

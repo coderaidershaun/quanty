@@ -1,15 +1,16 @@
-//! Stand-ins for the two paid services, so the whole chapter run can be tried offline. Poppler,
-//! the file system and every module of the crate stay real. There are no tests in this file.
+//! Support for tests, behind the cargo feature `testing`: stand-ins for the two paid services, so
+//! the whole chapter run can be tried offline, and small helpers for the sample chapter. Poppler,
+//! the file system and every module of the crate stay real. Every helper panics when it fails.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use ocr::ChapterJob;
-use ocr::content::{PageBox, PageCategories, Symbol};
-use ocr::convert::reply::{
+use crate::ChapterJob;
+use crate::content::{PageBox, PageCategories, Symbol};
+use crate::convert::reply::{
     CitedKind, CitedLabel, CopiedPage, CopiedPiece, Discussion, TranscribedPage, TranscribedPiece,
 };
-use ocr::convert::services::{
+use crate::convert::services::{
     Answer, CallUsage, JevError, MathPlacement, PageServices, PageSource, ServiceError,
 };
 

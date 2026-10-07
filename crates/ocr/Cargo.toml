@@ -15,6 +15,10 @@ sha2.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["macros", "process", "rt-multi-thread", "time"] }
 
+[features]
+testing = []
+
 [dev-dependencies]
+ocr = { workspace = true, features = ["testing"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt", "time"] }

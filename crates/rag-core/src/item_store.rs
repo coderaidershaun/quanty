@@ -105,6 +105,23 @@ impl ItemStore {
         Ok(reply.result.map_or(0, |result| result.count))
     }
 
+    /// The exact number of points of one document. A document with no points gives `0`.
+    ///
+    /// # Errors
+    /// [`StoreError::Request`] when Qdrant refuses, cannot be reached, or has no such collection.
+    pub async fn count_document(&self, document: DocId) -> Result<u64, StoreError> {
+        let reply = self
+            .client
+            .count(
+                CountPointsBuilder::new(self.collection.as_str())
+                    .filter(points_of(document))
+                    .exact(true),
+            )
+            .await
+            .map_err(|source| self.request_error("count the points of the document", source))?;
+        Ok(reply.result.map_or(0, |result| result.count))
+    }
+
     /// Removes every point of one document and returns how many points that was. A document
     /// with no points gives `0`, which is not an error.
     ///
@@ -113,33 +130,28 @@ impl ItemStore {
     /// not exist is not a special case: the count fails, and that error, which names the
     /// collection, is passed on.
     pub async fn delete_document(&self, document: DocId) -> Result<u64, StoreError> {
-        let of_document = Filter::must([Condition::matches(DOC_ID_FIELD, document.to_string())]);
         // SMELL: counting and deleting are two calls, so points of the document that another
         // program stores between the two are removed but not counted, and the number returned
         // is then too low.
-        let reply = self
-            .client
-            .count(
-                CountPointsBuilder::new(self.collection.as_str())
-                    .filter(of_document.clone())
-                    .exact(true),
-            )
-            .await
-            .map_err(|source| self.request_error("count the points of the document", source))?;
+        let count = self.count_document(document).await?;
         self.client
             .delete_points(
                 DeletePointsBuilder::new(self.collection.as_str())
-                    .points(of_document)
+                    .points(points_of(document))
                     .wait(true),
             )
             .await
             .map_err(|source| self.request_error("delete the points of the document", source))?;
-        Ok(reply.result.map_or(0, |result| result.count))
+        Ok(count)
     }
 
     fn request_error(&self, action: &'static str, source: QdrantError) -> StoreError {
         request_error(&self.url, &self.collection, action, source)
     }
+}
+
+fn points_of(document: DocId) -> Filter {
+    Filter::must([Condition::matches(DOC_ID_FIELD, document.to_string())])
 }
 
 fn point_struct(point: &ItemPoint) -> Result<PointStruct, StoreError> {

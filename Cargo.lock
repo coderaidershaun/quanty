@@ -1156,6 +1156,7 @@ dependencies = [
  "anyhow",
  "dotenvy",
  "futures-util",
+ "ocr",
  "reqwest",
  "schemars",
  "serde",

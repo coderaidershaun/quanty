@@ -9,6 +9,7 @@ const FALKORDB_URL: &str = "FALKORDB_URL";
 const FALKORDB_GRAPH: &str = "FALKORDB_GRAPH";
 const QDRANT_ITEMS_COLLECTION: &str = "QDRANT_ITEMS_COLLECTION";
 const GEMINI_API_KEY: &str = "EMBEDDING_GEMINI_API_KEY";
+const JEV_API_KEY: &str = "CONVERTER_JEV_API_KEY";
 const QDRANT_CONCEPTS_COLLECTION: &str = "QDRANT_CONCEPTS_COLLECTION";
 const CONCEPT_CACHE_DIR: &str = "CONCEPT_CACHE_DIR";
 const CONCEPT_DECISION_LOG: &str = "CONCEPT_DECISION_LOG";
@@ -69,12 +70,16 @@ pub struct Config {
     /// to. A relative path starts at the folder the command runs in. Tests set a temporary file so
     /// they never touch the real one.
     pub concept_decision_log: PathBuf,
-    /// Where the converted files of a picture that stands alone are saved. A relative path starts
-    /// at the folder the command runs in. Tests set a temporary folder so they never touch the
-    /// real one.
+    /// Where the converted files of a picture that stands alone, and of the chapters that
+    /// `rag-ingest pdf` converts, are saved. A relative path starts at the folder the command runs
+    /// in. Tests set a temporary folder so they never touch the real one.
     pub content_folder: PathBuf,
     /// Not needed by every command, so a missing key is not an error here.
     pub gemini_api_key: Option<ApiKey>,
+    /// The key of the Jev API, which the converter asks whether a page holds math. Only
+    /// `rag-ingest pdf` uses it, and only when a page is left to convert, so a missing key is
+    /// not an error here.
+    pub jev_api_key: Option<ApiKey>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -148,6 +153,7 @@ impl Config {
                 .unwrap_or_else(|| DEFAULT_CONTENT_FOLDER.to_owned())
                 .into(),
             gemini_api_key: setting(GEMINI_API_KEY).map(ApiKey::new),
+            jev_api_key: setting(JEV_API_KEY).map(ApiKey::new),
         })
     }
 }

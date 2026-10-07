@@ -4,12 +4,11 @@
 use std::path::{Path, PathBuf};
 
 use super::checks::{
-    ReplyFault, any_string_has_backslash, check_reply, clean_reply, piece_word_count,
-    text_layer_word_count, word_match,
+    ReplyFault, clean_and_check, piece_word_count, text_layer_word_count, word_match,
 };
 use super::figure::cut_figures;
 use super::reply::{TranscribedPage, TranscribedPiece};
-use super::route::route_reasons;
+use super::route::{CopyOutcome, judge_copy, route_reasons};
 use super::save::write_page;
 use super::services::{CallUsage, MathPlacement, PageServices, PageSource, ServiceError};
 use super::summary::CallTally;
@@ -17,10 +16,6 @@ use crate::content::{
     CallRecord, CallStep, Checks, ContentError, Conversion, MathCheck, PageCategories,
     REJECTED_REPLY_FILE, Route, RouteReason, page_folder_name, partial_page_folder_name,
 };
-
-// Both match ratios of a Haiku copy must reach this. A clean copy of the sample text page scored
-// 0.995 and 1.0, and a false alarm only costs one Sonnet call.
-const COPY_MATCH_MINIMUM: f64 = 0.96;
 
 #[derive(thiserror::Error, Debug)]
 pub enum PageError {
@@ -72,21 +67,43 @@ pub(super) fn call_record(step: CallStep, usage: &CallUsage) -> CallRecord {
     }
 }
 
-fn math_check_of(answer: Result<Option<MathPlacement>, ServiceError>) -> MathCheck {
-    match answer {
+// Room for a status and the start of what the service said. A whole reply would fill `page.json`.
+const MATH_CHECK_FAILURE_MAX_CHARS: usize = 300;
+
+struct MathAnswer {
+    check: MathCheck,
+    /// Why the check gave no answer. `None` when it answered.
+    failure: Option<String>,
+}
+
+fn math_answer_of(answer: Result<Option<MathPlacement>, ServiceError>) -> MathAnswer {
+    let check = match answer {
         Ok(Some(MathPlacement::Inline)) => MathCheck::Inline,
         Ok(Some(MathPlacement::Block)) => MathCheck::Block,
         Ok(Some(MathPlacement::Both)) => MathCheck::Both,
         Ok(None) => MathCheck::None,
-        // SMELL: why the math check failed is dropped here. Only `no-answer` is saved, so a run
-        // where every page goes to Sonnet for this reason does not say what went wrong.
-        Err(_) => MathCheck::NoAnswer,
+        Err(error) => {
+            return MathAnswer {
+                check: MathCheck::NoAnswer,
+                failure: Some(error_with_causes(&error)),
+            };
+        }
+    };
+    MathAnswer {
+        check,
+        failure: None,
     }
 }
 
-enum CopyOutcome {
-    Kept(TranscribedPage),
-    Refused(RouteReason),
+fn error_with_causes(error: &ServiceError) -> String {
+    let mut text = error.to_string();
+    let mut cause = std::error::Error::source(error);
+    while let Some(next) = cause {
+        text.push_str(": ");
+        text.push_str(&next.to_string());
+        cause = next.source();
+    }
+    text.chars().take(MATH_CHECK_FAILURE_MAX_CHARS).collect()
 }
 
 struct Written {
@@ -106,7 +123,7 @@ struct PageRun<'a, S> {
 impl<S: PageServices> PageRun<'_, S> {
     /// The tags are needed to save the page, so a failed tagging fails it. A failed math check
     /// does not: the page goes to Sonnet instead.
-    async fn tag_and_check_math(&mut self) -> Result<(PageCategories, MathCheck), PageError> {
+    async fn tag_and_check_math(&mut self) -> Result<(PageCategories, MathAnswer), PageError> {
         let (tagged, math) = tokio::join!(
             self.services.tag(self.source),
             self.services.contains_math(self.source)
@@ -114,7 +131,7 @@ impl<S: PageServices> PageRun<'_, S> {
         let tags = tagged?;
         self.ledger.add(CallStep::Tag, &tags.usage);
         self.ledger.tally.math_check += 1;
-        Ok((tags.value, math_check_of(math)))
+        Ok((tags.value, math_answer_of(math)))
     }
 
     /// Haiku copies a page that has no reason to go to Sonnet. Every other page goes to Sonnet,
@@ -151,32 +168,11 @@ impl<S: PageServices> PageRun<'_, S> {
     async fn copy_checked(&mut self) -> Result<CopyOutcome, PageError> {
         let copy = self.services.copy(self.source).await?;
         self.ledger.add(CallStep::Copy, &copy.usage);
-        let asked_for_stronger_model = copy.value.needs_stronger_model;
-        let mut page = TranscribedPage::from(copy.value);
-        clean_reply(&mut page);
-        if asked_for_stronger_model {
-            return Ok(CopyOutcome::Refused(RouteReason::CopyFlaggedStrongerModel));
-        }
-        Ok(match self.copy_problem(&page) {
-            Some(reason) => CopyOutcome::Refused(reason),
-            None => CopyOutcome::Kept(page),
-        })
-    }
-
-    fn copy_problem(&self, copy: &TranscribedPage) -> Option<RouteReason> {
-        if copy.pieces.is_empty() {
-            return Some(RouteReason::CopyHasNoPieces);
-        }
-        if any_string_has_backslash(copy) {
-            return Some(RouteReason::CopyContainsBackslash);
-        }
-        if check_reply(copy, self.text_layer_words).is_err() {
-            return Some(RouteReason::CopyFailedReplyCheck);
-        }
-        let matched = word_match(copy, &self.source.text_layer);
-        (matched.piece_words_in_text_layer < COPY_MATCH_MINIMUM
-            || matched.text_layer_words_in_pieces < COPY_MATCH_MINIMUM)
-            .then_some(RouteReason::CopyFailedCopyCheck)
+        Ok(judge_copy(
+            copy.value,
+            &self.source.text_layer,
+            self.text_layer_words,
+        ))
     }
 
     /// Asks Sonnet for one cleaned reply and checks it. `correction` says why the last one was
@@ -188,8 +184,7 @@ impl<S: PageServices> PageRun<'_, S> {
         let reply = self.services.transcribe(self.source, correction).await?;
         self.ledger.add(CallStep::Transcribe, &reply.usage);
         let mut page = reply.value;
-        clean_reply(&mut page);
-        let checked = check_reply(&page, self.text_layer_words);
+        let checked = clean_and_check(&mut page, self.text_layer_words);
         Ok((page, checked))
     }
 
@@ -258,21 +253,22 @@ pub(super) async fn convert_page<S: PageServices>(
         text_layer_words: text_layer_word_count(&source.text_layer),
         ledger: Ledger::default(),
     };
-    let (tags, math_check) = run.tag_and_check_math().await?;
-    let mut reasons = route_reasons(&tags, math_check, run.text_layer_words);
+    let (tags, math) = run.tag_and_check_math().await?;
+    let mut reasons = route_reasons(&tags, math.check, run.text_layer_words);
     let written = run.write_by_route(&mut reasons).await?;
     let page = &written.page;
     let cut = cut_figures(&partial_folder, page).await;
 
     let reported_displayed_math =
-        tags.math_notation || matches!(math_check, MathCheck::Block | MathCheck::Both);
+        tags.math_notation || matches!(math.check, MathCheck::Block | MathCheck::Both);
     let has_formula = page
         .pieces
         .iter()
         .any(|piece| matches!(piece, TranscribedPiece::Formula { .. }));
     let conversion = Conversion {
         tags,
-        math_check,
+        math_check: math.check,
+        math_check_failure: math.failure,
         route: written.route,
         route_reasons: reasons,
         checks: Checks {

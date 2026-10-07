@@ -139,11 +139,11 @@ fn status_note(status: Option<u16>) -> String {
     status.map_or_else(String::new, |status| format!(" (status {status})"))
 }
 
-// SMELL: an empty `result` string counts as a reason, so the message ends with a bare colon.
 fn join_reasons(result: Option<&str>, errors: &[String]) -> String {
     let reasons: Vec<&str> = result
         .into_iter()
         .chain(errors.iter().map(String::as_str))
+        .filter(|reason| !reason.trim().is_empty())
         .collect();
     if reasons.is_empty() {
         "no reason given".to_owned()

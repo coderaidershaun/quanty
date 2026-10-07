@@ -15,6 +15,10 @@ const ITEM_ROW: &str =
     "an item with the concepts it mentions (an item id and a list of concept ids)";
 const INGESTED_ITEMS_ROW: &str = "a count of items or null (one whole number that is not negative)";
 
+/// What a statement returns for a document `d`, in the order that `document_from_row` reads it.
+/// Every statement that reads a document takes its columns from here.
+pub(super) const DOCUMENT_COLUMNS: &str = "d.id, d.title, d.book, d.author, d.tags";
+
 // SMELL: there is no index on the normalised name either, and an index could not cover the list
 // of aliases, so each lookup reads every concept node.
 const FIND_CONCEPT: &str = "\
@@ -31,10 +35,14 @@ LIMIT 1";
 // SMELL: this reads every document, and it is read by each ingest, each `tag` and each query that
 // has a label to match. Four documents are nothing, and a large library would need a read by id
 // and a read of the ids that carry given labels.
-const DOCUMENTS: &str = "\
+fn documents_statement() -> String {
+    format!(
+        "\
 MATCH (d:Document)
-RETURN d.id, d.title, d.book, d.author, d.tags
-ORDER BY d.id";
+RETURN {DOCUMENT_COLUMNS}
+ORDER BY d.id"
+    )
+}
 
 const INGESTED_ITEMS: &str = "\
 MATCH (d:Document {id: $id})
@@ -99,7 +107,9 @@ pub(super) async fn concept(
 
 pub(super) async fn documents(graph: &FalkorGraph) -> Result<Vec<DocumentNode>, GraphError> {
     let action = "read the documents";
-    let reply = graph.run(action, DOCUMENTS, Vec::new()).await?;
+    let reply = graph
+        .run(action, &documents_statement(), Vec::new())
+        .await?;
     reply
         .data
         .into_values_lossy()

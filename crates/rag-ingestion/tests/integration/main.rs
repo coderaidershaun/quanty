@@ -5,5 +5,6 @@ mod delete;
 mod health;
 mod image;
 mod ingest;
+mod items;
 mod pdf;
 mod support;

@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use ocr::{ConvertError, PageError};
 use rag_core::Config;
-use rag_ingestion::{PdfError, health};
+use rag_ingestion::{ConceptError, IngestError, PdfError, health};
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::IntoCallToolResult;
 use rmcp::handler::server::wrapper::Parameters;
@@ -124,9 +124,8 @@ impl ToolError {
                     matches!(**source, PageError::Service(_))
                 }
                 PdfError::Convert(_) => false,
-                // SMELL: every failure of the ingest step gets the hint, also the few that no
-                // service causes, such as a decision log that cannot be written.
-                _ => true,
+                PdfError::Graph(_) | PdfError::Store(_) => true,
+                PdfError::Ingest(error) => is_service_failure_of_the_ingest(error),
             },
             ToolError::Ingest(error) => matches!(
                 error,
@@ -137,6 +136,24 @@ impl ToolError {
                     | PdfIngestError::Labels(_)
             ),
         }
+    }
+}
+
+/// Whether a store or an outside service stopped the ingest of a converted chapter. A file that
+/// cannot be read or written, a reply that the model got wrong twice and stores that do not belong
+/// together are not that, and `health` would call every service ready.
+fn is_service_failure_of_the_ingest(error: &IngestError) -> bool {
+    match error {
+        IngestError::Embed(_) | IngestError::Store(_) | IngestError::Graph(_) => true,
+        IngestError::Concepts(error) => matches!(
+            error,
+            ConceptError::Stopped { .. }
+                | ConceptError::Embed { .. }
+                | ConceptError::ConceptStore(_)
+                | ConceptError::RelatedItems { .. }
+                | ConceptError::Graph(_)
+        ),
+        _ => false,
     }
 }
 

@@ -1,15 +1,15 @@
 //! The Qdrant collection that holds one point for each concept. Ingestion writes it and
 //! retrieval searches it, so both use this one definition of the collection.
 
+use qdrant_client::Payload;
 use qdrant_client::qdrant::{
     PointStruct, PointsIdsList, QueryPointsBuilder, ScoredPoint, SetPayloadPointsBuilder,
     UpsertPointsBuilder,
 };
-use qdrant_client::{Payload, Qdrant, QdrantError};
-use serde::Deserialize;
+use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
-use crate::qdrant::{build_client, ensure_collection, point_id_text, request_error};
+use crate::qdrant::{Collection, point_id_text};
 use crate::{ConceptId, Config, DocumentInput, Embedding, StoreError};
 
 const NAME_FIELD: &str = "name";
@@ -46,9 +46,7 @@ pub struct ConceptHit {
 /// Reads and writes the one collection of concepts that the config names. Its payload holds only
 /// the name and the aliases: the definition lives in the graph.
 pub struct ConceptStore {
-    client: Qdrant,
-    url: String,
-    collection: String,
+    collection: Collection,
 }
 
 impl ConceptStore {
@@ -59,14 +57,12 @@ impl ConceptStore {
     /// [`StoreError::Connect`] when the address in the config is not a valid URL.
     pub fn connect(config: &Config) -> Result<ConceptStore, StoreError> {
         Ok(ConceptStore {
-            client: build_client(config)?,
-            url: config.qdrant_url.clone(),
-            collection: config.concepts_collection.clone(),
+            collection: Collection::open(config, &config.concepts_collection)?,
         })
     }
 
     pub fn collection(&self) -> &str {
-        &self.collection
+        &self.collection.name
     }
 
     /// Creates the collection when it is missing: one unnamed vector of the embedder's length for
@@ -76,7 +72,7 @@ impl ConceptStore {
     /// # Errors
     /// [`StoreError::Request`] when Qdrant refuses or cannot be reached.
     pub async fn ensure_collection(&self) -> Result<(), StoreError> {
-        ensure_collection(&self.client, &self.url, &self.collection).await
+        self.collection.ensure().await
     }
 
     /// Stores the concept under its own id, replacing the point that has that id, and returns once
@@ -90,12 +86,13 @@ impl ConceptStore {
             concept.vector.clone(),
             concept_payload(&concept.name, &concept.aliases),
         );
-        self.client
+        self.collection
+            .client
             .upsert_points(
-                UpsertPointsBuilder::new(self.collection.as_str(), vec![point]).wait(true),
+                UpsertPointsBuilder::new(self.collection.name.as_str(), vec![point]).wait(true),
             )
             .await
-            .map_err(|source| self.request_error("store the concept", source))?;
+            .map_err(|source| self.collection.request_error("store the concept", source))?;
         Ok(())
     }
 
@@ -106,16 +103,20 @@ impl ConceptStore {
     /// [`StoreError::Request`] when Qdrant refuses or cannot be reached.
     pub async fn set_aliases(&self, id: ConceptId, aliases: &[String]) -> Result<(), StoreError> {
         let fields = Map::from_iter([(ALIASES_FIELD.to_owned(), Value::from(aliases))]);
-        self.client
+        self.collection
+            .client
             .set_payload(
-                SetPayloadPointsBuilder::new(self.collection.as_str(), Payload::from(fields))
+                SetPayloadPointsBuilder::new(self.collection.name.as_str(), Payload::from(fields))
                     .points_selector(PointsIdsList {
                         ids: vec![id.to_string().into()],
                     })
                     .wait(true),
             )
             .await
-            .map_err(|source| self.request_error("set the aliases of the concept", source))?;
+            .map_err(|source| {
+                self.collection
+                    .request_error("set the aliases of the concept", source)
+            })?;
         Ok(())
     }
 
@@ -131,24 +132,21 @@ impl ConceptStore {
         vector: Embedding,
         limit: usize,
     ) -> Result<Vec<ConceptHit>, StoreError> {
-        let query = QueryPointsBuilder::new(self.collection.as_str())
+        let query = QueryPointsBuilder::new(self.collection.name.as_str())
             .query(vector)
             .limit(limit as u64)
             .with_payload(true);
         let reply = self
+            .collection
             .client
             .query(query)
             .await
-            .map_err(|source| self.request_error("search for concepts", source))?;
+            .map_err(|source| self.collection.request_error("search for concepts", source))?;
         reply
             .result
             .into_iter()
-            .map(|point| concept_hit(&self.collection, point))
+            .map(|point| concept_hit(&self.collection.name, point))
             .collect()
-    }
-
-    fn request_error(&self, action: &'static str, source: QdrantError) -> StoreError {
-        request_error(&self.url, &self.collection, action, source)
     }
 }
 
@@ -157,14 +155,6 @@ fn concept_payload(name: &str, aliases: &[String]) -> Payload {
         (NAME_FIELD.to_owned(), Value::from(name)),
         (ALIASES_FIELD.to_owned(), Value::from(aliases)),
     ]))
-}
-
-// SMELL: the field names of this struct repeat `NAME_FIELD` and `ALIASES_FIELD`, and nothing keeps
-// them the same. If one side is renamed alone, no stored concept can be read.
-#[derive(Deserialize)]
-struct StoredConcept {
-    name: String,
-    aliases: Vec<String>,
 }
 
 fn concept_hit(collection: &str, point: ScoredPoint) -> Result<ConceptHit, StoreError> {
@@ -176,18 +166,26 @@ fn concept_hit(collection: &str, point: ScoredPoint) -> Result<ConceptHit, Store
             point: id_text,
             source,
         })?;
-    let json = Value::from(Payload::from(point.payload));
-    let stored = serde_json::from_value::<StoredConcept>(json).map_err(|source| {
-        StoreError::StoredConceptPayload {
-            id,
-            collection: collection.to_owned(),
-            source,
-        }
-    })?;
+    let mut payload = Value::from(Payload::from(point.payload));
+    let not_a_concept = |source| StoreError::StoredConceptPayload {
+        id,
+        collection: collection.to_owned(),
+        source,
+    };
     Ok(ConceptHit {
         id,
         score: point.score,
-        name: stored.name,
-        aliases: stored.aliases,
+        name: stored_field(&mut payload, NAME_FIELD).map_err(not_a_concept)?,
+        aliases: stored_field(&mut payload, ALIASES_FIELD).map_err(not_a_concept)?,
     })
+}
+
+/// Takes one field out of a stored payload. A field that is missing is read as null, so it fails
+/// in the same way as a field of the wrong type.
+fn stored_field<T: DeserializeOwned>(
+    payload: &mut Value,
+    field: &str,
+) -> Result<T, serde_json::Error> {
+    let value = payload.get_mut(field).map(Value::take).unwrap_or_default();
+    serde_json::from_value(value)
 }

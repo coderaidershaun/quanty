@@ -33,52 +33,6 @@ pub struct PageBox {
     pub bottom: i32,
 }
 
-/// Added to every side of the rectangle that is cut, in thousandths of the page. It is under the
-/// narrowest gap measured between a figure and the text next to it, and it forgives an edge a
-/// little too tight.
-const FIGURE_PADDING: i32 = 15;
-/// A rectangle with a side shorter than this, in thousandths of the page, cannot be a figure. It
-/// catches a reply written as fractions of the page.
-pub(crate) const MIN_FIGURE_SIDE: i32 = 20;
-
-// SMELL: the two rules below and the two numbers above are the converter's. Nothing that reads a
-// saved chapter uses them. They sit with the saved shapes only because they are written as
-// methods of `PageBox`.
-impl PageBox {
-    /// The first reason the rectangle is unusable, checked in a fixed order, or `None`.
-    pub(crate) fn problem(&self) -> Option<&'static str> {
-        let sides = [self.left, self.top, self.right, self.bottom];
-        if sides.iter().any(|side| !(0..=1000).contains(side)) {
-            return Some("a side is not between 0 and 1000");
-        }
-        if self.left >= self.right {
-            return Some("left is not less than right");
-        }
-        if self.top >= self.bottom {
-            return Some("top is not less than bottom");
-        }
-        if self.right <= 100 && self.bottom <= 100 {
-            return Some(
-                "every number is 100 or less, which reads as percentages or fractions, not thousandths",
-            );
-        }
-        if self.right - self.left < MIN_FIGURE_SIDE || self.bottom - self.top < MIN_FIGURE_SIDE {
-            return Some("it is too small to be a figure");
-        }
-        None
-    }
-
-    /// Grown by [`FIGURE_PADDING`] on every side and kept inside the page.
-    pub(crate) fn padded(&self) -> PageBox {
-        PageBox {
-            left: (self.left - FIGURE_PADDING).max(0),
-            top: (self.top - FIGURE_PADDING).max(0),
-            right: (self.right + FIGURE_PADDING).min(1000),
-            bottom: (self.bottom + FIGURE_PADDING).min(1000),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ImageShows {

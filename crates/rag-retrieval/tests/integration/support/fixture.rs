@@ -11,9 +11,37 @@ use rag_core::{
 };
 use rag_ingestion::Stores;
 use rag_ingestion::testing::{StandInEmbedder, first_axis, vector_at};
+use rag_retrieval::{Retriever, SearchResults};
 
 /// The question that every item and concept of a [`Fixture`] is placed against.
 pub const QUESTION: &str = "How is the price of an option found?";
+
+/// How far the score that Qdrant gives an item may be from the cosine the item was placed at.
+pub const SCORE_ERROR: f32 = 0.001;
+
+/// Labels that name nothing but these tags.
+pub fn tagged(tags: &[&str]) -> DocumentLabels {
+    DocumentLabels {
+        tags: tags.iter().map(|tag| tag.parse().unwrap()).collect(),
+        ..DocumentLabels::default()
+    }
+}
+
+pub async fn found_among(
+    retriever: &Retriever<StandInEmbedder, FalkorGraph>,
+    kind: Option<ItemKind>,
+    wanted: &DocumentLabels,
+) -> SearchResults {
+    retriever.search(QUESTION, kind, wanted).await.unwrap()
+}
+
+pub fn texts_of(results: &SearchResults) -> Vec<&str> {
+    results
+        .hits
+        .iter()
+        .map(|hit| hit.item.payload.text.as_str())
+        .collect()
+}
 
 /// An item to put in the stores, and how near to the question it is.
 pub struct Placed {

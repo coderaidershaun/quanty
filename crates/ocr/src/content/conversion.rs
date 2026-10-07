@@ -10,6 +10,10 @@ use serde::{Deserialize, Serialize};
 pub struct Conversion {
     pub tags: PageCategories,
     pub math_check: MathCheck,
+    /// Why the math check gave no answer: the error and its causes, cut short. `None` when it
+    /// answered.
+    #[serde(default)]
+    pub math_check_failure: Option<String>,
     pub route: Route,
     pub route_reasons: Vec<RouteReason>,
     pub checks: Checks,

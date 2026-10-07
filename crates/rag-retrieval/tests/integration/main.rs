@@ -5,3 +5,4 @@ mod answer;
 mod live_answer;
 mod search;
 mod support;
+mod traced_search;

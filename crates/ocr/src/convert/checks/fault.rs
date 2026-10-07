@@ -2,11 +2,10 @@
 
 use std::fmt;
 
-use crate::content::MIN_FIGURE_SIDE;
 use crate::convert::reply::{TranscribedPage, TranscribedPiece};
+use crate::convert::usable_box::MIN_FIGURE_SIDE;
 
 pub(super) const MIN_FIGURE_EXPLANATION_WORDS: usize = 60;
-pub(super) const ALIGNED_WITHOUT_ROW_BREAK: &str = "aligned with no row break";
 
 /// Names a piece by number, kind, and label or first six words. The second try is a fresh session
 /// that never saw the first reply, so a number alone would mean nothing to it.
@@ -76,12 +75,25 @@ pub enum ReplyFault {
         field: &'static str,
     },
 
-    #[error("{}", lost_backslash_sentence(.piece.as_ref(), .field, .seen))]
+    #[error(
+        "{} holds {seen}: a LaTeX command lost its backslash, or LaTeX was written over several lines, or a tab was used for spacing",
+        location(.piece.as_ref(), .field)
+    )]
     LostBackslash {
         /// `None` when the string is a page field.
         piece: Option<PieceRef>,
         field: &'static str,
         seen: &'static str,
+    },
+
+    #[error(
+        "{} uses aligned but has no row break: a row break lost a backslash, or the formula is one line and needs no aligned",
+        location(.piece.as_ref(), .field)
+    )]
+    AlignedWithoutRowBreak {
+        /// `None` when the string is a page field.
+        piece: Option<PieceRef>,
+        field: &'static str,
     },
 
     #[error("{} holds {seen}", location(Some(.piece), .field))]
@@ -113,8 +125,15 @@ pub enum ReplyFault {
         seen: &'static str,
     },
 
-    #[error("{}", mid_sentence_sentence(.flag))]
-    MidSentenceFlag { flag: &'static str },
+    #[error(
+        "starts-mid-sentence is true, but the first piece that is not a figure, table or footnote is not a text piece; make it false unless the page really begins in the middle of a sentence in a text piece"
+    )]
+    StartsMidSentenceFlag,
+
+    #[error(
+        "ends-mid-sentence is true, but the last piece that is not a figure, table or footnote is not a text piece; make it false unless the page really ends in the middle of a sentence in a text piece"
+    )]
+    EndsMidSentenceFlag,
 
     #[error(
         "{piece} holds {seen} inside its text; a displayed formula must be a formula piece of its own, with its label and statement"
@@ -137,31 +156,4 @@ fn location(piece: Option<&PieceRef>, field: &str) -> String {
         Some(piece) => format!("the {field} of {piece}"),
         None => format!("the page's {field}"),
     }
-}
-
-// SMELL: which sentence a fault gets is decided by comparing text: `seen` against a constant
-// here, and the flag's name by how it starts in the function below. A misspelt string still
-// compiles and picks the wrong sentence.
-fn lost_backslash_sentence(piece: Option<&PieceRef>, field: &str, seen: &str) -> String {
-    let location = location(piece, field);
-    if seen == ALIGNED_WITHOUT_ROW_BREAK {
-        format!(
-            "{location} uses aligned but has no row break: a row break lost a backslash, or the formula is one line and needs no aligned"
-        )
-    } else {
-        format!(
-            "{location} holds {seen}: a LaTeX command lost its backslash, or LaTeX was written over several lines, or a tab was used for spacing"
-        )
-    }
-}
-
-fn mid_sentence_sentence(flag: &str) -> String {
-    let (edge, verb) = if flag.starts_with("starts") {
-        ("first", "begins")
-    } else {
-        ("last", "ends")
-    };
-    format!(
-        "{flag} is true, but the {edge} piece that is not a figure, table or footnote is not a text piece; make it false unless the page really {verb} in the middle of a sentence in a text piece"
-    )
 }

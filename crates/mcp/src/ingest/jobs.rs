@@ -2,6 +2,7 @@
 //! its report: only the tasks of the job write it, and any number of callers read it. One job may
 //! run at a time.
 
+use std::collections::VecDeque;
 use std::sync::{Mutex, PoisonError};
 
 use rag_ingestion::PdfOutcome;
@@ -109,18 +110,21 @@ pub(super) struct Started {
     pub(super) watcher: watch::Receiver<IngestReport>,
 }
 
-// SMELL: a job is never removed from the list, so a server that runs for months keeps one small
-// report for each PDF it was sent.
+/// How many jobs the list keeps. Without a limit, a server that runs for months would keep one
+/// report for each PDF it was ever sent.
+pub(super) const KEPT_JOBS: usize = 100;
+
+/// The newest jobs, oldest first.
 #[derive(Default)]
 pub(super) struct Jobs {
-    list: Mutex<Vec<(Uuid, watch::Receiver<IngestReport>)>>,
+    list: Mutex<VecDeque<(Uuid, watch::Receiver<IngestReport>)>>,
 }
 
 impl Jobs {
-    /// Makes a job, unless one is running. The check and the new job are in one lock with no
-    /// `.await` between them, so two calls at the same moment cannot both start. It holds in one
-    /// server only: a second server, or `rag-ingest pdf`, is not stopped from taking the same
-    /// chapter at the same time.
+    /// Makes a job, unless one is running, and forgets the oldest job when the list is full. The
+    /// check and the new job are in one lock with no `.await` between them, so two calls at the
+    /// same moment cannot both start. It holds in one server only: a second server, or
+    /// `rag-ingest pdf`, is not stopped from taking the same chapter at the same time.
     pub(super) fn start(&self, book: &str, file: &str) -> Result<Started, PdfIngestError> {
         let mut list = self.list.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some((running, _)) = list.iter().find(|(_, watcher)| is_running(watcher)) {
@@ -128,9 +132,13 @@ impl Jobs {
                 job_id: running.to_string(),
             });
         }
+        // No job is running here, so the job that is forgotten has ended.
+        if list.len() >= KEPT_JOBS {
+            list.pop_front();
+        }
         let id = Uuid::new_v4();
         let (report, watcher) = watch::channel(IngestReport::running(id, book, file));
-        list.push((id, watcher.clone()));
+        list.push_back((id, watcher.clone()));
         Ok(Started { report, watcher })
     }
 

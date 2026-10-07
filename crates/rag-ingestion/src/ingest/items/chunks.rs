@@ -17,8 +17,6 @@ fn estimated_tokens(text: &str) -> usize {
 
 /// The labels of the figures, tables and equations that a text piece or a footnote points at, as
 /// printed. A footnote marker is not one of them: it points at a note, and a note is not an item.
-// SMELL: no sample chapter has a footnote that cites a figure, a table or an equation, so the cites
-// of a footnote are read here, but no test has seen one kept.
 fn cited_labels(piece: &ChapterPiece) -> impl Iterator<Item = &str> {
     let cites: &[Cite] = match &piece.detail {
         PieceDetail::Text { cites } | PieceDetail::Footnote { cites, .. } => cites,

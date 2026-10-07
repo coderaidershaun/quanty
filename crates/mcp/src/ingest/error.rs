@@ -9,6 +9,8 @@ use rag_core::{EmbedError, EmptyTag, StoreError};
 use rag_ingestion::{PdfError, RelabelError};
 use tokio::task::JoinError;
 
+use super::jobs::KEPT_JOBS;
+
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum PdfIngestError {
     #[error(
@@ -91,7 +93,7 @@ pub(crate) enum PdfIngestError {
     Busy { job_id: String },
 
     #[error(
-        "no ingest job has the id {job_id:?}; job ids are forgotten when the server restarts, so send the PDF again: a PDF that is ingested is not ingested twice"
+        "no ingest job has the id {job_id:?}; job ids are forgotten when the server restarts, and the server keeps only its last {KEPT_JOBS} jobs, so send the PDF again: a PDF that is ingested is not ingested twice"
     )]
     UnknownJob { job_id: String },
 

@@ -81,10 +81,13 @@ impl<S: Services> Ingest<S> {
         args: IngestPdfArgs,
         error_text: fn(PdfIngestError) -> String,
     ) -> Result<IngestReport, PdfIngestError> {
-        // SMELL: a PDF sent as base64 is decoded here, and then saved by the job, on threads of
-        // the async runtime. Each step holds its thread for as long as a PDF of the size limit
-        // takes.
-        let checked = pdf::check(args, &self.config, self.max_pdf_bytes)?;
+        let config = self.config.clone();
+        let max_pdf_bytes = self.max_pdf_bytes;
+        // The check decodes a PDF that was sent as base64, which can be megabytes of text, so it
+        // runs on a thread that may block and the other calls are not held up.
+        let checked = tokio::task::spawn_blocking(move || pdf::check(args, &config, max_pdf_bytes))
+            .await
+            .map_err(PdfIngestError::Stopped)??;
         let started = self.jobs.start(&checked.book, &checked.file_name)?;
         self.spawn(checked, started.report, error_text);
         let mut watcher = started.watcher;

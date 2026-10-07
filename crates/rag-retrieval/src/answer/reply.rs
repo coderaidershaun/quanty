@@ -147,18 +147,36 @@ fn one_line(text: &str) -> Option<String> {
 /// `\theta` written that way as a tab and `heta`, and does the same with a command that starts
 /// with `b`, `f` or `r`. A sentence holds none of those four control characters for any other
 /// reason.
-// SMELL: a command that starts with `n`, such as `\nu`, arrives as a line break and is not put
-// back, because a line break can also be one that the model meant.
+///
+/// A command that starts with `n`, such as `\nu`, arrives as a line break and `u`. A line break
+/// can also be one that the model meant, so it is put back only between `\(` and `\)` and before
+/// a letter: the prompt allows no line break between those marks.
 fn with_backslashes_restored(text: &str) -> String {
     let mut restored = String::with_capacity(text.len());
-    for character in text.chars() {
+    let mut is_in_math = false;
+    let mut follows_backslash = false;
+    let mut characters = text.chars().peekable();
+    while let Some(character) = characters.next() {
         match character {
             '\t' => restored.push_str("\\t"),
             '\u{8}' => restored.push_str("\\b"),
             '\u{c}' => restored.push_str("\\f"),
             '\r' => restored.push_str("\\r"),
+            '\n' if is_in_math && characters.peek().is_some_and(char::is_ascii_alphabetic) => {
+                restored.push_str("\\n");
+            }
             other => restored.push(other),
         }
+        // A backslash and the character after it are read as one, so the `(` of `\\(` opens
+        // nothing.
+        if follows_backslash {
+            match character {
+                '(' => is_in_math = true,
+                ')' => is_in_math = false,
+                _ => {}
+            }
+        }
+        follows_backslash = character == '\\' && !follows_backslash;
     }
     restored
 }

@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::checks::{ReplyFault, check_reply, clean_reply};
+use super::checks::{ReplyFault, clean_and_check};
 use super::page::call_record;
 use super::reply::{TranscribedPage, TranscribedPiece};
 use super::save::figure_file;
@@ -140,8 +140,7 @@ struct LoneFigure {
 /// here, because nothing is cut out, and pieces of other kinds are left out.
 fn only_figure(answer: Answer<TranscribedPage>) -> Result<LoneFigure, ReplyFault> {
     let mut page = answer.value;
-    clean_reply(&mut page);
-    match check_reply(&page, 0) {
+    match clean_and_check(&mut page, 0) {
         Ok(()) | Err(ReplyFault::BadFigureBounds { .. }) => {}
         Err(fault) => return Err(fault),
     }

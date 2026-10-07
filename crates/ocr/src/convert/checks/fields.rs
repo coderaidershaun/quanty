@@ -1,6 +1,6 @@
 //! Lists every string of a reply with where it sits, and the rules that read those strings.
 
-use super::fault::{ALIGNED_WITHOUT_ROW_BREAK, PieceRef, ReplyFault};
+use super::fault::{PieceRef, ReplyFault};
 use super::latex;
 use crate::convert::reply::{CitedLabel, TranscribedPage, TranscribedPiece};
 
@@ -177,7 +177,10 @@ fn lost_backslash(page: &TranscribedPage, fields: &[Field<'_>]) -> Result<(), Re
                 return Err(fault("a line break inside LaTeX"));
             }
             Role::Formula if latex::aligned_without_row_break(field.text) => {
-                return Err(fault(ALIGNED_WITHOUT_ROW_BREAK));
+                return Err(ReplyFault::AlignedWithoutRowBreak {
+                    piece,
+                    field: field.name,
+                });
             }
             Role::Mixed => {
                 // A span that does not close is reported by the balance rule.

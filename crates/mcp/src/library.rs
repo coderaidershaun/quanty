@@ -28,6 +28,10 @@ pub(crate) struct ReadPageArgs {
 pub(crate) struct Documents {
     /// Sorted by title.
     documents: Vec<DocumentView>,
+    /// One line for each converted chapter under the content folder that cannot be read, with
+    /// the file that is at fault. The document of such a chapter shows no chapter above, and
+    /// `read_page` cannot read it. Empty when every chapter can be read.
+    unreadable_chapters: Vec<String>,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -112,6 +116,19 @@ pub(crate) enum LibraryError {
     )]
     UnknownDocument { id: DocId, folder: PathBuf },
 
+    /// A chapter that cannot be read has no document id to compare, so the document that was
+    /// asked for may be one of these.
+    #[error(
+        "no converted chapter that can be read under {} has the document id {id}; the document may be one of the chapters that cannot be read: {}; call `list_documents` to see the document ids",
+        folder.display(),
+        unreadable.join("; ")
+    )]
+    UnreadableChapters {
+        id: DocId,
+        folder: PathBuf,
+        unreadable: Vec<String>,
+    },
+
     #[error("could not read the converted chapter")]
     Chapter(#[from] ReadChapterError),
 
@@ -120,16 +137,13 @@ pub(crate) enum LibraryError {
 }
 
 /// Every document of the graph with its labels, and its chapter when that is under the content
-/// folder.
+/// folder. A chapter that cannot be read is named, and does not hide the others.
 ///
 /// # Errors
 /// The graph that is not ready, or a content folder that cannot be listed.
 pub(crate) async fn list_documents(config: &Config) -> Result<Documents, LibraryError> {
     let graph = FalkorGraph::connect(config).await?;
     let nodes = graph.documents().await?;
-    // SMELL: a chapter whose `chapter.json` cannot be read is passed over without a word, here
-    // and in `read_page`. Its document then shows no chapter, and `read_page` says that it has
-    // no converted chapter.
     let catalogue = Catalogue::read(&config.content_folder)?;
     let chapters: HashMap<DocId, &ChapterEntry> = catalogue
         .chapters
@@ -153,14 +167,17 @@ pub(crate) async fn list_documents(config: &Config) -> Result<Documents, Library
         })
         .collect();
     documents.sort_by(|a, b| a.title.cmp(&b.title));
-    Ok(Documents { documents })
+    Ok(Documents {
+        documents,
+        unreadable_chapters: unreadable_chapters(&catalogue),
+    })
 }
 
 /// The pieces of one page of the chapter that the document id names. It needs no store.
 ///
 /// # Errors
-/// A bad argument, a document that no converted chapter has, a page that the chapter does not
-/// have, or a chapter that cannot be read.
+/// A bad argument, a document that no converted chapter has or whose chapter may be one that
+/// cannot be read, a page that the chapter does not have, or a chapter that cannot be read.
 pub(crate) fn read_page(config: &Config, args: ReadPageArgs) -> Result<PageView, LibraryError> {
     let id: DocId = args.document_id.trim().parse()?;
     if args.page == 0 {
@@ -171,9 +188,17 @@ pub(crate) fn read_page(config: &Config, args: ReadPageArgs) -> Result<PageView,
         .chapters
         .iter()
         .find(|entry| document_of(entry) == id)
-        .ok_or_else(|| LibraryError::UnknownDocument {
-            id,
-            folder: config.content_folder.clone(),
+        .ok_or_else(|| {
+            let folder = config.content_folder.clone();
+            if catalogue.unreadable.is_empty() {
+                LibraryError::UnknownDocument { id, folder }
+            } else {
+                LibraryError::UnreadableChapters {
+                    id,
+                    folder,
+                    unreadable: unreadable_chapters(&catalogue),
+                }
+            }
         })?;
     if args.page > entry.index.page_count {
         return Err(LibraryError::PageOutOfRange {
@@ -222,6 +247,15 @@ impl From<&ChapterPiece> for PieceView {
                 .map(|picture| picture.path.display().to_string()),
         }
     }
+}
+
+/// One line for each chapter of the catalogue that cannot be read. The line names the file.
+fn unreadable_chapters(catalogue: &Catalogue) -> Vec<String> {
+    catalogue
+        .unreadable
+        .iter()
+        .map(ToString::to_string)
+        .collect()
 }
 
 /// The document that a converted chapter is stored as: the same PDF always gives the same id.

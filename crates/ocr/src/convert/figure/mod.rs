@@ -5,14 +5,16 @@ mod sheet;
 
 use std::path::Path;
 
-use super::checks::piece_strings;
+use super::checks::{piece_strings, words};
 use super::poppler::{self, PopplerError};
 use super::reply::{TranscribedPage, TranscribedPiece};
+use super::usable_box::UsableBox;
 use crate::content::{
     FigureImage, ImageShows, PAGE_IMAGE_FILE, PAGE_PDF_FILE, WholePageFigure,
     figure_image_file_name,
 };
 
+use refine::PrintedWords;
 use sheet::{Sheet, read_sheet};
 
 #[derive(Debug, Default)]
@@ -43,9 +45,9 @@ pub(super) async fn cut_figures(page_folder: &Path, page: &TranscribedPage) -> C
     let mut usable = Vec::new();
     for (index, piece) in page.pieces.iter().enumerate() {
         if let TranscribedPiece::Figure { number, bounds, .. } = piece {
-            match bounds.problem() {
-                Some(seen) => cut.fall_back(*number, seen.to_owned()),
-                None => usable.push((index, *number, *bounds)),
+            match UsableBox::new(*bounds) {
+                Ok(bounds) => usable.push((index, *number, bounds)),
+                Err(seen) => cut.fall_back(*number, seen.to_owned()),
             }
         }
     }
@@ -53,8 +55,8 @@ pub(super) async fn cut_figures(page_folder: &Path, page: &TranscribedPage) -> C
         match read_sheet(page_folder).await {
             Ok(sheet) => {
                 for (index, number, bounds) in usable {
-                    let (own, other) = strings_around(page, index);
-                    let rectangle = refine::cut_rectangle(bounds, &own, &other, &sheet.lines);
+                    let printed = words_around(page, index);
+                    let rectangle = refine::cut_rectangle(bounds, &printed, &sheet.lines);
                     match draw(page_folder, number, &sheet, &rectangle).await {
                         Ok(image) => cut.images.push((number, image)),
                         Err(error) => cut.fall_back(number, without_folder(&error, page_folder)),
@@ -74,8 +76,9 @@ pub(super) async fn cut_figures(page_folder: &Path, page: &TranscribedPage) -> C
     cut
 }
 
-/// The strings the figure at `index` printed, then the strings of the rest of the page.
-fn strings_around(page: &TranscribedPage, index: usize) -> (Vec<String>, Vec<String>) {
+/// The words of the strings the figure at `index` printed, and of the strings of the rest of the
+/// page.
+fn words_around(page: &TranscribedPage, index: usize) -> PrintedWords {
     let mut other: Vec<String> = [&page.printed_page_number, &page.running_header]
         .into_iter()
         .flatten()
@@ -86,7 +89,11 @@ fn strings_around(page: &TranscribedPage, index: usize) -> (Vec<String>, Vec<Str
             other.extend(printed_strings(piece));
         }
     }
-    (printed_strings(&page.pieces[index]), other)
+    let words_of = |strings: Vec<String>| strings.iter().map(|text| words(text)).collect();
+    PrintedWords {
+        own: words_of(printed_strings(&page.pieces[index])),
+        other: words_of(other),
+    }
 }
 
 /// A figure's label and caption are also given as one string, because they are printed on one
@@ -129,7 +136,7 @@ async fn draw(
     Ok(FigureImage {
         file,
         shows: ImageShows::Figure,
-        cut: Some(cut.area),
+        cut: Some(cut.area.page_box()),
         holds_body_text: cut.holds_body_text,
         unchecked: cut.unchecked,
     })

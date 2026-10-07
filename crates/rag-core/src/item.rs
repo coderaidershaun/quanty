@@ -86,27 +86,36 @@ impl FromStr for ItemId {
     }
 }
 
-/// The four things a chapter is stored as. A heading is not one of them: it is context.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ItemKind {
-    Chunk,
-    Formula,
-    Figure,
-    Table,
+/// Declares an enum together with `ALL`, the list of its kinds. Both are written from the one
+/// list of names, so a kind cannot be in the enum and missing from `ALL`.
+macro_rules! enum_with_all {
+    (
+        $(#[$attribute:meta])*
+        pub enum $name:ident { $($kind:ident),+ $(,)? }
+    ) => {
+        $(#[$attribute])*
+        pub enum $name { $($kind),+ }
+
+        impl $name {
+            /// Every kind, in the order of the enum.
+            pub const ALL: [$name; [$($name::$kind),+].len()] = [$($name::$kind),+];
+        }
+    };
+}
+
+enum_with_all! {
+    /// The four things a chapter is stored as. A heading is not one of them: it is context.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "lowercase")]
+    pub enum ItemKind {
+        Chunk,
+        Formula,
+        Figure,
+        Table,
+    }
 }
 
 impl ItemKind {
-    /// Every kind, in the order of the enum.
-    // SMELL: a kind that is added to the enum must be added to this list by hand. Nothing checks
-    // it, and a kind that is missing here is refused as unknown.
-    pub const ALL: [ItemKind; 4] = [
-        ItemKind::Chunk,
-        ItemKind::Formula,
-        ItemKind::Figure,
-        ItemKind::Table,
-    ];
-
     /// The name stored in the payload and used to make the item's identifier.
     pub fn as_str(self) -> &'static str {
         match self {

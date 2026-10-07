@@ -3,7 +3,9 @@
 
 mod claude_cli;
 mod claude_live;
+mod concept_store;
 mod gemini_live;
 mod gemini_stub;
 mod gemini_wire;
 mod item_store;
+mod throwaway;

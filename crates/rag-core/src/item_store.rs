@@ -2,14 +2,15 @@
 //! for each point. Ingestion writes it and retrieval reads it, so both use this one definition
 //! of the collection.
 
+use qdrant_client::Payload;
 use qdrant_client::qdrant::{
-    Condition, CountPointsBuilder, DeletePayloadPointsBuilder, DeletePointsBuilder, Filter,
-    PointStruct, QueryPointsBuilder, ScoredPoint, SetPayloadPointsBuilder, UpsertPointsBuilder,
+    Condition, CountPointsBuilder, CreateFieldIndexCollectionBuilder, DeletePayloadPointsBuilder,
+    DeletePointsBuilder, FieldType, Filter, PointStruct, QueryPointsBuilder, ScoredPoint,
+    SetPayloadPointsBuilder, UpsertPointsBuilder,
 };
-use qdrant_client::{Payload, Qdrant, QdrantError};
 use serde_json::{Map, Value};
 
-use crate::qdrant::{build_client, ensure_collection, point_id_text, request_error};
+use crate::qdrant::{Collection, point_id_text};
 use crate::{
     Config, DocId, DocumentLabels, Embedding, ItemId, ItemKind, ItemPayload, StoreError, Tag,
 };
@@ -27,9 +28,7 @@ pub struct ItemPoint {
 
 /// Reads and writes the one collection that the config names.
 pub struct ItemStore {
-    client: Qdrant,
-    url: String,
-    collection: String,
+    collection: Collection,
 }
 
 impl ItemStore {
@@ -40,37 +39,52 @@ impl ItemStore {
     /// [`StoreError::Connect`] when the address in the config is not a valid URL.
     pub fn connect(config: &Config) -> Result<ItemStore, StoreError> {
         Ok(ItemStore {
-            client: build_client(config)?,
-            url: config.qdrant_url.clone(),
-            collection: config.items_collection.clone(),
+            collection: Collection::open(config, &config.items_collection)?,
         })
     }
 
     pub fn collection(&self) -> &str {
-        &self.collection
+        &self.collection.name
     }
 
     /// # Errors
     /// [`StoreError::Unreachable`] when Qdrant does not answer a health check.
     pub async fn ping(&self) -> Result<(), StoreError> {
-        self.client
+        self.collection
+            .client
             .health_check()
             .await
             .map(|_| ())
             .map_err(|source| StoreError::Unreachable {
-                url: self.url.clone(),
+                url: self.collection.url.clone(),
                 source: Box::new(source),
             })
     }
 
     /// Creates the collection when it is missing: one unnamed vector of the embedder's length for
-    /// each point, compared by cosine distance. An existing collection is left as it is, and is
-    /// not checked to have that shape.
+    /// each point, compared by cosine distance. An existing collection keeps its points and its
+    /// shape, which is not checked. A collection that has no index on the kind of its items gets
+    /// one, so that a search by kind does not read the kind of every point it visits.
     ///
     /// # Errors
     /// [`StoreError::Request`] when Qdrant refuses or cannot be reached.
     pub async fn ensure_collection(&self) -> Result<(), StoreError> {
-        ensure_collection(&self.client, &self.url, &self.collection).await
+        self.collection.ensure().await?;
+        let index = CreateFieldIndexCollectionBuilder::new(
+            self.collection.name.as_str(),
+            KIND_FIELD,
+            FieldType::Keyword,
+        )
+        .wait(true);
+        self.collection
+            .client
+            .create_field_index(index)
+            .await
+            .map_err(|source| {
+                self.collection
+                    .request_error("index the kind of the items", source)
+            })?;
+        Ok(())
     }
 
     /// Whether the collection is there. It never creates it.
@@ -78,10 +92,7 @@ impl ItemStore {
     /// # Errors
     /// [`StoreError::Request`] when Qdrant refuses or cannot be reached.
     pub async fn collection_exists(&self) -> Result<bool, StoreError> {
-        self.client
-            .collection_exists(self.collection.as_str())
-            .await
-            .map_err(|source| self.request_error("look for the collection", source))
+        self.collection.exists().await
     }
 
     /// Stores the points, replacing any point that has the same identifier, and returns once
@@ -96,12 +107,13 @@ impl ItemStore {
                 .iter()
                 .map(point_struct)
                 .collect::<Result<Vec<_>, _>>()?;
-            self.client
+            self.collection
+                .client
                 .upsert_points(
-                    UpsertPointsBuilder::new(self.collection.as_str(), structs).wait(true),
+                    UpsertPointsBuilder::new(self.collection.name.as_str(), structs).wait(true),
                 )
                 .await
-                .map_err(|source| self.request_error("store points", source))?;
+                .map_err(|source| self.collection.request_error("store points", source))?;
         }
         Ok(())
     }
@@ -112,10 +124,11 @@ impl ItemStore {
     /// [`StoreError::Request`] when Qdrant refuses or cannot be reached.
     pub async fn count(&self) -> Result<u64, StoreError> {
         let reply = self
+            .collection
             .client
-            .count(CountPointsBuilder::new(self.collection.as_str()).exact(true))
+            .count(CountPointsBuilder::new(self.collection.name.as_str()).exact(true))
             .await
-            .map_err(|source| self.request_error("count points", source))?;
+            .map_err(|source| self.collection.request_error("count points", source))?;
         Ok(reply.result.map_or(0, |result| result.count))
     }
 
@@ -125,14 +138,18 @@ impl ItemStore {
     /// [`StoreError::Request`] when Qdrant refuses, cannot be reached, or has no such collection.
     pub async fn count_document(&self, document: DocId) -> Result<u64, StoreError> {
         let reply = self
+            .collection
             .client
             .count(
-                CountPointsBuilder::new(self.collection.as_str())
+                CountPointsBuilder::new(self.collection.name.as_str())
                     .filter(points_of(document))
                     .exact(true),
             )
             .await
-            .map_err(|source| self.request_error("count the points of the document", source))?;
+            .map_err(|source| {
+                self.collection
+                    .request_error("count the points of the document", source)
+            })?;
         Ok(reply.result.map_or(0, |result| result.count))
     }
 
@@ -148,14 +165,18 @@ impl ItemStore {
         // program stores between the two are removed but not counted, and the number returned
         // is then too low.
         let count = self.count_document(document).await?;
-        self.client
+        self.collection
+            .client
             .delete_points(
-                DeletePointsBuilder::new(self.collection.as_str())
+                DeletePointsBuilder::new(self.collection.name.as_str())
                     .points(points_of(document))
                     .wait(true),
             )
             .await
-            .map_err(|source| self.request_error("delete the points of the document", source))?;
+            .map_err(|source| {
+                self.collection
+                    .request_error("delete the points of the document", source)
+            })?;
         Ok(count)
     }
 
@@ -187,30 +208,37 @@ impl ItemStore {
             }
         }
         if !left_out.is_empty() {
-            self.client
+            self.collection
+                .client
                 .delete_payload(
-                    DeletePayloadPointsBuilder::new(self.collection.as_str(), left_out)
+                    DeletePayloadPointsBuilder::new(self.collection.name.as_str(), left_out)
                         .points_selector(points_of(document))
                         .wait(true),
                 )
                 .await
-                .map_err(|source| self.request_error("remove labels from the document", source))?;
+                .map_err(|source| {
+                    self.collection
+                        .request_error("remove labels from the document", source)
+                })?;
         }
         if !given.is_empty() {
-            self.client
+            self.collection
+                .client
                 .set_payload(
-                    SetPayloadPointsBuilder::new(self.collection.as_str(), Payload::from(given))
-                        .points_selector(points_of(document))
-                        .wait(true),
+                    SetPayloadPointsBuilder::new(
+                        self.collection.name.as_str(),
+                        Payload::from(given),
+                    )
+                    .points_selector(points_of(document))
+                    .wait(true),
                 )
                 .await
-                .map_err(|source| self.request_error("write labels to the document", source))?;
+                .map_err(|source| {
+                    self.collection
+                        .request_error("write labels to the document", source)
+                })?;
         }
         Ok(())
-    }
-
-    fn request_error(&self, action: &'static str, source: QdrantError) -> StoreError {
-        request_error(&self.url, &self.collection, action, source)
     }
 }
 
@@ -377,7 +405,7 @@ impl ItemStore {
         conditions: Vec<Condition>,
         limit: u64,
     ) -> Result<Vec<ItemHit>, StoreError> {
-        let mut query = QueryPointsBuilder::new(self.collection.as_str())
+        let mut query = QueryPointsBuilder::new(self.collection.name.as_str())
             .query(vector)
             .limit(limit)
             .with_payload(true);
@@ -385,21 +413,20 @@ impl ItemStore {
             query = query.filter(Filter::must(conditions));
         }
         let reply = self
+            .collection
             .client
             .query(query)
             .await
-            .map_err(|source| self.request_error(action, source))?;
+            .map_err(|source| self.collection.request_error(action, source))?;
         reply
             .result
             .into_iter()
-            .map(|point| item_hit(&self.collection, point))
+            .map(|point| item_hit(&self.collection.name, point))
             .collect()
     }
 }
 
 fn kind_condition(kind: ItemKind) -> Condition {
-    // SMELL: the collection has no index on the kind field, so Qdrant reads the kind of each
-    // point it visits. That is fine for a few chapters and slow for a large collection.
     Condition::matches(KIND_FIELD, kind.as_str().to_owned())
 }
 

@@ -4,6 +4,7 @@
 use crate::content::PageBox;
 use crate::convert::checks::words;
 use crate::convert::poppler::TextLine;
+use crate::convert::usable_box::{UsableBox, padded};
 
 /// Words in a row that two texts must share before a line counts as copied from one of them.
 /// Single words and pairs recur between a figure and its paragraphs; four in a row do not.
@@ -18,8 +19,8 @@ const GROW_REACH: i32 = 30;
 const TRIM_MARGIN: i32 = 6;
 
 pub(super) struct FigureCut {
-    /// Padding included. Always a usable rectangle.
-    pub area: PageBox,
+    /// Padding included.
+    pub area: UsableBox,
     /// A line of another piece of the page is still wholly inside `area`.
     pub holds_body_text: bool,
     /// The model's rectangle could not be checked: none of the figure's own lines was found at it,
@@ -42,36 +43,38 @@ struct Classified {
     owner: Owner,
 }
 
-/// `bounds` is the rectangle the model gave, which must already be usable; its left and right
-/// edges only ever move outward. `own` is every string the figure printed, and `other` every
-/// string the rest of the page copied from the page.
-// SMELL: `own` and `other` have the same type, so a call that swaps them compiles and gets every
-// decision the wrong way round. One type holding both lists would make the swap impossible.
+/// The words of every string a page printed, one list for each string. The two sides are named
+/// fields of one value, so they cannot change places on the way to the cut.
+pub(super) struct PrintedWords {
+    /// The strings the figure printed.
+    pub own: Vec<Vec<String>>,
+    /// The strings the rest of the page copied from the page.
+    pub other: Vec<Vec<String>>,
+}
+
+/// `bounds` is the rectangle the model gave; its left and right edges only ever move outward.
 pub(super) fn cut_rectangle(
-    bounds: PageBox,
-    own: &[String],
-    other: &[String],
+    bounds: UsableBox,
+    printed: &PrintedWords,
     lines: &[TextLine],
 ) -> FigureCut {
-    let own: Vec<Vec<String>> = own.iter().map(|text| words(text)).collect();
-    let other: Vec<Vec<String>> = other.iter().map(|text| words(text)).collect();
     let lines: Vec<Classified> = lines
         .iter()
         .map(|line| Classified {
             area: line.area,
-            owner: owner_of(&words(&line.text), &own, &other),
+            owner: owner_of(&words(&line.text), printed),
         })
         .collect();
 
     // Padding goes on before the trim: padding a trimmed rectangle would take the first line of
     // the next paragraph straight back in.
-    let refined = trimmed(grown(bounds, &lines).padded(), &lines)
-        .filter(|refined| refined.problem().is_none());
+    let refined = trimmed(padded(grown(bounds.page_box(), &lines)), &lines)
+        .and_then(|refined| UsableBox::new(refined).ok());
     let unchecked = refined.is_none();
     let area = refined.unwrap_or_else(|| bounds.padded());
     let holds_body_text = lines
         .iter()
-        .any(|line| line.owner == Owner::Other && is_inside(line.area, area));
+        .any(|line| line.owner == Owner::Other && is_inside(line.area, area.page_box()));
     FigureCut {
         area,
         holds_body_text,
@@ -79,7 +82,8 @@ pub(super) fn cut_rectangle(
     }
 }
 
-fn owner_of(line: &[String], own: &[Vec<String>], other: &[Vec<String>]) -> Owner {
+fn owner_of(line: &[String], printed: &PrintedWords) -> Owner {
+    let PrintedWords { own, other } = printed;
     let count = line.len();
     if count == 0 {
         return Owner::Neither;

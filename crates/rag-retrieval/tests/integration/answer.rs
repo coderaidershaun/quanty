@@ -277,3 +277,23 @@ async fn an_answer_gives_the_number_of_each_source_a_title_headings_and_follow_u
     assert_eq!(written.title, None);
     assert_eq!(written.follow_ups, ["What is a put option?"]);
 }
+
+#[tokio::test]
+async fn a_line_break_between_the_math_marks_is_the_lost_backslash_of_a_command() {
+    let llm = replying(json!([
+        {
+            // Do not write `\\nu` or `\\nabla` below. Each `\n` is a real line break, which is
+            // what JSON gives when the model writes the command with one backslash.
+            "text": "The vega \\( \nu \\) and the slope \\(\nabla V\\) are named.\nNothing else is.",
+            "sources": [1],
+        },
+    ]));
+
+    let written = answer(&llm, QUESTION, &found_items()).await.unwrap();
+
+    assert_eq!(
+        written.claims[0].text,
+        "The vega \\( \\nu \\) and the slope \\(\\nabla V\\) are named.\nNothing else is.",
+        "a line break before a letter is put back between the marks, and one outside them is kept"
+    );
+}

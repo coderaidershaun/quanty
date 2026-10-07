@@ -4,17 +4,33 @@
 use std::collections::HashMap;
 
 use graph::{GraphError, GraphStore, Mention, Relation};
-use rag_core::{ConceptId, Embedder, ItemId, Llm};
+use rag_core::{ConceptId, Embedder, Llm, LlmError};
 
-use super::question::Extraction;
+use super::ask::ItemAnswer;
 use super::resolve::{Resolved, Resolver, normalised};
 use super::{ConceptError, ConceptSummary};
+
+/// What resolving the concepts of one reply came to.
+enum ReplyConcepts {
+    Resolved {
+        names: HashMap<String, ConceptId>,
+        mentions: Vec<Mention>,
+    },
+    /// The model cannot answer any question until the person acts.
+    Stopped(LlmError),
+}
+
+/// The relations of one reply that can be written, each once, and how many of its relations
+/// cannot.
+#[derive(Default)]
+struct ReplyRelations {
+    kept: Vec<Relation>,
+    dropped: usize,
+}
 
 // SMELL: nothing removes the mentions of an earlier run, so after a change of the prompt an item
 // keeps the mentions of the old answers beside the new ones, until its document is deleted and
 // ingested again.
-// SMELL: this function does two jobs for each item in one long loop: it resolves the concepts and
-// collects their mentions, and then it builds the relations. Each job wants a function of its own.
 /// Writes the concepts, mentions and relations of every item. The returned summary counts only
 /// these writes and the questions that resolving the concepts asked. `items` is how many items
 /// the run was given, which a stop reports.
@@ -26,86 +42,114 @@ use super::{ConceptError, ConceptSummary};
 /// - [`ConceptError::Graph`] when the graph cannot be read or written
 pub(super) async fn write<L: Llm, E: Embedder, G: GraphStore>(
     resolver: &Resolver<'_, L, E, G>,
-    extractions: &[(ItemId, Extraction)],
+    answers: &[ItemAnswer],
     items: usize,
 ) -> Result<ConceptSummary, ConceptError> {
     let graph = &resolver.stores.graph;
     let mut summary = ConceptSummary::default();
-    for (read, (item, extraction)) in extractions.iter().enumerate() {
-        // The concepts of this reply are kept by normalised name, so that a relation finds them
-        // without asking the graph.
-        let mut names: HashMap<String, ConceptId> = HashMap::new();
-        let mut mentions: Vec<Mention> = Vec::new();
-        for concept in &extraction.concepts {
-            let normalised_name = normalised(&concept.name);
-            if normalised_name.is_empty() {
-                tracing::warn!(
-                    name = concept.name,
-                    "a concept with no letters or digits in its name was left out"
-                );
-                continue;
-            }
-            if names.contains_key(&normalised_name) {
-                continue;
-            }
-            let id = match resolver.resolve(*item, concept, &mut summary).await? {
-                Resolved::Created(id) => {
-                    summary.concepts_created += 1;
-                    id
-                }
-                Resolved::Linked(id) => {
-                    summary.concepts_linked += 1;
-                    id
-                }
-                Resolved::Stopped(source) => {
-                    // SMELL: `read` counts the items whose concepts were written. An item that
-                    // was skipped is in neither count, so the message can name fewer items than
-                    // the run has dealt with.
-                    return Err(ConceptError::Stopped {
-                        read,
-                        items,
-                        source,
-                    });
-                }
-            };
-            names.insert(normalised_name, id);
-            // Two names of one reply can be one concept, for example when the second became an
-            // alias of the first. The item mentions it once, in the first wording.
-            if !mentions.iter().any(|mention| mention.concept == id) {
-                mentions.push(Mention {
-                    item: *item,
-                    concept: id,
-                    wording: concept.name.clone(),
+    for answer in answers {
+        let (names, mentions) = match resolve_concepts(resolver, answer, &mut summary).await? {
+            ReplyConcepts::Resolved { names, mentions } => (names, mentions),
+            ReplyConcepts::Stopped(source) => {
+                return Err(ConceptError::Stopped {
+                    read: answer.items_before,
+                    items,
+                    source,
                 });
             }
-        }
+        };
         graph.add_mentions(&mentions).await?;
 
-        let mut relations: Vec<Relation> = Vec::new();
-        for relation in &extraction.relations {
-            let from = concept_named(graph, &names, &relation.from).await?;
-            let to = concept_named(graph, &names, &relation.to).await?;
-            match (from, to) {
-                (Some(from), Some(to)) if from != to => {
-                    let relation = Relation {
-                        from,
-                        to,
-                        kind: relation.kind,
-                        item: *item,
-                    };
-                    if !relations.contains(&relation) {
-                        relations.push(relation);
-                    }
-                }
-                _ => summary.relations_dropped += 1,
-            }
-        }
-        graph.add_relations(&relations).await?;
+        let relations = relations_of(graph, answer, &names).await?;
+        graph.add_relations(&relations.kept).await?;
 
         summary.mentions_written += mentions.len();
-        summary.relations_written += relations.len();
+        summary.relations_written += relations.kept.len();
+        summary.relations_dropped += relations.dropped;
     }
     Ok(summary)
+}
+
+/// Links each concept of the reply to a stored concept, or makes it, in the order of the reply,
+/// and collects one mention for each. It stops at the first concept that the model cannot be
+/// asked about.
+///
+/// # Errors
+/// Every error that [`Resolver::resolve`] returns.
+async fn resolve_concepts<L: Llm, E: Embedder, G: GraphStore>(
+    resolver: &Resolver<'_, L, E, G>,
+    answer: &ItemAnswer,
+    summary: &mut ConceptSummary,
+) -> Result<ReplyConcepts, ConceptError> {
+    // The concepts of this reply are kept by normalised name, so that a relation finds them
+    // without asking the graph.
+    let mut names: HashMap<String, ConceptId> = HashMap::new();
+    let mut mentions: Vec<Mention> = Vec::new();
+    for concept in &answer.extraction.concepts {
+        let normalised_name = normalised(&concept.name);
+        if normalised_name.is_empty() {
+            tracing::warn!(
+                name = concept.name,
+                "a concept with no letters or digits in its name was left out"
+            );
+            continue;
+        }
+        if names.contains_key(&normalised_name) {
+            continue;
+        }
+        let id = match resolver.resolve(answer.item, concept, summary).await? {
+            Resolved::Created(id) => {
+                summary.concepts_created += 1;
+                id
+            }
+            Resolved::Linked(id) => {
+                summary.concepts_linked += 1;
+                id
+            }
+            Resolved::Stopped(source) => return Ok(ReplyConcepts::Stopped(source)),
+        };
+        names.insert(normalised_name, id);
+        // Two names of one reply can be one concept, for example when the second became an
+        // alias of the first. The item mentions it once, in the first wording.
+        if !mentions.iter().any(|mention| mention.concept == id) {
+            mentions.push(Mention {
+                item: answer.item,
+                concept: id,
+                wording: concept.name.clone(),
+            });
+        }
+    }
+    Ok(ReplyConcepts::Resolved { names, mentions })
+}
+
+/// Turns the two names of each relation of the reply into concepts. A relation cannot be written
+/// when one of its names is no concept of the reply and no stored one, or when both names are one
+/// concept.
+async fn relations_of<G: GraphStore>(
+    graph: &G,
+    answer: &ItemAnswer,
+    names: &HashMap<String, ConceptId>,
+) -> Result<ReplyRelations, GraphError> {
+    let mut relations = ReplyRelations::default();
+    for relation in &answer.extraction.relations {
+        let from = concept_named(graph, names, &relation.from).await?;
+        let to = concept_named(graph, names, &relation.to).await?;
+        match (from, to) {
+            (Some(from), Some(to)) if from != to => {
+                let relation = Relation {
+                    from,
+                    to,
+                    kind: relation.kind,
+                    item: answer.item,
+                };
+                if !relations.kept.contains(&relation) {
+                    relations.kept.push(relation);
+                }
+            }
+            _ => relations.dropped += 1,
+        }
+    }
+    Ok(relations)
 }
 
 /// A concept of the same reply, or else a stored one.

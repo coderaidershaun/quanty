@@ -11,7 +11,7 @@ use ocr::read_chapter;
 use rag_core::{ConceptStore, DocumentInput, Embedder, ItemKind, ItemPoint, ItemStore};
 use rag_ingestion::{Item, chapter_items};
 
-pub use fixture::{Fixture, Placed, QUESTION};
+pub use fixture::{Fixture, Placed, QUESTION, SCORE_ERROR, found_among, tagged, texts_of};
 pub use word_embedder::WordEmbedder;
 
 /// The title that every item of the sample chapter of the book carries.

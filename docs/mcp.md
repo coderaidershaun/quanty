@@ -73,6 +73,8 @@ The arguments `question`, `kind`, `book`, `author` and `tags` of `search`. Gives
 
 No arguments. Gives `documents`, sorted by title: `document_id`, `title`, `book`, `author`, `tags` and, when the converted chapter is under the content folder, `chapter_number`, `chapter_name` and `pages`.
 
+It also gives `unreadable_chapters`: one line for each chapter under the content folder whose `chapter.json` cannot be read, with the file that is at fault. The list is always there, and it is empty when every chapter can be read. The document of such a chapter shows no `chapter_number`, `chapter_name` or `pages`, and `read_page` cannot read it.
+
 ### `read_page`
 
 | Argument | |
@@ -120,7 +122,7 @@ Good to know:
 
 - One ingest runs at a time in a server. A second `ingest_pdf` while one runs is refused, and the refusal names the running `job_id`. This holds inside one server only: do not send the same chapter through two servers, or beside `rag-ingest pdf`, at the same time.
 - A store that is down, a missing Gemini key, and a PDF that is already ingested show in the answer of `ingest_pdf` itself. A missing Jev key, `ANTHROPIC_API_KEY` being set, Poppler not installed, and a file that starts with `%PDF-` but is not a PDF are found only after the paid work has begun. So they show in `ingest_status` as `failed`, or, when they are found at once, in the answer of `ingest_pdf` as a tool error with the same text.
-- Jobs live in the memory of the server. Over stdio a running job stops when the client closes the server, and a restarted server forgets its job ids. Send the PDF again: a PDF that is ingested is not ingested twice, and a stopped one goes on from where it ended.
+- Jobs live in the memory of the server. Over stdio a running job stops when the client closes the server, and a restarted server forgets its job ids. The server keeps only its last 100 jobs: when it holds 100 and a new one starts, the oldest, which has ended, is forgotten. Send the PDF again: a PDF that is ingested is not ingested twice, and a stopped one goes on from where it ended.
 
 ## 5. When a call fails
 
@@ -131,8 +133,9 @@ A failure comes back as a tool error (`isError: true`) with a text that says wha
 | A store or a service is down, or a key is missing | The error, the address or key it names, and: call the `health` tool |
 | A bad argument: a blank question, an unknown `kind`, a bad `document_id`, a `limit` of 0, both `path` and `pdf_base64` | What was given and what is allowed |
 | `read_page` for a document that has no converted chapter | The id, the content folder, and: call `list_documents` |
+| `read_page` for a document that is not found, when some chapters cannot be read | The id, the content folder, "the document may be one of the chapters that cannot be read" with the file of each, and: call `list_documents` |
 | `read_page` for a page the chapter does not have | The page and how many pages there are |
-| `ingest_status` for an unknown `job_id` | Job ids are forgotten when the server restarts; send the PDF again |
+| `ingest_status` for an unknown `job_id` | Job ids are forgotten when the server restarts, and the server keeps only its last 100 jobs; send the PDF again |
 | A PDF that is refused: no file at the path, not a file, not a PDF, too big, a file name that is not `chapter-<number>-<name>.pdf`, a `file_name` with a folder in it | The reason and the fix |
 | An ingest is already running | Its `job_id`, and: ask `ingest_status`, and send this PDF when that job has ended |
 

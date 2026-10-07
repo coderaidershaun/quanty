@@ -8,10 +8,11 @@ mod latex;
 mod word_match;
 
 use super::reply::{TranscribedPage, TranscribedPiece};
+use super::usable_box::UsableBox;
 
+use clean::clean_reply;
 use fault::MIN_FIGURE_EXPLANATION_WORDS;
 
-pub(super) use clean::clean_reply;
 pub use fault::{PieceRef, ReplyFault};
 pub(super) use fields::any_string_has_backslash;
 pub(super) use word_match::{
@@ -20,13 +21,19 @@ pub(super) use word_match::{
 
 pub(super) const ALMOST_EMPTY_WORDS: usize = 20;
 
-/// Returns the first rule the reply breaks.
-// SMELL: a reply must be cleaned before it is checked, and nothing enforces that order. The table
-// rule expects lines that the cleaning has already trimmed.
-pub(super) fn check_reply(
-    page: &TranscribedPage,
+/// Tidies the reply, then returns the first rule the tidied reply breaks.
+///
+/// The two steps are one call because the rules read a tidied reply: the table rule expects
+/// lines that are already trimmed.
+pub(super) fn clean_and_check(
+    page: &mut TranscribedPage,
     text_layer_words: usize,
 ) -> Result<(), ReplyFault> {
+    clean_reply(page);
+    check_reply(page, text_layer_words)
+}
+
+fn check_reply(page: &TranscribedPage, text_layer_words: usize) -> Result<(), ReplyFault> {
     piece_numbers(page)?;
     no_pieces(page, text_layer_words)?;
     fields::check_strings(page)?;
@@ -158,14 +165,10 @@ fn mid_sentence_flags(page: &TranscribedPage) -> Result<(), ReplyFault> {
     let is_text =
         |piece: Option<&TranscribedPiece>| matches!(piece, Some(TranscribedPiece::Text { .. }));
     if page.starts_mid_sentence && !is_text(page.pieces.iter().find(is_body)) {
-        return Err(ReplyFault::MidSentenceFlag {
-            flag: "starts-mid-sentence",
-        });
+        return Err(ReplyFault::StartsMidSentenceFlag);
     }
     if page.ends_mid_sentence && !is_text(page.pieces.iter().rfind(is_body)) {
-        return Err(ReplyFault::MidSentenceFlag {
-            flag: "ends-mid-sentence",
-        });
+        return Err(ReplyFault::EndsMidSentenceFlag);
     }
     Ok(())
 }
@@ -193,7 +196,7 @@ fn displayed_math_in_text(page: &TranscribedPage) -> Result<(), ReplyFault> {
 fn figure_bounds(page: &TranscribedPage) -> Result<(), ReplyFault> {
     for (index, piece) in page.pieces.iter().enumerate() {
         if let TranscribedPiece::Figure { bounds, .. } = piece
-            && let Some(seen) = bounds.problem()
+            && let Err(seen) = UsableBox::new(*bounds)
         {
             return Err(ReplyFault::BadFigureBounds {
                 piece: PieceRef::of(page, index),

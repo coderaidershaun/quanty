@@ -16,8 +16,8 @@ pub use conversion::{
     CallRecord, CallStep, Checks, Conversion, MathCheck, PageCategories, Route, RouteReason,
     WholePageFigure, WordMatch,
 };
+pub(crate) use figure_image::figure_image_file_name;
 pub use figure_image::{FigureImage, ImageShows, PageBox};
-pub(crate) use figure_image::{MIN_FIGURE_SIDE, figure_image_file_name};
 pub use index::{ChapterIndex, ImageIndex, PageIndex};
 pub use piece::{Cite, CiteKind, PieceDetail, PieceEntry, Relationship, RelationshipKind, Symbol};
 

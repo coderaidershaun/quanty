@@ -31,16 +31,20 @@ impl<S: Services> Work<S> {
     ///
     /// # Errors
     /// What went wrong, in the first step that failed.
-    pub(super) async fn run(&self) -> Result<PdfOutcome, PdfIngestError> {
+    pub(super) async fn run(mut self) -> Result<PdfOutcome, PdfIngestError> {
+        if let Some(upload) = self.pdf.upload.take() {
+            // Writing megabytes to the disk can take a while, so it runs on a thread that may
+            // block and the other calls are not held up.
+            tokio::task::spawn_blocking(move || save(&upload))
+                .await
+                .map_err(PdfIngestError::Stopped)??;
+        }
         let Work {
             services,
             config,
             pdf,
             report,
-        } = self;
-        if let Some(upload) = &pdf.upload {
-            save(upload)?;
-        }
+        } = &self;
         // The models are set up before the first page is converted, so a missing key for the
         // embedder fails before anything is paid for.
         let models = Models {

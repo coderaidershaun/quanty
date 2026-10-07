@@ -1,5 +1,5 @@
 //! Checks that a failure reaches the agent as a tool error whose text says what to do: a store
-//! that is down, a bad argument, and a document that is not there.
+//! that is down, a bad argument, a document that is not there, and a chapter that cannot be read.
 
 use ocr::testing::sample_pdf;
 use rag_core::DocId;
@@ -115,4 +115,29 @@ async fn an_unknown_document_is_a_tool_error_that_points_at_list_documents() {
         "{text}"
     );
     assert!(text.contains("`list_documents`"), "{text}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_chapter_that_cannot_be_read_is_named_when_a_document_is_not_found() {
+    let ports = ClosedPorts::new();
+    let broken = ports
+        .config
+        .content_folder
+        .join("a-book/chapter-1/chapter.json");
+    std::fs::create_dir_all(broken.parent().unwrap()).unwrap();
+    std::fs::write(&broken, "not json").unwrap();
+    let client = connect(ports.server()).await;
+    let asked = DocId::from_source_sha256("the pdf of the broken chapter").to_string();
+
+    let result = call(
+        &client,
+        "read_page",
+        json!({ "document_id": asked, "page": 1 }),
+    )
+    .await;
+
+    let text = error_text(&result);
+    assert!(text.contains(&asked), "{text}");
+    assert!(text.contains("cannot be read"), "{text}");
+    assert!(text.contains(&broken.display().to_string()), "{text}");
 }

@@ -26,10 +26,18 @@ const TRIES_FOR_ONE_QUESTION: usize = 2;
 /// What the first half found, with the items in the order they came in.
 #[derive(Default)]
 pub(super) struct Answers {
-    pub extractions: Vec<(ItemId, Extraction)>,
+    pub extractions: Vec<ItemAnswer>,
     pub llm_calls: usize,
     pub cache_hits: usize,
     pub skipped: Vec<SkippedItem>,
+}
+
+/// What the model found in one item.
+pub(super) struct ItemAnswer {
+    pub item: ItemId,
+    /// How many items of the run come before this one, the skipped ones among them.
+    pub items_before: usize,
+    pub extraction: Extraction,
 }
 
 /// How a question was answered, and how many times the model was asked for it.
@@ -91,12 +99,17 @@ impl<L: Llm> ConceptExtractor<L> {
         while let Some((item, read)) = reads.next().await {
             let read = read?;
             answers.llm_calls += read.llm_calls;
+            let answered = |extraction| ItemAnswer {
+                item: item.id,
+                items_before: taken,
+                extraction,
+            };
             match read.outcome {
                 Outcome::Cached(extraction) => {
                     answers.cache_hits += 1;
-                    answers.extractions.push((item.id, extraction));
+                    answers.extractions.push(answered(extraction));
                 }
-                Outcome::Asked(extraction) => answers.extractions.push((item.id, extraction)),
+                Outcome::Asked(extraction) => answers.extractions.push(answered(extraction)),
                 Outcome::Failed(reason) => answers.skipped.push(SkippedItem {
                     id: item.id,
                     kind: item.payload.kind,

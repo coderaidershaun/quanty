@@ -143,10 +143,17 @@ fn assert_routes_reasons_and_calls(chapter: &Path, stubs: &StubServices) {
             "page {position}: the math check is a call too"
         );
     }
-    assert_eq!(
-        read_json(&page_folder(chapter, 7).join("page.json"))["conversion"]["math-check"],
-        "no-answer"
+    let page_seven = read_json(&page_folder(chapter, 7).join("page.json"));
+    assert_eq!(page_seven["conversion"]["math-check"], "no-answer");
+    let failure = page_seven["conversion"]["math-check-failure"]
+        .as_str()
+        .expect("page 7 should say why its math check gave no answer");
+    assert!(
+        failure.contains("status 503") && failure.contains("stub outage"),
+        "{failure}"
     );
+    let page_six = read_json(&page_folder(chapter, 6).join("page.json"));
+    assert!(page_six["conversion"]["math-check-failure"].is_null());
     assert_eq!(
         stubs.calls_for(1),
         [Call::Tag(1), Call::Math(1), Call::Copy(1)]

@@ -65,28 +65,36 @@ pub struct Mention {
     pub wording: String,
 }
 
-/// How one concept relates to another. The list is fixed: a new kind is a change to this type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum RelationKind {
-    DerivedFrom,
-    Assumes,
-    Generalises,
-    PartOf,
-    UsedFor,
+/// Declares an enum together with `ALL`, the list of its kinds. Both are written from the one
+/// list of names, so a kind cannot be in the enum and missing from `ALL`.
+macro_rules! enum_with_all {
+    (
+        $(#[$attribute:meta])*
+        pub enum $name:ident { $($kind:ident),+ $(,)? }
+    ) => {
+        $(#[$attribute])*
+        pub enum $name { $($kind),+ }
+
+        impl $name {
+            /// Every kind, in the order of the enum.
+            pub const ALL: [$name; [$($name::$kind),+].len()] = [$($name::$kind),+];
+        }
+    };
+}
+
+enum_with_all! {
+    /// How one concept relates to another. The list is fixed: a new kind is a change to this type.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub enum RelationKind {
+        DerivedFrom,
+        Assumes,
+        Generalises,
+        PartOf,
+        UsedFor,
+    }
 }
 
 impl RelationKind {
-    /// Every kind, in the order of the enum.
-    // SMELL: a kind that is added to the enum must be added to this list by hand. Nothing checks
-    // it, and a kind that is missing here is refused as unknown.
-    pub const ALL: [RelationKind; 5] = [
-        RelationKind::DerivedFrom,
-        RelationKind::Assumes,
-        RelationKind::Generalises,
-        RelationKind::PartOf,
-        RelationKind::UsedFor,
-    ];
-
     /// The name stored on the edge.
     pub fn as_str(self) -> &'static str {
         match self {

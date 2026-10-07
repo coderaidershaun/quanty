@@ -1,6 +1,6 @@
 //! Checks `ingest_pdf` and `ingest_status`: a PDF sent by path and as base64 is ingested, a
-//! second one is refused while one runs, a job that fails says why and frees the place, and a
-//! file that must not be taken is refused before anything is written.
+//! second one is refused while one runs, a job that fails says why and frees the place, an old
+//! job is forgotten, and a file that must not be taken is refused before anything is written.
 
 use std::path::PathBuf;
 
@@ -278,4 +278,68 @@ async fn a_job_that_fails_after_the_paid_work_began_says_failed_and_what_to_do()
     open_the_gate.send(()).unwrap();
     let ended_again = report_when_ended(&client, again["job_id"].as_str().unwrap()).await;
     assert_eq!(ended_again["state"], "failed", "{ended_again}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored ingest::"]
+async fn a_job_that_a_file_stops_does_not_point_at_health() {
+    let (services, open_the_gate) = StandInServices::new().with_gate();
+    let (stores, server) = empty_library("mcp-ingest-file", services);
+    // A file is where the folder of kept answers must be made, so the ingest stops there, after
+    // every store has answered.
+    let in_the_way = &stores.config().concept_cache_folder;
+    std::fs::write(in_the_way, "not a folder").unwrap();
+    let client = connect(server).await;
+    let sent = json!({ "book": "Option Volatility and Pricing", "path": sample_pdf() });
+
+    let first = call(&client, "ingest_pdf", sent).await;
+
+    let started = structured(&first);
+    assert_eq!(started["state"], "running");
+    open_the_gate.send(()).unwrap();
+    let ended = report_when_ended(&client, started["job_id"].as_str().unwrap()).await;
+    assert_eq!(ended["state"], "failed", "{ended}");
+    let error = ended["error"].as_str().unwrap();
+    assert!(error.contains(&in_the_way.display().to_string()), "{error}");
+    assert!(
+        !error.contains("`health`"),
+        "no service is down when a file is in the way: {error}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored ingest::"]
+async fn a_job_is_forgotten_when_a_hundred_newer_jobs_were_started() {
+    let (_stores, server) = empty_library("mcp-ingest-forgotten", StandInServices::new());
+    let client = connect(server).await;
+    let sent = json!({ "book": "Option Volatility and Pricing", "path": sample_pdf() });
+    let first = call(&client, "ingest_pdf", sent.clone()).await;
+    let first_id = structured(&first)["job_id"].as_str().unwrap().to_owned();
+    let ended = report_when_ended(&client, &first_id).await;
+    assert_eq!(ended["state"], "done", "{ended}");
+    // Each of these jobs finds the PDF in the stores, so it has ended when its call answers.
+    let send_again = async || {
+        let again = call(&client, "ingest_pdf", sent.clone()).await;
+        let report = structured(&again).clone();
+        assert_eq!(report["state"], "already_ingested", "{report}");
+        report["job_id"].as_str().unwrap().to_owned()
+    };
+    for _ in 0..99 {
+        send_again().await;
+    }
+    let status = call(&client, "ingest_status", json!({ "job_id": first_id })).await;
+    assert_eq!(
+        structured(&status)["state"],
+        "done",
+        "the first of a hundred jobs is still kept"
+    );
+
+    let newest_id = send_again().await;
+
+    let forgotten = call(&client, "ingest_status", json!({ "job_id": first_id })).await;
+    let text = error_text(&forgotten);
+    assert!(text.contains(&first_id), "{text}");
+    assert!(text.contains("last 100 jobs"), "{text}");
+    let status = call(&client, "ingest_status", json!({ "job_id": newest_id })).await;
+    assert_eq!(structured(&status)["state"], "already_ingested");
 }

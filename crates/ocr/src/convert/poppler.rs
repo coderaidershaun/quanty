@@ -8,6 +8,7 @@ use std::time::Duration;
 use tokio::process::Command;
 
 use super::services::JEV_API_KEY_VARIABLE;
+use super::usable_box::UsableBox;
 use crate::content::PageBox;
 
 const TOOL_TIMEOUT: Duration = Duration::from_secs(60);
@@ -273,18 +274,16 @@ async fn draw_png(
 /// Draws only `region` of a one-page PDF to the PNG file `destination` at [`FIGURE_DPI`].
 ///
 /// `picture_size` is the pixel size of the page's picture at [`IMAGE_DPI`], which fixes the page's
-/// size in pixels at the sharper resolution. `region` must be inside the page and usable: the
-/// tool never reports a bad crop, so none may be passed. The tool draws the whole page when the
-/// start is beyond the page, and everything up to the page edge when the width or height is 0.
-// SMELL: that a rectangle is usable is a rule its callers have to remember to check. Nothing in
-// the type of `region` says it was checked, and the same holds where a figure's rectangle is
-// refined.
+/// size in pixels at the sharper resolution. `region` is a [`UsableBox`] because the tool never
+/// reports a bad crop, so none may be passed. The tool draws the whole page when the start is
+/// beyond the page, and everything up to the page edge when the width or height is 0.
 pub(super) async fn render_region(
     page_pdf: &Path,
     picture_size: (u32, u32),
-    region: PageBox,
+    region: UsableBox,
     destination: &Path,
 ) -> Result<(), PopplerError> {
+    let region = region.page_box();
     let page_width = picture_size.0 * FIGURE_DPI / IMAGE_DPI;
     let page_height = picture_size.1 * FIGURE_DPI / IMAGE_DPI;
     let side = |thousandths: i32| thousandths.clamp(0, 1000) as u32;

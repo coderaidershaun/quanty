@@ -19,7 +19,7 @@ pub(super) fn remove_invisible(text: &str) -> String {
     visible
 }
 
-pub(crate) fn clean_reply(page: &mut TranscribedPage) {
+pub(super) fn clean_reply(page: &mut TranscribedPage) {
     clean_optional(&mut page.printed_page_number);
     clean_optional(&mut page.running_header);
     for piece in &mut page.pieces {

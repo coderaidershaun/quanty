@@ -1,11 +1,26 @@
-//! Answer text with its citations and tables. For now the Markdown source is shown as it is,
-//! followed by one chip for each citation.
+//! Stored Markdown drawn as text that a person can read and copy: emphasis, code, formulas on
+//! the baseline of their line, footnotes, citation chips and tables. A block is read and laid
+//! out once, and kept until it is no longer drawn.
+
+mod atom;
+mod breaker;
+mod flow;
+mod layouts;
+mod measure;
+mod paint;
+mod parse;
+mod parse_table;
+mod pieces;
+mod place;
+mod style;
+mod table;
 
 use eframe::egui;
 
 use super::Media;
 use crate::theme::TextRole;
-use crate::widgets::CitationChip;
+
+pub use self::layouts::{LayoutStats, Layouts};
 
 /// A block of Markdown with the numbers of the results it cites.
 #[derive(Debug, Clone, Copy)]
@@ -18,6 +33,7 @@ pub struct RichText<'a> {
 }
 
 impl<'a> RichText<'a> {
+    /// A text with no citations, and no citation chosen.
     pub fn new(markdown: &'a str, role: TextRole) -> Self {
         RichText {
             markdown,
@@ -27,11 +43,13 @@ impl<'a> RichText<'a> {
         }
     }
 
+    /// Sets the results that the text cites. Each gets a chip after the text.
     pub fn cites(mut self, cites: &'a [usize]) -> Self {
         self.cites = cites;
         self
     }
 
+    /// Sets the citation whose chip is drawn as chosen.
     pub fn selected(mut self, cite: Option<usize>) -> Self {
         self.selected = cite;
         self
@@ -42,63 +60,37 @@ impl<'a> RichText<'a> {
 /// `Intent::CopyText`, so the text never reaches the clipboard from here.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Clicked {
+    /// A citation chip was clicked. It holds the number of the result.
     Citation(usize),
     /// "Copy text" or "Copy table" was chosen. It holds the stored source.
     CopyText(String),
 }
 
-/// Draws the text, then a chip for each citation. Returns the click, if there was one.
+/// Draws the text wrapped to the room that is left, with a chip after it for each citation.
+/// Empty text draws nothing and takes no room. Returns the click, if there was one.
 #[must_use = "a click or a copy request is lost"]
-pub fn show(ui: &mut egui::Ui, _media: &mut Media, text: &RichText<'_>) -> Option<Clicked> {
-    let mut clicked = None;
-    ui.add(egui::Label::new(text.role.rich(text.markdown)).wrap());
-    ui.horizontal_wrapped(|ui| {
-        for &number in text.cites {
-            let chip = CitationChip::new(number).selected(text.selected == Some(number));
-            if ui.add(chip).clicked() {
-                clicked = Some(Clicked::Citation(number));
-            }
-        }
-    });
-    clicked
+pub fn show(ui: &mut egui::Ui, media: &mut Media, text: &RichText<'_>) -> Option<Clicked> {
+    if text.markdown.trim().is_empty() && text.cites.is_empty() {
+        return None;
+    }
+    let flow = media.text.block(ui, &mut media.math, text);
+    if flow.rows.is_empty() {
+        return None;
+    }
+    paint::block(ui, &flow, text, &mut media.math)
 }
 
-/// Draws a Markdown table. It only ever returns `CopyText`, and the stand-in never does.
+/// Draws a Markdown table. Text that is not a table is drawn as `show` draws it. It only ever
+/// returns `CopyText`.
 #[must_use = "a copy request is lost"]
 pub fn table(
     ui: &mut egui::Ui,
-    _media: &mut Media,
+    media: &mut Media,
     markdown: &str,
     role: TextRole,
 ) -> Option<Clicked> {
-    egui::ScrollArea::horizontal().show(ui, |ui| {
-        ui.label(egui::RichText::new(markdown).font(role.code_font()));
-    });
-    None
-}
-
-/// Counts what the text layouts did, for tests.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct LayoutStats {
-    pub texts_parsed: u64,
-    pub layouts_built: u64,
-    pub layouts_held: usize,
-}
-
-/// The laid-out text that is kept between frames.
-#[derive(Debug, Default)]
-pub struct Layouts {
-    stats: LayoutStats,
-}
-
-impl Layouts {
-    pub fn new() -> Layouts {
-        Layouts::default()
-    }
-
-    pub fn poll(&mut self, _ctx: &egui::Context) {}
-
-    pub fn stats(&self) -> LayoutStats {
-        self.stats
+    match media.text.table(ui, &mut media.math, markdown, role) {
+        Some(layout) => table::show(ui, &mut media.math, &layout, markdown),
+        None => show(ui, media, &RichText::new(markdown, role)),
     }
 }

@@ -19,7 +19,6 @@ pub(super) enum Density {
     Compact,
 }
 
-/// The rows share the height they are given, up to the height of two lines and a gap.
 pub(super) fn fit(height: f32, rows: usize) -> (f32, Density) {
     let pitch = (height / rows as f32).floor().clamp(size::STEP, MAX_PITCH);
     let density = if pitch >= TWO_LINES + space::XXS {
@@ -92,7 +91,6 @@ pub(super) fn show(
     }
 }
 
-/// A short line between two markers, drawn only when the rows are far enough apart for it.
 pub(super) fn connect(ui: &egui::Ui, upper: egui::Rect, lower: egui::Rect) {
     let x = upper.left() + HALF_STEP;
     let from = upper.center().y + HALF_STEP + space::XS;

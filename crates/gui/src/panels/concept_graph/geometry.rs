@@ -1,5 +1,5 @@
-//! Plain points, sizes, rectangles and link routes, so that the layout can be worked out and
-//! tested without a window.
+//! Plain points, sizes, rectangles and link routes, so that the layout can be worked out without
+//! a window.
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub(super) struct Point {
@@ -67,7 +67,6 @@ impl Rect {
         }
     }
 
-    /// True when the two share more than an edge.
     pub(super) fn overlaps(&self, other: &Rect) -> bool {
         self.min.x < other.max.x
             && other.min.x < self.max.x
@@ -75,7 +74,6 @@ impl Rect {
             && other.min.y < self.max.y
     }
 
-    /// True when `other` is inside this rectangle, edges included.
     pub(super) fn holds(&self, other: &Rect) -> bool {
         self.min.x <= other.min.x
             && self.min.y <= other.min.y
@@ -112,16 +110,14 @@ impl Rect {
     }
 }
 
-/// How many straight pieces a curve is cut into.
 const CURVE_PIECES: usize = 12;
 
-/// The path of one link, from its first end to its second.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) enum Route {
     Line(Point, Point),
-    /// A quadratic curve: start, control, end.
+    /// The three points are the start, the control and the end of a quadratic curve.
     Arc(Point, Point, Point),
-    /// Down a band, through a gap of the middle row, down the next band.
+    /// The route goes down a band, through a gap of the middle row, and down the next band.
     Bent([Point; 4]),
 }
 
@@ -144,7 +140,6 @@ impl Route {
         }
     }
 
-    /// The same path, run the other way.
     pub(super) fn reversed(self) -> Route {
         match self {
             Route::Line(from, to) => Route::Line(to, from),

@@ -23,7 +23,6 @@ use crate::widgets::gallery::{self, GalleryState};
 /// How long `logic` may spend on backend events before it hands the frame back.
 const DRAIN_BUDGET: Duration = Duration::from_millis(4);
 
-/// The scene that shows the widget kit instead of the app.
 const GALLERY_SCENE: &str = "gallery";
 
 type FilePicker = Box<dyn FnMut() -> Option<PathBuf>>;
@@ -40,9 +39,6 @@ pub struct App {
 }
 
 impl App {
-    /// Makes the app inside the eframe creation closure: installs the theme, starts the backend,
-    /// and queues a load of the catalogue, then the intents of `opening`.
-    ///
     /// # Errors
     /// Whatever the operating system says when the backend's threads cannot start.
     pub fn new(
@@ -77,24 +73,21 @@ impl App {
         &self.shared
     }
 
-    /// Queues an intent. It is applied at the end of the next frame.
     pub fn push(&mut self, intent: Intent) {
         self.intents.push(intent);
     }
 
-    /// Replaces the file dialog. A test installs one that returns `None`.
     pub fn with_file_picker(mut self, pick: impl FnMut() -> Option<PathBuf> + 'static) -> App {
         self.pick_file = Box::new(pick);
         self
     }
 
-    /// True when the backend, the shared state and the media have nothing left to do.
     pub fn is_idle(&self) -> bool {
         self.backend.is_idle() && self.shared.is_at_rest() && self.media.is_idle()
     }
 
-    /// Applies every queued intent, then does what the shared state asked for. An event from
-    /// the backend can ask for something too, so this runs once even when no intent is queued.
+    /// An event from the backend can ask for something too, so this runs once even when no
+    /// intent is queued.
     fn apply(&mut self, ctx: &egui::Context) {
         loop {
             let mut intents = std::mem::take(&mut self.intents);
@@ -184,8 +177,6 @@ impl eframe::App for App {
     }
 }
 
-/// Opens the window and runs the app until it closes.
-///
 /// # Errors
 /// Whatever eframe reports when the window cannot be made.
 pub fn run(handler: impl Handler, facts: StartupFacts, opening: Vec<Intent>) -> eframe::Result {

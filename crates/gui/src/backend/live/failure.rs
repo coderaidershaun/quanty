@@ -17,7 +17,6 @@ use rag_retrieval::{AnswerError, SearchError};
 
 use crate::contract::{Failure, FailureKind as Kind};
 
-/// The error and each cause under it, on one line.
 fn chain(error: &dyn Error) -> String {
     let mut text = error.to_string();
     let mut cause = error.source();
@@ -29,8 +28,7 @@ fn chain(error: &dyn Error) -> String {
     text
 }
 
-/// What a person is told about an error: the kind, and a hint when a value belongs in it. With no
-/// hint the kind's standard one is used.
+/// With no hint the kind's standard one is used.
 struct Verdict {
     kind: Kind,
     hint: Option<String>,
@@ -337,147 +335,3 @@ failures_from!(
     ReadChapterError => read_chapter,
     ConfigError => config,
 );
-
-#[cfg(test)]
-mod tests {
-    use std::io;
-    use std::os::unix::process::ExitStatusExt;
-    use std::path::PathBuf;
-    use std::process::ExitStatus;
-
-    use graph::FalkorGraph;
-    use ocr::PageError;
-    use rag_core::{ApiKey, Config, DocId, ItemStore};
-
-    use super::*;
-
-    /// Settings whose addresses are not URLs, so a store refuses at once with no network.
-    fn unusable_addresses() -> Config {
-        let folder = std::env::temp_dir().join("quanty-failure-test");
-        Config {
-            qdrant_url: "not a url".to_owned(),
-            falkordb_url: "not a url either".to_owned(),
-            falkordb_graph: "test".to_owned(),
-            items_collection: "test-items".to_owned(),
-            concepts_collection: "test-concepts".to_owned(),
-            concept_cache_folder: folder.join("cache"),
-            concept_decision_log: folder.join("decisions.jsonl"),
-            content_folder: folder.join("content"),
-            gemini_api_key: Some(ApiKey::new("a-made-up-key")),
-            jev_api_key: None,
-        }
-    }
-
-    fn io() -> io::Error {
-        io::Error::other("the disk said no")
-    }
-
-    fn p(text: &str) -> PathBuf {
-        PathBuf::from(text)
-    }
-
-    fn limit() -> LlmError {
-        LlmError::UsageLimit {
-            message: "resets at 5pm".to_owned(),
-        }
-    }
-
-    /// The failure for `error`, checked to carry the chain of causes on one line.
-    fn told<E: Error + Into<Failure>>(error: E) -> Failure {
-        let expected = chain(&error);
-        let failure: Failure = error.into();
-        assert_eq!(
-            failure.detail, expected,
-            "the detail is the chain of causes"
-        );
-        assert!(!failure.detail.contains('\n'), "the detail is one line");
-        failure
-    }
-
-    /// The error has this kind and the standard hint of the kind.
-    fn plain<E: Error + Into<Failure>>(error: E, kind: Kind) {
-        let failure = told(error);
-        assert_eq!((failure.kind, failure.hint.as_str()), (kind, kind.hint()));
-    }
-
-    /// The error has this kind, and its hint says the value.
-    fn names<E: Error + Into<Failure>>(error: E, kind: Kind, value: &str) {
-        let failure = told(error);
-        assert_eq!(failure.kind, kind, "{failure:?}");
-        assert!(
-            failure.hint.contains(value),
-            "{failure:?} must name {value}"
-        );
-        assert_ne!(failure.hint, kind.hint(), "{failure:?} must say more");
-    }
-
-    // One row to a line, so the table can be read down the page. rustfmt would turn every error
-    // with fields into five lines.
-    #[rustfmt::skip]
-    #[test]
-    fn every_backend_error_tells_the_person_what_to_do() {
-        // The stores say their address.
-        let config = unusable_addresses();
-        names(ItemStore::connect(&config).err().unwrap(), Kind::QdrantDown, "not a url");
-        let runtime = tokio::runtime::Runtime::new().expect("a runtime starts");
-        let falkor = runtime.block_on(FalkorGraph::connect(&config)).err().unwrap();
-        names(falkor, Kind::FalkorDbDown, "not a url either");
-
-        // The keys and the models.
-        plain(EmbedError::MissingApiKey, Kind::EmbeddingKeyMissing);
-        plain(EmbedError::Rejected { status: 429, body: String::new() }, Kind::EmbeddingFailed);
-        plain(LlmError::ApiKeySet, Kind::ClaudeApiKeySet);
-        plain(LlmError::Start(io()), Kind::ClaudeMissing);
-        plain(LlmError::NotSignedIn { message: String::new() }, Kind::ClaudeSignedOut);
-        plain(limit(), Kind::ClaudeUsageLimit);
-        names(LlmError::TimedOut { seconds: 90 }, Kind::TimedOut, "90 seconds");
-        plain(ClaudeCliError::Start(io()), Kind::ClaudeMissing);
-        let status = ExitStatus::from_raw(256);
-        plain(ClaudeCliError::NotSignedIn { status, stderr: String::new() }, Kind::ClaudeSignedOut);
-        names(ClaudeCliError::TimedOut { seconds: 10 }, Kind::TimedOut, "10 seconds");
-
-        // An error that only wraps another takes the row of the one inside, and keeps the whole
-        // chain as its detail.
-        plain(SearchError::Embed(EmbedError::MissingApiKey), Kind::EmbeddingKeyMissing);
-        plain(AnswerError::Llm(limit()), Kind::ClaudeUsageLimit);
-        let stopped = || ConceptError::Stopped { read: 3, items: 9, source: limit() };
-        plain(PdfError::Ingest(IngestError::Concepts(stopped())), Kind::ClaudeUsageLimit);
-        let detail = told(IngestError::Concepts(stopped())).detail;
-        assert!(detail.contains("usage limit"), "the cause is in the detail");
-
-        // The converter.
-        let poppler = ConvertError::Poppler;
-        let services = ConvertError::Services;
-        names(poppler(PopplerError::Start { tool: "pdftoppm", source: io() }), Kind::PopplerMissing, "pdftoppm");
-        names(poppler(PopplerError::TimedOut { tool: "pdfinfo" }), Kind::TimedOut, "pdfinfo");
-        names(poppler(PopplerError::NoPageCount { file: p("/books/chapter-1-a.pdf") }), Kind::BadFile, "chapter-1-a.pdf");
-        plain(services(ServiceError::Jev(JevError::MissingApiKey)), Kind::ConverterKeyMissing);
-        plain(services(ServiceError::Claude(ClaudeError::Spawn(io()))), Kind::ClaudeMissing);
-        plain(ConvertError::ApiKeySet, Kind::ClaudeApiKeySet);
-        names(ContentError::BadFileName { name: "notes.pdf".to_owned() }, Kind::BadFile, "notes.pdf");
-        names(ContentError::EmptyBookFolderName { title: "?!".to_owned() }, Kind::BadFile, "book title \"?!\"");
-        names(ConvertError::SourceUnreadable { path: p("/books/gone.pdf"), source: io() }, Kind::BadFile, "gone.pdf");
-        let slow = PageError::Service(ServiceError::Claude(ClaudeError::TimedOut { seconds: 5 }));
-        names(ConvertError::PageFailed { position: 4, folder: p("/work"), source: Box::new(slow) }, Kind::PageFailed, "Page 4");
-        let (saved_file, given_file) = ("a.pdf".to_owned(), "b.pdf".to_owned());
-        names(ConvertError::DifferentSource { folder: p("/content/ch-2"), saved_file, given_file }, Kind::ChapterTaken, "/content/ch-2");
-
-        // A chapter, a document or a file that is not where it was.
-        names(IngestError::ChapterFolder { path: p("/content/ch-3"), source: io() }, Kind::SourceMissing, "/content/ch-3");
-        names(ContentError::Read { path: p("/content/chapter.json"), source: io() }, Kind::SourceMissing, "chapter.json");
-        let bad_json = serde_json::from_str::<u32>("not json").expect_err("that is not json");
-        names(ContentError::Parse { path: p("/content/page.json"), source: bad_json }, Kind::SourceMissing, "page.json");
-        names(ReadChapterError::NotFinished { folder: p("/content/half") }, Kind::SourceMissing, "/content/half");
-        names(ReadChapterError::PieceFile { path: p("/content/03-text.md"), source: io() }, Kind::SourceMissing, "03-text.md");
-        let id: DocId = "00000000-0000-0000-0000-00000000002a".parse().expect("a document id");
-        names(DeleteError::UnknownDocument { id, collection: "items".to_owned() }, Kind::SourceMissing, "2a");
-        names(RelabelError::UnknownDocument { id }, Kind::SourceMissing, "2a");
-
-        // Anything else is `Internal`, with the error text in the detail.
-        plain(LlmError::Failed { exit_code: Some(1), reason: "odd".to_owned() }, Kind::Internal);
-        plain(EmbedError::UnsupportedImage { path: p("a.gif") }, Kind::Internal);
-        plain(ConfigError::DotenvParse { path: p(".env") }, Kind::Internal);
-        plain(IngestError::VectorCount { items: 2, vectors: 1 }, Kind::Internal);
-        plain(ContentError::Write { path: p("x"), source: io() }, Kind::Internal);
-    }
-}

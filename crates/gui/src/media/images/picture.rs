@@ -7,7 +7,7 @@ use super::chain::MAX_LEVELS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageFailure {
-    /// No file at the path. Stored figure paths are absolute and can be stale.
+    /// Stored figure paths are absolute and can be stale.
     Missing,
     /// The file is there but is not a PNG or JPEG that can be decoded.
     Unreadable,
@@ -62,9 +62,8 @@ impl Picture {
             .map_or_else(egui::TextureId::default, |(texture, _)| *texture)
     }
 
-    /// Paints the whole picture into `rect` with the right stored size. For zoom and pan, pass
-    /// the full picture rectangle, even where it lies off the screen, and let the clip rectangle
-    /// cut it.
+    /// For zoom and pan, pass the full picture rectangle, even where it lies off the screen, and
+    /// let the clip rectangle cut it.
     pub fn paint(&self, painter: &egui::Painter, rect: egui::Rect, tint: egui::Color32) {
         let texture = self.texture(rect.width(), painter.pixels_per_point());
         let whole = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));

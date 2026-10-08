@@ -136,7 +136,6 @@ struct Cut {
     bottom: i32,
 }
 
-/// The folder of the sample chapters at or above `near`, if there is one.
 pub(in crate::backend::fake) fn find_samples(near: &Path) -> Option<PathBuf> {
     near.ancestors()
         .map(|folder| folder.join("samples").join("content"))
@@ -154,7 +153,6 @@ fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, SampleError
     })
 }
 
-/// A piece file's text without its one closing newline.
 fn read_piece(path: &Path) -> Result<String, SampleError> {
     let mut text = std::fs::read_to_string(path).map_err(|source| SampleError::Unreadable {
         path: path.to_path_buf(),
@@ -174,14 +172,10 @@ fn chapter_folder(samples: &Path, doc: DocId) -> Result<PathBuf, SampleError> {
         .ok_or(SampleError::UnknownDocument { doc: doc.0 })
 }
 
-/// The title that a stored chapter has: its book, its number and its name.
 pub(super) fn title_of(book: &str, number: u32, name: &str) -> String {
     format!("{book}, chapter {number}: {name}")
 }
 
-/// The sample documents, grouped into books as the live catalogue groups them: books by title,
-/// chapters by number.
-///
 /// # Errors
 /// When a `chapter.json` or a `page.json` cannot be read.
 pub(in crate::backend::fake) fn catalogue(samples: &Path) -> Result<Catalogue, SampleError> {
@@ -251,7 +245,6 @@ fn read_page_file(folder: &Path, position: u32) -> Result<PageFile, SampleError>
     )
 }
 
-/// The picture `path` points at, when the file is there.
 fn picture(path: PathBuf) -> Option<ImageRef> {
     path.is_file().then_some(ImageRef { path })
 }
@@ -334,8 +327,6 @@ fn piece_of(folder: &Path, position: u32, entry: PieceFile) -> Result<PagePiece,
     Ok(piece)
 }
 
-/// The page `page` of the sample document `doc`, as the live backend builds it.
-///
 /// # Errors
 /// [`SampleError::UnknownDocument`] for a document that is not a sample,
 /// [`SampleError::NoSuchPage`] for a page outside the chapter, and the errors of reading a file.

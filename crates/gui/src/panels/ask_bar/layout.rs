@@ -6,12 +6,10 @@ use eframe::egui;
 use crate::theme::{size, space, stroke};
 use crate::widgets;
 
-/// Both rows and the gap between them.
 pub(super) const CONTENT_HEIGHT: f32 = size::CONTROL_LG + space::SM + size::CONTROL_SM;
 /// SMELL: this repeats the least width of a large button, which the kit keeps to itself. If the
 /// kit makes its buttons wider, Ask and Stop leave their slot.
 const ASK_WIDTH: f32 = 2.4 * size::CONTROL_LG;
-/// The mode and each filter share one width.
 const PICKER_WIDTH: f32 = 4.5 * size::CONTROL_LG;
 
 #[derive(Debug, Clone, Copy)]
@@ -25,7 +23,7 @@ pub(super) struct Rects {
     pub(super) note: egui::Rect,
 }
 
-/// The seven slots inside `content`, which is exactly `CONTENT_HEIGHT` high.
+/// `content` is exactly `CONTENT_HEIGHT` high.
 pub(super) fn rects(content: egui::Rect) -> Rects {
     let first =
         egui::Rect::from_min_size(content.min, egui::vec2(content.width(), size::CONTROL_LG));
@@ -79,8 +77,7 @@ pub(super) fn card() -> egui::Frame {
     ))
 }
 
-/// Draws one control in its own slot, centred on the row. The slot is not clipped, because the
-/// kit paints focus rings and glows outside a control.
+/// The slot is not clipped, because the kit paints focus rings and glows outside a control.
 pub(super) fn slot<R>(
     ui: &mut egui::Ui,
     name: &str,

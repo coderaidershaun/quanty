@@ -19,9 +19,7 @@ use crate::backend::live::chapters::chapters_on_disk;
 use crate::backend::live::{LiveContext, Services};
 use crate::contract::{AskDraft, AskMode, Event, RequestId, SearchReply};
 
-/// Answers one ask. It sends the results with their trace, then the graph, and then, unless the
-/// ask wants the results only, the answer. A failed graph or a failed answer leaves what was
-/// sent before it. A search that finds nothing or fails is the only event: the window settles
+/// A search that finds nothing or fails is the only event: the window settles
 /// the later steps itself, and the model is never asked without a result.
 pub async fn ask<S: Services>(
     cx: &LiveContext<S>,
@@ -106,9 +104,9 @@ pub async fn ask<S: Services>(
     });
 }
 
-/// What the chapters on disk say about each hit. A document list that cannot be read only means
-/// that no stored folder is known, and a reading that does not finish gives an empty list, which
-/// leaves every hit without facts. Neither stops the ask, because the facts are optional.
+/// A reading that does not finish gives an empty list, which leaves every hit without facts.
+/// Neither that nor a document list that cannot be read stops the ask, because the facts are
+/// optional.
 async fn pieces_on_disk<G: GraphStore>(
     graph: &G,
     results: &Arc<SearchResults>,

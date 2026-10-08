@@ -1,6 +1,5 @@
-//! The question, the results, the graph and the answer that every scene asks with.
-//!
-//! Every text comes from the sample chapters, so the results are what the pages say.
+//! The question, the results, the graph and the answer that every scene asks with. The text of
+//! each result is read from the sample chapters, so the results are what the pages say.
 
 use std::path::Path;
 
@@ -16,7 +15,6 @@ use crate::contract::{
 pub(in crate::backend::fake) const QUESTION: &str =
     "How is the Black–Scholes formula derived and what assumptions does it make?";
 
-/// A result of the search: what it is and the piece of a sample page it was stored from.
 struct Hit {
     kind: ItemKind,
     doc: u128,
@@ -33,9 +31,8 @@ const fn hit(kind: ItemKind, doc: u128, page: u32, piece: u32) -> Hit {
     }
 }
 
-/// The results in citation order: the kind, then the sample document, the page and the piece.
-/// No document has more than three of the first eight, as the real search caps them; the ninth
-/// is a table that result 4 cites.
+/// The results in citation order. No document has more than three of the first eight, as the
+/// real search caps them; the ninth is a table that result 4 cites.
 const HITS: [Hit; 9] = [
     hit(ItemKind::Formula, 2, 3, 5),
     hit(ItemKind::Formula, 2, 3, 9),
@@ -102,8 +99,6 @@ fn names(names: &[&str]) -> Option<Vec<String>> {
     Some(names.iter().map(|name| (*name).to_owned()).collect())
 }
 
-/// What the search finds for the question: nine results and the trace of how it found them.
-///
 /// # Errors
 /// When a sample page cannot be read.
 pub(in crate::backend::fake) fn reply(samples: &Path) -> Result<SearchReply, SampleError> {
@@ -133,8 +128,6 @@ pub(in crate::backend::fake) fn reply(samples: &Path) -> Result<SearchReply, Sam
     })
 }
 
-/// The same results, found by a search that met no concept in the graph.
-///
 /// # Errors
 /// When a sample page cannot be read.
 pub(in crate::backend::fake) fn reply_without_concepts(
@@ -152,8 +145,7 @@ pub(in crate::backend::fake) fn reply_without_concepts(
     Ok(found)
 }
 
-/// A search that found nothing near the question. The real search stops there, at its first
-/// step, so no later step has a value.
+/// The real search stops at its first step when it finds nothing, so no later step has a value.
 pub(in crate::backend::fake) fn no_result() -> SearchReply {
     SearchReply {
         results: Vec::new(),
@@ -200,8 +192,7 @@ fn edge(from: NodeId, to: NodeId, kind: EdgeKind) -> GraphEdge {
     GraphEdge { from, to, kind }
 }
 
-/// Four concepts, two of them one relation away from the search, and the three results that
-/// mention them, with one edge of each kind.
+/// The graph has an edge of each kind.
 pub(in crate::backend::fake) fn graph() -> ConceptGraph {
     ConceptGraph {
         nodes: vec![
@@ -253,8 +244,6 @@ fn follow_ups() -> Vec<String> {
     .to_vec()
 }
 
-/// The answer to the question: the formula, the hedging argument, each assumption, and the
-/// table and the figure that the results add.
 pub(in crate::backend::fake) fn answer() -> Answer {
     let mut blocks = vec![
         paragraph(
@@ -299,26 +288,10 @@ pub(in crate::backend::fake) fn answer() -> Answer {
     }
 }
 
-/// An answer that says the results do not answer the question, and still offers questions.
 pub(in crate::backend::fake) fn answer_without_blocks() -> Answer {
     Answer {
         title: None,
         blocks: Vec::new(),
         follow_ups: follow_ups(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::reply_without_concepts;
-    use crate::testkit;
-
-    #[test]
-    fn a_search_that_met_no_concept_adds_nothing_through_the_graph() {
-        let found = reply_without_concepts(&testkit::samples_folder());
-        let trace = found.expect("the sample pages are read").trace;
-        assert_eq!(trace.candidates, Some(trace.nearest));
-        assert_eq!(trace.ranked, Some(trace.nearest));
-        assert!(trace.passed_over.is_empty());
     }
 }

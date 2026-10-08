@@ -8,14 +8,10 @@ use gui::media::math::{Math, MathRef, MathState};
 use gui::testkit;
 use gui::theme::TextRole;
 
-/// Every formula the committed chapters hold, by the way the book writes it.
 #[derive(Default)]
 struct Formulas {
-    /// The `.tex` files: whole formulas on a line of their own.
     blocks: Vec<String>,
-    /// The `\( .. \)` spans inside the text files.
     spans: Vec<String>,
-    /// The symbols a page lists in its `page.json`.
     symbols: Vec<String>,
 }
 

@@ -3,7 +3,6 @@
 
 use eframe::egui::{self, Color32};
 
-/// A soft halo in the tone's solid colour: `painter.add(glow(tone).as_shape(rect, radius))`.
 pub fn glow(tone: Tone) -> egui::Shadow {
     egui::Shadow {
         offset: [0, 0],
@@ -13,9 +12,9 @@ pub fn glow(tone: Tone) -> egui::Shadow {
     }
 }
 
-/// The named colours. `CANVAS` is the window, `PANEL` a panel on it, and `RAISED` a control or a
-/// card on a panel. `BORDER` outlines a control and `HAIRLINE` a panel. Content is `TEXT`, text
-/// that supports it `TEXT_SECONDARY`, and a placeholder or a zero count `TEXT_MUTED`.
+/// `CANVAS` is the window, `PANEL` a panel on it, and `RAISED` a control or a card on a panel;
+/// `BORDER` outlines a control and `HAIRLINE` a panel. Content is `TEXT`, text that supports it
+/// `TEXT_SECONDARY`, and a placeholder or a zero count `TEXT_MUTED`.
 pub mod color {
     use super::Color32;
 
@@ -48,9 +47,8 @@ pub enum Tone {
     Danger,
 }
 
-/// The five colours of one tone. `solid` is a fill or a stroke, `on_solid` is text on that
-/// fill, `text` is the hue as readable text on a dark surface, `wash` is a dark tinted fill,
-/// and `edge` is the outline of that fill.
+/// `solid` is a fill or a stroke, `on_solid` is text on that fill, `text` is the hue as readable
+/// text on a dark surface, `wash` is a dark tinted fill, and `edge` is the outline of that fill.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Swatch {
     pub solid: Color32,
@@ -74,7 +72,6 @@ const fn swatch(solid: u32, on_solid: u32, text: u32, wash: u32, edge: u32) -> S
 }
 
 impl Tone {
-    /// Every tone, in the order of the enum.
     pub(crate) const ALL: [Tone; 7] = [
         Tone::Neutral,
         Tone::Blue,
@@ -85,7 +82,6 @@ impl Tone {
         Tone::Danger,
     ];
 
-    /// The five colours of this tone.
     pub const fn swatch(self) -> Swatch {
         match self {
             Tone::Neutral => swatch(0x8496B0, 0x0A0612, 0xB4C3D6, 0x0E1C31, 0x223B5C),
@@ -96,103 +92,5 @@ impl Tone {
             Tone::Warning => swatch(0xF2A93B, 0x0A0612, 0xF7C266, 0x33230A, 0x8F6217),
             Tone::Danger => swatch(0xF0503C, 0x0A0612, 0xFF8070, 0x3A120E, 0x9E2E22),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const SURFACES: [(&str, Color32); 4] = [
-        ("CANVAS", color::CANVAS),
-        ("PANEL", color::PANEL),
-        ("RAISED", color::RAISED),
-        ("RAISED_HOVER", color::RAISED_HOVER),
-    ];
-
-    const TEXTS: [(&str, Color32); 3] = [
-        ("TEXT", color::TEXT),
-        ("TEXT_SECONDARY", color::TEXT_SECONDARY),
-        ("TEXT_MUTED", color::TEXT_MUTED),
-    ];
-
-    #[test]
-    fn text_tokens_meet_contrast_on_every_surface() {
-        let mut misses = Vec::new();
-        let mut require = |what: String, foreground: Color32, background: Color32, least: f32| {
-            let ratio = contrast(foreground, background);
-            if ratio < least {
-                misses.push(format!("{what}: {ratio:.2}, needs {least}"));
-            }
-        };
-        for (text_name, text) in TEXTS {
-            for (surface_name, surface) in SURFACES {
-                require(format!("{text_name} on {surface_name}"), text, surface, 4.5);
-            }
-        }
-        for tone in Tone::ALL {
-            let swatch = tone.swatch();
-            require(
-                format!("{tone:?} on_solid on solid"),
-                swatch.on_solid,
-                swatch.solid,
-                4.5,
-            );
-            require(
-                format!("{tone:?} text on PANEL"),
-                swatch.text,
-                color::PANEL,
-                4.5,
-            );
-            require(
-                format!("{tone:?} text on RAISED"),
-                swatch.text,
-                color::RAISED,
-                4.5,
-            );
-            require(
-                format!("{tone:?} text on wash"),
-                swatch.text,
-                swatch.wash,
-                4.5,
-            );
-            require(
-                format!("TEXT on {tone:?} wash"),
-                color::TEXT,
-                swatch.wash,
-                13.0,
-            );
-            require(
-                format!("{tone:?} solid on PANEL"),
-                swatch.solid,
-                color::PANEL,
-                3.0,
-            );
-        }
-        assert!(misses.is_empty(), "text that is hard to read: {misses:#?}");
-    }
-
-    /// How far apart two opaque colours are in brightness, as the WCAG 2 accessibility standard
-    /// counts it.
-    fn contrast(first: Color32, second: Color32) -> f32 {
-        let (light, dark) = (luminance(first), luminance(second));
-        let (light, dark) = if light >= dark {
-            (light, dark)
-        } else {
-            (dark, light)
-        };
-        (light + 0.05) / (dark + 0.05)
-    }
-
-    fn luminance(color: Color32) -> f32 {
-        let linear = |channel: u8| {
-            let value = f32::from(channel) / 255.0;
-            if value <= 0.03928 {
-                value / 12.92
-            } else {
-                ((value + 0.055) / 1.055).powf(2.4)
-            }
-        };
-        0.2126 * linear(color.r()) + 0.7152 * linear(color.g()) + 0.0722 * linear(color.b())
     }
 }

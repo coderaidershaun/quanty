@@ -40,7 +40,6 @@ impl KeyName {
     }
 }
 
-/// When a shortcut is read. `NotTyping` rows are skipped while a text box has the keyboard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum When {
     Always,
@@ -54,7 +53,6 @@ pub struct Chord {
     pub key: KeyName,
 }
 
-/// What the help sheet prints: "⌘K", "⇧⌘S", "/", "Esc".
 impl fmt::Display for Chord {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.shift {
@@ -77,7 +75,6 @@ pub struct Shortcut {
     pub help: &'static str,
 }
 
-/// The key with ⌘ held.
 const fn command(key: KeyName) -> Chord {
     Chord {
         command: true,
@@ -86,7 +83,6 @@ const fn command(key: KeyName) -> Chord {
     }
 }
 
-/// The key alone.
 const fn plain(key: KeyName) -> Chord {
     Chord {
         command: false,

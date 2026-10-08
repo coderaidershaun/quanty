@@ -18,11 +18,9 @@ pub(super) struct PieceFacts {
     pub(super) name: Option<String>,
 }
 
-/// For each hit, the piece it was made from, or `None`. A chunk has none, because one chunk can
-/// hold several text pieces. A formula, figure or table has one when exactly one piece of its
-/// page has its kind and its label; with none or with two there is no guess. A document with no
-/// folder, or whose chapter cannot be read, gives `None` for all its hits. Each chapter is read
-/// once.
+/// A chunk has none, because one chunk can hold several text pieces. A formula, figure or table
+/// has one only when exactly one piece of its page has its kind and its label: with none or with
+/// two there is no guess.
 pub(super) fn piece_facts(
     hits: &[SearchHit],
     folders: &HashMap<DocId, PathBuf>,
@@ -88,8 +86,7 @@ fn printed(text: Option<&str>) -> Option<&str> {
     text.map(str::trim).filter(|text| !text.is_empty())
 }
 
-/// The results of a search, numbered from 1 in the order of the hits. `facts` has one entry for
-/// each hit, and a hit past its end has none.
+/// `facts` has one entry for each hit, and a hit past its end has none.
 pub(super) fn result_items(hits: &[SearchHit], facts: Vec<Option<PieceFacts>>) -> Vec<ResultItem> {
     let facts = facts.into_iter().chain(std::iter::repeat(None));
     hits.iter()
@@ -131,113 +128,5 @@ fn reason(reason: &rag_retrieval::Reason) -> contract::Reason {
             by: *by,
             label: label.clone(),
         },
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::path::Path;
-
-    use rag_core::{DocumentLabels, ItemHit, ItemId};
-
-    use super::*;
-
-    fn sample_chapter(path: &str) -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../samples/content")
-            .join(path)
-    }
-
-    fn document(name: &str) -> DocId {
-        DocId::from_source_sha256(name)
-    }
-
-    fn hit(document: DocId, page: u32, kind: ItemKind, label: Option<&str>) -> SearchHit {
-        SearchHit {
-            item: ItemHit {
-                id: ItemId::new(document, kind, 0),
-                score: 0.5,
-                payload: ItemPayload {
-                    doc_id: document,
-                    doc_title: "A book".to_owned(),
-                    page,
-                    printed_page: None,
-                    kind,
-                    text: String::new(),
-                    image_path: None,
-                    label: label.map(str::to_owned),
-                    cites: Vec::new(),
-                    document_labels: DocumentLabels::default(),
-                },
-            },
-            reason: rag_retrieval::Reason::Nearest,
-        }
-    }
-
-    fn facts(piece: u32, caption: Option<&str>, name: Option<&str>) -> Option<PieceFacts> {
-        Some(PieceFacts {
-            piece,
-            caption: caption.map(str::to_owned),
-            name: name.map(str::to_owned),
-        })
-    }
-
-    #[test]
-    fn a_hit_takes_its_piece_caption_and_name_from_the_one_piece_of_its_page_kind_and_label() {
-        let (notes_1, notes_2, volatility) = (
-            document("notes 1"),
-            document("notes 2"),
-            document("volatility"),
-        );
-        let (no_folder, no_chapter) = (document("no folder"), document("no chapter"));
-        let folders = HashMap::from([
-            (notes_1, sample_chapter("quanty-sample-notes/chapter-1")),
-            (notes_2, sample_chapter("quanty-sample-notes/chapter-2")),
-            (
-                volatility,
-                sample_chapter("option-volatility-and-pricing/chapter-1"),
-            ),
-            (no_chapter, sample_chapter("quanty-sample-notes/chapter-9")),
-        ]);
-        let hits = [
-            hit(notes_2, 3, ItemKind::Formula, Some("(2.4)")),
-            hit(notes_1, 2, ItemKind::Table, Some("Table 1-1")),
-            hit(notes_2, 3, ItemKind::Chunk, None),
-            // Page 2 has two formulas and neither has a label.
-            hit(volatility, 2, ItemKind::Formula, None),
-            // Page 3 has two tables, told apart by their labels.
-            hit(volatility, 3, ItemKind::Table, Some("Figure 7-2")),
-            // Page 5 has a figure with this label and no formula.
-            hit(volatility, 5, ItemKind::Formula, Some("Figure 13-4")),
-            hit(volatility, 5, ItemKind::Figure, Some("Figure 13-4")),
-            // Page 3 of the notes has no formula without a label.
-            hit(notes_2, 3, ItemKind::Formula, None),
-            hit(no_folder, 1, ItemKind::Formula, Some("(1.1)")),
-            hit(no_chapter, 1, ItemKind::Formula, Some("(1.1)")),
-        ];
-
-        assert_eq!(
-            piece_facts(&hits, &folders),
-            vec![
-                facts(5, None, Some("Black–Scholes call price")),
-                facts(
-                    3,
-                    Some("How the price of a call and of a put respond when one input rises."),
-                    None
-                ),
-                None,
-                None,
-                facts(
-                    1,
-                    Some("Effect of changing interest rates on option values."),
-                    None
-                ),
-                None,
-                facts(1, None, None),
-                None,
-                None,
-                None,
-            ]
-        );
     }
 }

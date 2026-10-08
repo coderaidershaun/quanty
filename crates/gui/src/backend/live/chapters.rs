@@ -7,14 +7,9 @@ use std::path::Path;
 use ocr::{Catalogue, ChapterEntry, ChapterIndex};
 use rag_core::DocId;
 
-/// The converted chapter of each document, read from disk only. A document is given with the
-/// folder the graph stored for it, if any. A stored folder is used when its `chapter.json` reads
-/// and names this document: a folder that now holds another document is not this document's
-/// folder. Each document that is left is looked for by its id among the chapters under
-/// `content_root`, which is how a document stored before folders were kept is found.
-///
-/// A document that is found by neither way has no entry. A content folder that cannot be listed,
-/// or a chapter under it that cannot be read, is logged and never fails the lookup.
+/// A stored folder is used only when its `chapter.json` reads and names this document: a folder
+/// that now holds another document is not this document's folder. The scan of `content_root`
+/// finds a document that was stored before folders were kept.
 pub(super) fn chapters_on_disk<'a>(
     documents: impl IntoIterator<Item = (DocId, Option<&'a Path>)>,
     content_root: &Path,

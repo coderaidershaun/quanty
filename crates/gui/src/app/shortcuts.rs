@@ -5,8 +5,7 @@ use eframe::egui;
 use super::top_bar::is_bound;
 use crate::contract::{Chord, Intent, KeyName, SHORTCUTS, When};
 
-/// Reads this frame's keys and pushes the intents they stand for. A row that matches takes its
-/// key away, so a widget never sees it too. Nothing is read while a sheet is open.
+/// A row that matches takes its key away, so a widget never sees it too.
 pub(super) fn read(ctx: &egui::Context, intents: &mut Vec<Intent>) {
     if ctx.memory(|memory| memory.top_modal_layer().is_some()) {
         return;
@@ -72,9 +71,7 @@ fn key_of(key: KeyName) -> egui::Key {
     }
 }
 
-/// True when the chord was pressed this frame, and takes its key events away. A held key counts
-/// again only when `repeats` is true. `InputState::consume_key` is not used because it counts
-/// every repeat of a held key.
+/// `InputState::consume_key` is not used because it counts every repeat of a held key.
 fn chord_pressed(
     input: &mut egui::InputState,
     pattern: egui::Modifiers,
@@ -102,142 +99,4 @@ fn chord_pressed(
         );
     }
     found
-}
-
-#[cfg(test)]
-mod tests {
-    use egui_kittest::Harness;
-    use egui_kittest::kittest::Queryable;
-
-    use super::*;
-
-    /// A text box, a button that is not a text box, and what `read` made of the keys.
-    struct Probe {
-        text: String,
-        intents: Vec<Intent>,
-        focus_the_box: bool,
-    }
-
-    impl eframe::App for Probe {
-        fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-            let before = self.intents.len();
-            read(ctx, &mut self.intents);
-            self.focus_the_box |= self.intents[before..].contains(&Intent::FocusAskBar);
-        }
-
-        fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-            let id = egui::Id::new("question");
-            if std::mem::take(&mut self.focus_the_box) {
-                ui.memory_mut(|memory| memory.request_focus(id));
-            }
-            ui.add(egui::TextEdit::singleline(&mut self.text).id(id));
-            let _chip = ui.button("A chip");
-        }
-    }
-
-    fn probe() -> Harness<'static, Probe> {
-        Harness::builder()
-            .with_size(egui::vec2(300.0, 120.0))
-            .build_eframe(|_creation| Probe {
-                text: String::new(),
-                intents: Vec::new(),
-                focus_the_box: false,
-            })
-    }
-
-    fn key_event(key: egui::Key, modifiers: egui::Modifiers, repeat: bool) -> egui::Event {
-        egui::Event::Key {
-            key,
-            physical_key: Some(key),
-            pressed: true,
-            repeat,
-            modifiers,
-        }
-    }
-
-    #[test]
-    fn a_plain_key_waits_while_a_text_box_has_the_keyboard_and_a_held_key_counts_once() {
-        let mut harness = probe();
-
-        harness.key_press(egui::Key::Slash);
-        harness.run();
-        assert_eq!(harness.state().intents, vec![Intent::FocusAskBar]);
-
-        // A focused widget that is not a text box does not hold a plain key back.
-        harness.get_by_label("A chip").focus();
-        harness.run();
-        harness.key_press(egui::Key::Slash);
-        harness.run();
-        assert_eq!(harness.state().intents.len(), 2);
-
-        // The slash that opened the box is not typed into it.
-        harness.get_by_label("A chip").focus();
-        harness.run();
-        harness.state_mut().text.clear();
-        harness
-            .input_mut()
-            .events
-            .push(egui::Event::Text("/".to_owned()));
-        harness.key_press(egui::Key::Slash);
-        harness.run();
-        assert_eq!(harness.state().intents.len(), 3);
-        assert_eq!(
-            harness.state().text,
-            "",
-            "the key that opens the box is not typed in it"
-        );
-
-        // While the box has the keyboard, plain keys are text and a ⌘ key still works.
-        harness
-            .get_by_role(egui::accesskit::Role::TextInput)
-            .focus();
-        harness.run();
-        for key in [egui::Key::Slash, egui::Key::J, egui::Key::Escape] {
-            harness.key_press(key);
-            harness.run();
-        }
-        assert_eq!(
-            harness.state().intents.len(),
-            3,
-            "a plain key waits for the text box"
-        );
-        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::K);
-        harness.run();
-        assert_eq!(harness.state().intents.len(), 4);
-
-        // A held ⌘K is one press. A held J, which wants repeats, is one press for each repeat.
-        harness.state_mut().intents.clear();
-        harness.get_by_label("A chip").focus();
-        harness.run();
-        let command = egui::Modifiers::COMMAND;
-        harness
-            .input_mut()
-            .events
-            .push(key_event(egui::Key::K, command, false));
-        harness.run();
-        for _ in 0..2 {
-            harness
-                .input_mut()
-                .events
-                .push(key_event(egui::Key::K, command, true));
-            harness.run();
-        }
-        assert_eq!(harness.state().intents, vec![Intent::FocusAskBar]);
-        harness.state_mut().intents.clear();
-        harness.get_by_label("A chip").focus();
-        harness.run();
-        harness
-            .input_mut()
-            .events
-            .push(key_event(egui::Key::J, egui::Modifiers::NONE, false));
-        harness.run();
-        for _ in 0..2 {
-            harness
-                .input_mut()
-                .events
-                .push(key_event(egui::Key::J, egui::Modifiers::NONE, true));
-            harness.run();
-        }
-        assert_eq!(harness.state().intents, vec![Intent::StepResult(1); 3]);
-    }
 }

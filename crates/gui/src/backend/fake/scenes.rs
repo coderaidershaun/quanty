@@ -12,7 +12,6 @@ pub struct Scene {
     pub(super) script: Script,
 }
 
-/// How a scene plays each command. What a scene does not name is played from the samples.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct Script {
     pub(super) search: Search,
@@ -27,11 +26,9 @@ pub(super) struct Script {
     pub(super) ingest: Ingest,
 }
 
-/// What the search of an ask comes back with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum Search {
     Found,
-    /// Found, but with no concept in the graph to follow.
     FoundWithoutConcepts,
     Nothing,
     Fails(FailureKind),
@@ -81,7 +78,6 @@ pub(super) enum Ingest {
     Fails(FailureKind),
 }
 
-/// What the scene does when the window opens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum Opening {
     Nothing,
@@ -90,7 +86,6 @@ pub(super) enum Opening {
     AsksWithALabelNoDocumentHas,
     /// Asks, and opens page 5 of the third sample chapter, which holds a figure.
     AsksAndOpensASource,
-    /// Opens the Ingest tab and checks the chapter that the form holds.
     ChecksAChapter,
 }
 

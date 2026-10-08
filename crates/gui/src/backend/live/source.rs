@@ -44,7 +44,6 @@ pub async fn load_page<S: Services>(
     });
 }
 
-/// Why a page could not be built. It never leaves this file: it becomes a `Failure` at once.
 #[derive(Debug)]
 enum PageFault {
     Read(ReadChapterError),
@@ -166,8 +165,8 @@ fn page_from_disk(target: &PageTarget, content_folder: &Path) -> Result<PageView
     })
 }
 
-/// Where the chapter is on disk. The folder is made canonical, as ingestion does, so a picture has
-/// one path whichever way the folder was found, and one place in the cache of decoded pictures.
+/// The folder is made canonical, as ingestion does, so a picture has one path whichever way the
+/// folder was found, and one place in the cache of decoded pictures.
 fn chapter_folder(target: &PageTarget, content_folder: &Path) -> Result<PathBuf, PageFault> {
     let stored = target
         .folder

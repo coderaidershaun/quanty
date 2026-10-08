@@ -10,20 +10,18 @@ use super::picture::{ImageFailure, ImageState, Picture};
 use crate::contract::ImageRef;
 use crate::media::{Offload, Urgency, Workers};
 
-const DEFAULT_BUDGET: usize = 256 * 1024 * 1024;
+const BUDGET: usize = 256 * 1024 * 1024;
 const DECODE_THREADS: usize = 2;
 /// A stored size is never longer than this, whatever the graphics card allows: it is plenty for
 /// a page.
 const MAX_STORED_SIDE: u32 = 4096;
 
-/// Pictures decoded off the window's thread, and the textures they became.
 pub struct Images {
     workers: Workers<DecodeJob, Decoded>,
     entries: HashMap<ImageRef, Entry>,
-    budget: usize,
     /// The bytes of every stored size of every ready picture.
     bytes: usize,
-    /// The number of polls so far. A picture is wanted when it was asked for since the last poll.
+    /// A picture is wanted when it was asked for since the last poll.
     polls: u64,
     max_side: u32,
 }
@@ -61,7 +59,6 @@ impl Entry {
 }
 
 impl Images {
-    /// A cache that keeps at most 256 MiB of textures.
     pub fn new(ctx: &egui::Context, offload: Offload) -> Images {
         Images {
             workers: Workers::start(
@@ -72,21 +69,13 @@ impl Images {
                 decode,
             ),
             entries: HashMap::new(),
-            budget: DEFAULT_BUDGET,
             bytes: 0,
             polls: 0,
             max_side: max_side(ctx),
         }
     }
 
-    /// Keeps at most `bytes` of textures, except for the pictures that are on screen.
-    pub fn with_budget(mut self, bytes: usize) -> Images {
-        self.budget = bytes;
-        self
-    }
-
-    /// Once per frame, before any panel draws: takes finished pictures, drops queued work that
-    /// nobody asked for since the last poll, and frees the least recently used pictures.
+    /// Call this once per frame, before any panel draws.
     pub fn poll(&mut self, ctx: &egui::Context) {
         let last_drawn = self.polls;
         self.polls += 1;
@@ -103,13 +92,11 @@ impl Images {
         self.workers.run_pending();
     }
 
-    /// True when no picture is loading.
     pub fn is_idle(&self) -> bool {
         !self.entries.values().any(Entry::is_loading)
     }
 
-    /// The picture, wanted on screen now. The first call queues the decode and answers
-    /// `Loading`. It never blocks and never reads a file.
+    /// It never blocks and never reads a file.
     pub fn get(&mut self, image: &ImageRef) -> ImageState {
         let Some(entry) = self.entries.get_mut(image) else {
             self.request(image, Urgency::Now);
@@ -129,8 +116,7 @@ impl Images {
         }
     }
 
-    /// The same as `get`, but decoded after everything that is on screen. Call it each frame for
-    /// the pictures that will be asked for next.
+    /// Call it each frame for the pictures that will be asked for next.
     pub fn prefetch(&mut self, image: &ImageRef) {
         match self.entries.get_mut(image) {
             Some(entry) => entry.last_used = self.polls,
@@ -193,7 +179,6 @@ impl Images {
         self.bytes += entry.bytes();
     }
 
-    /// A queued job that nobody asked for since the last poll is removed, and so is its entry.
     /// A job that already runs is left alone: its entry stays until the result arrives.
     fn cancel_unwanted(&mut self, last_drawn: u64) {
         let unwanted: Vec<ImageRef> = self
@@ -220,10 +205,10 @@ impl Images {
         }
     }
 
-    /// While over budget, frees the ready picture that was used longest ago. A picture that
-    /// was asked for since the last poll is on screen and stays, even when it alone is over.
+    /// A picture that was asked for since the last poll is on screen and stays, even when it
+    /// alone is over the budget.
     fn evict(&mut self, last_drawn: u64) {
-        if self.bytes <= self.budget {
+        if self.bytes <= BUDGET {
             return;
         }
         let mut idle: Vec<(u64, ImageRef)> = self
@@ -236,7 +221,7 @@ impl Images {
             .collect();
         idle.sort_by_key(|(last_used, _)| *last_used);
         for (_, image) in idle {
-            if self.bytes <= self.budget {
+            if self.bytes <= BUDGET {
                 break;
             }
             if let Some(entry) = self.entries.remove(&image) {
@@ -246,7 +231,6 @@ impl Images {
     }
 }
 
-/// The longest side a stored size may have.
 fn max_side(ctx: &egui::Context) -> u32 {
     let allowed = ctx.input(|input| input.max_texture_side);
     u32::try_from(allowed).map_or(MAX_STORED_SIDE, |side| side.min(MAX_STORED_SIDE))

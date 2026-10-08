@@ -43,7 +43,7 @@ pub struct PagePiece {
     pub cut: Option<PageBox>,
 }
 
-/// Everything about one page. It is read from disk, so it works while the stores are down.
+/// It is read from disk, so it works while the stores are down.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct PageView {
     pub doc: DocId,

@@ -1,6 +1,5 @@
-//! The three messages of the app: what a person asks for (`Intent`), what the backend is told to
-//! do (`Command`), and what comes back (`Event`), plus what the shared state asks the app to do
-//! (`Effect`).
+//! The messages of the app: what a person asks for (`Intent`), what the backend is told to do
+//! (`Command`), what comes back (`Event`) and what the shared state asks the app to do (`Effect`).
 
 use super::ask::{Answer, AskDraft, SearchReply};
 use super::concept_graph::ConceptGraph;
@@ -23,7 +22,6 @@ impl Tab {
     pub const ALL: [Tab; 3] = [Tab::Ask, Tab::Library, Tab::Ingest];
 }
 
-/// What a panel or a shortcut asks for. The shared state decides what it means.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Intent {
     OpenTab(Tab),
@@ -42,14 +40,13 @@ pub enum Intent {
         piece: Option<u32>,
     },
     TurnPage(i32),
-    /// Load the open page and its concepts again: "Try again" in Source.
     ReloadSource,
     RefreshCatalogue,
     SetLabels(LabelEdit),
     DeleteDocument(DocId),
     /// The Ingest panel asks for the file dialog. It never opens one itself.
     PickPdf,
-    /// The shell's answer to `PickPdf`. A test pushes it with no dialog.
+    /// The shell's answer to `PickPdf`.
     PdfPicked(std::path::PathBuf),
     CheckIngest(IngestRequest),
     StartIngest,
@@ -63,7 +60,6 @@ pub enum Intent {
     DismissQuit,
 }
 
-/// What the backend is told to do. Every command carries the id of the request it belongs to.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Command {
     Ask {
@@ -102,7 +98,7 @@ pub enum Command {
 }
 
 impl Command {
-    /// The request this command belongs to. For `Cancel`, the request to stop.
+    /// For `Cancel` it is the request to stop.
     pub fn request(&self) -> RequestId {
         match self {
             Command::Ask { request, .. }
@@ -117,10 +113,9 @@ impl Command {
         }
     }
 
-    /// The events that answer this command with a failure: what a part that is not built, a panic
-    /// or a scene sends. A health check is answered with `Unknown` for every service and not with
-    /// `Down`: a check that failed says nothing about the services, and `Down` would make the next
-    /// good search send the check again, for ever.
+    /// A health check is answered with `Unknown` for every service and not with `Down`: a check
+    /// that failed says nothing about the services, and `Down` would make the next good search
+    /// send the check again, for ever.
     pub fn failed(&self, failure: &Failure) -> Vec<Event> {
         match self {
             // An ask is answered in three parts, and any of them may still be waited for.
@@ -183,20 +178,16 @@ impl Command {
     }
 }
 
-/// What the backend sends back. Every event carries the id of the command that caused it.
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Event {
-    /// The results of an ask.
     Search {
         request: RequestId,
         result: Result<SearchReply, Failure>,
     },
-    /// The concept graph of an ask.
     Graph {
         request: RequestId,
         result: Result<ConceptGraph, Failure>,
     },
-    /// The answer of an ask.
     Answer {
         request: RequestId,
         result: Result<Answer, Failure>,
@@ -242,7 +233,6 @@ pub enum Event {
     },
 }
 
-/// What the shared state asks the app to do after it applied an intent or an event.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Effect {
     Send(Command),

@@ -9,7 +9,6 @@ use uuid::Uuid;
 
 use crate::contract::{ConceptId, DocId, Filters, ItemId, ItemKind, LabelEdit};
 
-/// Reads the text of a backend id. The backend prints an id as a UUID, so this cannot fail.
 fn uuid_of(text: &str) -> Uuid {
     Uuid::parse_str(text).expect("a backend id prints as a UUID")
 }

@@ -10,7 +10,6 @@ use gui::testkit;
 
 use super::{Window, click, has, is_open_tab, node, press, shared};
 
-/// What the app asked the window to copy in the last frame that ran.
 fn copied(harness: &Window) -> Vec<String> {
     harness
         .output()
@@ -38,7 +37,6 @@ fn question_box(harness: &Window) -> Option<String> {
     node(harness, Role::TextInput, "Question").value()
 }
 
-/// Checks that exactly one new ask was made since `generation`, with this question.
 fn assert_new_ask(harness: &Window, generation: u64, question: &str) {
     let ask = &shared(harness).ask;
     assert_eq!(ask.generation, generation + 1, "one new ask was made");
@@ -50,7 +48,6 @@ fn a_follow_up_starts_a_new_ask_and_copies_reach_the_clipboard() {
     let mut harness = testkit::app("black-scholes", DEFAULT_WINDOW);
     testkit::settle(&mut harness);
 
-    // The Books list comes from the library, and the ask carries the book that was chosen.
     let books: Vec<String> = shared(&harness)
         .library
         .catalogue
@@ -84,7 +81,6 @@ fn a_follow_up_starts_a_new_ask_and_copies_reach_the_clipboard() {
     assert_new_ask(&harness, before, &question);
     assert_eq!(shared(&harness).ask.filters.book.as_ref(), Some(&books[0]));
 
-    // A suggestion chip asks its question again with the same mode and filters.
     click(&mut harness, Role::Tab, "Results");
     let follow_up = shared(&harness)
         .ask
@@ -109,7 +105,6 @@ fn a_follow_up_starts_a_new_ask_and_copies_reach_the_clipboard() {
         "a new ask opens the Answer tab again"
     );
 
-    // A typed follow-up.
     let typed = "What does gamma measure?";
     node(&harness, Role::TextInput, "Follow-up question").click();
     node(&harness, Role::TextInput, "Follow-up question").type_text(typed);
@@ -125,8 +120,6 @@ fn a_follow_up_starts_a_new_ask_and_copies_reach_the_clipboard() {
         "the follow-up box is empty again"
     );
 
-    // A slash typed in the question box stays in the box, and a slash anywhere else moves the
-    // caret to it.
     click(&mut harness, Role::TextInput, "Question");
     let cue = shared(&harness).cues.focus_ask_bar;
     press(&mut harness, egui::Modifiers::NONE, egui::Key::Slash);

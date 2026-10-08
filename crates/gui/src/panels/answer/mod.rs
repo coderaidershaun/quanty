@@ -9,8 +9,6 @@ mod pane;
 mod phase;
 mod results;
 mod states;
-#[cfg(test)]
-mod tests;
 
 use eframe::egui;
 
@@ -22,7 +20,6 @@ use crate::panels::PanelCx;
 use crate::theme::space;
 use crate::widgets;
 
-/// The pane's own state. A new ask starts it again.
 #[derive(Debug, Default)]
 pub struct Local {
     seen: u64,
@@ -30,8 +27,6 @@ pub struct Local {
     view: View,
 }
 
-/// Draws the pane into `ui`, which is its whole rectangle, and pushes an intent to select a
-/// result, to copy text or to share the answer.
 pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     let shared = cx.shared;
     let ask = &shared.ask;

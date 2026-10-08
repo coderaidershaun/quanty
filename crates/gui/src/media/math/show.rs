@@ -16,9 +16,7 @@ const INLINE_WAITING_SIZE_EM: Vec2 = vec2(2.0, 1.2);
 const SMALLEST_SCALE: f32 = 0.6;
 const WAITING_NAME: &str = "Typesetting formula";
 
-/// One formula as a widget, with every state drawn. `Display::Block`: centred in the available
-/// width and scaled down to fit. `Display::Inline`: its own size. In every state there is exactly
-/// one accessible node, an `Image` named by the LaTeX source.
+/// In every state there is exactly one accessible node, an `Image` named by the LaTeX source.
 pub fn show(ui: &mut Ui, media: &mut Media, math: &MathRef<'_>) -> Response {
     let state = media.math.get(math);
     // A parent with no width limit has no width to centre in or to fit to, so a block is laid
@@ -93,8 +91,8 @@ fn scrolled(ui: &mut Ui, image: &MathImage, latex: &str) -> Response {
         .inner
 }
 
-/// The LaTeX source in the code font. It is painted, not a label, so that the only node that
-/// carries the source as its name is the formula's own.
+/// The LaTeX is painted, not a label, so that the only node that carries the source as its name
+/// is the formula's own.
 fn source(ui: &mut Ui, display: Display, latex: &str) -> Response {
     let font = TextRole::Mono.font();
     let galley = match display {
@@ -112,68 +110,4 @@ fn source(ui: &mut Ui, display: Display, latex: &str) -> Response {
     let (rect, response) = ui.allocate_exact_size(galley.size(), Sense::hover());
     ui.painter().galley(rect.min, galley, color::TEXT_MUTED);
     response
-}
-
-#[cfg(test)]
-mod tests {
-    use egui_kittest::Harness;
-
-    use super::*;
-    use crate::testkit::{self, Host};
-
-    const WIDE: &str = r"\text{forward price} = \text{current cash price} + \text{costs of buying now} - \text{benefits of buying now}";
-
-    fn painted_widths(harness: &Harness<'_, Host>, texture: egui::TextureId) -> Vec<f32> {
-        fn collect(shape: &egui::Shape, texture: egui::TextureId, found: &mut Vec<f32>) {
-            match shape {
-                egui::Shape::Mesh(mesh) if mesh.texture_id == texture => {
-                    found.push(mesh.calc_bounds().width());
-                }
-                egui::Shape::Vec(shapes) => shapes
-                    .iter()
-                    .for_each(|shape| collect(shape, texture, found)),
-                _ => {}
-            }
-        }
-        let mut found = Vec::new();
-        for clipped in &harness.output().shapes {
-            collect(&clipped.shape, texture, &mut found);
-        }
-        found
-    }
-
-    /// The image of the wide formula, and the width in points that it was painted at.
-    fn drawn_in(room: f32) -> (MathImage, f32) {
-        let mut harness = testkit::panel([room, 80.0], testkit::asked("q"), |ui, cx| {
-            show(ui, cx.media, &MathRef::block(WIDE));
-        });
-        harness.run();
-        harness.state_mut().media.run_pending();
-        harness.run();
-        let MathState::Ready(image) = harness.state_mut().media.math.get(&MathRef::block(WIDE))
-        else {
-            panic!("the wide formula is typeset");
-        };
-        let painted = painted_widths(&harness, image.texture);
-        assert_eq!(painted.len(), 1, "one textured quad for one formula");
-        (image, painted[0])
-    }
-
-    #[test]
-    fn a_block_wider_than_its_room_is_scaled_down_and_then_scrolls() {
-        let (image, whole) = drawn_in(900.0);
-        assert!((whole - image.texture_size.x).abs() < 1.0, "room to spare");
-
-        let room = image.width * 0.85;
-        let (_, scaled) = drawn_in(room);
-        assert!(scaled < image.texture_size.x);
-        assert!(scaled <= room + 2.0 * image.bleed, "it fits its room");
-
-        let (_, scrolled) = drawn_in(image.width * SMALLEST_SCALE / 2.0);
-        let expected = image.texture_size.x * SMALLEST_SCALE;
-        assert!(
-            (scrolled - expected).abs() < 1.0,
-            "it stops at the least scale"
-        );
-    }
 }

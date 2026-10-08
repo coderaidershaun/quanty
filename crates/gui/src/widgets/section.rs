@@ -4,7 +4,6 @@ use eframe::egui;
 
 use crate::theme::{TextRole, color, hairline, radius, size, space, stroke};
 
-/// The frame of every panel.
 pub fn panel_frame() -> egui::Frame {
     egui::Frame::NONE
         .fill(color::PANEL)
@@ -13,8 +12,8 @@ pub fn panel_frame() -> egui::Frame {
         .inner_margin(space::LG)
 }
 
-/// A title at the left and whatever `add_actions` draws at the right. The actions are laid out
-/// from right to left, so the first one that is drawn is the one at the far right.
+/// The actions are laid out from right to left, so the first one that is drawn is the one at
+/// the far right.
 pub fn section_header<R>(
     ui: &mut egui::Ui,
     title: &str,
@@ -32,7 +31,6 @@ pub fn section_header<R>(
     .inner
 }
 
-/// A line across the whole width.
 pub fn separator(ui: &mut egui::Ui) {
     let side = egui::vec2(ui.available_width(), stroke::BORDER);
     let (rect, _) = ui.allocate_exact_size(side, egui::Sense::hover());

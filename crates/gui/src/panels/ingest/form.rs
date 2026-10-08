@@ -12,14 +12,12 @@ use crate::widgets::{Button, ControlSize, Dropdown, TextInput};
 /// The button that goes back to the list of books is this wide.
 const BACK_WIDTH: f32 = 200.0;
 
-/// The last row of the list of books.
 const ADD_A_NEW_BOOK: &str = "Add a new book…";
 
 pub(super) const RULE: &str =
     "The file must be named chapter-<number>-<name>.pdf, for example chapter-3-greeks.pdf.";
 pub(super) const COST: &str = "Checking is free. Starting is paid work: claude and Jev convert each page, Gemini embeds the items, and claude reads the concepts.";
 
-/// Draws the form. The whole of it is faded out while an ingest runs.
 pub(super) fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     let is_running = cx.shared.ingest.is_running();
     ui.label(TextRole::Heading.rich("Add a chapter"));
@@ -71,8 +69,6 @@ fn file_row(ui: &mut egui::Ui, local: &Local, intents: &mut Vec<Intent>) {
     });
 }
 
-/// The book: a list of the books of the library with `Add a new book…` last, or a box for the
-/// title of a new book. With no book in the library the box shows at once, with the reason.
 fn book_row(ui: &mut egui::Ui, local: &mut Local, cx: &PanelCx<'_>) {
     caption(ui, "Book");
     let catalogue = &cx.shared.library.catalogue;
@@ -88,7 +84,6 @@ fn book_row(ui: &mut egui::Ui, local: &mut Local, cx: &PanelCx<'_>) {
     }
 }
 
-/// Why the library offers no book to choose from.
 fn why_no_list(catalogue: &Loadable<Catalogue>) -> &str {
     match catalogue {
         Loadable::Idle | Loadable::Loading => "The library is still loading.",
@@ -122,7 +117,6 @@ fn list(ui: &mut egui::Ui, local: &mut Local, offers: &[Offer<'_>]) {
     }
 }
 
-/// The box of the title of a new book, with a button back to the list when there is a list.
 fn new_book(ui: &mut egui::Ui, local: &mut Local, has_list: bool) {
     let mut text = match &local.book {
         BookChoice::Unchosen => String::new(),

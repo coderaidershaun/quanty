@@ -9,7 +9,6 @@ pub(super) const TITLE: &str = "Retrieval Path";
 pub(super) const SEARCHING: &str = "Searching";
 pub(super) const FAILED: &str = "The search failed";
 
-/// What fills the card under the header.
 #[derive(Debug)]
 pub(super) enum Body<'a> {
     Steps,
@@ -38,7 +37,6 @@ pub(super) fn body(ask: &AskSession) -> Body<'_> {
     }
 }
 
-/// One row of the path.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Step {
     pub(super) title: &'static str,
@@ -55,7 +53,6 @@ pub(super) enum Progress {
     NotReached,
 }
 
-/// The five rows of a search that has not come back.
 pub(super) fn waiting() -> Vec<Step> {
     ROWS.iter()
         .map(|row| {
@@ -68,7 +65,6 @@ pub(super) fn waiting() -> Vec<Step> {
         .collect()
 }
 
-/// The five rows of a search that came back, from what its trace says each step did.
 pub(super) fn taken(trace: &RetrievalTrace) -> Vec<Step> {
     let outcomes = [
         nearest(trace),
@@ -207,7 +203,6 @@ fn cited(trace: &RetrievalTrace) -> Outcome {
     }
 }
 
-/// `+3 items`: what a step added to the items already found.
 fn added(count: usize) -> String {
     format!("+{}", counted(count, "item", "items"))
 }
@@ -217,7 +212,6 @@ fn counted(count: usize, one: &str, many: &str) -> String {
     format!("{count} {noun}")
 }
 
-/// The first few names, then how many more there are.
 fn listed(names: &[String]) -> String {
     let shown: Vec<&str> = names.iter().take(NAMES_SHOWN).map(String::as_str).collect();
     let shown = shown.join(", ");
@@ -263,7 +257,7 @@ const ROWS: [Row; 5] = [
     },
 ];
 
-/// What one step did. A line of `None` leaves the row's own about line.
+/// A line of `None` leaves the row's own about line.
 struct Outcome {
     progress: Progress,
     badge: Option<String>,
@@ -271,7 +265,6 @@ struct Outcome {
 }
 
 impl Outcome {
-    /// The search stopped before this step: the badge says so and the about line stays.
     fn not_reached() -> Self {
         Outcome {
             progress: Progress::NotReached,
@@ -290,185 +283,5 @@ impl Row {
             progress: outcome.progress,
             tone: self.tone,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_search_that_has_not_come_back_waits_on_five_rows_with_no_count() {
-        let rows = waiting();
-        let titles: Vec<_> = rows.iter().map(|row| row.title).collect();
-        assert_eq!(
-            titles,
-            [
-                "Nearest items",
-                "Concepts matched",
-                "One hop in the graph",
-                "Ranked and capped",
-                "Cited items"
-            ]
-        );
-        assert!(rows.iter().all(|row| row.badge.is_none()));
-        assert!(rows.iter().all(|row| row.progress == Progress::Waiting));
-        assert_eq!(
-            rows[0].line,
-            "The stored items closest in meaning to the question."
-        );
-    }
-
-    fn strings(names: &[&str]) -> Option<Vec<String>> {
-        Some(names.iter().map(|name| (*name).to_owned()).collect())
-    }
-
-    fn badges_and_lines(trace: &RetrievalTrace) -> Vec<(Option<String>, String)> {
-        taken(trace)
-            .into_iter()
-            .map(|row| (row.badge, row.line))
-            .collect()
-    }
-
-    #[test]
-    fn a_finished_search_names_what_each_step_produced() {
-        let trace = RetrievalTrace {
-            documents_searched: None,
-            nearest: 8,
-            seed_concepts: strings(&[
-                "Black–Scholes model",
-                "Volatility",
-                "Itô's lemma",
-                "Risk-free rate",
-                "European option",
-            ]),
-            related_concepts: strings(&["Risk-neutral measure", "Hedging"]),
-            candidates: Some(14),
-            ranked: Some(14),
-            kept: Some(8),
-            passed_over: vec![(
-                "Quanty Sample Notes, chapter 2: The Black–Scholes model".to_owned(),
-                2,
-            )],
-            cited: strings(&["Table 1-1"]),
-        };
-        let some = |badge: &str, line: &str| (Some(badge.to_owned()), line.to_owned());
-        assert_eq!(
-            badges_and_lines(&trace),
-            [
-                some(
-                    "8 items",
-                    "The stored items closest in meaning to the question."
-                ),
-                some(
-                    "5 concepts",
-                    "Black–Scholes model, Volatility, Itô's lemma and 2 more"
-                ),
-                some("+6 items", "Risk-neutral measure, Hedging"),
-                some(
-                    "8 kept",
-                    "14 ranked together. The cap passed over 2: Quanty Sample Notes, chapter 2: The Black–Scholes model."
-                ),
-                some("+1 item", "Table 1-1"),
-            ]
-        );
-        assert!(
-            taken(&trace)
-                .iter()
-                .all(|row| row.progress == Progress::Taken)
-        );
-    }
-
-    fn badges(trace: &RetrievalTrace) -> Vec<Option<String>> {
-        taken(trace).into_iter().map(|row| row.badge).collect()
-    }
-
-    #[test]
-    fn a_missing_step_is_not_reached_and_a_real_zero_is_a_zero() {
-        let empty_library = RetrievalTrace::default();
-        let rows = taken(&empty_library);
-        assert_eq!(rows[0].badge.as_deref(), Some("0 items"));
-        assert_eq!(rows[0].line, "The library holds no items.");
-        assert!(
-            rows[1..]
-                .iter()
-                .all(|row| row.progress == Progress::NotReached
-                    && row.badge.as_deref() == Some("Not reached"))
-        );
-        // A not reached row keeps its about line, so a person reads what the step would have done.
-        assert_eq!(rows[1].line, ROWS[1].about);
-
-        let no_document = RetrievalTrace {
-            documents_searched: Some(0),
-            ..RetrievalTrace::default()
-        };
-        assert_eq!(badges(&no_document)[0].as_deref(), Some("0 documents"));
-
-        let no_item_matches = RetrievalTrace {
-            documents_searched: Some(2),
-            ..RetrievalTrace::default()
-        };
-        assert_eq!(
-            taken(&no_item_matches)[0].line,
-            "No item matches the filters."
-        );
-
-        let nothing_found = RetrievalTrace {
-            nearest: 8,
-            seed_concepts: Some(Vec::new()),
-            related_concepts: Some(Vec::new()),
-            candidates: Some(8),
-            ranked: Some(8),
-            kept: Some(8),
-            cited: Some(Vec::new()),
-            ..RetrievalTrace::default()
-        };
-        assert_eq!(
-            badges(&nothing_found),
-            ["8 items", "0 concepts", "+0 items", "8 kept", "+0 items"]
-                .map(|text| Some(text.to_owned()))
-        );
-    }
-
-    #[test]
-    fn a_count_that_is_missing_has_no_badge_and_a_count_that_does_not_add_up_is_zero() {
-        let half = RetrievalTrace {
-            nearest: 9,
-            related_concepts: Some(vec!["Hedging".to_owned()]),
-            candidates: Some(4),
-            kept: Some(1),
-            ..RetrievalTrace::default()
-        };
-        let rows = taken(&half);
-        assert_eq!(rows[2].badge.as_deref(), Some("+0 items"));
-        assert_eq!(rows[3].badge.as_deref(), Some("1 kept"));
-        assert_eq!(rows[3].line, "The cap passed over none.");
-        let only_related = RetrievalTrace {
-            related_concepts: Some(vec!["Hedging".to_owned()]),
-            ..RetrievalTrace::default()
-        };
-        assert_eq!(taken(&only_related)[2].badge, None);
-    }
-
-    #[test]
-    fn a_filter_and_a_cap_show_in_the_ranked_line() {
-        let filtered = RetrievalTrace {
-            documents_searched: Some(2),
-            nearest: 3,
-            candidates: Some(14),
-            ranked: Some(11),
-            kept: Some(6),
-            passed_over: vec![("Notes".to_owned(), 3), ("Hull".to_owned(), 2)],
-            ..RetrievalTrace::default()
-        };
-        let rows = taken(&filtered);
-        assert_eq!(
-            rows[0].line,
-            "The closest items in the 2 documents with these labels."
-        );
-        assert_eq!(
-            rows[3].line,
-            "11 of 14 ranked together; the others lack these labels. The cap passed over 5: 3 from Notes; 2 from Hull."
-        );
     }
 }

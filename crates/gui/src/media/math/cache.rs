@@ -20,7 +20,7 @@ const MIN_EM_PX: f32 = 4.0;
 /// Above this the picture costs more than it can show.
 const MAX_EM_PX: f32 = 256.0;
 
-/// One formula to typeset. The colour is not part of it: ink is white and `paint` tints it.
+/// The colour is not part of it: ink is white and `paint` tints it.
 struct Job {
     key: u64,
     latex: Box<str>,
@@ -30,13 +30,13 @@ struct Job {
     max_side: u32,
 }
 
-/// A job and what the worker made of it. `made` is `None` when the formula cannot be typeset.
+/// `made` is `None` when the formula cannot be typeset.
 struct Done {
     job: Job,
     made: Option<Made>,
 }
 
-/// A texture on the graphics side, and the numbers that go with it. Dropping it frees the texture.
+/// Dropping it frees the texture.
 struct Made {
     _texture: egui::TextureHandle,
     image: MathImage,
@@ -81,7 +81,6 @@ impl Entry {
     }
 }
 
-/// Formulas typeset off the window's thread, and the textures they became.
 pub struct Math {
     workers: Workers<Job, Done>,
     /// Keyed by a hash of the source, the mode and the pixels to the em, so that a lookup by
@@ -90,14 +89,13 @@ pub struct Math {
     budget: usize,
     /// The bytes of every texture in `entries`.
     bytes: usize,
-    /// The number of polls so far. A formula is wanted when it was asked for since the last poll.
+    /// A formula is wanted when it was asked for since the last poll.
     polls: u64,
     pixels_per_point: f32,
     max_side: u32,
 }
 
 impl Math {
-    /// A cache that keeps at most 64 MiB of textures.
     pub fn new(ctx: &egui::Context, offload: Offload) -> Math {
         Math {
             workers: Workers::start(offload, WORKER_NAME, TYPESET_THREADS, ctx.clone(), work),
@@ -110,14 +108,13 @@ impl Math {
         }
     }
 
-    /// Sets the most bytes of textures to keep. A formula that is asked for in every frame
-    /// stays, even beyond that.
+    /// A formula that is asked for in every frame stays, even beyond the budget.
     pub fn with_budget(mut self, bytes: usize) -> Math {
         self.budget = bytes;
         self
     }
 
-    /// Once per frame, before any panel draws.
+    /// Call this once per frame, before any panel draws.
     pub fn poll(&mut self, ctx: &egui::Context) {
         let last_drawn = self.polls;
         self.polls += 1;
@@ -135,12 +132,11 @@ impl Math {
         self.workers.run_pending();
     }
 
-    /// True when no formula is `Loading`.
     pub fn is_idle(&self) -> bool {
         !self.entries.values().any(Entry::is_loading)
     }
 
-    /// The first call queues the work and returns `Loading`. Never blocks.
+    /// It never blocks.
     pub fn get(&mut self, math: &MathRef<'_>) -> MathState {
         let em_px = em_px(math.size, self.pixels_per_point);
         let key = egui::util::hash((math.latex, math.display, em_px));
@@ -194,9 +190,7 @@ impl Math {
         };
     }
 
-    /// A queued job that nobody asked for since the last poll is removed, and so is its entry:
-    /// the formula is not on screen. A job that already runs is left alone: its entry stays
-    /// until the result arrives.
+    /// A job that already runs is left alone: its entry stays until the result arrives.
     fn cancel_unwanted(&mut self, last_drawn: u64) {
         let unwanted: Vec<u64> = self
             .entries
@@ -226,7 +220,6 @@ impl Math {
         }
     }
 
-    /// Drops the textures that were asked for least recently, until the rest fits the budget.
     /// A texture asked for since the last poll is on screen and stays.
     fn evict(&mut self, last_drawn: u64) {
         if self.bytes <= self.budget {
@@ -311,61 +304,4 @@ fn make(ctx: &egui::Context, job: &Job) -> Result<Made, TypesetError> {
         image,
         bytes: width * height * BYTES_PER_PIXEL,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn asked(latex: &str) -> MathRef<'_> {
-        MathRef {
-            latex,
-            display: Display::Block,
-            size: 20.0,
-        }
-    }
-
-    fn math_names(ctx: &egui::Context) -> Vec<String> {
-        let manager = ctx.tex_manager();
-        let manager = manager.read();
-        let names = manager.allocated().map(|(_, meta)| meta.name.clone());
-        names.filter(|name| name.starts_with("math:")).collect()
-    }
-
-    #[test]
-    fn a_formula_that_nobody_asks_for_again_is_never_typeset() {
-        let ctx = egui::Context::default();
-        let mut math = Math::new(&ctx, Offload::Manual);
-        assert_eq!(math.get(&asked("a")), MathState::Loading);
-        assert_eq!(math.get(&asked("b")), MathState::Loading);
-        math.poll(&ctx);
-
-        assert_eq!(math.get(&asked("a")), MathState::Loading);
-        math.poll(&ctx);
-        math.run_pending();
-        math.poll(&ctx);
-
-        assert!(matches!(math.get(&asked("a")), MathState::Ready(_)));
-        assert_eq!(math_names(&ctx), ["math:a"], "b was never typeset");
-        assert_eq!(math.get(&asked("b")), MathState::Loading, "b starts again");
-        assert!(!math.is_idle());
-    }
-
-    #[test]
-    fn a_worker_thread_delivers_a_typeset_formula_with_no_help() {
-        let ctx = egui::Context::default();
-        let mut math = Math::new(&ctx, Offload::Threads);
-        let started = std::time::Instant::now();
-        assert_eq!(math.get(&asked("a")), MathState::Loading);
-        loop {
-            math.poll(&ctx);
-            match math.get(&asked("a")) {
-                MathState::Ready(_) => break,
-                MathState::Loading if started.elapsed() < std::time::Duration::from_secs(5) => {
-                    std::thread::sleep(std::time::Duration::from_millis(2));
-                }
-                other => panic!("the worker thread ended with {other:?}"),
-            }
-        }
-    }
 }

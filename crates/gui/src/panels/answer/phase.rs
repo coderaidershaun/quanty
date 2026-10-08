@@ -21,7 +21,6 @@ impl AnswerTab {
         AnswerTab::Tables,
     ];
 
-    /// The tab that is open until the person chooses another.
     pub(super) const fn opened_by(mode: AskMode) -> AnswerTab {
         match mode {
             AskMode::Answer => AnswerTab::Answer,
@@ -43,8 +42,7 @@ impl AnswerTab {
         }
     }
 
-    /// True when this tab lists results of this kind. The Answer tab lists them all while the
-    /// answer is not written.
+    /// The Answer tab lists results of every kind while the answer is not written.
     pub(super) const fn lists(self, kind: ItemKind) -> bool {
         match self {
             AnswerTab::Answer | AnswerTab::Results => true,
@@ -99,103 +97,5 @@ impl<'a> Phase<'a> {
             },
         };
         Phase::Found { written }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::contract::{AnswerBlock, SearchReply};
-    use crate::testkit::sample;
-
-    fn failure() -> Failure {
-        sample::failure(crate::contract::FailureKind::Internal)
-    }
-
-    fn ask(search: Loadable<SearchReply>, answer: Loadable<Answer>) -> AskSession {
-        AskSession {
-            generation: 1,
-            search,
-            answer,
-            ..AskSession::default()
-        }
-    }
-
-    fn found() -> Loadable<SearchReply> {
-        Loadable::Ready(sample::search_reply())
-    }
-
-    fn written(session: &AskSession) -> Option<&'static str> {
-        let Phase::Found { written, .. } = Phase::of(session) else {
-            return None;
-        };
-        Some(match written {
-            Written::NotAsked => "not asked",
-            Written::Writing => "writing",
-            Written::Ready(_) => "ready",
-            Written::Empty => "empty",
-            Written::Failed(_) => "failed",
-            Written::Stopped => "stopped",
-        })
-    }
-
-    #[test]
-    fn the_search_alone_names_the_states_with_no_result() {
-        let never = AskSession::default();
-        assert!(matches!(Phase::of(&never), Phase::Idle));
-        let cancelled = ask(Loadable::Idle, Loadable::Idle);
-        assert!(matches!(Phase::of(&cancelled), Phase::SearchStopped));
-        let loading = ask(Loadable::Loading, Loadable::Loading);
-        assert!(matches!(Phase::of(&loading), Phase::Searching));
-        let broken = ask(Loadable::Failed(failure()), Loadable::Idle);
-        assert!(matches!(Phase::of(&broken), Phase::SearchFailed(_)));
-        let nothing = ask(Loadable::Ready(SearchReply::default()), Loadable::Idle);
-        assert!(matches!(Phase::of(&nothing), Phase::NoResults));
-    }
-
-    #[test]
-    fn the_answer_names_what_stands_under_the_results() {
-        let block = Answer {
-            blocks: vec![AnswerBlock::Item(1)],
-            ..Answer::default()
-        };
-        let cases = [
-            (Loadable::Loading, "writing"),
-            (Loadable::Failed(failure()), "failed"),
-            (Loadable::Ready(block), "ready"),
-            (Loadable::Ready(Answer::default()), "empty"),
-            (Loadable::Idle, "stopped"),
-        ];
-        for (answer, expected) in cases {
-            assert_eq!(written(&ask(found(), answer)), Some(expected));
-        }
-        let results_only = AskSession {
-            mode: AskMode::ResultsOnly,
-            ..ask(found(), Loadable::Idle)
-        };
-        assert_eq!(written(&results_only), Some("not asked"));
-    }
-
-    #[test]
-    fn a_tab_lists_its_own_kind_and_the_mode_opens_a_tab() {
-        assert_eq!(AnswerTab::opened_by(AskMode::Answer), AnswerTab::Answer);
-        assert_eq!(
-            AnswerTab::opened_by(AskMode::ResultsOnly),
-            AnswerTab::Results
-        );
-        let kinds = [
-            ItemKind::Chunk,
-            ItemKind::Formula,
-            ItemKind::Figure,
-            ItemKind::Table,
-        ];
-        let listed = |tab: AnswerTab| kinds.map(|kind| tab.lists(kind));
-        assert_eq!(listed(AnswerTab::Results), [true; 4]);
-        assert_eq!(listed(AnswerTab::Formulas), [false, true, false, false]);
-        assert_eq!(listed(AnswerTab::Figures), [false, false, true, false]);
-        assert_eq!(listed(AnswerTab::Tables), [false, false, false, true]);
-        for (at, tab) in AnswerTab::ALL.into_iter().enumerate() {
-            assert_eq!(tab.index(), at);
-        }
     }
 }

@@ -1,5 +1,5 @@
-//! The top of the gallery: the colour tokens, the tones, the text styles, every icon, and a line
-//! of the symbols that the fonts must draw.
+//! The left column of the gallery: the colour tokens, the tones, the text styles, every icon,
+//! and a line of the symbols that the fonts must draw.
 
 use eframe::egui::{self, Align2, Color32, Sense, Stroke, StrokeKind, vec2};
 
@@ -38,7 +38,6 @@ const ROLES: [(&str, TextRole); 8] = [
 const TILE: egui::Vec2 = vec2(112.0, size::CONTROL_LG);
 /// A colour whose channels add up to more than this is light, so it gets dark text.
 const LIGHT_SUM: u32 = 380;
-/// The room for one icon and its name.
 const ICON_CELL: f32 = 72.0;
 const SYMBOLS: &str = "α β σ Δ Σ ∂ ∑ ∫ √ ∞ ≈ ≠ ≤ ≥ → ⇒ ↦ ∈ ∀ ℝ ℚ ℙ 𝔼 x² xᵢ ½ – — “q” ⌘K";
 
@@ -86,7 +85,6 @@ pub(super) fn show(ui: &mut egui::Ui) {
     ui.label(TextRole::Body.rich(format!("Symbols: {SYMBOLS}")));
 }
 
-/// A filled rectangle with the name of the colour and its hex value inside it.
 fn tile(ui: &mut egui::Ui, name: &str, colour: Color32) {
     let (rect, _) = ui.allocate_exact_size(TILE, Sense::hover());
     let painter = ui.painter();

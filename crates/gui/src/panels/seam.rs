@@ -32,8 +32,6 @@ pub struct Locals {
     pub notices: notices::Local,
 }
 
-/// A bordered rectangle with the name of the panel in its centre. It fills the whole area
-/// the panel was given, and the name is its accessible label.
 pub fn placeholder(ui: &mut egui::Ui, name: &str) {
     let rect = ui.max_rect();
     let response = ui.allocate_rect(rect, egui::Sense::hover());

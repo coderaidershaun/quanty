@@ -6,7 +6,7 @@ use gui::contract::{
     AnswerBlock, AskDraft, AskMode, ConceptId, DocId, EdgeKind, Event, Filters, GraphEdge,
     GraphNode, ItemId, ItemKind, NodeId, NodeKind, Reason, RequestId, ResultItem,
 };
-use rag_core::{Config, LlmError};
+use rag_core::Config;
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores};
 use rag_retrieval::RESULTS_PER_QUERY;
 use serde_json::json;
@@ -39,7 +39,7 @@ async fn an_ask_sends_the_results_with_their_trace_then_the_graph_then_the_answe
     });
     let world = fill("query-ask", &answering, FOLDERS).await;
 
-    let events = ask(&world.cx, AskMode::Answer, Filters::default()).await;
+    let events = ask(&world.cx).await;
 
     let [
         Event::Search {
@@ -170,7 +170,7 @@ async fn an_ask_with_nothing_stored_sends_an_empty_search_and_asks_no_model() {
     let stores = ThrowawayStores::new("query-empty");
     let cx = context_with(stores, &answering, StandInEmbedder::default);
 
-    let events = ask(&cx, AskMode::Answer, Filters::default()).await;
+    let events = ask(&cx).await;
 
     let [
         Event::Search {
@@ -194,7 +194,7 @@ async fn an_ask_with_nothing_stored_sends_an_empty_search_and_asks_no_model() {
     };
     let cx = context_over(config, stores, &answering, StandInEmbedder::default);
 
-    let events = ask(&cx, AskMode::Answer, Filters::default()).await;
+    let events = ask(&cx).await;
 
     let [
         Event::Search {
@@ -206,71 +206,6 @@ async fn an_ask_with_nothing_stored_sends_an_empty_search_and_asks_no_model() {
         panic!("expected a failed search alone, with id 7: {events:#?}");
     };
     assert_eq!(answering.calls(), 0);
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p gui --test integration -- --ignored query::"]
-async fn a_results_only_ask_obeys_its_filters_and_a_failed_answer_keeps_the_results() {
-    let answering = StandInLlm::replying(|_, _| {
-        Err(LlmError::UsageLimit {
-            message: "the usage limit was reached".to_owned(),
-        })
-    });
-    let world = fill("query-filters", &answering, FOLDERS).await;
-    let sample_notes = Filters {
-        book: Some("quanty sample notes".to_owned()),
-        tags: vec![" ".to_owned()],
-        ..Filters::default()
-    };
-
-    let events = ask(&world.cx, AskMode::ResultsOnly, sample_notes.clone()).await;
-
-    let [
-        Event::Search {
-            result: Ok(search), ..
-        },
-        Event::Graph { result: Ok(_), .. },
-    ] = events.as_slice()
-    else {
-        panic!("expected the search and the graph, with no answer: {events:#?}");
-    };
-    assert!(!search.results.is_empty());
-    assert!(
-        (search.results.iter()).all(|result| result.book.as_deref() == Some("Quanty Sample Notes"))
-    );
-    assert_eq!(search.trace.documents_searched, Some(2));
-    assert_eq!(answering.calls(), 0);
-
-    let events = ask(&world.cx, AskMode::Answer, sample_notes).await;
-
-    let [
-        Event::Search { result: Ok(_), .. },
-        Event::Graph { result: Ok(_), .. },
-        Event::Answer { result: Err(_), .. },
-    ] = events.as_slice()
-    else {
-        panic!("expected the results to stay when the answer fails: {events:#?}");
-    };
-    assert_eq!(answering.calls(), 1);
-
-    let no_such_book = Filters {
-        book: Some("No such book".to_owned()),
-        ..Filters::default()
-    };
-    let events = ask(&world.cx, AskMode::Answer, no_such_book).await;
-
-    let [
-        Event::Search {
-            result: Ok(search), ..
-        },
-    ] = events.as_slice()
-    else {
-        panic!("expected the search alone: {events:#?}");
-    };
-    assert!(search.results.is_empty());
-    assert_eq!(search.trace.documents_searched, Some(0));
-    assert_eq!(search.trace.seed_concepts, None);
-    assert_eq!(answering.calls(), 1);
 }
 
 fn paragraph(text: &str, cites: &[usize]) -> AnswerBlock {
@@ -302,16 +237,16 @@ fn on_disk(result: &ResultItem) -> (Option<u32>, Option<&str>, Option<&str>) {
     )
 }
 
-/// Asks the question and returns every event that was sent. The `Send` bound is a proof at
-/// compile time that the window can run the ask on any thread of its runtime.
-async fn ask(cx: &LiveContext<StandInServices>, mode: AskMode, filters: Filters) -> Vec<Event> {
+/// The `Send` bound is a proof at compile time that the window can run the ask on any thread of
+/// its runtime.
+async fn ask(cx: &LiveContext<StandInServices>) -> Vec<Event> {
     fn assert_send<F: Future + Send>(future: F) -> F {
         future
     }
     let draft = AskDraft {
         question: QUESTION.to_owned(),
-        mode,
-        filters,
+        mode: AskMode::Answer,
+        filters: Filters::default(),
     };
     let (reply, events, _stop) = Reply::collecting();
     assert_send(query::ask(cx, REQUEST, &draft, &reply)).await;

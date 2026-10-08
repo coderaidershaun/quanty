@@ -8,13 +8,9 @@ use super::Button;
 use super::look::{Look, focus_ring};
 use crate::theme::{Icon, Kind, TextRole, Tone, color, radius, size, space, stroke};
 
-/// The icon inside the small box of a card tag.
 const TAG_GLYPH: f32 = 10.0;
-/// The small box of a card tag.
 const TAG_BOX: f32 = 16.0;
 
-/// A raised card around any content. It can carry a tag in its corner and an icon button at its
-/// top right, and the whole card can answer to a click.
 #[derive(Default)]
 pub struct Card<'a> {
     tag: Option<(Kind, &'a str)>,
@@ -24,8 +20,6 @@ pub struct Card<'a> {
     forced: Option<Look>,
 }
 
-/// What a card reports. `inner` is what the contents returned, `response` is the whole card and
-/// holds the click of a clickable one, and `action_clicked` is the icon button at its top right.
 pub struct CardResponse<R> {
     pub inner: R,
     pub response: Response,
@@ -37,7 +31,6 @@ impl<'a> Card<'a> {
         Card::default()
     }
 
-    /// A tag in the corner, naming what kind of thing the card holds.
     pub fn tag(mut self, kind: Kind, text: &'a str) -> Self {
         self.tag = Some((kind, text));
         self
@@ -54,7 +47,7 @@ impl<'a> Card<'a> {
         self
     }
 
-    /// The whole card answers to a click. `label` is its accessible name.
+    /// `label` is the accessible name of the card.
     pub fn clickable(mut self, label: &'a str) -> Self {
         self.clickable = Some(label);
         self
@@ -67,7 +60,6 @@ impl<'a> Card<'a> {
         self
     }
 
-    /// Draws the card around whatever `add_contents` draws.
     pub fn show<R>(
         self,
         ui: &mut egui::Ui,
@@ -129,8 +121,6 @@ impl<'a> Card<'a> {
         }
     }
 
-    /// The row above the contents: the tag at the left, the action at the right. Says whether
-    /// the action was clicked.
     fn header(&self, ui: &mut egui::Ui) -> bool {
         let mut action_clicked = false;
         ui.horizontal(|ui| {
@@ -147,8 +137,7 @@ impl<'a> Card<'a> {
     }
 }
 
-/// The corner tag: a small coloured box with the kind's icon, then its name. The name is a
-/// label of its own, so a test or a screen reader finds it.
+/// The text of the tag is a label of its own, so a test or a screen reader finds it.
 fn paint_tag(ui: &mut egui::Ui, kind: Kind, text: &str) {
     let swatch = kind.tone().swatch();
     let galley = TextRole::Small.galley(ui, text, swatch.text);

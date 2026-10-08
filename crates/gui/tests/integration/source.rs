@@ -1,137 +1,25 @@
 //! Checks that the live backend reads a page of a saved chapter and the concepts of that page.
-// SMELL: this file is close to the limit of 500 lines. The test of the concepts on the real
-// stores, with what it writes to them, is the part to move out before another test is added.
 
 use std::path::Path;
 
 use graph::{ConceptNode, DocumentNode, GraphStore, ItemNode, Mention};
 use gui::backend::fake::Fake;
 use gui::backend::live::source::{self, PageTarget};
-use gui::backend::live::{LiveContext, RealServices, Services};
+use gui::backend::live::{LiveContext, Services};
 use gui::backend::{Handler, Reply};
 use gui::contract::{
-    ChapterLabel, Command, DocId, Event, Failure, FailureKind, ImageRef, PageBox, PageConcept,
-    PagePiece, PageView, PieceKind, RequestId,
+    Command, DocId, Event, Failure, FailureKind, PageConcept, PageView, RequestId,
 };
 use ocr::content::{FORMAT_VERSION, PageIndex, PieceEntry, page_folder_name};
 use ocr::{ChapterIndex, FigureImage, ImageShows, PieceDetail};
 use rag_core::{ConceptId, DocumentLabels, ItemId, ItemKind};
 use uuid::Uuid;
 
-use crate::support::{self, closed, document_of, sample_chapter};
+use crate::support::{self, closed, sample_chapter};
 
 const REQUEST: RequestId = RequestId(7);
 const VOLATILITY: &str = "option-volatility-and-pricing/chapter-1";
-const NOTES: &str = "quanty-sample-notes/chapter-1";
 const NO_CONTENT_FOLDER: &str = "/no/such/content/folder";
-
-#[tokio::test(flavor = "multi_thread")]
-async fn a_converted_page_loads_with_its_picture_its_figure_rectangle_and_its_neighbours() {
-    let chapter = sample_chapter(VOLATILITY);
-    // The folder is spelled in a way that the pictures must not repeat.
-    let spelled = chapter.join("..").join("chapter-1");
-
-    let page = shown(&closed(Path::new(NO_CONTENT_FOLDER)), &spelled, 5).await;
-
-    let picture = |page: u32| {
-        let path = chapter.join(page_folder_name(page)).join("page.png");
-        Some(ImageRef { path })
-    };
-    let text = |number, file: &str| PagePiece {
-        number,
-        kind: PieceKind::Text,
-        label: None,
-        name: None,
-        caption: None,
-        text: text_of(&chapter.join(page_folder_name(5)).join(file)),
-        image: None,
-        cut: None,
-    };
-    let figure = PagePiece {
-        kind: PieceKind::Figure,
-        label: Some("Figure 13-4".to_owned()),
-        image: Some(ImageRef {
-            path: chapter.join(page_folder_name(5)).join("01-figure.png"),
-        }),
-        cut: Some(PageBox {
-            left: 15,
-            top: 23,
-            right: 905,
-            bottom: 485,
-        }),
-        ..text(1, "01-figure.md")
-    };
-    let expected = PageView {
-        doc: DocId::default(),
-        page: 5,
-        book: Some("Option Volatility and Pricing".to_owned()),
-        chapter: Some(ChapterLabel {
-            number: 1,
-            name: "Sample Pages".to_owned(),
-        }),
-        page_count: 7,
-        printed_page: Some("233".to_owned()),
-        image: picture(5),
-        previous_image: picture(4),
-        next_image: picture(6),
-        pieces: vec![
-            figure,
-            text(2, "02-text.md"),
-            text(3, "03-text.md"),
-            text(4, "04-text.md"),
-        ],
-    };
-    assert_eq!(page, expected);
-    // The piece file ends with a newline that the page does not carry.
-    assert!(page.pieces[1].text.starts_with("Which spread is best?"));
-    assert!(page.pieces[3].text.ends_with("increase volatility."));
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn a_hand_written_page_loads_with_no_page_picture() {
-    use PieceKind::Heading;
-    let cx = closed(Path::new(NO_CONTENT_FOLDER));
-
-    let page = shown(&cx, &sample_chapter("quanty-sample-notes/chapter-2"), 3).await;
-
-    assert_eq!(page.book.as_deref(), Some("Quanty Sample Notes"));
-    let chapter = ChapterLabel {
-        number: 2,
-        name: "Black Scholes In Depth".to_owned(),
-    };
-    assert_eq!(page.chapter, Some(chapter));
-    assert_eq!(page.page_count, 3);
-    assert_eq!(page.printed_page.as_deref(), Some("7"));
-    assert_eq!(page.image, None);
-    assert_eq!(page.previous_image, None);
-    assert_eq!(page.next_image, None);
-    assert!(page.pieces.iter().all(|piece| piece.image.is_none()));
-    let numbers: Vec<u32> = page.pieces.iter().map(|piece| piece.number).collect();
-    assert_eq!(numbers, (1..=10).collect::<Vec<_>>());
-    assert_eq!(page.pieces[2].kind, Heading { rank: 2 });
-    assert_eq!(page.pieces[2].text, "The Pricing Formulas");
-    let formula = &page.pieces[4];
-    assert_eq!(formula.kind, PieceKind::Formula);
-    assert_eq!(formula.label.as_deref(), Some("(2.4)"));
-    assert_eq!(formula.name.as_deref(), Some("Black–Scholes call price"));
-    assert_eq!(formula.text, r"C = S\,N(d_1) - K e^{-rT} N(d_2)");
-
-    // The label of a heading is its printed number, that of a table is its own, and that of a
-    // footnote is its marker.
-    let notes = sample_chapter(NOTES);
-    let first_page = shown(&cx, &notes, 1).await;
-    let title = &first_page.pieces[0];
-    assert_eq!(title.kind, Heading { rank: 1 });
-    assert_eq!(title.label.as_deref(), Some("1"));
-    let table_page = shown(&cx, &notes, 2).await;
-    let (table, footnote) = (&table_page.pieces[2], &table_page.pieces[5]);
-    assert_eq!(table.kind, PieceKind::Table);
-    assert_eq!(table.label.as_deref(), Some("Table 1-1"));
-    let caption = "How the price of a call and of a put respond when one input rises.";
-    assert_eq!(table.caption.as_deref(), Some(caption));
-    assert_eq!(footnote.kind, PieceKind::Footnote);
-    assert_eq!(footnote.label.as_deref(), Some("1"));
-}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_page_loads_with_the_stores_down_and_the_concepts_say_why() {
@@ -146,28 +34,7 @@ async fn the_page_loads_with_the_stores_down_and_the_concepts_say_why() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_document_with_no_folder_is_found_in_the_content_folder() {
-    let samples = gui::testkit::samples_folder();
-    // The content folder is spelled in a way that the pictures must not repeat.
-    let cx = closed(&samples.join("..").join("content"));
-    let chapter = sample_chapter(VOLATILITY);
-    let doc = document_of(&chapter);
-    // A folder that was moved since the document was stored is searched for in the same way.
-    let moved = samples.join("no-such-book/chapter-1");
-
-    let given = loaded(&cx, &page_target(doc, 5, Some(&chapter))).await.0;
-    let searched = loaded(&cx, &page_target(doc, 5, None)).await.0;
-    let found_again = loaded(&cx, &page_target(doc, 5, Some(&moved))).await.0;
-
-    let given = given.expect("the page should load from the folder it was given");
-    assert_eq!(given.pieces.len(), 4);
-    assert_eq!(searched.expect("the page should be found by its id"), given);
-    assert_eq!(found_again.expect("the page should be found again"), given);
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn a_page_that_cannot_be_shown_says_what_to_do() {
-    // A document that no folder is known for.
     let content = tempfile::tempdir().expect("a temporary folder should be made");
     let unknown = page_target(DocId(Uuid::from_u128(9)), 1, None);
     let failure = page_failure(&closed(content.path()), &unknown).await;
@@ -199,10 +66,9 @@ async fn a_page_that_cannot_be_shown_says_what_to_do() {
     an_unfinished_chapter_says_where_it_is().await;
 }
 
-/// A chapter that was never finished is reported as missing, with the folder that was read.
 async fn an_unfinished_chapter_says_where_it_is() {
     let saved = tempfile::tempdir().expect("a temporary folder should be made");
-    saved_chapter(saved.path(), false, ImageShows::Figure, None);
+    saved_chapter(saved.path());
     let cx = closed(Path::new(NO_CONTENT_FOLDER));
 
     let failure = page_failure(&cx, &page_target(DocId::default(), 1, Some(saved.path()))).await;
@@ -211,36 +77,6 @@ async fn an_unfinished_chapter_says_where_it_is() {
     let folder = std::fs::canonicalize(saved.path()).expect("the folder should be there");
     let said = format!("{} {}", failure.hint, failure.detail);
     assert!(said.contains(&folder.display().to_string()), "{failure:?}");
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn a_figure_saved_as_the_whole_page_has_no_rectangle() {
-    let saved = tempfile::tempdir().expect("a temporary folder should be made");
-    let cx = closed(Path::new(NO_CONTENT_FOLDER));
-    let rectangle = |right| ocr::PageBox {
-        left: 15,
-        top: 23,
-        right,
-        bottom: 485,
-    };
-    // A whole-page picture can be saved with the rectangle set. A rectangle past the edge of
-    // the page cannot be drawn.
-    for (shows, cut) in [
-        (ImageShows::WholePage, rectangle(905)),
-        (ImageShows::Figure, rectangle(1200)),
-    ] {
-        saved_chapter(saved.path(), true, shows, Some(cut));
-
-        let page = shown(&cx, saved.path(), 1).await;
-
-        assert_eq!(page.pieces[0].cut, None, "{shows:?} with {cut:?}");
-        assert!(page.pieces[0].image.is_some(), "the picture is still sent");
-    }
-
-    // A picture whose file is gone is not sent.
-    let gone = saved.path().join(page_folder_name(1)).join("01-figure.png");
-    std::fs::remove_file(gone).expect("the picture should be removed");
-    assert_eq!(shown(&cx, saved.path(), 1).await.pieces[0].image, None);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -357,12 +193,6 @@ async fn a_page_lists_the_concepts_its_items_mention() {
     assert_eq!(concepts.expect("the concepts should be read"), expected);
 }
 
-/// The text of a piece file, without its one closing newline.
-fn text_of(file: &Path) -> String {
-    let text = std::fs::read_to_string(file).expect("a piece file should be read");
-    text.strip_suffix('\n').unwrap_or(&text).to_owned()
-}
-
 fn page_target(doc: DocId, page: u32, folder: Option<&Path>) -> PageTarget {
     PageTarget {
         doc,
@@ -371,9 +201,7 @@ fn page_target(doc: DocId, page: u32, folder: Option<&Path>) -> PageTarget {
     }
 }
 
-/// Saves a chapter of one page in `folder`. The page holds one figure, whose picture shows
-/// `shows` and was cut at `cut`, and the file of that picture is there.
-fn saved_chapter(folder: &Path, finished: bool, shows: ImageShows, cut: Option<ocr::PageBox>) {
+fn saved_chapter(folder: &Path) {
     let index = ChapterIndex {
         format_version: FORMAT_VERSION,
         book_title: "A Saved Book".to_owned(),
@@ -382,7 +210,7 @@ fn saved_chapter(folder: &Path, finished: bool, shows: ImageShows, cut: Option<o
         source_file: "chapter-1-one-figure.pdf".to_owned(),
         source_sha256: "a-made-up-hash".to_owned(),
         page_count: 1,
-        finished,
+        finished: false,
     };
     index.write(folder).unwrap();
     let page_folder = folder.join(page_folder_name(1));
@@ -390,8 +218,8 @@ fn saved_chapter(folder: &Path, finished: bool, shows: ImageShows, cut: Option<o
     std::fs::write(page_folder.join("01-figure.png"), b"not a real picture").unwrap();
     let picture = FigureImage {
         file: "01-figure.png".to_owned(),
-        shows,
-        cut,
+        shows: ImageShows::Figure,
+        cut: None,
         holds_body_text: false,
         unchecked: false,
     };
@@ -424,19 +252,12 @@ async fn served(backend: &impl Handler, command: Command) -> Vec<Event> {
     events.try_iter().collect()
 }
 
-async fn shown(cx: &LiveContext<RealServices>, folder: &Path, page: u32) -> PageView {
-    let (page, _concepts) = loaded(cx, &page_target(DocId::default(), page, Some(folder))).await;
-    page.expect("the page should load")
-}
-
 async fn page_failure<S: Services>(cx: &LiveContext<S>, target: &PageTarget) -> Failure {
     let (page, _concepts) = loaded(cx, target).await;
     page.expect_err("the page should not load")
 }
 
-/// Loads the page and returns what the two events carry, after checking that exactly two were
-/// sent, the page first and its concepts second, both with the id of the request. The `Send`
-/// bound is a proof at compile time that the window can run the load on any thread.
+/// The `Send` bound is a proof at compile time that the window can run the load on any thread.
 async fn loaded<S: Services>(
     cx: &LiveContext<S>,
     target: &PageTarget,

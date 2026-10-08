@@ -71,7 +71,6 @@ impl<'a> Pane<'a, '_> {
         self.ask.selected_result == Some(number)
     }
 
-    /// The result with this number and the words of its row.
     pub(super) fn found(&self, number: usize) -> Option<(&'a ResultItem, &'a Row)> {
         let results = self.ask.results();
         let at = results.iter().position(|item| item.number == number)?;
@@ -82,13 +81,11 @@ impl<'a> Pane<'a, '_> {
         self.cx.intents.push(Intent::SelectResult(number));
     }
 
-    /// Asks the app to copy `text`, and marks the button that asked as copied.
     pub(super) fn copy(&mut self, text: &str, mark: Copied) {
         self.cx.intents.push(Intent::CopyText(text.to_owned()));
         self.view.copied = Some(mark);
     }
 
-    /// Asks the app to copy the answer as Markdown, and marks Share as copied.
     pub(super) fn share(&mut self) {
         self.cx.intents.push(Intent::ShareAnswer);
         self.view.copied = Some(Copied::Answer);
@@ -104,7 +101,6 @@ impl<'a> Pane<'a, '_> {
         self.route(clicked);
     }
 
-    /// The one place that turns a click on text into an intent.
     fn route(&mut self, clicked: Option<Clicked>) {
         match clicked {
             Some(Clicked::Citation(number)) => self.select(number),

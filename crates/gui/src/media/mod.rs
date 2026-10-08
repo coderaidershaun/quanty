@@ -10,7 +10,6 @@ use eframe::egui;
 
 pub use offload::{Offload, Urgency, Workers};
 
-/// Everything a panel may ask for that takes time to make.
 pub struct Media {
     pub images: images::Images,
     pub math: math::Math,
@@ -18,7 +17,6 @@ pub struct Media {
 }
 
 impl Media {
-    /// For the app: work runs on worker threads.
     pub fn new(ctx: &egui::Context) -> Media {
         Media::with_offload(ctx, Offload::Threads)
     }
@@ -36,7 +34,7 @@ impl Media {
         }
     }
 
-    /// Takes in what the workers finished. The app calls it once for every frame.
+    /// The app calls it once for every frame.
     pub fn poll(&mut self, ctx: &egui::Context) {
         self.images.poll(ctx);
         self.math.poll(ctx);
@@ -49,7 +47,6 @@ impl Media {
         self.math.run_pending();
     }
 
-    /// True when no picture and no formula is loading.
     pub fn is_idle(&self) -> bool {
         self.images.is_idle() && self.math.is_idle()
     }

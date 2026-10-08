@@ -7,8 +7,7 @@ use eframe::egui::{
 use super::look::{Look, focus_ring};
 use crate::theme::{Icon, TextRole, Tone, color, hairline, radius, size, space, stroke};
 
-/// One tab of a strip. It shows its label, then its count in brackets when it has one. The
-/// label alone is the accessible name, and a test or a screen reader reads the count as the
+/// The label alone is the accessible name, and a test or a screen reader reads the count as the
 /// value of the tab.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Tab<'a> {
@@ -37,7 +36,6 @@ impl<'a> Tab<'a> {
     }
 }
 
-/// A row of tabs. It reports the tab that was chosen and keeps no choice of its own.
 pub struct TabStrip<'a> {
     tabs: &'a [Tab<'a>],
     active: usize,
@@ -57,13 +55,11 @@ impl<'a> TabStrip<'a> {
         }
     }
 
-    /// The colour of the active tab and of the bar under it. It is blue when this is not called.
     pub fn tone(mut self, tone: Tone) -> Self {
         self.tone = tone;
         self
     }
 
-    /// A smaller strip for a narrow column.
     pub fn compact(mut self) -> Self {
         self.is_compact = true;
         self
@@ -105,7 +101,6 @@ impl<'a> TabStrip<'a> {
         chosen
     }
 
-    /// Draws one tab and says whether it was clicked and is not the active one.
     fn show_tab(
         &self,
         ui: &mut egui::Ui,
@@ -173,7 +168,6 @@ impl<'a> TabStrip<'a> {
         response.clicked() && !is_active
     }
 
-    /// The label, and after it the count in brackets. A count of zero is muted.
     fn galley(
         &self,
         ui: &egui::Ui,

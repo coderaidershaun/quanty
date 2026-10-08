@@ -11,12 +11,10 @@ use super::style::TextLook;
 /// A word this close to where the text itself would put it counts as being there.
 const ALIGN_TOLERANCE: f32 = 0.01;
 
-/// The box of one row of a block.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct RowBox {
     pub(super) top: f32,
     pub(super) height: f32,
-    /// The baseline that the words, the formulas and the marks of the row stand on.
     pub(super) baseline: f32,
 }
 
@@ -32,7 +30,6 @@ pub(super) struct Run {
     pub(super) job: LayoutJob,
 }
 
-/// The fill behind a code span.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct CodeFill {
     pub(super) row: usize,
@@ -57,7 +54,6 @@ pub(super) struct PlacedChip {
     pub(super) rect: Rect,
 }
 
-/// One row to place: its number in the block, its box, and what its text looks like.
 pub(super) struct Row<'a> {
     pub(super) index: usize,
     pub(super) bounds: RowBox,
@@ -65,7 +61,6 @@ pub(super) struct Row<'a> {
     pub(super) look: &'a TextLook,
 }
 
-/// What is drawn of a block, added row after row.
 #[derive(Debug, Clone, Default)]
 pub(super) struct Placed {
     pub(super) runs: Vec<Run>,
@@ -128,7 +123,6 @@ impl Placed {
         self.finish_run(run.take(), row.index);
     }
 
-    /// One fill behind each run of code words that stand next to each other.
     fn add_code_fills(&mut self, fragments: &[Fragment<'_>], row: &Row<'_>) {
         let mut open: Option<(f32, f32)> = None;
         for fragment in fragments {
@@ -163,7 +157,6 @@ impl Placed {
     }
 }
 
-/// The words of a run so far.
 struct RunBuilder {
     x: f32,
     font: FontId,

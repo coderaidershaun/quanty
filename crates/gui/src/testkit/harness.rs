@@ -10,7 +10,7 @@ use egui_kittest::Harness;
 use crate::app::App;
 use crate::backend::Handler;
 use crate::backend::fake::Fake;
-use crate::contract::{Effect, Intent, StartupFacts};
+use crate::contract::{Intent, StartupFacts};
 use crate::media::Media;
 use crate::panels::PanelCx;
 use crate::state::Shared;
@@ -21,7 +21,7 @@ const SETTLE_LIMIT: Duration = Duration::from_secs(5);
 
 type Draw = Box<dyn FnMut(&mut egui::Ui, &mut PanelCx<'_>)>;
 
-/// One panel in a harness. Look at `shared` and `intents` through `harness.state()`.
+/// Look at `shared` and `intents` through `harness.state()`.
 pub struct Host {
     pub shared: Shared,
     pub media: Media,
@@ -29,18 +29,6 @@ pub struct Host {
     ctx: egui::Context,
     panel_size: egui::Vec2,
     draw: Draw,
-}
-
-impl Host {
-    /// Applies the intents the panel pushed, through the shared state's rules, and returns what
-    /// the state asked the app to do.
-    pub fn apply_intents(&mut self) -> Vec<Effect> {
-        let mut effects = Vec::new();
-        for intent in std::mem::take(&mut self.intents) {
-            self.shared.apply_intent(intent, &mut effects);
-        }
-        effects
-    }
 }
 
 impl eframe::App for Host {
@@ -77,8 +65,8 @@ impl Drop for Host {
     }
 }
 
-/// One panel in a harness. `size` is the panel's outer rectangle. The window is that plus the
-/// gutter on every side, so the panel sits where the shell would put it.
+/// `size` is the panel's outer rectangle. The window is that plus the gutter on every side, so
+/// the panel sits where the shell would put it.
 ///
 /// The media is manual, and the host polls it at the start of every frame. To see pictures,
 /// call `harness.state_mut().media.run_pending()`, then `harness.run()`.
@@ -113,8 +101,7 @@ pub fn app(scene: &str, size: [f32; 2]) -> Harness<'static, App> {
     app_at(scene, size, PIXELS_PER_POINT)
 }
 
-/// As `app`, drawn at this many pixels for each point. A picture that is kept on disk is drawn at
-/// 1.0, so that it stays small.
+/// A picture that is kept on disk is drawn at 1.0, so that it stays small.
 ///
 /// # Panics
 /// When the scene does not exist or the backend cannot start.
@@ -133,7 +120,7 @@ pub fn app_at(scene: &str, size: [f32; 2], pixels_per_point: f32) -> Harness<'st
     build_app(fake, facts, opening, size, pixels_per_point)
 }
 
-/// The whole app on any backend, with no file dialog. `app` is this on the fake backend.
+/// The whole app on any backend, with no file dialog.
 ///
 /// # Panics
 /// When the backend's threads cannot start.
@@ -163,8 +150,6 @@ fn build_app(
         })
 }
 
-/// Runs frames until the app is idle.
-///
 /// # Panics
 /// When the app is still busy after five seconds.
 pub fn settle(harness: &mut Harness<'_, App>) {
@@ -172,9 +157,6 @@ pub fn settle(harness: &mut Harness<'_, App>) {
 }
 
 /// As `settle`, with the limit a slow backend needs.
-///
-/// # Panics
-/// When the app is still busy after `limit`.
 pub fn settle_within(harness: &mut Harness<'_, App>, limit: Duration) {
     let started = Instant::now();
     loop {
@@ -192,10 +174,6 @@ pub fn settle_within(harness: &mut Harness<'_, App>, limit: Duration) {
     }
 }
 
-/// Writes `<QUANTY_PNG_DIR>/<name>.png`. Does nothing when the variable is not set.
-///
-/// # Panics
-/// When the folder or the file cannot be written, or the frame cannot be drawn.
 pub fn save_png<S>(harness: &mut Harness<'_, S>, name: &str) {
     let Some(folder) = std::env::var_os("QUANTY_PNG_DIR") else {
         return;
@@ -211,7 +189,6 @@ pub fn save_png<S>(harness: &mut Harness<'_, S>, name: &str) {
         .expect("the picture is written");
 }
 
-/// The folder of the repository, two levels above this crate's manifest folder.
 pub(super) fn repository_root() -> PathBuf {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     manifest

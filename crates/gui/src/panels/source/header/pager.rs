@@ -8,14 +8,11 @@ use crate::state::SourceNav;
 use crate::theme::{TextRole, color};
 use crate::widgets::{Step, Stepper};
 
-/// Shown where a page number is not known.
 const UNKNOWN: &str = "–";
 /// A change of the pager's width smaller than this comes from rounding. It is not worth laying
 /// the frame out again.
 const WIDTH_SLACK: f32 = 1.0;
 
-/// The texts of the pager and how wide it was when it was last drawn. A page that is on its way
-/// shows as the page asked for, in a muted colour, and the printed page number waits for it.
 #[derive(Debug, Default)]
 pub(super) struct PagerText {
     key: Option<(DocId, u32, u32)>,
@@ -30,8 +27,6 @@ impl PagerText {
         self.width
     }
 
-    /// Draws the pager and returns the turn the person asked for.
-    ///
     /// It is laid out from its left in a room as wide as it was when it was last drawn, so it
     /// ends at the right edge of its row. When its width changes, the frame is laid out once
     /// more before it is shown.
@@ -85,7 +80,6 @@ impl PagerText {
     }
 }
 
-/// What the pager shows in one frame.
 #[derive(Debug, Clone, Copy)]
 struct Pager<'a> {
     stepper: &'a str,

@@ -41,7 +41,6 @@ impl LayoutKey {
         }
     }
 
-    /// The width the layout is made for.
     fn width(self) -> f32 {
         self.wrap as f32
     }
@@ -62,7 +61,6 @@ struct Used<T> {
     last_used: u64,
 }
 
-/// The laid-out text that is kept between frames.
 #[derive(Debug, Default)]
 pub struct Layouts {
     parsed: HashMap<u64, Used<Arc<Parsed>>>,
@@ -70,18 +68,16 @@ pub struct Layouts {
     parsed_tables: HashMap<u64, Used<Option<Arc<ParsedTable>>>>,
     flows: HashMap<LayoutKey, Used<Arc<Flow>>>,
     tables: HashMap<LayoutKey, Used<Arc<TableLayout>>>,
-    /// The number of polls so far.
     polls: u64,
     stats: LayoutStats,
 }
 
 impl Layouts {
-    /// An empty cache.
     pub fn new() -> Layouts {
         Layouts::default()
     }
 
-    /// Once per frame, before any panel draws: drops what was not drawn lately.
+    /// Call this once per frame, before any panel draws.
     pub fn poll(&mut self, _ctx: &egui::Context) {
         self.polls += 1;
         let polls = self.polls;
@@ -93,7 +89,6 @@ impl Layouts {
         keep_most_recent(&mut self.parsed_tables);
     }
 
-    /// What the cache has done so far, and what it holds now.
     pub fn stats(&self) -> LayoutStats {
         LayoutStats {
             layouts_held: self.flows.len() + self.tables.len(),
@@ -101,8 +96,8 @@ impl Layouts {
         }
     }
 
-    /// The layout of a block of text at the width that is left in `ui`. It is made again when a
-    /// formula that is on screen is not what the layout was made with.
+    /// The layout is made again when a formula that is on screen is not what the layout was
+    /// made with.
     pub(super) fn block(
         &mut self,
         ui: &egui::Ui,
@@ -136,8 +131,7 @@ impl Layouts {
         flow
     }
 
-    /// The layout of a table at the width that is left in `ui`, or `None` when the text is not
-    /// a table.
+    /// It is `None` when the text is not a table.
     pub(super) fn table(
         &mut self,
         ui: &egui::Ui,
@@ -198,7 +192,6 @@ impl Layouts {
     }
 }
 
-/// Drops the entries that were used least recently, until `MAX_PARSED` are left.
 fn keep_most_recent<T>(parsed: &mut HashMap<u64, Used<T>>) {
     if parsed.len() <= MAX_PARSED {
         return;

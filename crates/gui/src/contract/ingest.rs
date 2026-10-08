@@ -5,8 +5,8 @@ use super::failure::Failure;
 use super::ids::DocId;
 use super::library::{ChapterLabel, ItemCounts};
 
-/// An ingest takes no labels. The book names the chapter's folder. The author and the tags are
-/// written after the ingest, as a change to the stored document.
+/// The book names the chapter's folder. The author and the tags are not part of the ingest: they
+/// are written after it, as a change to the stored document.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct IngestRequest {
     pub pdf: std::path::PathBuf,
@@ -77,9 +77,9 @@ pub struct IngestReport {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum IngestOutcome {
-    /// Nothing was converted, embedded or asked. An author or tags that were given have still
-    /// been written. `pages_to_check` is `None` when the chapter's folder is gone, so they are
-    /// not known.
+    /// Nothing was converted, embedded or asked, but an author or tags that were given have
+    /// still been written. `pages_to_check` is `None` when the chapter's folder is gone, so they
+    /// are not known.
     AlreadyIngested {
         doc: DocId,
         items: u64,

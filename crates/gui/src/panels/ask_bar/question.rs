@@ -12,7 +12,6 @@ use crate::theme::Icon;
 use crate::widgets::{Button, ControlSize, Dropdown, TextInput};
 
 const PLACEHOLDER: &str = "Ask a question about your books";
-/// Each row of the mode list, with the mode it stands for.
 const MODES: [(&str, AskMode); 2] = [
     ("Answer", AskMode::Answer),
     ("Results only", AskMode::ResultsOnly),
@@ -111,7 +110,6 @@ impl Local {
     }
 }
 
-/// Selects the whole text, so that typing replaces it.
 fn select_all(ctx: &egui::Context, id: egui::Id, text: &str) {
     let mut state = egui::TextEdit::load_state(ctx, id).unwrap_or_default();
     let whole = CCursorRange::two(CCursor::new(0), CCursor::new(text.chars().count()));

@@ -76,7 +76,6 @@ impl FailureKind {
 }
 
 impl Failure {
-    /// A failure of this kind, with the standard hint.
     pub fn new(kind: FailureKind, detail: impl Into<String>) -> Failure {
         Failure {
             kind,
@@ -85,7 +84,6 @@ impl Failure {
         }
     }
 
-    /// The same failure with a hint that has a value in it: an address, a page, a file name.
     pub fn with_hint(mut self, hint: impl Into<String>) -> Failure {
         self.hint = hint.into();
         self
@@ -103,7 +101,6 @@ impl Failure {
     }
 }
 
-/// A result that is not there yet, is on its way, has arrived, or has failed.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Loadable<T> {
     Idle,

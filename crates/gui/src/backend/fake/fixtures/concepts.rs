@@ -70,8 +70,6 @@ const PAGE_CONCEPTS: [(u128, u32, &[u128]); 10] = [
     (3, 7, &[9, 2]),
 ];
 
-/// The concept the number names in `CONCEPTS`.
-///
 /// # Panics
 /// When the number is not in `CONCEPTS`: it is a mistake in the fixtures, never a runtime input.
 pub(super) fn concept(number: u128) -> PageConcept {
@@ -90,7 +88,7 @@ pub(super) fn concept_id(number: u128) -> ConceptId {
     ConceptId(Uuid::from_u128(0xC0_0000 + number))
 }
 
-/// The concepts that the sample page mentions, most mentioned first. Many pages have none.
+/// The concepts that the sample page mentions, most mentioned first.
 pub(in crate::backend::fake) fn page_concepts(doc: DocId, page: u32) -> Vec<PageConcept> {
     PAGE_CONCEPTS
         .iter()

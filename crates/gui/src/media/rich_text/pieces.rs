@@ -11,7 +11,6 @@ use crate::media::math::{Math, MathRef};
 /// A word, a mark or a formula, before it has a width.
 pub(super) struct Piece {
     pub(super) kind: PieceKind,
-    /// A space of the text comes after it.
     pub(super) has_space_after: bool,
 }
 
@@ -31,7 +30,6 @@ pub(super) enum PieceKind {
 }
 
 impl Piece {
-    /// The text and its format, for a word or a footnote mark. A formula has none.
     pub(super) fn as_text(&self) -> Option<(&str, &TextFormat)> {
         match &self.kind {
             PieceKind::Word { text, format, .. } | PieceKind::Foot { text, format } => {
@@ -51,8 +49,8 @@ pub(super) struct LinePieces<'a> {
     pub(super) starts_paragraph: bool,
 }
 
-/// The pieces of every line, and the formulas that the text holds. `math` is asked for every
-/// formula. `small` is the look of a footnote note, whatever the look of the text is.
+/// `math` is asked for every formula. `small` is the look of a footnote note, whatever the look
+/// of the text is.
 pub(super) fn split_into_pieces<'a>(
     parsed: &Parsed,
     look: &'a TextLook,

@@ -16,12 +16,10 @@ const LIBRARY_FAILED: &str = "The library did not load. ";
 const TRY_AGAIN: &str = "Try again";
 const SPINNER_LABEL: &str = "Library is loading";
 
-/// Why the bar cannot ask, or `None` when it can.
 pub(super) fn refusal(draft: &AskDraft) -> Option<&'static str> {
     draft.question.trim().is_empty().then_some(BLANK)
 }
 
-/// What the line says. The first case that holds wins.
 #[derive(Debug, Clone, Copy)]
 pub(super) enum Note<'a> {
     LibraryFailed(&'a Failure),

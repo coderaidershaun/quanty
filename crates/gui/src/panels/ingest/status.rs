@@ -13,7 +13,7 @@ use crate::state::IngestJob;
 use crate::theme::{TextRole, space};
 use crate::widgets::{self, Button, Notice};
 
-/// Draws the block for the state of the ingest. `draft` is the request the form holds now.
+/// `draft` is the request the form holds now.
 pub(super) fn show(
     ui: &mut egui::Ui,
     local: &mut Local,
@@ -173,7 +173,6 @@ fn finished(
     });
 }
 
-/// The line under "Ingested": what was stored, then the parts that need a look.
 fn summary(report: &IngestReport) -> String {
     let mut text = format!(
         "{} pages, {}. {} concepts created, {} linked.",

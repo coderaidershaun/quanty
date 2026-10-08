@@ -7,10 +7,8 @@ use super::view::{MAX_ZOOM, MIN_ZOOM, View, Viewport, ZoomStep, step_zoom};
 use crate::theme::{Icon, TextRole};
 use crate::widgets::{Button, Slider};
 
-/// How wide the slider is, in points.
 const SLIDER_WIDTH: f32 = 120.0;
 
-/// What a press on the bar, or a zoom key, asks for.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) enum ZoomAction {
     Step(ZoomStep),
@@ -19,8 +17,6 @@ pub(super) enum ZoomAction {
 }
 
 impl ZoomAction {
-    /// The view after the action. The point of the page at the centre of the viewport stays
-    /// at the centre.
     pub(super) fn apply(self, viewport: &Viewport, view: View) -> View {
         let zoom = match self {
             ZoomAction::Step(step) => step_zoom(view.zoom, step),
@@ -31,7 +27,6 @@ impl ZoomAction {
     }
 }
 
-/// The zoom as text, such as `110%`. It is built again only when the rounded number changes.
 #[derive(Debug, Default)]
 pub(super) struct Percent {
     rounded: u32,

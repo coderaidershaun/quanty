@@ -7,12 +7,11 @@ use super::parse::SpanStyle;
 use crate::media::math::{MathRef, MathState};
 use crate::theme::TextRole;
 
-/// One thing that a line is made of.
 #[derive(Debug, Clone)]
 pub(super) struct Atom {
     pub(super) kind: AtomKind,
     pub(super) width: f32,
-    /// Height above the text baseline. Only formulas and chips have one.
+    /// Only formulas and chips have one.
     pub(super) ascent: f32,
     pub(super) descent: f32,
     /// Room after it, if something else follows on the same line. A break drops it.
@@ -48,7 +47,7 @@ pub(super) enum AtomKind {
         text: String,
         format: TextFormat,
     },
-    /// A formula. Until it is painted it only holds its room.
+    /// Until it is painted it only holds its room.
     Math {
         /// Which of the formulas of the text it is.
         formula: usize,
@@ -133,7 +132,6 @@ impl MeasuredLine {
     }
 }
 
-/// The width of a run of atoms that no break may split: the atoms and the room between them.
 pub(super) fn unit_width(unit: &[Atom]) -> f32 {
     let gaps = unit.len().saturating_sub(1);
     let inner: f32 = unit.iter().take(gaps).map(|atom| atom.gap).sum();
@@ -151,8 +149,7 @@ pub(super) struct Measured {
 }
 
 impl Measured {
-    /// The width of the widest run of atoms that no break may split. The text cannot be made
-    /// narrower than this without a cut in a word.
+    /// The text cannot be made narrower than this without a cut in a word.
     pub(super) fn widest_unit(&self) -> f32 {
         self.lines
             .iter()
@@ -161,7 +158,6 @@ impl Measured {
             .fold(0.0, f32::max)
     }
 
-    /// The width of the widest line when it is not broken.
     pub(super) fn widest_line(&self) -> f32 {
         let width_of = |line: &MeasuredLine| match line.atoms.split_last() {
             Some((last, rest)) => {

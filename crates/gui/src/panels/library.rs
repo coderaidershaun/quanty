@@ -1,4 +1,5 @@
-//! The stored documents, grouped by book, with their labels.
+//! A stand-in for the Library page, which is not built yet: the stored documents, grouped by book,
+//! with their labels.
 
 use eframe::egui;
 

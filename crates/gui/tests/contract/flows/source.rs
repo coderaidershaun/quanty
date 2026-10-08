@@ -13,7 +13,6 @@ use super::{Window, click, has, is_enabled, node, press, says, shared};
 
 const COMMAND: egui::Modifiers = egui::Modifiers::COMMAND;
 
-/// The page that the Source panel shows, as a number.
 fn shown_page(harness: &Window) -> Option<u32> {
     shared(harness).source.page.ready().map(|view| view.page)
 }
@@ -37,7 +36,6 @@ fn assert_page(harness: &Window, doc: DocId, page: u32) {
     assert!(has(harness, Role::Label, &page_label(harness)));
 }
 
-/// The title of the book that holds this document.
 fn book_of(harness: &Window, doc: DocId) -> String {
     let catalogue = shared(harness)
         .library
@@ -62,7 +60,6 @@ fn queue_click(harness: &mut Window, role: Role, name: &str) {
     }
 }
 
-/// A chapter with no page pictures: its pieces are shown, and nothing has failed.
 fn a_chapter_with_no_page_pictures_shows_its_pieces(harness: &mut Window, doc: DocId) {
     let notes_book = book_of(harness, doc);
     click(harness, Role::ComboBox, "Book");
@@ -122,7 +119,6 @@ fn the_source_shows_the_page_its_pickers_and_pager_name() {
         .clone();
     let with_pictures = figure.doc;
 
-    // The book with page pictures: its first page, then the pager.
     let book = book_of(&harness, with_pictures);
     click(&mut harness, Role::ComboBox, "Book");
     click(&mut harness, Role::Button, &book);
@@ -172,7 +168,6 @@ fn the_source_shows_the_page_its_pickers_and_pager_name() {
     );
     testkit::settle(&mut harness);
 
-    // A page with a figure, with the figure framed.
     harness
         .state_mut()
         .push(Intent::SelectResult(figure.number));

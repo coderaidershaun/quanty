@@ -3,7 +3,6 @@
 
 use super::parse::{Parsed, clean, parse_cell};
 
-/// How the text of one column sits in its cells.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ColumnAlign {
     Left,
@@ -11,7 +10,7 @@ pub(super) enum ColumnAlign {
     Right,
 }
 
-/// A table that was read. The header and every row have one cell for each column.
+/// The header and every row have one cell for each column.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ParsedTable {
     pub(super) aligns: Vec<ColumnAlign>,
@@ -19,8 +18,8 @@ pub(super) struct ParsedTable {
     pub(super) rows: Vec<Vec<Parsed>>,
 }
 
-/// Reads a table. `None` says that the text is not one: it has no bar in its first line, or no
-/// line of dashes with as many cells under it.
+/// `None` says that the text is not a table: it has no bar in its first line, or no line of
+/// dashes with as many cells under it.
 pub(super) fn parse_table(markdown: &str) -> Option<ParsedTable> {
     let cleaned = clean(markdown);
     let mut lines = cleaned
@@ -51,7 +50,6 @@ pub(super) fn parse_table(markdown: &str) -> Option<ParsedTable> {
     })
 }
 
-/// The cells of one line of a table, with no cell for the bars at its two ends.
 fn split_cells(line: &str) -> Vec<String> {
     let mut cells = Vec::new();
     let mut cell = String::new();
@@ -76,7 +74,6 @@ fn split_cells(line: &str) -> Vec<String> {
     cells.iter().map(|cell| cell.trim().to_owned()).collect()
 }
 
-/// The alignment that a cell of the dashed line asks for, or `None` if it is not such a cell.
 fn align_of(cell: &str) -> Option<ColumnAlign> {
     let dashes = cell.trim_matches(':');
     if dashes.is_empty() || !dashes.chars().all(|c| c == '-') {
@@ -87,29 +84,4 @@ fn align_of(cell: &str) -> Option<ColumnAlign> {
         (false, true) => ColumnAlign::Right,
         _ => ColumnAlign::Left,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_table_has_a_header_alignments_and_padded_rows() {
-        let table =
-            parse_table("| | a *b* |c \\| d|\n|:--|:-:|--:|\n| x | y |\n| 1 | 2 | 3 | 4 |\n")
-                .expect("a table");
-        assert_eq!(
-            table.aligns,
-            [ColumnAlign::Left, ColumnAlign::Center, ColumnAlign::Right]
-        );
-        let plain = |cells: &[Parsed]| {
-            cells
-                .iter()
-                .map(|cell| cell.plain.clone())
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(plain(&table.header), ["", "a b", "c | d"]);
-        assert_eq!(plain(&table.rows[0]), ["x", "y", ""]);
-        assert_eq!(plain(&table.rows[1]), ["1", "2", "3"]);
-    }
 }

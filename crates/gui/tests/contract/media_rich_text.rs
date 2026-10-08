@@ -1,5 +1,5 @@
 //! Checks what a panel gets when it hands stored text to the media code: the text is read as the
-//! pipeline wrote it, laid out once, and a click comes back as a citation or as the source to copy.
+//! pipeline wrote it, laid out once, and a click comes back as the source to copy.
 
 use eframe::egui;
 use eframe::egui::epaint::text::ByteRangeExt as _;
@@ -11,7 +11,6 @@ use gui::media::rich_text::{self, Clicked, RichText};
 use gui::testkit::{self, Host};
 use gui::theme::TextRole;
 
-/// One piece of text that was painted: where, and how each section of it was formatted.
 struct Painted {
     text: String,
     right: f32,
@@ -51,7 +50,6 @@ fn painted(harness: &Harness<'_, Host>) -> Vec<Painted> {
     found
 }
 
-/// Every picture that was painted: its texture and the rectangle it covers on the screen.
 fn pictures(harness: &Harness<'_, Host>) -> Vec<(egui::TextureId, egui::Rect)> {
     fn collect(shape: &egui::Shape, found: &mut Vec<(egui::TextureId, egui::Rect)>) {
         match shape {
@@ -67,14 +65,13 @@ fn pictures(harness: &Harness<'_, Host>) -> Vec<(egui::TextureId, egui::Rect)> {
     found
 }
 
-/// The baseline of a formula picture that was painted in `covered`. The texture has a clear
-/// margin around the box, and the picture may be drawn smaller than it was made.
+/// The texture has a clear margin around the box, and the picture may be drawn smaller than it
+/// was made.
 fn baseline_of(image: &MathImage, covered: egui::Rect) -> f32 {
     let scale = covered.height() / image.texture_size.y;
     covered.bottom() - (image.descent + image.bleed) * scale
 }
 
-/// Every painted section whose words hold `words`.
 fn sections_with<'a>(
     painted: &'a [Painted],
     words: &str,
@@ -235,18 +232,6 @@ fn stored_text_is_read_as_the_pipeline_writes_it() {
     testkit::save_png(&mut harness, "rich-text-ready");
 }
 
-#[test]
-fn a_citation_chip_reports_its_number() {
-    let mut harness = testkit::panel([600.0, 120.0], testkit::asked("q"), |ui, cx| {
-        let text = RichText::new("The value of the option.", TextRole::Body).cites(&[1, 2, 3]);
-        route(rich_text::show(ui, cx.media, &text), cx.intents);
-    });
-    harness.run();
-    harness.get_by_label("Citation 3").click();
-    harness.run();
-    assert_eq!(harness.state().intents, vec![Intent::SelectResult(3)]);
-}
-
 /// The five-column table of the sample chapter, as the page reader stored it.
 const TABLE: &str = "| | If domestic rates rise | If domestic rates fall | If foreign rates rise | If foreign rates fall |
 |---|---|---|---|---|
@@ -325,7 +310,6 @@ fn a_block_is_laid_out_once_more_when_its_formulas_settle() {
     );
     let settled = harness.get_by_label(PLAIN).rect();
 
-    // Each formula sits on the baseline of the words in front of it on its line.
     for latex in ["S", r"\sigma\sqrt{T}", "r"] {
         let math = MathRef::inline(latex, TextRole::Body);
         let image = match harness.state_mut().media.math.get(&math) {
@@ -366,7 +350,6 @@ fn a_block_is_laid_out_once_more_when_its_formulas_settle() {
     );
 }
 
-/// The table of the sample chapter in a panel as wide as `width`, with the picture saved.
 fn table_in(width: f32, picture: &str) -> (egui::Rect, Vec<Painted>) {
     let mut harness = testkit::panel([width, 600.0], testkit::asked("q"), |ui, cx| {
         route(

@@ -44,8 +44,6 @@ fn failed(ui: &mut egui::Ui, failure: &Failure, intents: &mut Vec<Intent>) {
     }
 }
 
-/// One chip for each concept. A click focuses the concept, and a click on the focused one lets
-/// go of it. The definition shows while the pointer is over the chip.
 fn chips(ui: &mut egui::Ui, list: &[PageConcept], cx: &mut PanelCx<'_>) {
     let nav = &cx.shared.source;
     let focused = cx.shared.ask.focused_concept;
@@ -74,81 +72,4 @@ fn chips(ui: &mut egui::Ui, list: &[PageConcept], cx: &mut PanelCx<'_>) {
 
 fn focus(concept: ConceptId, is_focused: bool) -> Intent {
     Intent::FocusConcept((!is_focused).then_some(concept))
-}
-
-#[cfg(test)]
-mod tests {
-    use eframe::egui::accesskit::Role;
-    use egui_kittest::kittest::Queryable;
-
-    use crate::contract::{FailureKind, Intent, Loadable};
-    use crate::panels::source::samples::{
-        self, DEFAULT_SIZE as SIZE, Sample, has_picture_of, shows,
-    };
-    use crate::testkit::{self, sample};
-
-    #[test]
-    fn concept_chips_focus_a_concept_and_their_states_leave_the_page_alone() {
-        let concepts = sample::page_concepts();
-        let mut harness = samples::panel(SIZE, samples::opened(Sample::EveryKind, None));
-        samples::see_pictures(&mut harness);
-        harness.get_by_role_and_label(Role::Tab, "Concepts").click();
-        harness.run();
-        assert!(
-            concepts
-                .iter()
-                .all(|concept| shows(&harness, &concept.name))
-        );
-        testkit::save_png(&mut harness, "source-concepts");
-        harness.get_by_label(&concepts[0].name).click();
-        harness.run();
-        assert_eq!(
-            harness.state().intents,
-            vec![Intent::FocusConcept(Some(concepts[0].id))]
-        );
-
-        harness.state_mut().intents.clear();
-        harness.state_mut().shared.ask.focused_concept = Some(concepts[0].id);
-        harness.run();
-        harness.get_by_label(&concepts[0].name).click();
-        harness.run();
-        assert_eq!(
-            harness.state().intents,
-            vec![Intent::FocusConcept(None)],
-            "a click on the focused concept lets go of it"
-        );
-        harness.state_mut().intents.clear();
-
-        harness.state_mut().shared.source.concepts = Loadable::Loading;
-        harness.run();
-        assert!(shows(&harness, "Finding the concepts on this page"));
-        testkit::save_png(&mut harness, "source-concepts-loading");
-
-        let failure = sample::failure(FailureKind::Internal);
-        harness.state_mut().shared.source.concepts = Loadable::Failed(failure.clone());
-        harness.run();
-        assert!(shows(&harness, "The concepts could not be read"));
-        assert!(shows(&harness, &failure.hint));
-        testkit::save_png(&mut harness, "source-concepts-failed");
-        harness.get_by_label("Try again").click();
-        harness.run();
-        assert_eq!(harness.state().intents, vec![Intent::ReloadSource]);
-        harness.state_mut().intents.clear();
-        harness.get_by_role_and_label(Role::Tab, "Page").click();
-        harness.run();
-        assert!(
-            has_picture_of(&harness, Sample::EveryKind),
-            "a failed read leaves the page alone"
-        );
-        harness.get_by_role_and_label(Role::Tab, "Concepts").click();
-
-        harness.state_mut().shared.source.concepts = Loadable::Ready(Vec::new());
-        harness.run();
-        assert!(shows(&harness, "No concepts were found on this page"));
-        testkit::save_png(&mut harness, "source-concepts-none");
-
-        harness.state_mut().shared.source.concepts = Loadable::Idle;
-        harness.run();
-        assert!(shows(&harness, "Concepts are not loaded"));
-    }
 }

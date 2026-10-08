@@ -10,7 +10,6 @@ const FACETS: usize = 6;
 const MARK_RADIUS: f32 = size::CONTROL_MD / 2.0 - 2.0;
 const HOLE_RADIUS: f32 = MARK_RADIUS / 2.2;
 
-/// The mark of the app, then its name in the title style.
 pub fn logo(ui: &mut egui::Ui) -> Response {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = space::SM;

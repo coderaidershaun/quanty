@@ -9,7 +9,6 @@ use crate::contract::{Answer, AnswerBlock, ItemKind};
 use crate::media::rich_text;
 use crate::theme::{TextRole, space};
 
-/// The Answer tab: the answer when it is written, else the reason it is not, over the results.
 pub(super) fn show(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, written: Written<'_>) {
     let Written::Ready(answer) = written else {
         ui.add_space(space::MD);

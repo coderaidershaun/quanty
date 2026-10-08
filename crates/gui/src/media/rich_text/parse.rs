@@ -1,8 +1,6 @@
 //! Reads the few Markdown marks that stored text uses: emphasis, code, formulas, footnotes and
-//! one-line list items. A full Markdown reader would also read marks that are plain text here,
-//! such as `_` and `#`. It knows nothing about drawing.
+//! one-line list items. A full Markdown reader would also read `_` and `#`, which are text here.
 
-/// Text split into lines of spans, and the same text with the marks taken out.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Parsed {
     pub(super) lines: Vec<ParsedLine>,
@@ -72,7 +70,7 @@ const MAX_STARS: usize = 3;
 /// Marks where a printed word may break. It is not part of the word, so it is taken out.
 const SOFT_HYPHEN: char = '\u{ad}';
 
-/// Reads a block of stored text. Anything that is not one of its marks stays as it is written.
+/// Anything that is not one of the marks stays as it is written.
 pub(super) fn parse(markdown: &str) -> Parsed {
     let cleaned = clean(markdown);
     let mut lines = Vec::new();
@@ -126,7 +124,6 @@ fn parse_line(line: &str, starts_paragraph: bool) -> ParsedLine {
     }
 }
 
-/// Splits off what starts a line: a footnote mark or a list marker.
 fn line_kind(line: &str) -> (LineKind, &str) {
     if let Some(rest) = line.strip_prefix("[^")
         && let Some((mark, note)) = rest.split_once("]: ")
@@ -159,8 +156,7 @@ fn is_foot_mark(mark: &str) -> bool {
     !mark.is_empty() && !mark.contains(|c: char| c.is_whitespace() || c == '[' || c == ']')
 }
 
-/// The spans of one line. `base` is the style that the text already has, when it stands
-/// inside an emphasis.
+/// `base` is the style that the text already has, when it stands inside an emphasis.
 fn parse_inline(chars: &[char], base: SpanStyle) -> Vec<Span> {
     let mut spans = Vec::new();
     let mut text = String::new();
@@ -249,13 +245,11 @@ fn formula(rest: &[char]) -> Option<(String, usize)> {
     (!latex.is_empty()).then_some((latex, end + 2))
 }
 
-/// The index of the `\)` that closes a formula whose source starts at `from`.
 fn formula_end(chars: &[char], from: usize) -> Option<usize> {
     (from..chars.len().saturating_sub(1)).find(|&i| chars[i] == '\\' && chars[i + 1] == ')')
 }
 
-/// The index of the backtick that closes a code span whose text starts at `from`. A code span
-/// holds at least one character.
+/// A code span holds at least one character.
 fn code_end(chars: &[char], from: usize) -> Option<usize> {
     (from + 1..chars.len()).find(|&i| chars[i] == '`')
 }
@@ -297,7 +291,6 @@ fn emphasis(
     close + stars - at
 }
 
-/// The index of the run of `stars` stars that ends an emphasis whose text starts at `from`.
 /// A formula or a code span in between hides the stars inside it.
 fn closing_stars(chars: &[char], from: usize, stars: usize) -> Option<usize> {
     let mut at = from;

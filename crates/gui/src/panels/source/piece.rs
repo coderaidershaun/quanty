@@ -10,8 +10,6 @@ use crate::media::math::{self, MathRef};
 use crate::media::rich_text::{self, Clicked, RichText};
 use crate::theme::{TextRole, color, size, space, stroke};
 
-/// How high a figure may be drawn, in points. It is as high as the room the list has, between
-/// these two.
 const MIN_FIGURE_HEIGHT: f32 = 120.0;
 const MAX_FIGURE_HEIGHT: f32 = 320.0;
 /// What a card spends on its tag, its caption, the gaps between them, its margins and its border,
@@ -26,7 +24,6 @@ const CARD_ROWS: f32 = size::CONTROL_SM
     + 2.0 * space::SM
     + 2.0 * stroke::BORDER;
 
-/// What a card calls a piece that has no printed label.
 pub(super) const fn kind_name(kind: PieceKind) -> &'static str {
     match kind {
         PieceKind::Heading { .. } => "Heading",
@@ -38,7 +35,6 @@ pub(super) const fn kind_name(kind: PieceKind) -> &'static str {
     }
 }
 
-/// Draws the piece, and pushes what a click on its text asks for.
 pub(super) fn body(ui: &mut egui::Ui, piece: &PagePiece, cx: &mut TabCx<'_>) {
     let media = &mut *cx.media;
     let words = |role| RichText::new(&piece.text, role);
@@ -91,7 +87,6 @@ fn forward(clicked: Option<Clicked>, intents: &mut Vec<Intent>) {
     }
 }
 
-/// Draws the printed number of a heading, or the marker of a footnote, before its text.
 fn after_marker(
     ui: &mut egui::Ui,
     marker: Option<&str>,
@@ -117,14 +112,12 @@ fn figure_room(ui: &egui::Ui) -> egui::Vec2 {
     egui::vec2(ui.available_width(), height)
 }
 
-/// Scrolls the list so that the block starts at the top edge of its room, or as near to it as the
-/// end of the list allows. The block is never above the top edge.
 pub(super) fn bring_into_view(block: &egui::Response) {
     block.scroll_to_me_animation(Some(egui::Align::Min), egui::style::ScrollAnimation::none());
 }
 
-/// True while the person scrolls or presses in the room that is left. Then a piece that was
-/// to be brought into view stays where the person put the list.
+/// While the person scrolls or presses in the room that is left, a piece that was to be brought
+/// into view stays where the person put the list.
 pub(super) fn is_scrolled_by_person(ui: &egui::Ui) -> bool {
     let room = ui.available_rect_before_wrap();
     ui.rect_contains_pointer(room)

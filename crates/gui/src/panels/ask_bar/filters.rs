@@ -14,23 +14,21 @@ const ALL_BOOKS: &str = "All books";
 const ALL_AUTHORS: &str = "All authors";
 const ALL_TAGS: &str = "All tags";
 
-/// What the three filters offer. It is worked out again only when the library changes.
 #[derive(Debug, Default)]
 pub(super) struct Choices {
-    /// The library revision these lists were built from. `None`: not built yet.
+    /// The library revision these lists were built from. `None` means they are not built yet.
     revision: Option<u64>,
     /// True when the lists come from a catalogue that has loaded.
     is_known: bool,
-    /// "All books", then each titled book in catalogue order.
+    /// "All books" comes first, then each titled book in catalogue order.
     books: Vec<String>,
-    /// "All authors", then each author once, sorted.
+    /// "All authors" comes first, then each author once, sorted.
     authors: Vec<String>,
-    /// Each tag once, sorted.
+    /// The list holds each tag once, sorted.
     tags: Vec<String>,
 }
 
 impl Choices {
-    /// Builds the lists again if the library changed. Returns true when it did.
     pub(super) fn refresh(&mut self, library: &Library) -> bool {
         if self.revision == Some(library.revision) {
             return false;
@@ -63,8 +61,7 @@ impl Choices {
         true
     }
 
-    /// Drops each value the loaded catalogue no longer holds: a filter on a book that is gone
-    /// would find nothing and not say why. Until a catalogue has loaded nothing is dropped.
+    /// A filter on a book that is gone would find nothing and not say why.
     pub(super) fn keep_known(&self, filters: &mut Filters) {
         if !self.is_known {
             return;
@@ -104,7 +101,7 @@ impl Choices {
     }
 }
 
-/// One list of which the person picks one row. Row 0 is "All …" and means no filter.
+/// Row 0 is "All …" and means no filter.
 struct Pick<'a> {
     label: &'a str,
     all: &'a str,
@@ -133,7 +130,7 @@ fn pick_one(ui: &mut egui::Ui, pick: &Pick<'_>, value: &mut Option<String>) {
     });
 }
 
-/// A list of which the person ticks any number of rows. The kit has no such list.
+/// The kit has no list of which the person ticks any number of rows.
 fn pick_several(ui: &mut egui::Ui, options: &[String], width: f32, chosen: &mut Vec<String>) {
     let summary = match chosen.as_slice() {
         [] => ALL_TAGS.to_owned(),

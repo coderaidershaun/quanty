@@ -6,9 +6,7 @@ use crate::theme::{TextRole, size};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Display {
-    /// Set in a line of text.
     Inline,
-    /// Set on a line of its own.
     Block,
 }
 
@@ -22,7 +20,6 @@ pub struct MathRef<'a> {
 }
 
 impl<'a> MathRef<'a> {
-    /// A display formula at the display size of the theme.
     pub fn block(latex: &'a str) -> Self {
         MathRef {
             latex,
@@ -31,7 +28,6 @@ impl<'a> MathRef<'a> {
         }
     }
 
-    /// A formula inside text of the role `beside`, at the formula size of that role.
     pub fn inline(latex: &'a str, beside: TextRole) -> Self {
         MathRef {
             latex,
@@ -53,7 +49,6 @@ pub enum MathState {
 /// points. Valid only in the frame that returned it: do not store it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MathImage {
-    /// The picture: white ink with the alpha of its coverage.
     pub texture: egui::TextureId,
     /// Size of the whole texture. It is the box plus `bleed` on every side.
     pub texture_size: egui::Vec2,
@@ -61,20 +56,16 @@ pub struct MathImage {
     pub bleed: f32,
     /// Width of the formula's box. Lay out with this.
     pub width: f32,
-    /// Height of the box above the baseline.
     pub ascent: f32,
-    /// Depth of the box below the baseline.
     pub descent: f32,
 }
 
 impl MathImage {
-    /// The box: `(width, ascent + descent)`.
     pub fn size(&self) -> egui::Vec2 {
         egui::vec2(self.width, self.ascent + self.descent)
     }
 
-    /// Paints with the left end of the baseline at `baseline_left`. At `scale` 1.0 each pixel
-    /// of the picture lands on one pixel of the screen.
+    /// At `scale` 1.0 each pixel of the picture lands on one pixel of the screen.
     pub fn paint(
         &self,
         painter: &egui::Painter,

@@ -8,9 +8,10 @@ use super::plan::{BOTTOM, MIDDLE, Plan, TOP};
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct Metrics {
     pub pill_height: f32,
-    /// Between two nodes of a row.
+    /// This is the room between two nodes of a row.
     pub gap: f32,
-    /// On each side of a label that sits between the centre and the node beside it.
+    /// This is the room on each side of a label that sits between the centre and the node
+    /// beside it.
     pub label_pad: f32,
     pub band_min: f32,
     pub band_max: f32,
@@ -20,17 +21,15 @@ pub(super) struct Metrics {
     pub label_height: f32,
 }
 
-/// The widths that the layout works from, and the room it has.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Sizes<'a> {
-    /// One for each of `Plan::nodes`.
+    /// There is one for each of `Plan::nodes`.
     pub nodes: &'a [f32],
-    /// One for each of `Plan::links`: the width of its words.
+    /// There is one for each of `Plan::links`: the width of its words.
     pub labels: &'a [f32],
     pub canvas: Size,
 }
 
-/// The rows of the picture, from the top.
 pub(super) struct Rows {
     /// The top of the top, the middle and the bottom row.
     pub top: [f32; 3],
@@ -57,14 +56,12 @@ impl Rows {
     }
 }
 
-/// The side of the centre that a stretch of the middle row grows towards.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Side {
     Left,
     Right,
 }
 
-/// Everything that rows, seats and routes need, and the rectangle of each node.
 pub(super) struct Layout<'a> {
     pub plan: &'a Plan,
     pub sizes: &'a Sizes<'a>,
@@ -167,7 +164,6 @@ impl<'a> Layout<'a> {
         }
     }
 
-    /// Every node and a margin, and never smaller than the canvas.
     pub(super) fn world(&self) -> Rect {
         let left = self
             .nodes

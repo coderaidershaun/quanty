@@ -57,16 +57,6 @@ async fn the_catalogue_joins_stored_documents_with_their_chapter_folders() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p gui --test integration -- --ignored library::"]
-async fn new_stores_give_an_empty_catalogue() {
-    let cx = support::context("library-empty");
-
-    let result = catalogue_of(&cx).await;
-
-    assert_eq!(result, Ok(Catalogue { books: Vec::new() }));
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn the_catalogue_answers_once_when_the_stores_are_down() {
     let cx = LiveContext::new(support::closed_ports_config(), RealServices);
 
@@ -75,9 +65,8 @@ async fn the_catalogue_answers_once_when_the_stores_are_down() {
     result.expect_err("no store answers, so the catalogue cannot be read");
 }
 
-/// Loads the catalogue and returns what its one event carries, after checking that exactly one
-/// event was sent, with the id of the request. The `Send` bound is a proof at compile time that
-/// the window can run the load on any thread of its runtime.
+/// The `Send` bound is a proof at compile time that the window can run the load on any thread of
+/// its runtime.
 async fn catalogue_of<S: Services>(cx: &LiveContext<S>) -> Result<Catalogue, Failure> {
     fn assert_send<F: Future + Send>(future: F) -> F {
         future

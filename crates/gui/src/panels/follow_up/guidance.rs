@@ -34,7 +34,6 @@ const EMPTY_LIBRARY_BODY: &str =
     "Your library holds no items yet. Add a chapter on the Ingest tab, then ask again.";
 const RESULTS_ONLY: &str = "Results only: no answer is written, so no questions are suggested. Choose Answer in the Ask bar to get them.";
 
-/// What shows under the box: a message, then the questions to ask next.
 #[derive(Debug)]
 pub(super) struct Guidance<'a> {
     pub(super) message: Option<Message<'a>>,
@@ -89,6 +88,9 @@ pub(super) fn guidance(ask: &AskSession) -> Option<Guidance<'_>> {
 /// A search has no score limit, so it finds nothing only when no document carries the labels or
 /// nothing is stored. The notice names which.
 fn no_sources(documents_searched: Option<usize>) -> Message<'static> {
+    // SMELL: the Answer pane and the retrieval path tell these three cases apart too, each in
+    // its own code, and the Answer pane writes two of these hints out again letter for letter.
+    // A change to one of the three leaves the others saying something else.
     match documents_searched {
         Some(0) => Message::Notice {
             title: NO_LABELS_TITLE,
@@ -105,7 +107,6 @@ fn no_sources(documents_searched: Option<usize>) -> Message<'static> {
     }
 }
 
-/// The results are in: what shows depends on how the answer went.
 fn of_answer(answer: &Loadable<Answer>) -> Guidance<'_> {
     let (message, suggestions) = match answer {
         Loadable::Loading => (Some(Message::Waiting(WAITING)), &[][..]),

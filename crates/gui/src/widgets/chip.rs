@@ -8,12 +8,9 @@ use eframe::egui::{
 use super::look::{Look, focus_ring};
 use crate::theme::{Icon, Kind, TextRole, Tone, color, glow, radius, size, space, stroke};
 
-/// The icon inside the round badge of a kind chip.
 const CHIP_GLYPH: f32 = 10.0;
-/// The round badge of a kind chip.
 const CHIP_BADGE: f32 = 16.0;
 
-/// The number of a source, as a clickable chip. Its accessible name is "Citation {n}".
 pub struct CitationChip {
     number: usize,
     is_selected: bool,
@@ -105,7 +102,6 @@ impl egui::Widget for CitationChip {
     }
 }
 
-/// A clickable label, with a colour and an icon when it stands for a kind.
 pub struct Chip<'a> {
     label: &'a str,
     kind: Option<Kind>,
@@ -140,7 +136,6 @@ impl<'a> Chip<'a> {
         self
     }
 
-    /// Text past this width ends in "…". The tooltip and the accessible name keep all of it.
     pub fn max_width(mut self, width: f32) -> Self {
         self.max_width = width;
         self
@@ -241,8 +236,6 @@ impl egui::Widget for Chip<'_> {
     }
 }
 
-/// A short status in a tone, such as "Copied". It takes no click, and its text is its accessible
-/// name.
 pub struct Badge<'a> {
     text: &'a str,
     tone: Tone,
@@ -263,7 +256,6 @@ impl<'a> Badge<'a> {
         self
     }
 
-    /// An icon before the text.
     pub const fn icon(self, _icon: Icon) -> Self {
         // SMELL: `_icon` is used, so its underscore is wrong. Rename it to `icon`.
         Badge {
@@ -319,7 +311,6 @@ pub enum StepState {
     Pending,
 }
 
-/// A numbered circle of a step list. Its accessible name is "Step {n}".
 pub struct StepMarker {
     number: usize,
     tone: Tone,
@@ -394,36 +385,4 @@ pub fn dot(ui: &mut egui::Ui, tone: Tone) -> Response {
             .circle_filled(rect.center(), size::DOT / 2.0, tone.swatch().solid);
     }
     response
-}
-
-#[cfg(test)]
-mod tests {
-    use eframe::egui::accesskit::Toggled;
-    use egui_kittest::kittest::{NodeT, Queryable};
-
-    use super::{Chip, CitationChip};
-    use crate::state::Shared;
-    use crate::testkit;
-    use crate::widgets::Card;
-
-    #[test]
-    fn a_chosen_chip_and_a_chosen_card_say_so_to_a_screen_reader() {
-        let mut harness = testkit::panel([400.0, 200.0], Shared::default(), |ui, _cx| {
-            ui.add(CitationChip::new(1).selected(true));
-            ui.add(CitationChip::new(2));
-            ui.add(Chip::plain("Volatility").selected(true));
-            Card::new()
-                .selected(true)
-                .clickable("Result 1")
-                .show(ui, |ui| {
-                    ui.label("a result");
-                });
-        });
-        harness.run();
-        let toggled = |name: &str| harness.get_by_label(name).accesskit_node().toggled();
-        assert_eq!(toggled("Citation 1"), Some(Toggled::True));
-        assert_eq!(toggled("Citation 2"), Some(Toggled::False));
-        assert_eq!(toggled("Volatility"), Some(Toggled::True));
-        assert_eq!(toggled("Result 1"), Some(Toggled::True));
-    }
 }

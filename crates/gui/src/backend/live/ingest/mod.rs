@@ -16,11 +16,10 @@ use crate::contract::{ChapterLabel, Failure, FailureKind, IngestRequest};
 pub use preflight::preflight;
 pub use run::run;
 
-/// What every PDF starts with.
 const PDF_START: &[u8] = b"%PDF-";
 
-/// The chapter the request names, and the job that converts it: the checks that cost nothing and
-/// that a check and a start share. Nothing is written and no store is asked.
+/// These checks cost nothing, and a check and a start share them. Nothing is written and no
+/// store is asked.
 fn chapter_job<S: Services>(
     cx: &LiveContext<S>,
     ingest: &IngestRequest,
@@ -43,7 +42,7 @@ fn file_name_of(pdf: &Path) -> String {
         .unwrap_or_default()
 }
 
-/// Passes a file that can be read and starts like a PDF. The size is not limited here.
+/// The size is not limited here.
 fn check_is_a_pdf(pdf: &Path) -> Result<(), Failure> {
     let name = file_name_of(pdf);
     let refused = |problem: &str, detail: String| {

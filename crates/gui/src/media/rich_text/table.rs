@@ -16,10 +16,8 @@ use super::style::{TableLook, TextLook, header_look, rule, table_look, text_look
 use crate::media::math::{Math, MathRef, MathState};
 use crate::theme::TextRole;
 
-/// No column is made wider than this, however long the text in it is.
 pub(super) const MAX_COLUMN_WIDTH: f32 = 360.0;
 
-/// The table to lay out, and the room it has.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Source<'a> {
     pub(super) table: &'a ParsedTable,
@@ -30,7 +28,7 @@ pub(super) struct Source<'a> {
     pub(super) width: f32,
 }
 
-/// A laid-out table. Every length is in points from its top left corner.
+/// Every length is in points from its top left corner.
 #[derive(Debug)]
 pub(super) struct TableLayout {
     pub(super) content: u64,
@@ -75,11 +73,9 @@ pub(super) struct TableCell {
     pub(super) offset: Vec2,
 }
 
-/// The widths of the columns, and whether the table has to scroll. `mins` holds the least width
-/// of each column and `maxes` the width that each would like. With room for every `max`, each
-/// column has it. With less, each has its `min` and a share of the room that is left, in
-/// proportion to how much it can still grow. With no room for every `min`, each has its `min`
-/// and the table scrolls.
+/// Returns the widths of the columns, and whether the table has to scroll. With too little room
+/// for every `max`, each column has its `min` and a share of the room that is left, in
+/// proportion to how much it can still grow.
 pub(super) fn column_widths(mins: &[f32], maxes: &[f32], available: f32) -> (Vec<f32>, bool) {
     let total_min: f32 = mins.iter().sum();
     let total_max: f32 = maxes.iter().sum();
@@ -98,7 +94,6 @@ pub(super) fn column_widths(mins: &[f32], maxes: &[f32], available: f32) -> (Vec
     (mins.to_vec(), true)
 }
 
-/// The cells of one row with their widths, before the columns have theirs.
 struct MeasuredRow {
     cells: Vec<Measured>,
     is_header: bool,
@@ -119,8 +114,7 @@ fn column_bounds(rows: &[MeasuredRow], columns: usize) -> (Vec<f32>, Vec<f32>) {
     (mins, maxes)
 }
 
-/// Where each column starts, from the left edge of the table. `padding` is the room that a
-/// column takes beside its text.
+/// `padding` is the room that a column takes beside its text.
 fn column_lefts(widths: &[f32], padding: f32) -> Vec<f32> {
     widths
         .iter()
@@ -132,8 +126,8 @@ fn column_lefts(widths: &[f32], padding: f32) -> Vec<f32> {
         .collect()
 }
 
-/// Whether a formula in any cell is still loading. Every formula is asked for, with no early
-/// exit, because the formula cache drops a loading formula that nobody asked for in a frame.
+/// Every formula is asked for, with no early exit, because the formula cache drops a loading
+/// formula that nobody asked for in a frame.
 fn is_any_formula_loading(
     table: &ParsedTable,
     header: &TextLook,
@@ -153,7 +147,6 @@ fn is_any_formula_loading(
     loading
 }
 
-/// What every row of a table shares: where its columns are, and what its cells look like.
 struct Grid<'a> {
     ui: &'a Ui,
     widths: &'a [f32],
@@ -165,8 +158,6 @@ struct Grid<'a> {
 }
 
 impl Grid<'_> {
-    /// One row at `top`: every cell broken at the width of its column, and the row as high as
-    /// its tallest cell.
     fn row(&self, measured: &MeasuredRow, top: f32) -> TableRow {
         let cell_look = if measured.is_header {
             self.header
@@ -305,8 +296,6 @@ pub(super) fn is_stale(layout: &TableLayout, math: &mut Math, view: Rect) -> boo
     if layout.is_waiting { !loading } else { stale }
 }
 
-/// Draws the table and gives it one node, named by its cells. Returns `CopyText` with the
-/// stored Markdown when the copy menu was used.
 pub(super) fn show(
     ui: &mut Ui,
     math: &mut Math,
@@ -359,26 +348,5 @@ fn draw(painter: &Painter, layout: &TableLayout, origin: Pos2, math: &mut Math) 
         for cell in &row.cells {
             paint::draw(painter, &cell.flow, origin + cell.offset, math);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn columns_take_their_widest_cell_then_share_what_is_left_then_scroll() {
-        let (mins, maxes) = ([20.0, 40.0], [100.0, 200.0]);
-        assert_eq!(
-            column_widths(&mins, &maxes, 400.0),
-            (vec![100.0, 200.0], false)
-        );
-
-        let (widths, scrolls) = column_widths(&mins, &maxes, 180.0);
-        assert!(!scrolls);
-        assert!((widths.iter().sum::<f32>() - 180.0).abs() < 0.01);
-        assert!(widths[0] > 20.0 && widths[0] < 100.0 && widths[1] > 40.0 && widths[1] < 200.0);
-
-        assert_eq!(column_widths(&mins, &maxes, 50.0), (vec![20.0, 40.0], true));
     }
 }

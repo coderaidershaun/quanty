@@ -1,6 +1,5 @@
 //! Draws a laid-out block: its text runs, the fill behind code, the formulas and the chips, with
-//! its accessible name and its copy menu. It also tells when a layout no longer fits the
-//! formulas that are on screen, because only the drawing knows what is on screen.
+//! its accessible name and its copy menu. It also tells when a layout no longer fits its formulas.
 
 use eframe::egui::{
     Color32, Painter, Pos2, Rect, Response, Sense, Ui, WidgetInfo, WidgetType, vec2,
@@ -42,8 +41,6 @@ pub(super) fn is_stale(flow: &Flow, math: &mut Math, view: Rect) -> bool {
     stale
 }
 
-/// Paints the parts of a layout that are inside the clip rectangle of the painter. `origin`
-/// is where the top left corner of the block goes.
 pub(super) fn draw(painter: &Painter, flow: &Flow, origin: Pos2, math: &mut Math) {
     let shift = origin.to_vec2();
     let view = painter.clip_rect().translate(-shift);
@@ -70,7 +67,6 @@ pub(super) fn draw(painter: &Painter, flow: &Flow, origin: Pos2, math: &mut Math
     }
 }
 
-/// Draws a block of text as one node, with its chips on top, and returns what was clicked.
 pub(super) fn block(
     ui: &mut Ui,
     flow: &Flow,

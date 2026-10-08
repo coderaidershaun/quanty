@@ -11,7 +11,6 @@ use crate::contract::{ConceptGraph, GraphNode, Intent, NodeId, NodeKind};
 use crate::state::AskSession;
 use crate::theme::{TextRole, space};
 
-/// What the canvas shows and where.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Stage<'a> {
     pub canvas: egui::Rect,
@@ -20,7 +19,7 @@ pub(super) struct Stage<'a> {
     pub ask: &'a AskSession,
 }
 
-/// One frame of the canvas. It takes the input before anything is drawn, then registers the
+/// One frame of the canvas: it takes the input before anything is drawn, then registers the
 /// nodes and paints. Between the two, the title row can read the view as the input left it.
 pub(super) struct Canvas<'a> {
     stage: Stage<'a>,
@@ -29,8 +28,7 @@ pub(super) struct Canvas<'a> {
 }
 
 impl<'a> Canvas<'a> {
-    /// Registers the canvas below everything else, and applies the drag, the wheel and the
-    /// pinch to the view. The view never leaves the picture.
+    /// Registers the canvas below everything else.
     pub(super) fn take_input(ui: &egui::Ui, stage: Stage<'a>, view: &'a mut View) -> Canvas<'a> {
         let background = ui.interact(
             stage.canvas,
@@ -75,7 +73,6 @@ impl<'a> Canvas<'a> {
         }
     }
 
-    /// Puts the picture back in the view it opened in.
     pub(super) fn reset_view(&mut self) {
         *self.view = self.stage.scene.opening;
     }
@@ -112,8 +109,6 @@ impl<'a> Canvas<'a> {
         }
     }
 
-    /// Makes a button of each node, where the view has it now, and reads what was done to it:
-    /// a node that takes the keyboard is brought into sight, and a click sends its intent.
     fn register_nodes(
         &mut self,
         ui: &egui::Ui,

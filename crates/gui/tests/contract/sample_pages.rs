@@ -1,5 +1,5 @@
-//! Checks that the fake backend reads every page of the three sample chapters as the live
-//! reader does, and that it knows the pages that the other tests rely on.
+//! Checks that the fake backend loads every page of the three sample chapters, and that it knows
+//! the pages that the other tests rely on.
 
 use gui::backend::fake::Fake;
 use gui::backend::{Handler, Reply};
@@ -12,7 +12,6 @@ fn doc(number: u128) -> DocId {
     DocId(Uuid::from_u128(number))
 }
 
-/// The events a handler sends for one command, in order.
 fn serve_all(fake: &Fake, command: Command) -> Vec<Event> {
     let (reply, received, _stop) = Reply::collecting();
     tokio::runtime::Builder::new_current_thread()
@@ -23,7 +22,6 @@ fn serve_all(fake: &Fake, command: Command) -> Vec<Event> {
     received.try_iter().collect()
 }
 
-/// The page and the concepts that the fake sends for one page, and nothing else.
 fn load_page(fake: &Fake, doc: DocId, page: u32) -> (Result<PageView, Failure>, Event) {
     let command = Command::LoadPage {
         request: RequestId(1),

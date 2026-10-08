@@ -1,6 +1,5 @@
-//! What one text role looks like in running text: its fonts, colours and lengths. Every colour
-//! and length of the theme that rich text uses is read here and nowhere else, so that a change
-//! of the theme is a change in this one place.
+//! What one text role looks like in running text: its fonts, colours and lengths. Rich text reads
+//! every colour and length of the theme here only, so a theme change is a change in one place.
 
 use eframe::egui::{Color32, FontId, Painter, Stroke, text::TextFormat};
 
@@ -12,7 +11,6 @@ const FOOT_SCALE: f32 = 0.72;
 /// How far a footnote mark is raised, as a share of the size of the text beside it.
 const FOOT_RAISE: f32 = 1.0 / 3.0;
 
-/// The look of one block of text.
 #[derive(Debug, Clone)]
 pub(super) struct TextLook {
     pub(super) role: TextRole,
@@ -39,7 +37,6 @@ pub(super) struct TextLook {
     pub(super) list_gap: f32,
 }
 
-/// The look of a table: the padding of a cell and the fill of its header.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct TableLook {
     pub(super) pad_x: f32,
@@ -103,7 +100,6 @@ pub(super) fn table_look() -> TableLook {
 }
 
 impl TextLook {
-    /// The format of one section of a text run.
     pub(super) fn format(&self, style: SpanStyle) -> TextFormat {
         let (font_id, color) = match style {
             SpanStyle::Plain | SpanStyle::Emphasis => (&self.font, self.color),

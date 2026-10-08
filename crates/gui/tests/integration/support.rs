@@ -1,6 +1,5 @@
-//! What the tests of the live backend share: stand-in services over throwaway stores, the
-//! committed sample chapters stored in them, with the paid page services stubbed, and a config
-//! whose stores cannot be reached.
+//! What the tests of the live backend share: stand-in services over throwaway stores, the sample
+//! chapters stored in them, and a config whose stores cannot be reached.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -20,8 +19,8 @@ pub const IN_DEPTH: &str = "quanty-sample-notes/chapter-2";
 pub const INTUITION: &str = "quanty-sample-notes/chapter-1";
 pub const SAMPLE_PAGES: &str = "option-volatility-and-pricing/chapter-1";
 
-/// Services that never reach a real store or a paid model. The graph is the throwaway graph of
-/// `stores`, and `pages` is kept so a test can read the calls the stub received.
+/// The graph is the throwaway graph of `stores`, and `pages` is kept so a test can read the calls
+/// the stub received.
 pub struct StandInServices {
     pub stores: ThrowawayStores,
     pub embedder: Box<dyn Fn() -> StandInEmbedder + Send + Sync>,
@@ -63,21 +62,15 @@ impl Services for StandInServices {
     }
 }
 
-/// A context over throwaway stores. The embedder makes up its vectors, the model finds no
-/// concept, and the page services are stubs of the sample chapter.
 pub fn context(test_name: &str) -> LiveContext<StandInServices> {
-    context_and_pages(test_name, Scenario::SampleChapter).0
+    context_and_pages(test_name).0
 }
 
-/// The same, with pages converted as `scenario` says, and the stub pages, so a test can read the
-/// calls they got.
-pub fn context_and_pages(
-    test_name: &str,
-    scenario: Scenario,
-) -> (LiveContext<StandInServices>, Arc<StubServices>) {
+/// Also returns the stub pages, so a test can read the calls they got.
+pub fn context_and_pages(test_name: &str) -> (LiveContext<StandInServices>, Arc<StubServices>) {
     let stores = ThrowawayStores::new(test_name);
     let config = stores.config().clone();
-    let pages = Arc::new(StubServices::new(scenario));
+    let pages = Arc::new(StubServices::new(Scenario::SampleChapter));
     let services = StandInServices {
         stores,
         embedder: Box::new(StandInEmbedder::default),
@@ -160,7 +153,6 @@ pub fn closed_ports_config() -> Config {
     }
 }
 
-/// The real services on closed ports, with `content_folder` as the folder of the books.
 pub fn closed(content_folder: &Path) -> LiveContext<RealServices> {
     let config = Config {
         content_folder: content_folder.to_path_buf(),
@@ -176,7 +168,6 @@ pub fn sample_chapter(chapter: &str) -> PathBuf {
     std::fs::canonicalize(folder).expect("a committed chapter should exist")
 }
 
-/// The id that the stores give the document of a saved chapter.
 pub fn document_of(chapter: &Path) -> DocId {
     let index = ChapterIndex::read(chapter).expect("the chapter index should be read");
     rag_core::DocId::from_source_sha256(&index.source_sha256).into()
@@ -234,7 +225,6 @@ pub fn copy_folder(from: &Path, to: &Path) {
     }
 }
 
-/// A context over `stores` whose answers come from `answering`.
 pub fn context_with(
     stores: ThrowawayStores,
     answering: &StandInLlm,
@@ -244,7 +234,7 @@ pub fn context_with(
     context_over(config, stores, answering, embedder)
 }
 
-/// The same, with the settings of the context given: the graph is still the one of `stores`.
+/// The settings of the context are given, but the graph is still the one of `stores`.
 pub fn context_over(
     config: Config,
     stores: ThrowawayStores,
@@ -261,9 +251,8 @@ pub fn context_over(
     LiveContext::new(config, services)
 }
 
-/// How the three sample chapters are found again after they are stored. The graph keeps the
-/// folder of `stored`. `copied` is copied under the content folder, so only a scan finds it. The
-/// third chapter has neither.
+/// How the three sample chapters are found again: the graph keeps the folder of `stored`, only a
+/// scan of the content folder finds `copied`, and the third chapter has neither.
 #[derive(Clone, Copy)]
 pub struct Folders {
     pub stored: &'static str,
@@ -277,9 +266,8 @@ pub struct World {
     pub lemma: ConceptNode,
 }
 
-/// Ingests the three committed chapters into throwaway stores, with the picks placed near the
-/// question, then writes by hand what no stand-in finds: two concepts, what mentions one of
-/// them, and the relation between them. The chapters are found again as `folders` says.
+/// Two concepts, the mentions of one of them and the relation between them are written by hand,
+/// because the stand-in model finds none.
 pub async fn fill(name: &str, answering: &StandInLlm, folders: Folders) -> World {
     let stores = ThrowawayStores::new(name);
     let connected = stores.connect().await;
@@ -348,11 +336,8 @@ pub async fn fill(name: &str, answering: &StandInLlm, folders: Folders) -> World
     }
 }
 
-/// A context over throwaway stores that hold the three sample chapters, each found in another
-/// way: the figure's chapter by the folder the graph keeps, Notes chapter 2 by a scan of the
-/// content folder, and Notes chapter 1 not at all. The answer model cites the formula, the table
-/// and the figure in its first claim, so the three chips are on the first screen of the answer,
-/// and gives one follow-up.
+/// The answer model cites the formula, the table and the figure in its first claim, so the three
+/// chips are on the first screen of the answer.
 pub async fn seeded(test_name: &str) -> LiveContext<StandInServices> {
     let answering = StandInLlm::replying(|_, _| {
         Ok(json!({

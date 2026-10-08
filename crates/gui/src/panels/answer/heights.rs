@@ -11,7 +11,6 @@ pub(super) struct Heights {
     known: Vec<Option<f32>>,
 }
 
-/// Where a block stands in this frame, and whether it was drawn.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Slot {
     pub(super) rect: egui::Rect,
@@ -19,7 +18,6 @@ pub(super) struct Slot {
 }
 
 impl Heights {
-    /// Every block that was never drawn is taken to be `estimate` high.
     pub(super) fn estimating(estimate: f32) -> Heights {
         Heights {
             estimate,
@@ -27,9 +25,6 @@ impl Heights {
         }
     }
 
-    /// Draws block `index` when any of it is in view, and keeps its height. A block out of
-    /// view takes the height it had when it was last drawn, and is not drawn at all.
-    ///
     /// A block that is drawn and one that is skipped both take one id from the parent, so the
     /// ids of the blocks in view do not move when the list scrolls.
     pub(super) fn show(

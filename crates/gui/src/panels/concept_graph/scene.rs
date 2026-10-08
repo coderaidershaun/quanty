@@ -13,14 +13,15 @@ use super::view::View;
 use crate::contract::{ConceptGraph, ConceptId, EdgeKind, GraphNode, NodeId};
 use crate::theme::{Kind, TextRole, color, radius, size, space};
 
-/// Height of a pill with two lines of text, and of one with a single line.
+/// These are the heights of a pill with two lines of text and of a pill with a single line.
 const PILL_ROOMY: f32 = size::CONTROL_LG;
 const PILL_COMPACT: f32 = size::CONTROL_SM;
 /// A canvas this high or higher has room for three pills of two lines, two bands and margins.
 const ROOMY_FROM: f32 = 168.0;
-/// Between two pills of a row.
+/// This is the room between two pills of a row.
 const GAP: f32 = space::LG;
-/// On each side of a link's label where it stands between the centre and the node beside it.
+/// This is the room on each side of a link's label where it stands between the centre and the
+/// node beside it.
 const LABEL_PAD_ROOMY: f32 = space::MD;
 const LABEL_PAD_COMPACT: f32 = space::SM;
 const BAND_MIN: f32 = TextRole::Small.line_height();
@@ -37,7 +38,6 @@ pub(super) const DISC: f32 = size::ICON_MD;
 pub(super) const DISC_GAP: f32 = 6.0;
 const PAD_RIGHT: f32 = 10.0;
 const CHROME: f32 = PAD_LEFT + DISC + DISC_GAP + PAD_RIGHT;
-/// The size of the icon inside a node's disc, and inside a legend entry's disc.
 pub(super) const DISC_GLYPH: f32 = 11.0;
 pub(super) const LEGEND_DISC: f32 = size::ICON_SM;
 pub(super) const LEGEND_GLYPH: f32 = 10.0;
@@ -47,16 +47,14 @@ pub(super) const ARROW: f32 = 7.0;
 pub(super) const DIM: f32 = 0.3;
 /// Points of wheel scroll that double or halve the size.
 pub(super) const SCROLL_PER_DOUBLING: f32 = 240.0;
-/// The height of the title row and of the legend row.
 pub(super) const HEADER_HEIGHT: f32 = size::CONTROL_SM;
 pub(super) const LEGEND_HEIGHT: f32 = TextRole::Small.line_height();
 
-/// How much room a pill has, which decides how much text it holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Density {
-    /// Two rows of text in a pill.
+    /// A pill holds two rows of text.
     Roomy,
-    /// One row.
+    /// A pill holds one row of text.
     Compact,
 }
 
@@ -87,7 +85,6 @@ impl Density {
     }
 }
 
-/// How the text of one node is set.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct TextOpts {
     pub is_centre: bool,
@@ -99,7 +96,6 @@ pub(super) struct TextOpts {
 }
 
 impl TextOpts {
-    /// The role's text at this scale, in `colour` faded.
     fn plain(&self, role: TextRole, colour: Color32) -> TextFormat {
         let mut format = role.format(colour.gamma_multiply(self.fade));
         format.font_id.size *= self.scale;
@@ -107,7 +103,6 @@ impl TextOpts {
         format
     }
 
-    /// The same, in the heavier weight of the role.
     fn strong(&self, role: TextRole, colour: Color32) -> TextFormat {
         let mut format = self.plain(role, colour);
         format.font_id = FontId {
@@ -125,7 +120,6 @@ pub(super) struct NodeText {
     pub second: Option<LayoutJob>,
 }
 
-/// The most width and rows a run of text may take.
 #[derive(Clone, Copy)]
 struct Limit {
     width: f32,
@@ -176,7 +170,6 @@ pub(super) fn node_text(node: &GraphNode, opts: TextOpts) -> NodeText {
     }
 }
 
-/// The font of a role at a scale.
 pub(super) fn scaled_font(role: TextRole, scale: f32) -> FontId {
     let mut font = role.font();
     font.size *= scale;
@@ -195,18 +188,16 @@ fn words(kind: EdgeKind) -> &'static str {
     }
 }
 
-/// Two kinds on one link are joined by a dot.
 fn link_words(kinds: &[EdgeKind]) -> String {
     let words: Vec<&str> = kinds.iter().map(|kind| words(*kind)).collect();
     words.join(" · ")
 }
 
-/// What is asked of a scene: the same key gives the same scene.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct SceneKey {
     pub generation: u64,
     pub focus: Option<ConceptId>,
-    /// Whole points of the canvas.
+    /// The canvas is measured in whole points.
     pub canvas: [i32; 2],
     pub pixels_per_point: u32,
     /// How many nodes and edges the graph has, so that a graph that changes under one
@@ -214,7 +205,6 @@ pub(super) struct SceneKey {
     pub graph_size: [usize; 2],
 }
 
-/// The graph and the key of the scene to make from it.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Source<'a> {
     pub graph: &'a ConceptGraph,
@@ -237,7 +227,6 @@ pub(super) struct Scene {
     /// kept by this size alone, so a view that was never moved stays equal to the opening view.
     pub canvas: Size,
     pub density: Density,
-    /// The view the picture opens in, and goes back to.
     pub opening: View,
     /// The words on each of `Plan::links`.
     pub link_words: Vec<String>,
@@ -246,7 +235,6 @@ pub(super) struct Scene {
     pub kinds: Vec<Kind>,
 }
 
-/// The kinds of the legend, in its order.
 const LEGEND_ORDER: [Kind; 5] = [
     Kind::Concept,
     Kind::RelatedConcept,
@@ -255,7 +243,6 @@ const LEGEND_ORDER: [Kind; 5] = [
     Kind::Table,
 ];
 
-/// What `Scene::refresh` did, and so what the view must do.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) enum Refresh {
     /// The scene fitted the key already, or no scene can be made.
@@ -267,8 +254,6 @@ pub(super) enum Refresh {
 }
 
 impl Refresh {
-    /// The view to use now. A new picture opens whole. After a resize a view that was never
-    /// moved opens again, and one that was moved is kept over the picture.
     pub(super) fn follow(self, view: View, scene: &Scene) -> View {
         match self {
             Refresh::Unchanged => view,
@@ -279,7 +264,6 @@ impl Refresh {
     }
 }
 
-/// A scene and the view of it, as the title row and the canvas see them.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Picture<'a> {
     pub scene: &'a Scene,
@@ -287,14 +271,12 @@ pub(super) struct Picture<'a> {
 }
 
 impl Picture<'_> {
-    /// True when the view is not the one the picture opened in.
     pub(super) fn is_moved(&self) -> bool {
         self.view != self.scene.opening
     }
 }
 
 impl Scene {
-    /// Makes the scene that `source` asks for, unless the slot holds it already.
     pub(super) fn refresh(slot: &mut Option<Scene>, ui: &egui::Ui, source: &Source<'_>) -> Refresh {
         if slot.as_ref().is_some_and(|scene| scene.key == source.key) {
             return Refresh::Unchanged;
@@ -381,7 +363,6 @@ impl Scene {
         })
     }
 
-    /// The rectangle of the node with this id on the picture, when it is drawn.
     pub(super) fn rect_of(&self, graph: &ConceptGraph, id: NodeId) -> Option<Rect> {
         let place = self
             .plan

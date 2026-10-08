@@ -19,7 +19,6 @@ const OPEN_LABEL: &str = "Open in source";
 /// out of sight.
 const FIGURE_HEIGHT: f32 = 6.0 * size::CONTROL_LG;
 
-/// A formula card. The formula is the result's own text, copied from the source.
 pub(super) fn formula(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem, row: &Row) {
     let number = item.number;
     let is_copied = pane.view.copied == Some(Copied::Latex(number));
@@ -89,7 +88,6 @@ pub(super) fn table(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultIte
     }
 }
 
-/// The label in bold, the caption, and the chip of the result at the end of the line.
 fn caption(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem, row: &Row) {
     let text = rich_text::RichText::new(&row.caption, TextRole::Body)
         .cites(std::slice::from_ref(&item.number))

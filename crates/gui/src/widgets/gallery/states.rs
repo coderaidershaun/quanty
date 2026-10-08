@@ -1,6 +1,5 @@
 //! The widgets of the gallery, each in every state it can be in. A demo widget that is there to
-//! be used writes its name to `last_activated`, so a test can tell which one took the click.
-//! Every label on the page is different, so a test can find one widget by its label.
+//! be used writes its name to `last_activated`, and the gallery prints it as "Last used".
 
 use eframe::egui::{self, Response};
 

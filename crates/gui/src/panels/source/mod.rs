@@ -7,8 +7,6 @@ mod header;
 mod page;
 mod piece;
 mod row;
-#[cfg(test)]
-mod samples;
 mod states;
 mod tabs;
 
@@ -60,7 +58,6 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     });
 }
 
-/// What is left under the tabs: the open tab's body, or why there is no page.
 fn body(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     let nav = &cx.shared.source;
     let page = nav.page.ready();

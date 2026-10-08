@@ -25,7 +25,7 @@ pub struct Document {
     /// `None`: a lone picture, or the chapter's folder is gone.
     pub chapter: Option<ChapterLabel>,
     pub author: Option<String>,
-    /// Lower case.
+    /// Each tag is lower case.
     pub tags: Vec<String>,
     pub pages: Option<u32>,
     pub items: ItemCounts,
@@ -62,7 +62,6 @@ impl Catalogue {
             .find(|book| book.chapters.iter().any(|document| document.id == id))
     }
 
-    /// Each author once, sorted.
     pub fn authors(&self) -> Vec<&str> {
         let mut authors: Vec<&str> = self
             .documents()
@@ -73,7 +72,6 @@ impl Catalogue {
         authors
     }
 
-    /// Each tag once, sorted.
     pub fn tags(&self) -> Vec<&str> {
         let mut tags: Vec<&str> = self
             .documents()
@@ -85,9 +83,8 @@ impl Catalogue {
     }
 }
 
-/// A change to a document's labels, in the shape of the one call that saves it. `author: None`
-/// leaves the author as it is, because the app offers no way to remove one. The book is not
-/// here: it comes from the chapter. Blank tags are dropped and tags are lower case.
+/// `author: None` leaves the author as it is, because the app offers no way to remove one. The
+/// book is not here: it comes from the chapter.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct LabelEdit {
     pub doc: DocId,

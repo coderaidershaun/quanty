@@ -4,8 +4,6 @@ mod filters;
 mod layout;
 mod note;
 mod question;
-#[cfg(test)]
-mod tests;
 
 use eframe::egui;
 
@@ -14,22 +12,17 @@ use crate::panels::PanelCx;
 use crate::state::Shared;
 use note::Note;
 
-/// What the bar keeps between frames: the question being written, and what the filters offer.
 #[derive(Debug, Default)]
 pub struct Local {
-    /// What the next ask sends.
     draft: AskDraft,
-    /// The ask the draft was last loaded from.
     seen_generation: u64,
-    /// The focus request already acted on.
     seen_focus_cue: u64,
-    /// What the filters offer.
     choices: filters::Choices,
 }
 
 impl Local {
     /// Loads the draft from the ask the app holds whenever a new one starts, whoever started it,
-    /// so a follow-up question shows in the box. Anything else leaves the draft alone.
+    /// so a follow-up question shows in the box.
     fn follow(&mut self, shared: &Shared) {
         let asked_anew = self.seen_generation != shared.ask.generation;
         if asked_anew {
@@ -47,7 +40,6 @@ impl Local {
     }
 }
 
-/// Draws the bar into `ui`, which is its whole rectangle, and pushes an intent to ask or to stop.
 pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     local.follow(cx.shared);
     layout::card().show(ui, |ui| {

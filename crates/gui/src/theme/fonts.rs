@@ -15,7 +15,6 @@ pub(super) static SEMIBOLD: LazyLock<FontFamily> =
     LazyLock::new(|| FontFamily::Name("semibold".into()));
 pub(super) static ICONS: LazyLock<FontFamily> = LazyLock::new(|| FontFamily::Name("icons".into()));
 
-/// What is tried, in order, when the first font of a family lacks a character.
 const FALLBACKS: [&str; 4] = ["noto-math", "Hack", "NotoEmoji-Regular", "emoji-icon-font"];
 
 fn inter(weight: f32) -> Arc<FontData> {
@@ -32,7 +31,7 @@ fn text_family(first: &str) -> Vec<String> {
         .collect()
 }
 
-/// Every font and family the app draws with. Hack and the emoji fonts come from eframe.
+/// Hack and the emoji fonts come from eframe.
 pub(super) fn definitions() -> FontDefinitions {
     let mut fonts = FontDefinitions::default();
     // No family below names the text font that egui starts with, so it is not kept.

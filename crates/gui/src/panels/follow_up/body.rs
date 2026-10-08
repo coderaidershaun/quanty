@@ -6,7 +6,7 @@ use super::guidance::{self, Guidance, Message};
 use crate::theme::{TextRole, size, space};
 use crate::widgets;
 
-/// `height` is the room under the box. Returns the question of the chip that was clicked.
+/// `height` is the room under the box.
 pub(super) fn show<'a>(ui: &mut egui::Ui, guidance: &Guidance<'a>, height: f32) -> Option<&'a str> {
     let top = ui.cursor().top();
     if let Some(message) = &guidance.message {

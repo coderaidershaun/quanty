@@ -13,7 +13,7 @@ const TOOLTIP_DELAY_SECONDS: f32 = 0.4;
 const DISABLED_ALPHA: f32 = 0.45;
 const CARET_WIDTH: f32 = 2.0;
 
-/// Sets the whole look. Both egui themes are given it, so a light system theme changes nothing.
+/// Both egui themes are given this look, so a light system theme changes nothing.
 pub(super) fn apply(style: &mut egui::Style) {
     text_styles(style);
     spacing(style);

@@ -4,8 +4,6 @@
 use super::{Icon, Tone};
 use crate::contract::{ItemKind, NodeKind, PieceKind};
 
-/// What a chip, a card tag, a graph node or a legend entry stands for. Each has one colour and
-/// one icon.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Kind {
     Concept,
@@ -17,8 +15,7 @@ pub enum Kind {
 }
 
 impl Kind {
-    /// The colour of this kind. A formula, a figure and a table share one, and `icon` tells
-    /// them apart.
+    /// A formula, a figure and a table share one colour, and `icon` tells them apart.
     pub const fn tone(self) -> Tone {
         match self {
             Kind::Concept => Tone::Blue,
@@ -28,8 +25,7 @@ impl Kind {
         }
     }
 
-    /// The icon of this kind. A concept and a related concept share one, and `tone` tells
-    /// them apart.
+    /// A concept and a related concept share one icon, and `tone` tells them apart.
     pub const fn icon(self) -> Icon {
         match self {
             Kind::Concept | Kind::RelatedConcept => Icon::CONCEPT,

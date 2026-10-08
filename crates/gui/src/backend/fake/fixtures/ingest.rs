@@ -25,9 +25,8 @@ fn file_name(pdf: &Path) -> String {
         .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
 }
 
-/// Reads `chapter-<number>-<name>.pdf` the way the real check does: the number is all digits and
-/// the name is its words, each with a capital letter. The fake may not name the crate that
-/// reads it for real, so the rule is written out here.
+/// Reads `chapter-<number>-<name>.pdf` the way the real check does. The fake may not name the
+/// crate that reads it for real, so the rule is written out here.
 fn parse(name: &str) -> Option<ChapterLabel> {
     let stem = name.strip_prefix("chapter-")?.strip_suffix(".pdf")?;
     let (digits, words) = stem.split_once('-')?;
@@ -66,7 +65,6 @@ fn chapter_of(pdf: &Path) -> Result<ChapterLabel, Failure> {
     })
 }
 
-/// What the free check finds: a new chapter with a name that fits, or a file that is refused.
 pub(in crate::backend::fake) fn preflight(request: &IngestRequest) -> Result<Preflight, Failure> {
     Ok(Preflight {
         chapter: chapter_of(&request.pdf)?,
@@ -76,7 +74,6 @@ pub(in crate::backend::fake) fn preflight(request: &IngestRequest) -> Result<Pre
     })
 }
 
-/// The report of a run that stored the chapter. The numbers are made up.
 pub(in crate::backend::fake) fn report(request: &IngestRequest) -> IngestReport {
     let chapter = chapter_of(&request.pdf).unwrap_or_default();
     IngestReport {

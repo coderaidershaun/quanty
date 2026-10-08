@@ -10,8 +10,7 @@ use crate::backend::Reply;
 use crate::backend::live::{LiveContext, Services};
 use crate::contract::{ChapterState, Event, Failure, IngestRequest, Preflight, RequestId};
 
-/// Sends exactly one `Event::Preflight`. It pays for nothing, writes to no store and makes no
-/// folder.
+/// It pays for nothing, writes to no store and makes no folder.
 pub async fn preflight<S: Services>(
     cx: &LiveContext<S>,
     request: RequestId,

@@ -15,12 +15,10 @@ pub use harness::{Host, app, app_at, app_on, panel, save_png, settle, settle_wit
 
 const QUESTION: &str = "How is the Black–Scholes formula derived?";
 
-/// The folder of the committed sample chapters.
 pub fn samples_folder() -> PathBuf {
     harness::repository_root().join("samples").join("content")
 }
 
-/// The state after a question was asked: the search is loading.
 pub fn asked(question: &str) -> Shared {
     let mut shared = Shared::default();
     let draft = AskDraft {
@@ -31,7 +29,6 @@ pub fn asked(question: &str) -> Shared {
     shared
 }
 
-/// The state after the search came back: the results are shown and the answer is loading.
 pub fn searched(reply: SearchReply) -> Shared {
     let mut shared = asked(QUESTION);
     deliver(&mut shared, |request| Event::Search {
@@ -41,7 +38,6 @@ pub fn searched(reply: SearchReply) -> Shared {
     shared
 }
 
-/// The state after the search, the graph and the answer all came back.
 pub fn answered(reply: SearchReply, graph: ConceptGraph, answer: Answer) -> Shared {
     let mut shared = searched(reply);
     deliver(&mut shared, |request| Event::Graph {
@@ -55,7 +51,6 @@ pub fn answered(reply: SearchReply, graph: ConceptGraph, answer: Answer) -> Shar
     shared
 }
 
-/// The state with one service in this state and every other service up.
 pub fn with_health(mut shared: Shared, service: Service, state: ServiceState) -> Shared {
     shared.apply_intent(Intent::RecheckHealth, &mut Vec::new());
     let request = shared

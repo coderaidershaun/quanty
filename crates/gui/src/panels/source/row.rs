@@ -3,8 +3,6 @@
 
 use eframe::egui;
 
-/// Draws the row in the room that is left, and uses the whole width of it. The row is as high
-/// as its tallest control.
 pub(super) fn show<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
     let rest = ui.available_rect_before_wrap();
     let room = egui::Rect::from_min_size(
@@ -21,7 +19,7 @@ pub(super) fn show<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui
     inner
 }
 
-/// Draws the row in `room`. It takes no space from `ui`.
+/// It takes no space from `ui`.
 pub(super) fn show_at<R>(
     ui: &mut egui::Ui,
     room: egui::Rect,

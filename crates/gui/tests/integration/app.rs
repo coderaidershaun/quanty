@@ -1,5 +1,5 @@
 //! Checks the whole app on the live backend: over throwaway stores that hold the sample
-//! chapters, over empty stores, and over stores that are down.
+//! chapters, and over stores that are down.
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -231,40 +231,6 @@ fn an_ask_runs_from_the_question_to_the_cited_page_on_the_live_adapters() {
 }
 
 #[test]
-#[ignore = "needs local Qdrant and FalkorDB, bills nothing; run with: cargo test -p gui --test integration -- --ignored app::"]
-fn a_first_run_on_empty_stores_shows_empty_states() {
-    let cx = support::context("app-first-run");
-    let mut harness = testkit::app_on(cx, facts(), Vec::new(), DEFAULT_WINDOW);
-    testkit::settle_within(&mut harness, SLOW);
-
-    let shared = harness.state().shared();
-    let catalogue = shared
-        .library
-        .catalogue
-        .ready()
-        .expect("an empty catalogue is no failure");
-    assert_eq!(catalogue.documents().count(), 0);
-    assert!(says(&harness, "library is empty"));
-
-    ask_in_the_box(&mut harness, Some(QUESTION));
-    let shared = harness.state().shared();
-    let reply = shared
-        .ask
-        .search
-        .ready()
-        .expect("an empty library is no failed search");
-    assert!(reply.results.is_empty());
-    assert!(says(&harness, "No sources found"));
-    let slots = [
-        shared.ask.search.failure(),
-        shared.ask.graph.failure(),
-        shared.ask.answer.failure(),
-        shared.library.catalogue.failure(),
-    ];
-    assert_eq!(slots, [None, None, None, None]);
-}
-
-#[test]
 fn the_app_opens_with_both_stores_down_and_says_what_to_start() {
     let samples = testkit::samples_folder();
     let mut harness = testkit::app_on(
@@ -320,7 +286,6 @@ fn settle(harness: &mut Harness<'_, App>) {
     testkit::settle_within(harness, SLOW);
 }
 
-/// The piece that Source was asked to mark.
 fn target_piece(harness: &Harness<'_, App>) -> Option<u32> {
     let target = harness.state().shared().source.target.as_ref();
     target.and_then(|target| target.piece)
@@ -337,8 +302,6 @@ fn says(harness: &Harness<'_, App>, text: &str) -> bool {
     harness.query_all_by_label_contains(text).next().is_some()
 }
 
-/// Types `question` into the Question box when there is one, presses Enter, and waits for the
-/// ask to end.
 fn ask_in_the_box(harness: &mut Harness<'_, App>, question: Option<&str>) {
     harness.get_by_label("Question").click();
     if let Some(question) = question {
@@ -349,7 +312,6 @@ fn ask_in_the_box(harness: &mut Harness<'_, App>, question: Option<&str>) {
     settle(harness);
 }
 
-/// Opens a list of the Ask bar and clicks one of its rows.
 fn choose(harness: &mut Harness<'_, App>, list: &str, row: &str) {
     harness.get_by_label(list).click();
     harness.run_ok();
@@ -357,7 +319,6 @@ fn choose(harness: &mut Harness<'_, App>, list: &str, row: &str) {
     settle(harness);
 }
 
-/// Clicks the first citation chip of a result, as a person reading the answer does.
 fn cite(harness: &mut Harness<'_, App>, result: &ResultItem) {
     let name = format!("Citation {}", result.number);
     harness

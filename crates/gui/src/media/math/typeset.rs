@@ -12,7 +12,6 @@ use ratex_types::math_style::MathStyle;
 use super::image::Display;
 
 const MAX_LATEX_BYTES: usize = 4096;
-/// The largest side of one picture, whatever the graphics card allows.
 const MAX_PICTURE_SIDE: u32 = 8192;
 const SOFT_HYPHEN: char = '\u{ad}';
 const BLEED_EM: f64 = 0.1;

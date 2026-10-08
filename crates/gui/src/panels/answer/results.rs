@@ -12,10 +12,9 @@ use crate::media::{images, math, rich_text};
 use crate::theme::{Icon, Kind, TextRole, color, size, space};
 use crate::widgets::{Badge, Card, CitationChip, Placeholder};
 
-/// Three lines of the small text.
 const TEXT_PREVIEW: f32 = 3.0 * TextRole::Small.line_height();
 const THUMBNAIL: egui::Vec2 = egui::vec2(3.0 * TEXT_PREVIEW, 2.0 * TEXT_PREVIEW);
-/// A table's header and two rows.
+/// This is room for a table's header and two rows.
 const TABLE_PREVIEW: f32 = 2.0 * TEXT_PREVIEW;
 const SCORE_WIDTH: f32 = size::CONTROL_LG;
 /// Rounding to whole pixels can move a row by a hair. This is the room that allows for it.
@@ -23,7 +22,6 @@ const SLACK: f32 = 1.0;
 const SCORE_HELP: &str = "How close the item is to the question. Higher is closer.";
 const CUT_MARK: &str = "…";
 
-/// The results this tab lists, in the order of the search and under their own numbers.
 pub(super) fn list(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, tab: AnswerTab) {
     let none_of_the_kind = pane
         .listing
@@ -114,9 +112,8 @@ fn card(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem, row: &Row
     }
 }
 
-/// Puts `…` at the end of the last line of `window`, over a fade of the card's own fill, so a
-/// text that goes on past the box does not look as if it ended there. `is_lit` says the card is
-/// drawn in its hover fill. The mark is drawn after the card, so nothing covers it.
+/// The mark stands over a fade of the card's own fill, so a text that goes on past the box does
+/// not look as if it ended there. It is drawn after the card, so nothing covers it.
 fn mark_cut(ui: &mut egui::Ui, window: egui::Rect, is_lit: bool) {
     let fill = if is_lit {
         color::RAISED_HOVER
@@ -154,8 +151,6 @@ fn mark_cut(ui: &mut egui::Ui, window: egui::Rect, is_lit: bool) {
     ui.put(line, egui::Label::new(mark).selectable(false).extend());
 }
 
-/// The chip, the kind, the place and the score on one line, and the reason under it. Returns
-/// true when the chip was clicked.
 fn head(ui: &mut egui::Ui, item: &ResultItem, row: &Row, is_selected: bool) -> bool {
     let kind = Kind::from(item.kind);
     let mut chip_clicked = false;
@@ -190,8 +185,8 @@ fn head(ui: &mut egui::Ui, item: &ResultItem, row: &Row, is_selected: bool) -> b
     chip_clicked
 }
 
-/// The start of the item, cut at a fixed height. Returns true when a picture or a formula in
-/// it was clicked, and the box of the text when the cut took a part of it.
+/// Returns true when a picture or a formula in the preview was clicked, and the box of the text
+/// when the cut took a part of it.
 fn preview(
     ui: &mut egui::Ui,
     pane: &mut Pane<'_, '_>,
@@ -250,8 +245,6 @@ fn small(text: &str) -> rich_text::RichText<'_> {
     rich_text::RichText::new(text, TextRole::Small)
 }
 
-/// Draws `add_contents` in a box at most `max_height` high, cuts what does not fit, and takes
-/// only the room it used. Returns the box when something did not fit.
 fn clipped(
     ui: &mut egui::Ui,
     max_height: f32,

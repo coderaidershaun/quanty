@@ -1,6 +1,5 @@
-//! Everything that does the work the window asks for: the live backend that reads the stores,
-//! the fake one that answers from built-in data, and the runtime that runs either off the window's
-//! thread.
+//! Everything that does the work the window asks for: the live backend, the fake one that answers
+//! from built-in data, and the runtime that runs either off the window's thread.
 
 pub mod fake;
 mod handler;

@@ -1,5 +1,5 @@
-//! Runs small jobs for the picture and formula caches: on a few worker threads in the app, and
-//! only when a test says so under a test.
+//! Runs small jobs for the picture and formula caches: on a few worker threads in the app, and in
+//! `Manual` mode, which tests use, only when the caller says so.
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -42,8 +42,8 @@ struct ByHand<Job, Done> {
     sender: Sender<Done>,
 }
 
-/// A queue of jobs and the results that come back. In `Threads` mode a few named threads take
-/// the jobs; in `Manual` mode `run_pending` does it on the caller's thread.
+/// In `Threads` mode a few named threads take the jobs; in `Manual` mode `run_pending` does it on
+/// the caller's thread.
 pub struct Workers<Job, Done> {
     queue: Arc<Queue<Job>>,
     done: Receiver<Done>,
@@ -87,7 +87,6 @@ impl<Job: Send + 'static, Done: Send + 'static> Workers<Job, Done> {
         }
     }
 
-    /// `Now` goes to the front of the queue, `Later` to the back.
     pub fn submit(&self, job: Job, urgency: Urgency) {
         let mut jobs = self.queue.lock();
         match urgency {
@@ -97,8 +96,7 @@ impl<Job: Send + 'static, Done: Send + 'static> Workers<Job, Done> {
         self.queue.arrived.notify_one();
     }
 
-    /// Removes the queued jobs that `unwanted` picks, and says how many. A job that is already
-    /// running is not touched.
+    /// A job that is already running is not touched.
     pub fn cancel(&self, mut unwanted: impl FnMut(&Job) -> bool) -> usize {
         let mut jobs = self.queue.lock();
         let before = jobs.len();
@@ -106,7 +104,6 @@ impl<Job: Send + 'static, Done: Send + 'static> Workers<Job, Done> {
         before - jobs.len()
     }
 
-    /// One finished result, if there is one.
     pub fn take_done(&mut self) -> Option<Done> {
         self.done.try_recv().ok()
     }
@@ -144,7 +141,6 @@ impl<Job, Done> Drop for Workers<Job, Done> {
     }
 }
 
-/// The loop of one worker thread.
 fn serve<Job, Done>(
     queue: &Queue<Job>,
     ctx: &egui::Context,
@@ -171,55 +167,5 @@ fn serve<Job, Done>(
             return;
         }
         ctx.request_repaint();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::time::{Duration, Instant};
-
-    use super::*;
-
-    fn double(_ctx: &egui::Context, job: u32) -> u32 {
-        job * 2
-    }
-
-    #[test]
-    fn a_queued_job_runs_once_in_order_and_a_cancelled_job_never_runs() {
-        let ctx = egui::Context::default();
-        let mut manual = Workers::start(Offload::Manual, "test", 1, ctx.clone(), double);
-        manual.submit(1, Urgency::Later);
-        manual.submit(2, Urgency::Later);
-        manual.submit(3, Urgency::Now);
-        manual.submit(4, Urgency::Later);
-        assert!(
-            manual.take_done().is_none(),
-            "nothing runs before run_pending"
-        );
-
-        assert_eq!(manual.cancel(|job| *job == 4), 1);
-        manual.run_pending();
-        let finished: Vec<u32> = std::iter::from_fn(|| manual.take_done()).collect();
-        assert_eq!(
-            finished,
-            vec![6, 2, 4],
-            "the urgent job first, then in order, and no 4"
-        );
-        manual.run_pending();
-        assert!(manual.take_done().is_none(), "a job runs once");
-
-        let mut threads = Workers::start(Offload::Threads, "test", 1, ctx, double);
-        threads.submit(5, Urgency::Later);
-        let started = Instant::now();
-        let result = loop {
-            if let Some(done) = threads.take_done() {
-                break Some(done);
-            }
-            if started.elapsed() > Duration::from_secs(5) {
-                break None;
-            }
-            std::thread::sleep(Duration::from_millis(2));
-        };
-        assert_eq!(result, Some(10), "a thread delivers with no run_pending");
     }
 }

@@ -11,7 +11,7 @@ use gui::testkit;
 use super::recording::{self, Seen};
 use super::{Window, click, failures, has, node, node_in, panels, says, shared};
 
-/// The scene, at rest. The health check has no button in any scene.
+/// The health check has no button in any scene.
 fn open(scene: &str) -> (Window, Seen) {
     let (mut harness, seen) = recording::open(scene, DEFAULT_WINDOW);
     testkit::settle(&mut harness);
@@ -26,13 +26,11 @@ fn page_loads(seen: &Seen) -> usize {
     seen.count(|command| matches!(command, Command::LoadPage { .. }))
 }
 
-/// True when a node says the hint of the failure that the slot holds.
 fn says_hint_of<T>(harness: &Window, slot: &Loadable<T>) -> bool {
     let failure = slot.failure().expect("the slot has failed");
     says(harness, &failure.hint)
 }
 
-/// True when a node inside `area` has `words` in its name.
 fn says_in(harness: &Window, words: &str, area: egui::Rect) -> bool {
     harness
         .query_all_by_label_contains(words)
@@ -57,7 +55,6 @@ fn assert_no_failure(harness: &Window) {
     assert!(held.is_empty(), "nothing should have failed: {held:?}");
 }
 
-/// Types a question into the question box and asks it with Enter.
 fn type_and_ask(harness: &mut Window, question: &str) {
     node(harness, Role::TextInput, "Question").click();
     node(harness, Role::TextInput, "Question").type_text(question);
@@ -66,7 +63,6 @@ fn type_and_ask(harness: &mut Window, question: &str) {
     testkit::settle(harness);
 }
 
-/// Presses the `Try again` that sits in this panel, and waits.
 fn try_again_in(harness: &mut Window, area: egui::Rect) {
     node_in(harness, Role::Button, "Try again", area)
         .expect("the panel offers Try again")

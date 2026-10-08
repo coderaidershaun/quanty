@@ -13,7 +13,6 @@ use gui::testkit;
 
 use super::{Wheel, Window, click, has, is_open_tab, node, panels, press, scroll_to, shared};
 
-/// The result with this number, as the search sent it.
 fn result(harness: &Window, number: usize) -> ResultItem {
     shared(harness)
         .ask
@@ -22,7 +21,6 @@ fn result(harness: &Window, number: usize) -> ResultItem {
         .clone()
 }
 
-/// The name of the node that the graph draws for a result, when the graph has one.
 fn graph_node_of(harness: &Window, number: usize) -> Option<String> {
     let graph = shared(harness).ask.graph.ready()?;
     let node = graph
@@ -32,7 +30,6 @@ fn graph_node_of(harness: &Window, number: usize) -> Option<String> {
     Some(format!("{}, result {number}", node.label))
 }
 
-/// The name of the node that the graph draws for a concept, when the graph has one.
 fn concept_node_of(harness: &Window, concept: ConceptId) -> Option<String> {
     let graph = shared(harness).ask.graph.ready()?;
     let node = graph
@@ -49,8 +46,6 @@ fn is_toggled(harness: &Window, role: Role, name: &str) -> bool {
     node(harness, role, name).accesskit_node().toggled() == Some(egui::accesskit::Toggled::True)
 }
 
-/// What every panel shows once result `number` is the selected one: the page of the result is
-/// open in Source, and its place and piece are the target.
 fn assert_source_follows(harness: &Window, number: usize) {
     let found = result(harness, number);
     let shared = shared(harness);
@@ -80,8 +75,6 @@ fn assert_source_follows(harness: &Window, number: usize) {
     );
 }
 
-/// The Answer pane draws a row for this result, so it has scrolled the row into view, and the
-/// row says that it is the chosen one.
 fn assert_row_is_marked(harness: &Window, number: usize) {
     let row = format!("Result {number}");
     assert!(
@@ -106,7 +99,6 @@ fn wait_until(harness: &mut Window, what: &str, done: impl Fn(&Window) -> bool) 
     }
 }
 
-/// A concept chip of the page that Source shows, then a node of the graph, focus a concept.
 fn a_concept_chip_and_a_graph_node_focus_a_concept(harness: &mut Window) {
     click(harness, Role::Tab, "Concepts");
     let concepts = shared(harness)
@@ -166,7 +158,6 @@ fn every_panel_follows_a_choice(size: [f32; 2], picture: &str) {
     );
     testkit::save_png(&mut harness, picture);
 
-    // A citation in the answer.
     let figure = result(&harness, 8);
     let rects = panels(size);
     scroll_to(
@@ -191,8 +182,7 @@ fn every_panel_follows_a_choice(size: [f32; 2], picture: &str) {
     let figure_node = graph_node_of(&harness, 8).expect("the graph draws the figure");
     assert!(is_toggled(&harness, Role::Button, &figure_node));
 
-    // A row of the Results tab. The formula's page has no page pictures, so Source shows its
-    // pieces in the Page tab.
+    // The formula's page has no page pictures, so Source shows its pieces in the Page tab.
     click(&mut harness, Role::Tab, "Results");
     scroll_to(
         &mut harness,
@@ -226,13 +216,11 @@ fn every_panel_follows_a_choice(size: [f32; 2], picture: &str) {
     let formula_node = graph_node_of(&harness, 1).expect("the graph draws the formula");
     assert!(is_toggled(&harness, Role::Button, &formula_node));
 
-    // The keys step through the results.
     press(&mut harness, egui::Modifiers::NONE, egui::Key::J);
     assert_eq!(shared(&harness).ask.selected_result, Some(2));
     press(&mut harness, egui::Modifiers::NONE, egui::Key::K);
     assert_eq!(shared(&harness).ask.selected_result, Some(1));
 
-    // A node of the graph: the row that was off screen comes into view, and Source follows.
     assert!(
         !has(&harness, Role::Button, "Result 8"),
         "the list starts above result 8"
@@ -262,7 +250,6 @@ fn a_choice_in_one_panel_shows_in_every_panel() {
     both_phases_of_an_ask_can_be_used_before_the_answer_is_written();
 }
 
-/// The results are usable while the answer is still being written, and Stop ends the ask.
 fn both_phases_of_an_ask_can_be_used_before_the_answer_is_written() {
     let mut harness = testkit::app("answering", DEFAULT_WINDOW);
     wait_until(&mut harness, "the results", |harness| {

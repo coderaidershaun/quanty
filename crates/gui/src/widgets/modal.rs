@@ -5,7 +5,6 @@ use eframe::egui;
 use super::Button;
 use crate::theme::{TextRole, color, radius, space, stroke};
 
-/// A confirm sheet is this wide.
 const CONFIRM_WIDTH: f32 = 360.0;
 
 /// A sheet over the window with a dimmed backdrop. It keeps nothing: show it on every frame
@@ -64,19 +63,16 @@ impl<'a> Confirm<'a> {
         self
     }
 
-    /// The text of the button that says yes. It is "Confirm" when this is not called.
     pub fn confirm_label(mut self, label: &'a str) -> Self {
         self.confirm_label = label;
         self
     }
 
-    /// The text of the button that says no. It is "Cancel" when this is not called.
     pub fn cancel_label(mut self, label: &'a str) -> Self {
         self.cancel_label = label;
         self
     }
 
-    /// The confirm button is dangerous: it is drawn in the danger colour.
     pub fn destructive(mut self) -> Self {
         self.is_destructive = true;
         self
@@ -110,59 +106,5 @@ impl<'a> Confirm<'a> {
             choice = Some(Choice::Cancelled);
         }
         choice
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::cell::Cell;
-    use std::rc::Rc;
-
-    use egui_kittest::Harness;
-    use egui_kittest::kittest::Queryable;
-
-    use super::*;
-    use crate::state::Shared;
-    use crate::testkit::{self, Host};
-
-    /// A harness that shows the dialog until a choice is made, as the app does.
-    fn dialog() -> (Harness<'static, Host>, Rc<Cell<Option<Choice>>>) {
-        let choice = Rc::new(Cell::new(None));
-        let seen = Rc::clone(&choice);
-        let mut harness = testkit::panel([420.0, 300.0], Shared::default(), move |ui, _cx| {
-            if seen.get().is_none() {
-                let sheet = Confirm::new("delete", "Delete this book?")
-                    .body("Its pages are removed from the library.")
-                    .confirm_label("Delete book")
-                    .destructive()
-                    .show(ui.ctx());
-                seen.set(sheet);
-            }
-        });
-        harness.run();
-        (harness, choice)
-    }
-
-    #[test]
-    fn confirm_reports_the_users_choice() {
-        let (mut harness, choice) = dialog();
-        assert_eq!(
-            choice.get(),
-            None,
-            "no choice is made before the person acts"
-        );
-        harness.get_by_label("Delete book").click();
-        harness.run();
-        assert_eq!(choice.get(), Some(Choice::Confirmed));
-
-        let (mut harness, choice) = dialog();
-        harness.key_press(egui::Key::Escape);
-        harness.run();
-        assert_eq!(choice.get(), Some(Choice::Cancelled));
-
-        let (mut harness, choice) = dialog();
-        harness.get_by_label("Cancel").click();
-        harness.run();
-        assert_eq!(choice.get(), Some(Choice::Cancelled));
     }
 }

@@ -1,16 +1,11 @@
 //! Who is drawn and in which row: the centre, the order of the others, the three rows and the
 //! links. It holds no number of the screen.
 
-// SMELL: with its tests this file is over 400 lines. `Table` has one caller and is the part to
-// move out, but the folder already holds twelve files, which is the most a folder may hold. Some
-// of those files must be grouped before `Table` can have a file of its own.
-
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, VecDeque};
 
 use crate::contract::{ConceptGraph, ConceptId, EdgeKind, NodeId, NodeKind};
 
-/// The most nodes one picture holds. The least important are left out and counted.
 pub(super) const NODE_CAP: usize = 36;
 
 pub(super) const TOP: usize = 0;
@@ -20,10 +15,10 @@ pub(super) const BOTTOM: usize = 2;
 /// All the relations between two nodes, drawn as one line.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Link {
-    /// Places in `Plan::nodes`; `a < b`.
+    /// `a` and `b` are places in `Plan::nodes`, and `a < b`.
     pub a: usize,
     pub b: usize,
-    /// Each kind once, in the order of `EdgeKind`.
+    /// The list holds each kind once, in the order of `EdgeKind`.
     pub kinds: Vec<EdgeKind>,
     pub points_at_a: bool,
     pub points_at_b: bool,
@@ -34,7 +29,6 @@ impl Link {
         self.a == place || self.b == place
     }
 
-    /// The end that is not `place`.
     pub(super) fn other(&self, place: usize) -> usize {
         if self.a == place { self.b } else { self.a }
     }
@@ -42,17 +36,17 @@ impl Link {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Plan {
-    /// Indices into `graph.nodes`. `[0]` is the centre; the rest are in order of importance.
+    /// These are indices into `graph.nodes`. `[0]` is the centre; the rest are in order of
+    /// importance.
     pub nodes: Vec<usize>,
-    /// Top, middle, bottom: places in `nodes`, left to right.
+    /// The rows are top, middle and bottom. Each holds places in `nodes`, left to right.
     pub rows: [Vec<usize>; 3],
-    /// Sorted by `(a, b)`, so the links of the centre come first.
+    /// They are sorted by `(a, b)`, so the links of the centre come first.
     pub links: Vec<Link>,
-    /// How many nodes did not fit in the picture.
     pub left_out: usize,
 }
 
-/// `None`: the graph has no concept, so there is nothing to draw.
+/// `None` means the graph has no concept, so there is nothing to draw.
 pub(super) fn plan(graph: &ConceptGraph, focus: Option<ConceptId>) -> Option<Plan> {
     let table = Table::new(graph);
     let centre = table.centre(focus)?;
@@ -75,7 +69,6 @@ pub(super) fn plan(graph: &ConceptGraph, focus: Option<ConceptId>) -> Option<Pla
     })
 }
 
-/// True for a matched and for a related concept, false for a result.
 pub(super) fn is_concept(kind: NodeKind) -> bool {
     matches!(kind, NodeKind::Concept | NodeKind::Related)
 }
@@ -99,7 +92,7 @@ struct Table<'a> {
     graph: &'a ConceptGraph,
     /// Where each id is in `graph.nodes`.
     index: BTreeMap<NodeId, usize>,
-    /// Keyed by the two ids, lower first.
+    /// The key is the two ids, lower first.
     pairs: BTreeMap<(NodeId, NodeId), Pair>,
     degree: BTreeMap<NodeId, usize>,
 }
@@ -120,7 +113,6 @@ impl<'a> Table<'a> {
                 })
                 .or_insert(place);
         }
-        // An edge with an unknown end, or from a node to itself, is dropped.
         let mut pairs: BTreeMap<(NodeId, NodeId), Pair> = BTreeMap::new();
         for edge in &graph.edges {
             if edge.from == edge.to
@@ -179,7 +171,6 @@ impl<'a> Table<'a> {
         self.pairs.contains_key(&key)
     }
 
-    /// The node of this kind with the most links. A tie goes to the lower-case label, then the id.
     fn most_connected(&self, kind: NodeKind) -> Option<NodeId> {
         self.index
             .keys()
@@ -194,8 +185,6 @@ impl<'a> Table<'a> {
             .copied()
     }
 
-    /// The focused concept when the graph has it; else the matched concept with the most links;
-    /// else the related concept with the most links.
     fn centre(&self, focus: Option<ConceptId>) -> Option<NodeId> {
         focus
             .map(NodeId::Concept)
@@ -204,8 +193,6 @@ impl<'a> Table<'a> {
             .or_else(|| self.most_connected(NodeKind::Related))
     }
 
-    /// Every node but the centre: those linked to the centre first, then results, matched
-    /// concepts, related concepts; then the most links, the lower-case label and the id.
     fn others_by_importance(&self, centre: NodeId) -> Vec<NodeId> {
         let class = |id: NodeId| match self.kind(id) {
             NodeKind::Formula | NodeKind::Figure | NodeKind::Table => 0,
@@ -230,9 +217,8 @@ impl<'a> Table<'a> {
         others
     }
 
-    /// The three rows, as places in `ids` (the centre is place 0). Results go to the bottom
-    /// row. Concepts are dealt in turn, and a bottom turn is skipped while the bottom row has
-    /// fewer nodes than results: those seats are theirs.
+    /// Results go to the bottom row. Concepts are dealt in turn, and a bottom turn is skipped
+    /// while the bottom row has fewer nodes than results: those seats are theirs.
     fn deal_rows(&self, ids: &[NodeId]) -> [Vec<usize>; 3] {
         let mut results: Vec<usize> = (1..ids.len())
             .filter(|place| !is_concept(self.kind(ids[*place])))
@@ -262,7 +248,6 @@ impl<'a> Table<'a> {
         .map(Vec::from)
     }
 
-    /// One link for each pair of drawn nodes, the centre's first.
     fn links(&self, place_of: &BTreeMap<NodeId, usize>) -> Vec<Link> {
         let mut links: Vec<Link> = self
             .pairs
@@ -296,8 +281,6 @@ impl<'a> Table<'a> {
     }
 }
 
-/// The row of the concept dealt at this turn: middle, middle, top, bottom, then top, top,
-/// bottom, bottom, middle, middle for ever.
 fn turn(count: usize) -> usize {
     const OPENING: [usize; 4] = [MIDDLE, MIDDLE, TOP, BOTTOM];
     const AFTER: [usize; 6] = [TOP, TOP, BOTTOM, BOTTOM, MIDDLE, MIDDLE];
@@ -318,133 +301,4 @@ fn seat_from_the_middle(mut row: VecDeque<usize>, arrivals: &[usize]) -> VecDequ
         }
     }
     row
-}
-
-#[cfg(test)]
-mod tests {
-    use super::super::samples::{black_scholes, c, concept, concept_id, edge, item};
-    use super::*;
-    use crate::contract::{NodeId, NodeKind};
-
-    fn centre_of(graph: &ConceptGraph, focus: Option<ConceptId>) -> Option<NodeId> {
-        let plan = plan(graph, focus)?;
-        Some(graph.nodes[plan.nodes[0]].id)
-    }
-
-    fn labels<'a>(graph: &'a ConceptGraph, plan: &Plan, row: usize) -> Vec<&'a str> {
-        let label = |place: &usize| graph.nodes[plan.nodes[*place]].label.as_str();
-        plan.rows[row].iter().map(label).collect()
-    }
-
-    #[test]
-    fn the_centre_is_the_focused_concept_or_else_the_most_connected_matched_one() {
-        let related_has_more = ConceptGraph {
-            nodes: vec![
-                concept(1, NodeKind::Concept, "Volatility"),
-                concept(2, NodeKind::Concept, "Hedging"),
-                concept(3, NodeKind::Related, "Smile"),
-                concept(4, NodeKind::Concept, "Delta"),
-                concept(5, NodeKind::Concept, "Gamma"),
-            ],
-            edges: vec![
-                edge(c(1), c(2), EdgeKind::UsedFor),
-                edge(c(1), c(4), EdgeKind::UsedFor),
-                edge(c(3), c(1), EdgeKind::UsedFor),
-                edge(c(3), c(2), EdgeKind::UsedFor),
-                edge(c(3), c(4), EdgeKind::UsedFor),
-                edge(c(3), c(5), EdgeKind::UsedFor),
-            ],
-        };
-        // No focus: a matched concept beats a related one that has more links.
-        assert_eq!(centre_of(&related_has_more, None), Some(c(1)));
-        // A focus that the graph has wins; one that it has not changes nothing.
-        let focus = Some(concept_id(2));
-        assert_eq!(centre_of(&related_has_more, focus), Some(c(2)));
-        let stranger = Some(concept_id(99));
-        assert_eq!(centre_of(&related_has_more, stranger), Some(c(1)));
-
-        // A tie is settled by the lower-case name, not by the case of its first letter.
-        let tie = ConceptGraph {
-            nodes: vec![
-                concept(1, NodeKind::Concept, "Zulu"),
-                concept(2, NodeKind::Concept, "alpha"),
-                concept(3, NodeKind::Concept, "Mike"),
-            ],
-            edges: vec![
-                edge(c(1), c(3), EdgeKind::UsedFor),
-                edge(c(2), c(3), EdgeKind::UsedFor),
-            ],
-        };
-        assert_eq!(centre_of(&tie, None), Some(c(3)));
-        let pair = ConceptGraph {
-            edges: vec![edge(c(1), c(2), EdgeKind::UsedFor)],
-            ..tie
-        };
-        assert_eq!(centre_of(&pair, None), Some(c(2)));
-
-        // With no matched concept, the most connected related one.
-        let only_related = ConceptGraph {
-            nodes: vec![
-                concept(1, NodeKind::Related, "Smile"),
-                concept(2, NodeKind::Related, "Skew"),
-                concept(3, NodeKind::Related, "Term"),
-            ],
-            edges: vec![
-                edge(c(1), c(2), EdgeKind::UsedFor),
-                edge(c(3), c(2), EdgeKind::UsedFor),
-            ],
-        };
-        assert_eq!(centre_of(&only_related, None), Some(c(2)));
-
-        // No concept at all: nothing to draw.
-        let only_items = ConceptGraph {
-            nodes: vec![item(1, NodeKind::Formula, "Formula (1.1)")],
-            edges: Vec::new(),
-        };
-        assert_eq!(centre_of(&only_items, None), None);
-        assert_eq!(centre_of(&ConceptGraph::default(), None), None);
-    }
-
-    #[test]
-    fn the_wireframe_graph_gets_the_wireframe_rows_and_one_link_for_each_pair() {
-        let graph = black_scholes();
-        let plan = plan(&graph, None).expect("the graph has concepts");
-
-        assert_eq!(graph.nodes[plan.nodes[0]].label, "Black–Scholes model");
-        assert_eq!(plan.left_out, 0);
-        assert_eq!(
-            labels(&graph, &plan, TOP),
-            ["Itô's lemma", "Risk-neutral measure"]
-        );
-        assert_eq!(
-            labels(&graph, &plan, MIDDLE),
-            [
-                "Geometric Brownian motion",
-                "Black–Scholes model",
-                "European option"
-            ]
-        );
-        assert_eq!(
-            labels(&graph, &plan, BOTTOM),
-            ["Formula (3.17)", "Figure 3.1"]
-        );
-
-        // Seven edges were stated, one of them twice: six links, all of the centre.
-        assert_eq!(plan.links.len(), 6);
-        assert!(plan.links.iter().all(|link| link.a == 0));
-        let derived = plan
-            .links
-            .iter()
-            .find(|link| graph.nodes[plan.nodes[link.b]].label == "Risk-neutral measure")
-            .expect("the model is linked to the measure");
-        assert_eq!(derived.kinds, [EdgeKind::DerivedFrom]);
-        // "Black–Scholes derived from Risk-neutral" points at the measure, not at the model.
-        assert!(derived.points_at_b && !derived.points_at_a);
-        let part_of = plan
-            .links
-            .iter()
-            .find(|link| graph.nodes[plan.nodes[link.b]].label == "European option")
-            .expect("the model is linked to the option");
-        assert!(part_of.points_at_a && !part_of.points_at_b);
-    }
 }

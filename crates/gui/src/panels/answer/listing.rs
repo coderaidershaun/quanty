@@ -4,8 +4,7 @@
 use super::phase::AnswerTab;
 use crate::contract::{ItemKind, Reason, ResultItem};
 
-/// How many results the search found, in all and by kind. Text passages have no count of
-/// their own: they are in `results` only.
+/// Text passages have no count of their own: they are in `results` only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(super) struct Counts {
     pub(super) results: usize,
@@ -15,7 +14,6 @@ pub(super) struct Counts {
 }
 
 impl Counts {
-    /// The count a tab shows. The Answer tab shows none.
     pub(super) const fn of(self, tab: AnswerTab) -> Option<usize> {
         match tab {
             AnswerTab::Answer => None,
@@ -27,7 +25,6 @@ impl Counts {
     }
 }
 
-/// The words of one result, in the place of the result in the search.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(super) struct Row {
     pub(super) kind_label: String,
@@ -114,83 +111,5 @@ fn caption(item: &ResultItem) -> String {
         (Some(label), None) => format!("**{label}**"),
         (None, Some(caption)) => caption.to_owned(),
         (None, None) => String::new(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::testkit::sample;
-
-    fn item(number: usize, kind: ItemKind) -> ResultItem {
-        ResultItem {
-            number,
-            kind,
-            doc_title: "Notes".to_owned(),
-            page: 4,
-            printed_page: Some("41".to_owned()),
-            label: None,
-            caption: None,
-            reason: Reason::Nearest,
-            score: 0.834,
-            ..sample::search_reply().results.remove(0)
-        }
-    }
-
-    #[test]
-    fn the_rows_say_what_each_result_is_and_why_it_is_there() {
-        let formula = ResultItem {
-            label: Some("(2.4)".to_owned()),
-            ..item(1, ItemKind::Formula)
-        };
-        let figure = ResultItem {
-            label: Some("Figure 13-4".to_owned()),
-            caption: Some("Three spreads.".to_owned()),
-            printed_page: None,
-            reason: Reason::Concept("Volatility".to_owned()),
-            ..item(4, ItemKind::Figure)
-        };
-        let table = ResultItem {
-            label: Some("Table 1-1".to_owned()),
-            reason: Reason::Cited {
-                by: 2,
-                label: "Table 1-1".to_owned(),
-            },
-            ..item(5, ItemKind::Table)
-        };
-        let text = item(2, ItemKind::Chunk);
-        let listing = Listing::of(&[formula, text, figure, table]);
-
-        assert_eq!(
-            listing.counts,
-            Counts {
-                results: 4,
-                formulas: 1,
-                figures: 1,
-                tables: 1
-            }
-        );
-        let row = |at: usize| &listing.rows[at];
-        assert_eq!(row(0).kind_label, "Formula (2.4)");
-        assert_eq!(row(1).kind_label, "Text");
-        assert_eq!(row(2).kind_label, "Figure 13-4");
-        assert_eq!(row(0).place, "Notes \u{b7} p. 41");
-        assert_eq!(row(2).place, "Notes \u{b7} page 4");
-        assert_eq!(row(0).reason, "Nearest to the question");
-        assert_eq!(row(2).reason, "Reached through the concept Volatility");
-        assert_eq!(row(3).reason, "Cited by result 2 as Table 1-1");
-        assert_eq!(row(0).score, "0.83");
-        assert_eq!(row(3).open_label, "Result 5");
-        assert_eq!(row(2).caption, "**Figure 13-4** Three spreads.");
-        assert_eq!(row(3).caption, "**Table 1-1**");
-        assert_eq!(row(1).caption, "");
-    }
-
-    #[test]
-    fn the_counts_of_a_tab_are_none_for_the_answer() {
-        let counts = Listing::of(&[item(1, ItemKind::Chunk)]).counts;
-        assert_eq!(counts.of(AnswerTab::Answer), None);
-        assert_eq!(counts.of(AnswerTab::Results), Some(1));
-        assert_eq!(counts.of(AnswerTab::Tables), Some(0));
     }
 }

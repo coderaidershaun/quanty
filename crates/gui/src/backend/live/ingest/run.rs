@@ -12,8 +12,6 @@ use crate::contract::{
     ItemCounts, PageToCheck, RequestId,
 };
 
-/// Sends the progress of the run, then exactly one `Event::IngestFinished`, last.
-///
 /// A cancel is not listened to: the work has no safe place to stop inside, so a run goes on to
 /// its end.
 pub async fn run<S: Services>(
@@ -77,7 +75,7 @@ fn send_progress(reply: &Reply, request: RequestId, stage: IngestStage, cost_usd
     });
 }
 
-/// The author and the tags of the request. A blank author is none, and a blank tag is dropped.
+/// A blank author is none, and a blank tag is dropped.
 fn label_change(ingest: &IngestRequest) -> LabelChange {
     LabelChange {
         author: ingest

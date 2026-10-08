@@ -17,7 +17,7 @@ use crate::contract::{Failure, FailureKind};
 /// A store that neither answers nor refuses must not hold a command for ever.
 const CONNECT_LIMIT: Duration = Duration::from_secs(5);
 
-/// Makes the outside services. `RealServices` makes the real ones; a test makes stand-ins.
+/// `RealServices` makes the real ones; a test makes stand-ins.
 pub trait Services: Send + Sync + 'static {
     type Embedder: Embedder + Send + Sync + 'static;
     type Llm: Llm + Send + Sync + 'static;
@@ -29,6 +29,8 @@ pub trait Services: Send + Sync + 'static {
     fn embedder(&self, config: &Config) -> Result<Self::Embedder, Failure>;
     fn llm(&self, model: &str) -> Self::Llm;
     fn graph(&self, config: &Config) -> impl Future<Output = Result<Self::Graph, Failure>> + Send;
+    // SMELL: nothing calls `page_services`, on this trait or on the context, yet every stand-in
+    // of a test must write one. Call it or delete it.
     fn page_services(
         &self,
         jev_api_key: Option<&str>,
@@ -46,7 +48,6 @@ pub trait Services: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ConversionSummary, ConvertError>> + Send;
 }
 
-/// The real Gemini embedder, `claude` command, FalkorDB graph, and page converter.
 pub struct RealServices;
 
 impl Services for RealServices {
@@ -98,7 +99,6 @@ pub struct LiveContext<S: Services> {
 }
 
 impl<S: Services> LiveContext<S> {
-    /// Opens nothing. Every connection is made when a command needs it.
     pub fn new(config: Config, services: S) -> Self {
         LiveContext {
             config,
@@ -113,9 +113,6 @@ impl<S: Services> LiveContext<S> {
         &self.config
     }
 
-    /// A retriever over the stores and the embedder. The first call connects and keeps it; the
-    /// later calls share it, until a store fails.
-    ///
     /// # Errors
     /// A failure that says which store or key is not ready.
     pub async fn retriever(&self) -> Result<Kept<S>, Failure> {
@@ -154,7 +151,6 @@ impl<S: Services> LiveContext<S> {
         Ok(graph)
     }
 
-    /// Opens the graph, and gives up when it does not answer in time.
     async fn connect_graph(&self) -> Result<S::Graph, Failure> {
         match tokio::time::timeout(CONNECT_LIMIT, self.services.graph(&self.config)).await {
             Ok(connected) => connected.map_err(|failure| self.failure(failure)),
@@ -209,8 +205,6 @@ impl<S: Services> LiveContext<S> {
         self.services.convert(job, key).await
     }
 
-    /// The models of an ingest.
-    ///
     /// # Errors
     /// A failure that says the embedding key is missing.
     pub fn models(&self) -> Result<Models<S::Embedder, S::Llm>, Failure> {
@@ -224,8 +218,8 @@ impl<S: Services> LiveContext<S> {
         self.services.llm(ANSWER_MODEL)
     }
 
-    /// Turns a backend error into a `Failure`. Every kind of work converts its errors through it.
-    /// A store that is down also drops what was kept, so the next command connects again.
+    /// Every kind of work converts its errors through it. A store that is down also drops what
+    /// was kept, so the next command connects again.
     pub fn failure(&self, error: impl Into<Failure>) -> Failure {
         let failure = error.into();
         if matches!(

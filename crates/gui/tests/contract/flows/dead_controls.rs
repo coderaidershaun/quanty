@@ -57,8 +57,6 @@ fn modifiers_of(chord: Chord) -> egui::Modifiers {
     modifiers
 }
 
-/// The commands the app must send as it opens: one load of the catalogue, and what the scene's
-/// own opening intents ask for.
 fn assert_start_up_sent_only_its_own_commands(scene: &str, seen: &Seen) {
     let opening = Fake::scene(scene, &testkit::samples_folder())
         .unwrap_or_else(|error| panic!("scene `{scene}`: {error}"))
@@ -128,7 +126,6 @@ fn pressable(harness: &Window) -> Vec<(Role, String, usize)> {
     found
 }
 
-/// Clicks the node again, when it is still there and still enabled.
 fn click_if_still_there(harness: &mut Window, role: Role, name: &str, place: usize) {
     let Some(node) = harness.query_all_by_role_and_label(role, name).nth(place) else {
         return;
@@ -140,9 +137,8 @@ fn click_if_still_there(harness: &mut Window, role: Role, name: &str, place: usi
     testkit::settle(harness);
 }
 
-/// Presses every control once, and every control that a press brings on screen. A tab is pressed
-/// only when nothing else on screen is left, so what a tab shows is pressed before the tab is
-/// left. The lists are left to `press_every_row_of_every_list`.
+/// A tab is pressed only when nothing else on screen is left, so what a tab shows is pressed
+/// before the tab is left. The lists are left to `press_every_row_of_every_list`.
 fn press_every_control(harness: &mut Window, scene: &str) {
     let mut pressed: HashSet<(Role, String, usize)> = HashSet::new();
     loop {
@@ -162,7 +158,6 @@ fn press_every_control(harness: &mut Window, scene: &str) {
     }
 }
 
-/// The rows of an open list: the controls that are there now and were not there before.
 fn rows_of_open_list(harness: &Window, closed: &HashSet<(Role, String)>) -> Vec<(Role, String)> {
     pressable(harness)
         .into_iter()
@@ -171,7 +166,7 @@ fn rows_of_open_list(harness: &Window, closed: &HashSet<(Role, String)>) -> Vec<
         .collect()
 }
 
-/// Opens each list, and presses each of its rows: a row is a control that only an open list has.
+/// A row is a control that only an open list has.
 fn press_every_row_of_every_list(harness: &mut Window) {
     // A list that the last click left open is shut first, so that its rows are not taken for
     // controls that are always there.
@@ -207,8 +202,8 @@ fn press_every_row_of_every_list(harness: &mut Window) {
     }
 }
 
-/// Every `CheckHealth` that the app sent after the start-up was the reducer's own recheck after
-/// a search that worked, so an ask came before it, and after the one before it.
+/// After the start-up, the only `CheckHealth` is the one the app sends by itself after a search
+/// that worked, so an ask came before each one, and after the one before it.
 fn assert_each_health_check_follows_an_ask(scene: &str, seen: &Seen) {
     let mut asked = false;
     for command in seen.all() {

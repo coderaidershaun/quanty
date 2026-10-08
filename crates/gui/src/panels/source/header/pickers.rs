@@ -7,9 +7,7 @@ use crate::contract::{ChapterLabel, DocId, Loadable, PageView};
 use crate::state::Shared;
 use crate::widgets::Dropdown;
 
-/// The books of the library and the chapters of the open document's book, as texts to choose
-/// from. It is worked out again only when the library, the open document or the shown page's
-/// document changes.
+/// The books of the library and the chapters of the open document's book, as texts to choose from.
 #[derive(Debug, Default)]
 pub(super) struct Lists {
     key: Option<(u64, Option<DocId>, Option<DocId>)>,
@@ -71,7 +69,6 @@ impl Lists {
         }
     }
 
-    /// The book picker and the chapter picker. A choice of a book opens its first chapter.
     pub(super) fn pickers<'a>(&'a self, shared: &'a Shared) -> [Picker<'a>; 2] {
         let catalogue = &shared.library.catalogue;
         let is_read = catalogue.ready().is_some();
@@ -121,7 +118,6 @@ fn chapter_text(chapter: &ChapterLabel) -> String {
     format!("Chapter {}: {}", chapter.number, chapter.name)
 }
 
-/// One dropdown, with what it shows, what each choice opens, and whether it takes a choice.
 #[derive(Debug)]
 pub(super) struct Picker<'a> {
     salt: &'a str,
@@ -132,13 +128,10 @@ pub(super) struct Picker<'a> {
     selected: Option<usize>,
     placeholder: &'a str,
     is_enabled: bool,
-    /// Said on hover while the picker is off.
     why_off: Option<&'a str>,
 }
 
 impl Picker<'_> {
-    /// Draws the picker and returns the document that the person's choice opens. A choice that
-    /// is the selection already opens nothing.
     pub(super) fn show(&self, ui: &mut egui::Ui, width: f32) -> Option<DocId> {
         let shown = ui.add_enabled_ui(self.is_enabled, |ui| {
             Dropdown::new(self.salt, self.label, self.options)

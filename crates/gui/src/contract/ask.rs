@@ -11,8 +11,7 @@ pub enum AskMode {
     ResultsOnly,
 }
 
-/// One book, one author and many tags. A book or an author matches whatever its capitals; every
-/// tag must be on the document.
+/// A book or an author matches whatever its capitals; every tag must be on the document.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct Filters {
     pub book: Option<String>,
@@ -61,19 +60,19 @@ pub struct ResultItem {
     /// Chunk Markdown, raw LaTeX, table Markdown, or a figure's explanation.
     pub text: String,
     pub image: Option<ImageRef>,
-    /// The next three are read from the chapter's folder on disk. They are `None` when the
-    /// document has no folder or no piece on the page matches. This is the piece number.
+    /// The number of the piece. This and the next two are read from the chapter's folder on
+    /// disk, and are `None` when the document has no folder or no piece on the page matches.
     pub piece: Option<u32>,
     pub caption: Option<String>,
     pub name: Option<String>,
 }
 
-/// What the search did, step by step. `None` means the search did not reach that step.
+/// `None` means the search did not reach that step.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct RetrievalTrace {
-    /// `None`: no filter. `Some(n)`: the filter matched n documents. `Some(0)`: no document
-    /// carries those labels, and the search stopped before it embedded the question, so the
-    /// screen says "no document has these labels", not "no sources".
+    /// `None` means no filter, and `Some(n)` means the filter matched n documents. With `Some(0)`
+    /// the search stopped before it embedded the question, so the screen says "no document has
+    /// these labels", not "no sources".
     pub documents_searched: Option<usize>,
     pub nearest: usize,
     /// Concept names, nearest and most mentioned first.
@@ -112,7 +111,6 @@ pub enum AnswerBlock {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct Answer {
-    /// `None`: the reply had no title.
     pub title: Option<String>,
     /// Empty means the stored items do not answer the question.
     pub blocks: Vec<AnswerBlock>,

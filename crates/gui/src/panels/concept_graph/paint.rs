@@ -17,10 +17,8 @@ use crate::theme::{Icon, Kind, TextRole, Tone, color, glow, radius, space, strok
 /// How much of the node's own wash a faded node takes on, over the panel colour. The fill
 /// stays solid, so a faded node still hides the links behind it.
 const FADED_FILL: f32 = 0.45;
-/// How far outside the pill the ring of the keyboard focus stands.
 const RING_OFFSET: f32 = space::XXS;
 
-/// What is drawn, and how.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Drawing<'a> {
     pub canvas: egui::Rect,
@@ -29,7 +27,6 @@ pub(super) struct Drawing<'a> {
     pub view: View,
 }
 
-/// What this frame knows about one node, from its widget.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct NodeState {
     /// The focused concept, or the selected result.
@@ -50,7 +47,6 @@ pub(super) fn to_offset(vector: egui::Vec2) -> Point {
     point(vector.x, vector.y)
 }
 
-/// Draws links, labels and nodes into the canvas, clipped to it.
 pub(super) fn paint(ui: &egui::Ui, drawing: &Drawing<'_>, states: &[NodeState]) {
     let lit = states
         .iter()
@@ -77,7 +73,6 @@ struct Pen<'a> {
     canvas_centre: Point,
 }
 
-/// One node as it is drawn: its place, its rectangle on the canvas and what is known of it.
 struct NodeView<'a> {
     place: usize,
     rect: egui::Rect,
@@ -106,8 +101,6 @@ impl Pen<'_> {
         self.lit.is_some_and(|lit| link.touches(lit))
     }
 
-    /// True when nothing is lit, or this node is the lit one or stands at the other end of one
-    /// of its links.
     fn is_in_the_light(&self, place: usize) -> bool {
         let links = &self.drawing.scene.plan.links;
         self.lit.is_none_or(|lit| {
@@ -118,8 +111,6 @@ impl Pen<'_> {
         })
     }
 
-    /// A link with a result is magenta, one with a related concept at an end is purple, any
-    /// other is blue.
     fn link_tone(&self, link: &Link) -> Tone {
         let kind_at = |place: usize| {
             let index = self.drawing.scene.plan.nodes[place];
@@ -134,7 +125,6 @@ impl Pen<'_> {
         }
     }
 
-    /// The links of the centre, and then the links of the lit node on top of them.
     fn links(&self) {
         let links = self.drawing.scene.plan.links.iter().enumerate();
         let of_centre = links
@@ -185,8 +175,6 @@ impl Pen<'_> {
         }
     }
 
-    /// A filled triangle on the end of a link. `along` is the line it sits on, from where the
-    /// link comes to its tip.
     fn arrowhead(&self, along: (Point, Point), colour: Color32) {
         let (from, tip) = (self.at(along.0), self.at(along.1));
         let direction = (tip - from).normalized();
@@ -200,8 +188,6 @@ impl Pen<'_> {
         self.painter.add(head);
     }
 
-    /// The words on a link: at rest only on the links of the centre that found a free place,
-    /// and while a node is lit only on its links, in full colour.
     fn link_labels(&self) {
         let scene = self.drawing.scene;
         for (index, link) in scene.plan.links.iter().enumerate() {
@@ -263,7 +249,6 @@ impl Pen<'_> {
         (CORNER * view.scale).min(view.rect.height() / 2.0)
     }
 
-    /// The glow of a selected node, the fill, and the outline.
     fn body(&self, view: &NodeView<'_>) {
         let tone = Kind::from(view.node.kind).tone();
         let swatch = tone.swatch();
@@ -290,7 +275,6 @@ impl Pen<'_> {
             .rect_stroke(view.rect, radius, outline, StrokeKind::Inside);
     }
 
-    /// The disc with the kind's icon, and the words.
     fn disc_and_text(&self, view: &NodeView<'_>) {
         let kind = Kind::from(view.node.kind);
         let swatch = kind.tone().swatch();

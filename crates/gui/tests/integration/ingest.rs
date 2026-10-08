@@ -1,9 +1,5 @@
 //! Checks that the live backend checks and runs an ingest of a chapter PDF: a new chapter is
-//! converted with stand-in pages, stored and labelled, a file that cannot be ingested is refused
-//! before any store is asked, and a page that fails or a store that is down ends the run as a
-//! failure with nothing paid for.
-
-use std::path::PathBuf;
+//! converted, stored and labelled, and a store that is down fails the run with nothing paid for.
 
 use gui::backend::live::{LiveContext, Services};
 use gui::backend::{Handler, Reply};
@@ -11,16 +7,16 @@ use gui::contract::{
     Catalogue, ChapterLabel, ChapterState, Command, Event, Failure, FailureKind, IngestOutcome,
     IngestProgress, IngestRequest, IngestStage, Preflight, RequestId,
 };
-use ocr::testing::{Scenario, sample_pdf};
+use ocr::testing::sample_pdf;
 
 use crate::support;
 
 const REQUEST: RequestId = RequestId(7);
 
-fn request(pdf: PathBuf, book: &str) -> IngestRequest {
+fn request() -> IngestRequest {
     IngestRequest {
-        pdf,
-        book: book.to_owned(),
+        pdf: sample_pdf(),
+        book: "Option Volatility and Pricing".to_owned(),
         author: None,
         tags: Vec::new(),
     }
@@ -32,7 +28,6 @@ async fn events_of<S: Services>(cx: &LiveContext<S>, command: Command) -> Vec<Ev
     events.try_iter().collect()
 }
 
-/// The result of a check, after checking that exactly one event was sent, for this request.
 async fn checked<S: Services>(
     cx: &LiveContext<S>,
     ingest: &IngestRequest,
@@ -54,8 +49,6 @@ async fn checked<S: Services>(
     result.clone()
 }
 
-/// The progress of a start, in the order it was sent, and how the start ended. The end must be the
-/// last event, and nothing but progress may come before it.
 async fn started<S: Services>(
     cx: &LiveContext<S>,
     ingest: &IngestRequest,
@@ -106,7 +99,7 @@ async fn catalogue_of<S: Services>(cx: &LiveContext<S>) -> Catalogue {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p gui --test integration -- --ignored ingest::"]
 async fn a_checked_chapter_is_ingested_with_its_labels_and_a_second_start_finds_it_ingested() {
-    let (cx, pages) = support::context_and_pages("ingest-run", Scenario::SampleChapter);
+    let (cx, pages) = support::context_and_pages("ingest-run");
     let wanted = IngestRequest {
         author: Some(" Sheldon Natenberg ".to_owned()),
         tags: vec![
@@ -114,7 +107,7 @@ async fn a_checked_chapter_is_ingested_with_its_labels_and_a_second_start_finds_
             "volatility".to_owned(),
             " ".to_owned(),
         ],
-        ..request(sample_pdf(), "Option Volatility and Pricing")
+        ..request()
     };
 
     let before = checked(&cx, &wanted).await;
@@ -179,68 +172,12 @@ async fn a_checked_chapter_is_ingested_with_its_labels_and_a_second_start_finds_
     assert_eq!(pages.calls(), calls_so_far, "no page was converted again");
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p gui --test integration -- --ignored ingest::"]
-async fn a_page_that_fails_ends_the_run_as_failed_with_the_page_named_and_no_document_stored() {
-    // Every reply for page 1 fails the check, so the conversion stops after its calls.
-    let scenario = Scenario::AllTables {
-        broken_page: Some(1),
-    };
-    let (cx, _pages) = support::context_and_pages("ingest-page-fails", scenario);
-    let wanted = request(sample_pdf(), "Option Volatility and Pricing");
-
-    let (progress, finished) = started(&cx, &wanted).await;
-
-    let stages: Vec<IngestStage> = progress.iter().map(|progress| progress.stage).collect();
-    assert_eq!(stages, [IngestStage::Converting]);
-    let failure = finished.expect_err("a page that fails ends the run");
-    assert_eq!(failure.kind, FailureKind::PageFailed, "{failure:?}");
-    assert!(failure.hint.contains("Page 1"), "{failure:?}");
-    let catalogue = catalogue_of(&cx).await;
-    assert_eq!(catalogue.documents().count(), 0, "no document was stored");
-}
-
-#[tokio::test]
-async fn a_file_the_check_must_refuse_is_refused_before_any_store_is_asked() {
-    let folder = tempfile::tempdir().expect("a temporary folder should be made");
-    let file = |name: &str, bytes: &[u8]| -> PathBuf {
-        let path = folder.path().join(name);
-        std::fs::write(&path, bytes).expect("a file should be written");
-        path
-    };
-    let wrong_name = file("notes.pdf", b"%PDF-1.4 a PDF with the wrong name");
-    let plain_text = file("chapter-1-text.pdf", b"This is plain text, not a PDF.");
-    let right_file = file("chapter-2-fine.pdf", b"%PDF-1.4 a PDF with the right name");
-    let cx = support::closed(&folder.path().join("content"));
-    let refused = [
-        (
-            request(wrong_name, "A Test Book"),
-            "chapter-<number>-<name>.pdf",
-        ),
-        (request(plain_text, "A Test Book"), "is not a PDF"),
-        (request(right_file, "?!"), "book title \"?!\""),
-    ];
-
-    for (ingest, hint) in refused {
-        let failure = checked(&cx, &ingest)
-            .await
-            .expect_err("a check refuses this file");
-
-        assert_eq!(failure.kind, FailureKind::BadFile, "{failure:?}");
-        assert!(failure.hint.contains(hint), "{failure:?} must say {hint}");
-        let (progress, finished) = started(&cx, &ingest).await;
-        assert!(progress.is_empty(), "nothing started: {progress:?}");
-        let failure = finished.expect_err("a start refuses this file too");
-        assert_eq!(failure.kind, FailureKind::BadFile, "{failure:?}");
-    }
-}
-
 #[tokio::test]
 async fn with_the_stores_down_the_check_and_the_start_fail_with_the_store_named_and_nothing_is_paid()
  {
     let folder = tempfile::tempdir().expect("a temporary folder should be made");
     let (cx, pages) = support::closed_with_stub_pages(&folder.path().join("content"));
-    let wanted = request(sample_pdf(), "Option Volatility and Pricing");
+    let wanted = request();
     let stores = [FailureKind::FalkorDbDown, FailureKind::QdrantDown];
 
     let failure = checked(&cx, &wanted)

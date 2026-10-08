@@ -1,6 +1,5 @@
 //! Stored Markdown drawn as text that a person can read and copy: emphasis, code, formulas on
-//! the baseline of their line, footnotes, citation chips and tables. A block is read and laid
-//! out once, and kept until it is no longer drawn.
+//! the baseline of their line, footnotes, citation chips and tables.
 
 mod atom;
 mod breaker;
@@ -33,7 +32,6 @@ pub struct RichText<'a> {
 }
 
 impl<'a> RichText<'a> {
-    /// A text with no citations, and no citation chosen.
     pub fn new(markdown: &'a str, role: TextRole) -> Self {
         RichText {
             markdown,
@@ -43,13 +41,12 @@ impl<'a> RichText<'a> {
         }
     }
 
-    /// Sets the results that the text cites. Each gets a chip after the text.
+    /// Each cited result gets a chip after the text.
     pub fn cites(mut self, cites: &'a [usize]) -> Self {
         self.cites = cites;
         self
     }
 
-    /// Sets the citation whose chip is drawn as chosen.
     pub fn selected(mut self, cite: Option<usize>) -> Self {
         self.selected = cite;
         self
@@ -60,14 +57,12 @@ impl<'a> RichText<'a> {
 /// `Intent::CopyText`, so the text never reaches the clipboard from here.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Clicked {
-    /// A citation chip was clicked. It holds the number of the result.
+    /// It holds the number of the result.
     Citation(usize),
-    /// "Copy text" or "Copy table" was chosen. It holds the stored source.
+    /// It holds the stored source.
     CopyText(String),
 }
 
-/// Draws the text wrapped to the room that is left, with a chip after it for each citation.
-/// Empty text draws nothing and takes no room. Returns the click, if there was one.
 #[must_use = "a click or a copy request is lost"]
 pub fn show(ui: &mut egui::Ui, media: &mut Media, text: &RichText<'_>) -> Option<Clicked> {
     if text.markdown.trim().is_empty() && text.cites.is_empty() {
@@ -80,8 +75,7 @@ pub fn show(ui: &mut egui::Ui, media: &mut Media, text: &RichText<'_>) -> Option
     paint::block(ui, &flow, text, &mut media.math)
 }
 
-/// Draws a Markdown table. Text that is not a table is drawn as `show` draws it. It only ever
-/// returns `CopyText`.
+/// It only ever returns `CopyText`.
 #[must_use = "a copy request is lost"]
 pub fn table(
     ui: &mut egui::Ui,

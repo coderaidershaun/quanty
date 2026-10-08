@@ -29,7 +29,6 @@ const PAGE_WAIT: Duration = Duration::from_millis(100);
 const PREFLIGHT_WAIT: Duration = Duration::from_millis(300);
 const INGEST_WAIT: Duration = Duration::from_millis(1500);
 
-/// The label that no sample document carries.
 const MISSING_LABEL: &str = "no-such-tag";
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -49,7 +48,6 @@ enum Pace {
     Instant,
 }
 
-/// The fake backend of one scene.
 #[derive(Debug, Clone)]
 pub struct Fake {
     scene: &'static Scene,
@@ -59,12 +57,6 @@ pub struct Fake {
 }
 
 impl Fake {
-    /// The fake for the scene called `name`.
-    ///
-    /// # Errors
-    /// [`FakeError::UnknownScene`] when no scene has that name, [`FakeError::SamplesMissing`]
-    /// when the sample chapters are not at or above `home`, or above the program's own folder,
-    /// or cannot be read.
     pub fn scene(name: &str, home: &Path) -> Result<Fake, FakeError> {
         let scene = scenes()
             .iter()
@@ -99,13 +91,12 @@ impl Fake {
         })
     }
 
-    /// The same fake with no waits, for tests. A reply that never comes still never comes.
+    /// A reply that never comes still never comes.
     pub fn instant(mut self) -> Fake {
         self.pace = Pace::Instant;
         self
     }
 
-    /// What the scene does when the window opens.
     pub fn opening(&self) -> Vec<Intent> {
         let asks = |mode, filters| {
             Intent::Ask(AskDraft {
@@ -147,6 +138,8 @@ impl Fake {
     }
 
     /// The failure of this kind, with the address in the hint where the real one has it.
+    // SMELL: each hint with a value in it is written here and again in the live backend, and the
+    // one for a page outside the chapter already differs. A change to one must be made in both.
     fn failure(&self, kind: FailureKind) -> Failure {
         match kind {
             FailureKind::QdrantDown => {
@@ -297,7 +290,7 @@ impl Fake {
         });
     }
 
-    /// Plays the two moments of a real ingest and then its end. It stores nothing.
+    /// Plays the two moments of a real ingest and then its end.
     async fn ingest(&self, request: RequestId, ingest: &IngestRequest, reply: &Reply) {
         for stage in [IngestStage::Converting, IngestStage::WritingGraph] {
             self.wait(INGEST_WAIT).await;

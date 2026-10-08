@@ -31,8 +31,8 @@ impl ControlSize {
     }
 }
 
-/// What is being done to a widget. A widget reads it from its response. The gallery forces one,
-/// so a state can be seen with no pointer.
+/// What is being done to a widget. The gallery forces one, so a state can be seen with no
+/// pointer.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(super) struct Look {
     pub(super) hovered: bool,

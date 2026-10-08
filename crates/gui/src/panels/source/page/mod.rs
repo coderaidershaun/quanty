@@ -19,7 +19,6 @@ use canvas::{Figure, Shown};
 use view::{View, Viewport};
 use zoom_bar::Percent;
 
-/// What the page picture is called when it cannot be shown.
 pub(super) const PICTURE_ALT: &str = "Page picture";
 
 #[derive(Debug, Default)]
@@ -31,8 +30,7 @@ pub(super) struct State {
 }
 
 impl State {
-    /// Takes in a picture that came on screen. Another page starts at its top and keeps its
-    /// zoom and its sideways position.
+    /// Another page starts at its top and keeps its zoom and its sideways position.
     fn arrive(&mut self, image: &ImageRef, page: u32) {
         if self
             .on_screen
@@ -45,8 +43,6 @@ impl State {
         self.on_screen = Some((image.clone(), page));
     }
 
-    /// The picture that was on screen, with the number of its page, to show while the picture
-    /// of the next page loads.
     fn old_picture(&self, media: &mut Media) -> Option<(Picture, u32)> {
         let (old, number) = self.on_screen.as_ref()?;
         match media.images.get(old) {
@@ -56,7 +52,6 @@ impl State {
     }
 }
 
-/// Asks for the pictures that are likely to be needed next, so the next turn finds them ready.
 pub(super) fn prefetch(media: &mut Media, page: &PageView) {
     let likely = [&page.previous_image, &page.next_image, &page.image];
     for image in likely.into_iter().flatten() {
@@ -116,8 +111,6 @@ fn figure_to_frame(piece: Option<&PagePiece>) -> Option<Figure<'_>> {
     })
 }
 
-/// Cuts the row for the bar from the bottom of the body, and returns what is left above it and
-/// the row.
 fn room_for_bar(body: egui::Rect) -> (egui::Rect, egui::Rect) {
     let bar = egui::Rect::from_min_max(
         egui::pos2(body.left(), body.bottom() - size::CONTROL_SM),
@@ -130,8 +123,7 @@ fn room_for_bar(body: egui::Rect) -> (egui::Rect, egui::Rect) {
     (area, bar)
 }
 
-/// The picture with its zoom bar under it. The bar is drawn first, so what it asks for shows
-/// in the frame that it is pressed in.
+/// The bar is drawn first, so what it asks for shows in the frame that it is pressed in.
 fn draw(ui: &mut egui::Ui, state: &mut State, shown: &Shown<'_>) {
     let (area, bar) = room_for_bar(ui.available_rect_before_wrap());
     let viewport = Viewport {

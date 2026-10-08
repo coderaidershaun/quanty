@@ -7,9 +7,8 @@ use super::scene::{HEADER_HEIGHT, LEGEND_DISC, LEGEND_GLYPH, LEGEND_HEIGHT, Pict
 use crate::theme::{Icon, Kind, TextRole, space};
 use crate::widgets::{Badge, Button, section_header};
 
-/// Where the title row, the legend row and the canvas stand. They are worked out before anything
-/// is drawn, so the canvas has its size before the picture is made, and the title row still
-/// shows what the picture holds in the same frame.
+/// The areas are worked out before anything is drawn, so the canvas has its size before the
+/// picture is made, and the title row still shows what the picture holds in the same frame.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Areas {
     header: egui::Rect,
@@ -47,8 +46,6 @@ impl Areas {
     }
 }
 
-/// Draws the title row, and the legend row when there is a picture. True when `Reset view` was
-/// clicked.
 pub(super) fn show(ui: &mut egui::Ui, areas: &Areas, picture: Option<Picture<'_>>) -> bool {
     let mut reset_clicked = false;
     ui.scope_builder(UiBuilder::new().max_rect(areas.header), |ui| {
@@ -71,7 +68,6 @@ pub(super) fn show(ui: &mut egui::Ui, areas: &Areas, picture: Option<Picture<'_>
     reset_clicked
 }
 
-/// One entry for each kind that the picture draws: the disc and icon of its nodes, and a word.
 /// The widgets have no legend entry, so it is made here from the colours and sizes of the theme.
 fn legend(ui: &mut egui::Ui, kinds: &[Kind]) {
     ui.spacing_mut().item_spacing.x = space::XS;

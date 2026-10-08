@@ -3,7 +3,6 @@
 
 use eframe::egui::{self, Color32, Stroke};
 
-/// A stroke one physical pixel wide.
 pub fn hairline(painter: &egui::Painter, color: Color32) -> Stroke {
     Stroke::new(1.0 / painter.ctx().pixels_per_point(), color)
 }

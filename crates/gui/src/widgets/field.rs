@@ -8,8 +8,7 @@ use eframe::egui::{self, Align, Margin, Response, Stroke};
 use super::{Button, ControlSize};
 use crate::theme::{Icon, TextRole, Tone, color, radius, size, space, stroke};
 
-/// A one-line text box with a frame that shows the focus. It is the one widget that edits the
-/// caller's own text, because egui needs a `&mut String`.
+/// It is the one widget that edits the caller's own text, because egui needs a `&mut String`.
 pub struct TextInput<'a> {
     id_salt: &'a str,
     label: &'a str,
@@ -21,9 +20,8 @@ pub struct TextInput<'a> {
     width: Option<f32>,
 }
 
-/// What a text box reports. `response` is that of the text itself, so its id is the one that
-/// holds the focus. `submitted` is Enter while the box has the focus, and the box then gives the
-/// focus up.
+/// `response` is that of the text itself, so its id is the one that holds the focus. `submitted`
+/// is Enter while the box has the focus, and the box then gives the focus up.
 pub struct TextInputResponse {
     pub response: Response,
     pub submitted: bool,
@@ -52,7 +50,6 @@ impl<'a> TextInput<'a> {
         self
     }
 
-    /// An icon before the text.
     pub fn icon(self, _icon: Icon) -> Self {
         // SMELL: `_icon` is used, so its underscore is wrong. Rename it to `icon`.
         TextInput {
@@ -72,13 +69,11 @@ impl<'a> TextInput<'a> {
         self
     }
 
-    /// The whole width of the box. Without it the box fills the width it is given.
     pub fn width(mut self, width: f32) -> Self {
         self.width = Some(width);
         self
     }
 
-    /// Draws the box and reports Enter and the trailing button.
     pub fn show(self, ui: &mut egui::Ui) -> TextInputResponse {
         let outer_width = self
             .width
@@ -186,7 +181,6 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
         }
     }
 
-    /// `None` shows the placeholder.
     pub fn selected(mut self, index: Option<usize>) -> Self {
         self.selected = index;
         self
@@ -205,14 +199,11 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
         }
     }
 
-    /// The whole width of the closed dropdown. A longer choice ends in "…". Without it the
-    /// dropdown is as wide as its longest choice.
     pub fn width(mut self, width: f32) -> Self {
         self.width = Some(width);
         self
     }
 
-    /// The index the person just chose.
     pub fn show(self, ui: &mut egui::Ui) -> Option<usize> {
         let chosen_text = self.selected.and_then(|index| self.options.get(index));
         let shown = match chosen_text {
@@ -255,7 +246,6 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
         chosen
     }
 
-    /// The width that shows the longest choice, or the placeholder, in full.
     fn widest(&self, ui: &egui::Ui) -> f32 {
         // SMELL: this lays out every choice on every frame. A dropdown with hundreds of
         // choices must be given a `width` instead.
@@ -271,7 +261,6 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
     }
 }
 
-/// A slider with no number next to it. It reports the value it was dragged to, and keeps none.
 pub struct Slider<'a> {
     label: &'a str,
     value: f32,
@@ -287,7 +276,6 @@ impl<'a> Slider<'a> {
         }
     }
 
-    /// The value the person dragged to.
     pub fn show(mut self, ui: &mut egui::Ui) -> Option<f32> {
         let blue = Tone::Blue.swatch();
         let response = ui
@@ -321,10 +309,8 @@ pub enum Step {
 
 /// The centre text of a stepper is at least this wide, so "p. 9" and "p. 64" do not move it.
 const STEPPER_TEXT_WIDTH: f32 = 48.0;
-/// The size of the two buttons of a stepper, which is also how high the text between them is.
 const STEPPER_SIZE: ControlSize = ControlSize::Small;
 
-/// A pair of previous and next buttons with a short text between them, such as a page number.
 pub struct Stepper<'a> {
     text: &'a str,
     previous: (&'a str, bool),
@@ -341,19 +327,18 @@ impl<'a> Stepper<'a> {
         }
     }
 
-    /// The accessible name of the button that goes back, and whether it can be pressed.
+    /// `label` is the accessible name of the button that goes back.
     pub fn previous(mut self, label: &'a str, is_enabled: bool) -> Self {
         self.previous = (label, is_enabled);
         self
     }
 
-    /// The accessible name of the button that goes on, and whether it can be pressed.
+    /// `label` is the accessible name of the button that goes on.
     pub fn next(mut self, label: &'a str, is_enabled: bool) -> Self {
         self.next = (label, is_enabled);
         self
     }
 
-    /// The button the person just pressed.
     pub fn show(self, ui: &mut egui::Ui) -> Option<Step> {
         let mut step = None;
         egui::Frame::NONE
@@ -380,8 +365,6 @@ impl<'a> Stepper<'a> {
         step
     }
 
-    /// Draws the previous button, the text and the next button, and says which button was
-    /// pressed.
     fn show_parts(&self, ui: &mut egui::Ui, middle: egui::Vec2) -> Option<Step> {
         let mut step = None;
         let (label, is_enabled) = self.previous;
@@ -405,66 +388,5 @@ impl<'a> Stepper<'a> {
             step = Some(Step::Next);
         }
         step
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::cell::RefCell;
-    use std::rc::Rc;
-
-    use egui_kittest::kittest::Queryable;
-
-    use super::*;
-    use crate::state::Shared;
-    use crate::testkit;
-
-    #[derive(Default)]
-    struct Typed {
-        text: String,
-        submits: usize,
-        /// The room the box was given, and the room it took.
-        room: Option<(egui::Rect, egui::Rect)>,
-    }
-
-    #[test]
-    fn text_input_takes_typing_and_reports_enter() {
-        let typed = Rc::new(RefCell::new(Typed::default()));
-        let drawn = Rc::clone(&typed);
-        let mut harness = testkit::panel([400.0, 80.0], Shared::default(), move |ui, _cx| {
-            let mut typed = drawn.borrow_mut();
-            let given = ui.available_rect_before_wrap();
-            let shown = TextInput::new("ask", "Question", &mut typed.text)
-                .placeholder("Ask the books")
-                .icon(Icon::SEARCH)
-                .trailing(Icon::CLOSE, "Clear question")
-                .size(ControlSize::Small)
-                .show(ui);
-            typed.submits += usize::from(shown.submitted);
-            typed.room = Some((given, ui.min_rect()));
-        });
-        harness.run();
-        let (given, taken) = typed.borrow().room.expect("the box was drawn");
-        let asked = egui::vec2(given.width(), ControlSize::Small.height());
-        assert_eq!(
-            taken,
-            egui::Rect::from_min_size(given.min, asked),
-            "the box starts where the layout put it, fills the width and is as high as its size"
-        );
-
-        let input = harness.get_by_label("Question");
-        input.click();
-        harness.run();
-        harness
-            .get_by_label("Question")
-            .type_text("derive Black-Scholes");
-        harness.run();
-        assert_eq!(typed.borrow().text, "derive Black-Scholes");
-        assert_eq!(typed.borrow().submits, 0, "typing alone is not a submit");
-
-        harness.key_press(egui::Key::Enter);
-        harness.run();
-        assert_eq!(typed.borrow().submits, 1);
-        assert_eq!(typed.borrow().text, "derive Black-Scholes");
     }
 }

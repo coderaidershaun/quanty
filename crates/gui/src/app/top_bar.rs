@@ -10,8 +10,7 @@ use crate::panels::PanelCx;
 use crate::theme::{Icon, Tone};
 use crate::widgets::{self, TabStrip};
 
-/// The tabs that have a screen. The strip draws these, and a shortcut for any other tab stays
-/// unbound.
+/// The tabs that have a screen.
 pub(super) const BUILT_TABS: [contract::Tab; 2] = [contract::Tab::Ask, contract::Tab::Ingest];
 
 /// False for a shortcut that leads to a part that is not built: a tab that is not in

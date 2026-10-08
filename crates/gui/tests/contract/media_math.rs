@@ -25,7 +25,6 @@ fn pass(ctx: &egui::Context) {
     output.textures_delta.clear();
 }
 
-/// The bytes of each texture that the formulas made.
 fn math_textures(ctx: &egui::Context) -> Vec<usize> {
     let manager = ctx.tex_manager();
     let manager = manager.read();
@@ -36,7 +35,6 @@ fn math_textures(ctx: &egui::Context) -> Vec<usize> {
         .collect()
 }
 
-/// Asks, lets the worker do the job, takes in the result and asks again.
 fn ready(math: &mut Math, ctx: &egui::Context, asked: &MathRef<'_>) -> MathImage {
     assert_eq!(math.get(asked), MathState::Loading, "a new formula waits");
     math.run_pending();
@@ -151,7 +149,6 @@ const BAD_BLOCK: &str = r"\frac{a";
 /// Negative space alone: it can be read, but its box is narrower than nothing.
 const BAD_INLINE: &str = r"\hspace{-2em}";
 
-/// A panel with one block formula, and one inside a line of text.
 fn panel_with(block: &'static str, inline: &'static str) -> Harness<'static, Host> {
     testkit::panel([420.0, 140.0], testkit::asked("q"), move |ui, cx| {
         math::show(ui, cx.media, &MathRef::block(block));

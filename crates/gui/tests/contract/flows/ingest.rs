@@ -21,7 +21,6 @@ fn is_ingest(command: &Command) -> bool {
     matches!(command, Command::Ingest { .. })
 }
 
-/// The scene at rest, with its first check made, and a list of what the app sent.
 fn open(scene: &str, size: [f32; 2]) -> (Window, Seen) {
     let (mut harness, seen) = recording::open(scene, size);
     testkit::settle(&mut harness);
@@ -32,7 +31,6 @@ fn field(harness: &Window, name: &str) -> Option<String> {
     node(harness, Role::TextInput, name).value()
 }
 
-/// Where the first command of this kind stands in the list of what was sent.
 fn place_of(seen: &Seen, is: fn(&Command) -> bool) -> Option<usize> {
     seen.all().iter().position(is)
 }

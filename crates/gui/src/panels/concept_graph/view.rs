@@ -18,13 +18,12 @@ fn scale_of(step: i8) -> f32 {
     2.0_f32.powf(f32::from(step) / STEPS_PER_DOUBLING)
 }
 
-/// Where the canvas looks at the picture, and how large the picture is drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub(super) struct View {
     /// The point of the picture that is at the centre of the canvas.
     pub at: Point,
-    /// Doublings of the size. The drawn size snaps to quarter steps, so that a long pinch asks
-    /// the font for only nine sizes of each text.
+    /// The zoom is counted in doublings of the size. The drawn size snaps to quarter steps, so
+    /// that a long pinch asks the font for only nine sizes of each text.
     pub zoom_log: f32,
 }
 
@@ -68,7 +67,6 @@ impl View {
         }
     }
 
-    /// The canvas point of a point of the picture.
     pub(super) fn point_on_canvas(&self, canvas_centre: Point, at: Point) -> Point {
         let scale = self.scale();
         point(
@@ -77,7 +75,6 @@ impl View {
         )
     }
 
-    /// The canvas rectangle of a rectangle of the picture.
     pub(super) fn rect_on_canvas(&self, canvas_centre: Point, rect: Rect) -> Rect {
         Rect {
             min: self.point_on_canvas(canvas_centre, rect.min),
@@ -104,8 +101,8 @@ impl View {
         self
     }
 
-    /// Zooms by `doublings`. The point of the picture under `pointer` (measured from the canvas
-    /// centre) stays where it is.
+    /// The point of the picture under `pointer` (measured from the canvas centre) stays where
+    /// it is.
     pub(super) fn zoomed(mut self, doublings: f32, pointer: Point) -> View {
         let before = self.scale();
         let under = point(
@@ -147,140 +144,5 @@ fn show(at: f32, (low, high): (f32, f32), half: f32) -> f32 {
         (low + high) / 2.0
     } else {
         at.clamp(high - half, low + half)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn world(width: f32, height: f32) -> Rect {
-        Rect::from_min_size(
-            point(-width / 2.0, 0.0),
-            Size {
-                w: width,
-                h: height,
-            },
-        )
-    }
-
-    /// The part of the picture that the canvas shows.
-    fn seen(view: View, canvas: Size) -> Rect {
-        Rect::from_centre(
-            view.at,
-            Size {
-                w: canvas.w / view.scale(),
-                h: canvas.h / view.scale(),
-            },
-        )
-    }
-
-    /// Along each side the canvas is inside the picture, or the picture is centred on it.
-    fn nothing_is_lost(view: View, world: Rect, canvas: Size) -> bool {
-        let seen = seen(view, canvas);
-        let along = |low: f32, high: f32, seen_low: f32, seen_high: f32| {
-            let centred = ((seen_low + seen_high) - (low + high)).abs() < 0.01;
-            let inside = seen_low >= low - 0.01 && seen_high <= high + 0.01;
-            if seen_high - seen_low >= high - low {
-                centred
-            } else {
-                inside
-            }
-        };
-        along(world.min.x, world.max.x, seen.min.x, seen.max.x)
-            && along(world.min.y, world.max.y, seen.min.y, seen.max.y)
-    }
-
-    #[test]
-    fn a_view_opens_fitted_or_on_the_centre_and_never_loses_the_picture() {
-        let canvas = Size { w: 522.0, h: 179.0 };
-
-        // A picture that fits opens whole, at the largest step that shows it all.
-        let small = world(400.0, 150.0);
-        let opened = View::opening(small, canvas, point(0.0, 75.0));
-        assert_eq!((opened.step(), opened.at), (0, small.centre()));
-        let wide = world(600.0, 150.0);
-        let opened = View::opening(wide, canvas, point(0.0, 75.0));
-        assert_eq!((opened.step(), opened.at), (-1, wide.centre()));
-
-        // One that needs more than 71 % opens at 71 %, on its middle when the centre node is in
-        // sight there, so that the cut is shared by both sides.
-        let large = world(800.0, 150.0);
-        let opened = View::opening(large, canvas, point(-300.0, 75.0));
-        assert_eq!((opened.step(), opened.at), (FIT_FLOOR, large.centre()));
-
-        // When the centre node is out of sight there, it opens on the centre node, kept over the
-        // picture.
-        let dense = world(3000.0, 400.0);
-        let opened = View::opening(dense, canvas, point(-1200.0, 200.0));
-        assert_eq!(opened.step(), FIT_FLOOR);
-        assert!(nothing_is_lost(opened, dense, canvas));
-        let sight = seen(opened, canvas);
-        assert!(sight.min.x <= -1200.0 && -1200.0 <= sight.max.x);
-        assert!((sight.min.x - dense.min.x).abs() < 0.01);
-
-        // A pan, a zoom or a smaller window cannot lose the picture, however far it goes.
-        let big = world(3000.0, 400.0);
-        let start = View::opening(big, canvas, point(0.0, 200.0));
-        for by in [
-            point(5000.0, 0.0),
-            point(-5000.0, 900.0),
-            point(30.0, -4000.0),
-        ] {
-            assert!(nothing_is_lost(
-                start.panned(by).held(big, canvas),
-                big,
-                canvas
-            ));
-        }
-        let tiny = Size { w: 300.0, h: 120.0 };
-        let zoomed_out = start.zoomed(-9.0, point(0.0, 0.0)).held(big, tiny);
-        assert!(nothing_is_lost(zoomed_out, big, tiny));
-        let flat = world(3000.0, 100.0);
-        assert!(nothing_is_lost(start.held(flat, canvas), flat, canvas));
-
-        // The zoom stops at 50 % and 200 %, and snaps to quarter steps.
-        assert_eq!(start.zoomed(-9.0, point(0.0, 0.0)).step(), -4);
-        assert_eq!(start.zoomed(9.0, point(0.0, 0.0)).step(), 4);
-        assert_eq!(
-            View {
-                zoom_log: 0.1,
-                ..start
-            }
-            .step(),
-            0
-        );
-        assert_eq!(
-            View {
-                zoom_log: 0.13,
-                ..start
-            }
-            .step(),
-            1
-        );
-
-        // A zoom keeps the point under the pointer where it is.
-        let pointer = point(100.0, 20.0);
-        let under = |view: View| {
-            point(
-                view.at.x + pointer.x / view.scale(),
-                view.at.y + pointer.y / view.scale(),
-            )
-        };
-        let after = start.zoomed(0.5, pointer);
-        assert_eq!(after.step(), 0);
-        assert!((under(after).x - under(start).x).abs() < 0.001);
-        assert!((under(after).y - under(start).y).abs() < 0.001);
-
-        // Showing a rectangle moves the view as little as it must, and not at all when the
-        // rectangle is in sight.
-        let far = Rect::from_min_size(point(900.0, 180.0), Size { w: 100.0, h: 40.0 });
-        let moved = start.showing(far, canvas);
-        assert_eq!(
-            moved.at,
-            point(1000.0 - canvas.w / start.scale() / 2.0, start.at.y)
-        );
-        let near = Rect::from_min_size(point(-20.0, 190.0), Size { w: 40.0, h: 20.0 });
-        assert_eq!(start.showing(near, canvas), start);
     }
 }

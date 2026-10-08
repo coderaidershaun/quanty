@@ -12,7 +12,6 @@ use super::look::{Look, focus_ring};
 use super::progress::paint_spinner;
 use crate::theme::{Icon, TextRole, Tone, color, glow, radius, space, stroke};
 
-/// A text button is at least this many times as wide as it is high.
 const MIN_WIDTH_PER_HEIGHT: f32 = 2.4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,8 +23,8 @@ enum Variant {
     IconOnly,
 }
 
-/// A button. `primary` is the one main action of a screen, `secondary` is any other, `ghost`
-/// sits in a toolbar, `danger` removes something, and `icon_only` is a small square with an icon.
+/// `primary` is the one main action of a screen, `secondary` is any other, `ghost` sits in a
+/// toolbar, `danger` removes something, and `icon_only` is a small square with an icon.
 pub struct Button<'a> {
     label: &'a str,
     variant: Variant,
@@ -38,7 +37,6 @@ pub struct Button<'a> {
     forced: Option<Look>,
 }
 
-/// The three colours a button is painted with in one state.
 struct Colours {
     fill: Color32,
     edge: Stroke,
@@ -64,22 +62,18 @@ impl<'a> Button<'a> {
         }
     }
 
-    /// The one main action of a screen, in magenta.
     pub fn primary(label: &'a str) -> Self {
         Button::with_variant(label, Variant::Primary)
     }
 
-    /// An action with an outline.
     pub fn secondary(label: &'a str) -> Self {
         Button::with_variant(label, Variant::Secondary)
     }
 
-    /// An action with no fill until the pointer is on it.
     pub fn ghost(label: &'a str) -> Self {
         Button::with_variant(label, Variant::Ghost)
     }
 
-    /// An action that removes something.
     pub fn danger(label: &'a str) -> Self {
         Button::with_variant(label, Variant::Danger)
     }
@@ -93,7 +87,6 @@ impl<'a> Button<'a> {
         }
     }
 
-    /// An icon before the text.
     pub fn icon(self, _icon: Icon) -> Self {
         // SMELL: `_icon` is used, so its underscore is wrong. Rename it to `icon`.
         Button {
@@ -102,25 +95,22 @@ impl<'a> Button<'a> {
         }
     }
 
-    /// The height of the button. A text button is `Medium` by default and an icon-only one `Small`.
     pub fn size(mut self, size: ControlSize) -> Self {
         self.size = size;
         self
     }
 
-    /// Draws the button as the chosen one of a group. A primary or a danger button ignores it.
+    /// A primary or a danger button ignores it.
     pub fn selected(mut self, is_selected: bool) -> Self {
         self.is_selected = is_selected;
         self
     }
 
-    /// A spinner takes the place of the icon, and clicks are ignored.
     pub fn loading(mut self, is_loading: bool) -> Self {
         self.is_loading = is_loading;
         self
     }
 
-    /// The button is at least this wide.
     pub fn min_width(mut self, width: f32) -> Self {
         self.min_width = width;
         self

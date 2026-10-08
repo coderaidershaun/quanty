@@ -10,7 +10,6 @@ use gui::testkit;
 
 use super::Window;
 
-/// Every command the backend was given, in order.
 #[derive(Clone, Default)]
 pub(super) struct Seen(Arc<Mutex<Vec<Command>>>);
 
@@ -22,7 +21,6 @@ impl Seen {
             .clone()
     }
 
-    /// How many commands so far are of the kind that `is` picks out.
     pub(super) fn count(&self, is: impl Fn(&Command) -> bool) -> usize {
         self.all().iter().filter(|command| is(command)).count()
     }
@@ -44,11 +42,7 @@ impl<H: Handler> Handler for Recording<H> {
     }
 }
 
-/// The whole app on this scene of the fake backend, with a list of what it sends. Nothing has
-/// run yet, so the start-up commands are not in the list until a frame runs.
-///
-/// # Panics
-/// When the scene does not exist.
+/// Nothing has run yet, so the start-up commands are not in the list until a frame runs.
 pub(super) fn open(scene: &str, size: [f32; 2]) -> (Window, Seen) {
     let home = testkit::samples_folder();
     let fake = Fake::scene(scene, &home)

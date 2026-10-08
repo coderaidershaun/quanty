@@ -3,7 +3,6 @@
 
 use eframe::egui;
 
-/// Gives `draw` a child ui whose area is exactly `rect`, clipped to it.
 pub(super) fn region(
     ui: &mut egui::Ui,
     name: &str,

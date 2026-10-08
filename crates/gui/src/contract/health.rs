@@ -35,7 +35,6 @@ pub enum ServiceState {
     Down(Failure),
 }
 
-/// What `main` learns before the window opens.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct StartupFacts {
     pub home: std::path::PathBuf,
@@ -46,8 +45,7 @@ pub struct StartupFacts {
 }
 
 impl Failure {
-    /// The service this failure says is not ready, if it says so. A slow or failed call does
-    /// not: the service may be fine.
+    /// A slow or failed call names no service: the service may be fine.
     pub fn service(&self) -> Option<Service> {
         match self.kind {
             FailureKind::QdrantDown => Some(Service::Qdrant),

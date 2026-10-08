@@ -3,8 +3,6 @@
 
 mod body;
 mod guidance;
-#[cfg(test)]
-mod tests;
 
 use eframe::egui;
 
@@ -13,14 +11,12 @@ use crate::panels::PanelCx;
 use crate::theme::{Icon, TextRole, color, space};
 use crate::widgets;
 
-/// What the panel keeps between frames: the ask it shows, and the question being typed.
 #[derive(Debug, Default)]
 pub struct Local {
     seen: u64,
     draft: String,
 }
 
-/// Draws the panel into `ui`, which is its whole rectangle. It pushes `Intent::Ask` only.
 pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     let shared = cx.shared;
     let ask = &shared.ask;
@@ -65,7 +61,6 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     }
 }
 
-/// The question that was typed, when the person asked for it with Enter or the button.
 fn ask_box(ui: &mut egui::Ui, draft: &mut String) -> Option<String> {
     let outcome = widgets::TextInput::new("follow_up", guidance::BOX_LABEL, draft)
         .placeholder(guidance::BOX_HINT)

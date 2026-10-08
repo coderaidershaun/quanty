@@ -1,6 +1,5 @@
-//! The sizes a picture is kept at: its own pixels, then a half, a quarter, and so on. The
-//! graphics card does not average pixels when it shrinks a texture, so a picture drawn small
-//! has to be stored small.
+//! The sizes a picture is kept at: its own pixels, then a half, a quarter, and so on. The graphics
+//! card does not average pixels when it shrinks a texture, so a picture drawn small is kept small.
 
 use image::RgbaImage;
 
@@ -31,8 +30,6 @@ pub(super) fn halve(source: &RgbaImage) -> RgbaImage {
     half
 }
 
-/// The picture and its halves, largest first. A picture whose longer side is above `max_side`
-/// is halved until it fits, and that smaller copy is the first level.
 pub(super) fn levels(picture: RgbaImage, max_side: u32) -> Vec<RgbaImage> {
     let mut first = picture;
     // Halving stops at one pixel, so a limit below one pixel would never be met.

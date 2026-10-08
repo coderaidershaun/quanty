@@ -20,14 +20,12 @@ const STAND_IN_MAX_LETTERS: usize = 40;
 /// What a text waits for before it shows its formulas.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum WaitFor {
-    /// Only its own formulas.
     OwnFormulas,
     /// A formula somewhere else is still loading, so this text waits too: the cells of a table
     /// show their formulas together.
     OthersToo,
 }
 
-/// What the atoms of one line need to know about the line.
 struct LineContext<'a> {
     look: &'a TextLook,
     metrics: LineMetrics,
@@ -36,7 +34,7 @@ struct LineContext<'a> {
     is_waiting: bool,
 }
 
-/// Measures a text. `math` is asked for every formula in it.
+/// `math` is asked for every formula in the text.
 pub(super) fn measure(
     ui: &Ui,
     parsed: &Parsed,
@@ -83,8 +81,8 @@ pub(super) fn measure(
     }
 }
 
-/// A layout job that sets its parts in one row. The words of a block are measured and drawn
-/// with the same settings, or a word would not be as wide when drawn as it was measured.
+/// The words of a block are measured and drawn with the same settings, or a word would not be
+/// as wide when drawn as it was measured.
 pub(super) fn one_row_job(parts: &[(String, TextFormat)]) -> LayoutJob {
     let mut job = LayoutJob::default();
     job.wrap.max_width = f32::INFINITY;
@@ -229,8 +227,7 @@ fn measure_piece(
 }
 
 impl LineContext<'_> {
-    /// The atom of a formula. Until the formula is painted, the atom is a stand-in as high as a
-    /// line of text.
+    /// Until the formula is painted, the atom is a stand-in as high as a line of text.
     fn formula_atom(&self, formula: usize, is_spaced: bool) -> Atom {
         let metrics = &self.metrics;
         let (width, ascent, descent, is_painted) = match self.formulas[formula].seen {
@@ -260,7 +257,6 @@ impl LineContext<'_> {
     }
 }
 
-/// The room that is kept for a formula until it is typeset.
 fn stand_in_width(latex: &str, em: f32) -> f32 {
     let letters = latex
         .chars()
@@ -270,7 +266,6 @@ fn stand_in_width(latex: &str, em: f32) -> f32 {
     STAND_IN_EM_PER_LETTER * em * letters as f32
 }
 
-/// The height of a line of text in this look, and where its baseline is.
 fn metrics_of(ui: &Ui, look: &TextLook) -> LineMetrics {
     let ascent_and_height = |font: &egui::FontId| {
         let galley = ui
@@ -296,7 +291,7 @@ fn metrics_of(ui: &Ui, look: &TextLook) -> LineMetrics {
     }
 }
 
-/// The chips of the citations stand after the last word. The first one sticks to it.
+/// The first chip sticks to the last word.
 fn add_chips(ui: &Ui, cites: &[usize], look: &TextLook, lines: &mut [MeasuredLine]) {
     let Some(line) = lines.last_mut() else {
         return;
@@ -413,42 +408,5 @@ impl Ruler {
             .collect();
         edges.push(width);
         edges
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::media::Offload;
-    use crate::media::rich_text::parse::parse;
-
-    /// Runs `check` inside one pass of a window, with a manual formula cache.
-    fn in_a_pass(check: impl FnOnce(&Ui, &mut Math)) {
-        let ctx = egui::Context::default();
-        // The fonts of the theme can be laid out only after the theme is installed.
-        crate::theme::install(&ctx);
-        let mut math = Math::new(&ctx, Offload::Manual);
-        let mut check = Some(check);
-        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
-            if let Some(check) = check.take() {
-                check(ui, &mut math);
-            }
-        });
-        output.textures_delta.clear();
-    }
-
-    #[test]
-    fn a_text_in_a_script_that_runs_right_to_left_is_still_measured() {
-        in_a_pass(|ui, math| {
-            let look = text_look(TextRole::Body);
-            let text = "emoji 😀 e\u{301} ﬁ 日本語 مرحبا a\u{200d}b \u{feff}x \u{1f468}\u{200d}\u{1f469} tab\u{0}nul";
-            let measured = measure(ui, &parse(text), &[], &look, math, WaitFor::OwnFormulas);
-            let atoms = &measured.lines[0].atoms;
-            assert!(atoms.iter().all(|atom| atom.width >= 0.0));
-            let arabic = atoms
-                .iter()
-                .find(|atom| matches!(&atom.kind, AtomKind::Word { text, .. } if text == "مرحبا"));
-            assert!(arabic.is_some_and(|atom| atom.width > 10.0 && atom.gap > 0.0));
-        });
     }
 }

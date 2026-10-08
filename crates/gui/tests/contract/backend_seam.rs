@@ -26,7 +26,6 @@ fn fake_of(scene: &str) -> Fake {
         .instant()
 }
 
-/// Runs the frames of the app until `done` holds for its shared state.
 fn run_until(harness: &mut Harness<'_, App>, what: &str, done: impl Fn(&Shared) -> bool) {
     let started = Instant::now();
     while !done(harness.state().shared()) {
@@ -36,7 +35,6 @@ fn run_until(harness: &mut Harness<'_, App>, what: &str, done: impl Fn(&Shared) 
     }
 }
 
-/// The next event of the runtime, waited for.
 fn next_event(backend: &mut Backend) -> Event {
     let started = Instant::now();
     loop {
@@ -52,7 +50,6 @@ fn is_failed<T>(slot: &Loadable<T>, kind: FailureKind) -> bool {
     slot.failure().is_some_and(|failure| failure.kind == kind)
 }
 
-/// What the scene must have put in the shared state once it has opened and settled.
 fn assert_scene(name: &str, shared: &Shared) {
     let (ask, source) = (&shared.ask, &shared.source);
     let documents = shared
@@ -190,7 +187,6 @@ fn an_ask_shows_results_then_the_answer_and_cancel_stops_it() {
     testkit::save_png(&mut harness, "shell-black-scholes");
 }
 
-/// Panics at once, whatever it is asked.
 struct PanicsAtOnce;
 
 impl Handler for PanicsAtOnce {
@@ -199,7 +195,6 @@ impl Handler for PanicsAtOnce {
     }
 }
 
-/// Sends the first results of an ask, and then panics on the way to the graph and the answer.
 struct PanicsAfterTheResults;
 
 impl Handler for PanicsAfterTheResults {
@@ -287,7 +282,6 @@ fn command_shortcuts_reach_the_reducer() {
     let command = egui::Modifiers::COMMAND;
     let none = egui::Modifiers::NONE;
 
-    // The keys that raise the Ask bar's cue, and the key that turns a tab.
     let mut harness = testkit::app("idle", DEFAULT_WINDOW);
     testkit::settle(&mut harness);
     // The plain key goes first: once ⌘K has put the caret in the question box, `/` is text.
@@ -301,7 +295,6 @@ fn command_shortcuts_reach_the_reducer() {
     press(&mut harness, command, egui::Key::Num1);
     assert_eq!(harness.state().shared().tab, Tab::Ask);
 
-    // ⌘3 opens the Ingest page and ⌘1 goes back to Ask.
     press(&mut harness, command, egui::Key::Num3);
     assert_eq!(harness.state().shared().tab, Tab::Ingest);
     press(&mut harness, command, egui::Key::Num1);
@@ -325,7 +318,6 @@ fn command_shortcuts_reach_the_reducer() {
         assert!(harness.state().is_idle(), "{key:?} sent a command");
     }
 
-    // The two keys that stop a running ask.
     let mut harness = testkit::app("searching", DEFAULT_WINDOW);
     run_until(&mut harness, "the ask to start", |shared| {
         shared.ask.is_running()
@@ -347,7 +339,6 @@ fn command_shortcuts_reach_the_reducer() {
     );
     testkit::settle(&mut harness);
 
-    // The keys that turn the source's page, step through the results, and copy the answer.
     let mut harness = testkit::app("black-scholes", DEFAULT_WINDOW);
     testkit::settle(&mut harness);
     harness.state_mut().push(Intent::SelectResult(1));

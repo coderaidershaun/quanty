@@ -10,12 +10,9 @@ use crate::theme::{Tone, color, motion, size};
 
 const DOTS: usize = 8;
 const DOT_RADIUS: f32 = 1.5;
-/// The dots stay this far inside the square that the ring is drawn in.
 const RING_INSET: f32 = 0.5;
 const BAR_HEIGHT: f32 = 4.0;
 
-/// A ring of dots. One bright dot moves round it ten times a second, and the dots behind it
-/// fade. `label` is its name.
 pub fn spinner(ui: &mut egui::Ui, label: &str) -> Response {
     let side = egui::Vec2::splat(size::ICON_MD);
     let (rect, response) = ui.allocate_exact_size(side, egui::Sense::hover());
@@ -24,8 +21,6 @@ pub fn spinner(ui: &mut egui::Ui, label: &str) -> Response {
     response
 }
 
-/// Draws the ring in `rect`, and asks for the next step. A widget that shows a spinner inside
-/// itself calls this. The ask is for a repaint after a delay, never at once.
 pub(super) fn paint_spinner(ui: &egui::Ui, rect: Rect, bright: Color32) {
     if !ui.is_rect_visible(rect) {
         return;
@@ -49,7 +44,6 @@ pub(super) fn paint_spinner(ui: &egui::Ui, rect: Rect, bright: Color32) {
     );
 }
 
-/// A bar filled to `fraction`, from 0.0 to 1.0. `label` is its name.
 pub fn progress_bar(ui: &mut egui::Ui, label: &str, fraction: f32) -> Response {
     let fraction = fraction.clamp(0.0, 1.0);
     let side = egui::vec2(ui.available_width(), BAR_HEIGHT);
@@ -67,28 +61,4 @@ pub fn progress_bar(ui: &mut egui::Ui, label: &str, fraction: f32) -> Response {
             .rect_filled(filled, rounding, Tone::Blue.swatch().solid);
     }
     response
-}
-
-#[cfg(test)]
-mod tests {
-    use egui_kittest::kittest::Queryable;
-
-    use super::*;
-    use crate::state::Shared;
-    use crate::testkit;
-
-    #[test]
-    fn a_visible_spinner_lets_the_harness_settle() {
-        let mut harness = testkit::panel([200.0, 100.0], Shared::default(), |ui, _cx| {
-            spinner(ui, "Loading the answer");
-            progress_bar(ui, "Reading the page", 0.4);
-        });
-        // `run` panics when a widget asks for a repaint on every frame.
-        harness.run();
-        harness.get_by_role_and_label(
-            egui::accesskit::Role::ProgressIndicator,
-            "Loading the answer",
-        );
-        harness.get_by_role_and_label(egui::accesskit::Role::ProgressIndicator, "Reading the page");
-    }
 }

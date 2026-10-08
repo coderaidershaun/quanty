@@ -26,7 +26,6 @@ const GAP_TOLERANCE: f32 = 0.5;
 /// A curve starts and ends this part of a node's width to the side of the node's centre.
 const ARC_FOOT: f32 = 0.25;
 
-/// The two ends of one link as they stand.
 struct Ends {
     a: Rect,
     b: Rect,
@@ -45,7 +44,6 @@ impl Ends {
         self.a.min.y < self.b.min.y
     }
 
-    /// The end that stands left, and the end that stands right.
     fn left_right(&self) -> (Rect, Rect) {
         if self.a_is_left() {
             (self.a, self.b)
@@ -54,7 +52,6 @@ impl Ends {
         }
     }
 
-    /// The end that stands higher, and the end that stands lower.
     fn upper_lower(&self) -> (Rect, Rect) {
         if self.a_is_upper() {
             (self.a, self.b)
@@ -83,7 +80,6 @@ impl Ends {
 }
 
 impl Layout<'_> {
-    /// The route of each link and the place of its label, in the order of `Plan::links`.
     pub(super) fn routes_and_label_spots(&self) -> (Vec<Route>, Vec<Rect>) {
         (0..self.plan.links.len())
             .map(|index| self.route(&self.ends(index), self.label_size(index)))
@@ -108,13 +104,11 @@ impl Layout<'_> {
         }
     }
 
-    /// The height of the middle of the band under `upper_row`.
     fn band_middle(&self, upper_row: usize) -> f32 {
         self.rows.top[upper_row] + self.metrics.pill_height + self.rows.band / 2.0
     }
 
-    /// The route of a link and the place of its label. Every route stays inside a band or a
-    /// gap, so it never crosses a node.
+    /// Every route stays inside a band or a gap, so it never crosses a node.
     fn route(&self, ends: &Ends, label: Size) -> (Route, Rect) {
         if ends.row_a == ends.row_b {
             return self.same_row(ends, label);
@@ -164,7 +158,6 @@ impl Layout<'_> {
         (ends.running_from_a(arc), spot)
     }
 
-    /// Two nodes of rows next to each other: a straight line through the band between them.
     fn between_rows(&self, ends: &Ends) -> Route {
         let (upper, lower) = ends.upper_lower();
         let (from, to) = self.feet(upper, lower);

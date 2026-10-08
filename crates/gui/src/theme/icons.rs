@@ -5,7 +5,6 @@ use eframe::egui::{self, FontId};
 use super::color;
 use super::fonts::ICONS;
 
-/// One icon of the icon font, drawn as a character.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Icon(&'static str);
 
@@ -70,17 +69,14 @@ impl Icon {
         Icon(glyph)
     }
 
-    /// One character of the icon font.
     pub const fn glyph(self) -> &'static str {
         self.0
     }
 
-    /// The icon font at `size` points.
     pub fn font(size: f32) -> FontId {
         FontId::new(size, ICONS.clone())
     }
 
-    /// The icon at `size` points in the secondary text colour, ready for `ui.label`.
     pub fn rich(self, size: f32) -> egui::RichText {
         egui::RichText::new(self.0)
             .font(Icon::font(size))

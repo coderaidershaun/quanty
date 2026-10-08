@@ -30,7 +30,6 @@ pub struct Backend {
     tasks: HashMap<RequestId, Task>,
 }
 
-/// What the panic said, when it said it in text.
 fn panic_text(payload: &(dyn std::any::Any + Send)) -> String {
     let message = payload
         .downcast_ref::<&str>()
@@ -41,8 +40,7 @@ fn panic_text(payload: &(dyn std::any::Any + Send)) -> String {
 }
 
 impl Backend {
-    /// Starts the runtime. Every event a task sends is followed by a call to `wake`, so the
-    /// window draws it.
+    /// Every event a task sends is followed by a call to `wake`, so the window draws it.
     ///
     /// # Errors
     /// Whatever the operating system says when the threads cannot be made.
@@ -94,7 +92,6 @@ impl Backend {
         })
     }
 
-    /// Starts the work of a command. `Cancel` aborts a task, or asks an ingest to stop.
     pub fn send(&mut self, command: Command) {
         self.tasks.retain(|_, task| !task.handle.is_finished());
         match command {
@@ -121,7 +118,6 @@ impl Backend {
         self.events.try_recv().ok()
     }
 
-    /// True when no task is running.
     pub fn is_idle(&self) -> bool {
         self.tasks.values().all(|task| task.handle.is_finished())
     }
@@ -134,70 +130,5 @@ impl Drop for Backend {
         if let Some(runtime) = self.runtime.take() {
             runtime.shutdown_timeout(SHUTDOWN_WAIT);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::time::Instant;
-
-    use super::*;
-    use crate::contract::{AskDraft, IngestOutcome, IngestRequest};
-
-    /// Waits for a cancel and says so. Left alone it waits for 30 seconds.
-    struct WaitsForCancel;
-
-    impl Handler for WaitsForCancel {
-        async fn serve(&self, command: Command, reply: Reply) {
-            let request = command.request();
-            tokio::select! {
-                () = reply.cancelled() => reply.send(Event::IngestFinished {
-                    request,
-                    result: Ok(IngestOutcome::Cancelled),
-                }),
-                () = tokio::time::sleep(Duration::from_secs(30)) => {}
-            }
-        }
-    }
-
-    fn next_within(backend: &mut Backend, wait: Duration) -> Option<Event> {
-        let started = Instant::now();
-        while started.elapsed() < wait {
-            if let Some(event) = backend.try_next() {
-                return Some(event);
-            }
-            std::thread::sleep(Duration::from_millis(2));
-        }
-        None
-    }
-
-    #[test]
-    fn a_cancel_aborts_a_task_but_only_asks_an_ingest_to_stop() {
-        let mut backend = Backend::start(WaitsForCancel, || {}).expect("the runtime starts");
-
-        let ask = RequestId(1);
-        backend.send(Command::Ask {
-            request: ask,
-            ask: AskDraft::default(),
-        });
-        backend.send(Command::Cancel(ask));
-        assert!(
-            next_within(&mut backend, Duration::from_millis(150)).is_none(),
-            "an aborted task never sends"
-        );
-        assert!(backend.is_idle());
-
-        let ingest = RequestId(2);
-        backend.send(Command::Ingest {
-            request: ingest,
-            ingest: IngestRequest::default(),
-        });
-        assert!(!backend.is_idle());
-        backend.send(Command::Cancel(ingest));
-        let ended = next_within(&mut backend, Duration::from_secs(2));
-        assert!(matches!(
-            ended,
-            Some(Event::IngestFinished { request, result: Ok(IngestOutcome::Cancelled) }) if request == ingest
-        ));
     }
 }

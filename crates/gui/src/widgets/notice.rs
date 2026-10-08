@@ -8,7 +8,6 @@ use eframe::egui::{
 use super::{Button, ControlSize, spinner};
 use crate::theme::{Icon, TextRole, Tone, color, radius, size, space, stroke};
 
-/// A message strip above content: what happened, a line of detail, and what to do about it.
 pub struct Notice<'a> {
     title: &'a str,
     tone: Tone,
@@ -18,7 +17,6 @@ pub struct Notice<'a> {
     is_dismissable: bool,
 }
 
-/// What a notice reports. `dismissed` is its close button.
 pub struct NoticeResponse {
     pub response: Response,
     pub action_clicked: bool,
@@ -58,20 +56,16 @@ impl<'a> Notice<'a> {
         self
     }
 
-    /// A button under the text. `label` is its name.
     pub fn action(mut self, label: &'a str) -> Self {
         self.action = Some(label);
         self
     }
 
-    /// Adds a close button, named "Dismiss".
     pub fn dismissable(mut self) -> Self {
         self.is_dismissable = true;
         self
     }
 
-    /// Draws the notice. A test or a screen reader finds the whole of it by "{title}. {body}",
-    /// or by the title alone when it has no body.
     pub fn show(self, ui: &mut egui::Ui) -> NoticeResponse {
         let swatch = self.tone.swatch();
         let mut action_clicked = false;
@@ -142,12 +136,9 @@ enum Fill {
 
 /// A placeholder is at least this high, so it stays readable in a small panel.
 const PLACEHOLDER_MIN_HEIGHT: f32 = 120.0;
-/// The hint under a placeholder's title is never wider than this.
 const PLACEHOLDER_TEXT_WIDTH: f32 = 360.0;
-/// The room for the icon, or the spinner, above the title.
 const PLACEHOLDER_ICON: f32 = 32.0;
 
-/// What fills a whole area that is empty, loading or failed. It is centred in the room it is given.
 pub struct Placeholder<'a> {
     fill: Fill,
     title: &'a str,
@@ -155,7 +146,6 @@ pub struct Placeholder<'a> {
     action: Option<&'a str>,
 }
 
-/// What a placeholder reports. `action_clicked` is its button.
 pub struct PlaceholderResponse {
     pub response: Response,
     pub action_clicked: bool,
@@ -194,8 +184,6 @@ impl<'a> Placeholder<'a> {
         self
     }
 
-    /// Draws the placeholder. A test or a screen reader finds the whole of it by
-    /// "{title}. {hint}", or by the title alone when it has no hint.
     pub fn show(self, ui: &mut egui::Ui) -> PlaceholderResponse {
         let area = ui.available_size();
         let height = if area.y.is_finite() {
@@ -260,7 +248,6 @@ impl<'a> Placeholder<'a> {
         }
     }
 
-    /// The height of everything that is stacked in the middle, to centre it.
     fn content_height(&self, ui: &egui::Ui, text_width: f32) -> f32 {
         // SMELL: this lists again what `show` stacks. A part that is added there and not here
         // puts the placeholder off centre.
@@ -290,7 +277,6 @@ fn paint_big_icon(ui: &mut egui::Ui, icon: Icon, tint: egui::Color32) {
     );
 }
 
-/// The height of `text` wrapped at `width`, laid out as a label of `role` lays it out.
 fn text_height(ui: &egui::Ui, role: TextRole, text: &str, width: f32) -> f32 {
     let mut job = LayoutJob::single_section(text.to_owned(), role.format(color::TEXT));
     job.wrap.max_width = width;

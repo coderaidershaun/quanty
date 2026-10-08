@@ -44,12 +44,10 @@ impl<'a> Fragment<'a> {
     }
 }
 
-/// The characters of a word from `from` up to `to`.
 pub(super) fn text_between(word: &str, from: usize, to: usize) -> String {
     word.chars().skip(from).take(to - from).collect()
 }
 
-/// The rows of one line.
 pub(super) fn break_line<'a>(
     line: &'a MeasuredLine,
     wrap: f32,
@@ -137,7 +135,6 @@ impl<'a> Breaker<'a> {
         }
     }
 
-    /// Sets a formula that is wider than its row at the scale at which it fits.
     fn shrink(&mut self, atom: &'a Atom) {
         let room = (self.wrap - self.x).max(1.0);
         let scale = (room / atom.width).clamp(SMALLEST_SCALE, 1.0);
@@ -148,10 +145,9 @@ impl<'a> Breaker<'a> {
         self.x += atom.gap;
     }
 
-    /// Cuts a word at the last character whose piece fits, as many times as it takes. A piece is
-    /// measured alone, as it is drawn. In the one line of text, the kerning between the last
-    /// character of a piece and the next one is already in the left edge of the next one, so
-    /// the edges make a piece too narrow.
+    /// A piece is measured alone, as it is drawn. In the one line of text, the kerning between
+    /// the last character of a piece and the next one is already in the left edge of the next
+    /// one, so the edges make a piece too narrow.
     fn cut(&mut self, atom: &'a Atom, edges: &[f32], width_alone: impl Fn(usize, usize) -> f32) {
         let chars = edges.len().saturating_sub(1);
         let mut from = 0;

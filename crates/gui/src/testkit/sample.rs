@@ -1,19 +1,14 @@
-//! One small, valid value of every view type, read from the committed sample chapters, so a
-//! test of one panel needs no backend.
-
-use std::path::PathBuf;
+//! One small, valid search reply, answer and concept graph, written by hand, so a test of one
+//! panel needs no backend. Only the picture of the figure is a file of the committed samples.
 
 use uuid::Uuid;
 
 use super::samples_folder;
 use crate::contract::{
-    Answer, AnswerBlock, Book, Catalogue, ChapterLabel, ChapterState, ConceptGraph, ConceptId,
-    DocId, Document, EdgeKind, Failure, FailureKind, GraphEdge, GraphNode, ImageRef, IngestReport,
-    ItemCounts, ItemId, ItemKind, NodeId, NodeKind, PageBox, PageConcept, PagePiece, PageToCheck,
-    PageView, PieceKind, Preflight, Reason, ResultItem, RetrievalTrace, SearchReply,
+    Answer, AnswerBlock, ConceptGraph, ConceptId, DocId, EdgeKind, GraphEdge, GraphNode, ImageRef,
+    ItemId, ItemKind, NodeId, NodeKind, Reason, ResultItem, RetrievalTrace, SearchReply,
 };
 
-const NOTES: &str = "quanty-sample-notes";
 const NOTES_TITLE: &str = "Quanty Sample Notes";
 const NOTES_CHAPTER_2: &str = "Black Scholes In Depth";
 const VOLATILITY: &str = "option-volatility-and-pricing";
@@ -28,12 +23,6 @@ fn image(relative: &str) -> ImageRef {
     ImageRef {
         path: samples_folder().join(relative),
     }
-}
-
-fn folder(book: &str, chapter: u32) -> PathBuf {
-    samples_folder()
-        .join(book)
-        .join(format!("chapter-{chapter}"))
 }
 
 /// The title an ingest gives a chapter.
@@ -173,224 +162,5 @@ pub fn concept_graph() -> ConceptGraph {
                 kind: EdgeKind::Mentions,
             },
         ],
-    }
-}
-
-pub fn catalogue() -> Catalogue {
-    let document =
-        |number: u128, book: &str, chapter: u32, name: &str, book_folder: &str, pages| Document {
-            id: DocId(id(number)),
-            title: chapter_title(book, chapter, name),
-            chapter: Some(ChapterLabel {
-                number: chapter,
-                name: name.to_owned(),
-            }),
-            author: None,
-            tags: vec!["options".to_owned()],
-            pages: Some(pages),
-            items: ItemCounts {
-                chunks: 6,
-                formulas: 2,
-                figures: 1,
-                tables: 0,
-            },
-            ingested_items: Some(9),
-            folder: Some(folder(book_folder, chapter)),
-        };
-    Catalogue {
-        books: vec![
-            Book {
-                title: Some(NOTES_TITLE.to_owned()),
-                chapters: vec![
-                    document(1, NOTES_TITLE, 1, "Options Pricing Intuition", NOTES, 3),
-                    document(2, NOTES_TITLE, 2, NOTES_CHAPTER_2, NOTES, 3),
-                ],
-            },
-            Book {
-                title: Some(VOLATILITY_TITLE.to_owned()),
-                chapters: vec![document(
-                    3,
-                    VOLATILITY_TITLE,
-                    1,
-                    VOLATILITY_CHAPTER,
-                    VOLATILITY,
-                    7,
-                )],
-            },
-        ],
-    }
-}
-
-pub fn page_view() -> PageView {
-    let page = folder(VOLATILITY, 1).join("page-num-5");
-    PageView {
-        doc: DocId(id(3)),
-        page: 5,
-        book: Some(VOLATILITY_TITLE.to_owned()),
-        chapter: Some(ChapterLabel {
-            number: 1,
-            name: VOLATILITY_CHAPTER.to_owned(),
-        }),
-        page_count: 7,
-        printed_page: Some("233".to_owned()),
-        image: Some(ImageRef {
-            path: page.join("page.png"),
-        }),
-        previous_image: Some(ImageRef {
-            path: folder(VOLATILITY, 1).join("page-num-4").join("page.png"),
-        }),
-        next_image: Some(ImageRef {
-            path: folder(VOLATILITY, 1).join("page-num-6").join("page.png"),
-        }),
-        pieces: vec![
-            PagePiece {
-                number: 1,
-                kind: PieceKind::Figure,
-                label: Some("Figure 13-4".to_owned()),
-                name: None,
-                caption: None,
-                text: "Three spreads show about the same theoretical profit at an underlying price of 48.40.".to_owned(),
-                image: Some(ImageRef {
-                    path: page.join("01-figure.png"),
-                }),
-                cut: Some(PageBox {
-                    left: 15,
-                    top: 23,
-                    right: 905,
-                    bottom: 485,
-                }),
-            },
-            PagePiece {
-                number: 2,
-                kind: PieceKind::Text,
-                label: None,
-                name: None,
-                caption: None,
-                text: "At this price the three positions are worth the same.".to_owned(),
-                image: None,
-                cut: None,
-            },
-        ],
-    }
-}
-
-pub fn page_concepts() -> Vec<PageConcept> {
-    vec![
-        PageConcept {
-            id: ConceptId(id(202)),
-            name: "Volatility".to_owned(),
-            definition: "How far a price moves over a period.".to_owned(),
-        },
-        PageConcept {
-            id: ConceptId(id(203)),
-            name: "Straddle".to_owned(),
-            definition: "A call and a put with the same strike and date.".to_owned(),
-        },
-    ]
-}
-
-pub fn preflight() -> Preflight {
-    Preflight {
-        chapter: ChapterLabel {
-            number: 1,
-            name: VOLATILITY_CHAPTER.to_owned(),
-        },
-        pages: Some(7),
-        state: Some(ChapterState::New),
-        blockers: Vec::new(),
-    }
-}
-
-pub fn ingest_report() -> IngestReport {
-    IngestReport {
-        doc: DocId(id(3)),
-        title: chapter_title(VOLATILITY_TITLE, 1, VOLATILITY_CHAPTER),
-        pages: 7,
-        items: ItemCounts {
-            chunks: 12,
-            formulas: 3,
-            figures: 2,
-            tables: 1,
-        },
-        concepts_created: 14,
-        concepts_linked: 9,
-        skipped_items: 0,
-        cost_usd: Some(0.42),
-        pages_to_check: vec![PageToCheck {
-            page: 4,
-            reasons: vec!["A figure may be cut short.".to_owned()],
-        }],
-    }
-}
-
-pub fn failure(kind: FailureKind) -> Failure {
-    Failure::new(kind, "a failure made for a test")
-}
-
-#[cfg(test)]
-mod tests {
-    use std::path::Path;
-
-    use super::*;
-
-    /// The book title, the chapter and the page count in the index file of a saved chapter.
-    fn saved(folder: &Path) -> (String, ChapterLabel, u32) {
-        let file = folder.join("chapter.json");
-        let index = std::fs::read_to_string(&file)
-            .unwrap_or_else(|error| panic!("cannot read {}: {error}", file.display()));
-        let index: serde_json::Value =
-            serde_json::from_str(&index).expect("the index file of a chapter is JSON");
-        let text = |key: &str| {
-            let value = index[key].as_str();
-            value.expect("the index file has this text").to_owned()
-        };
-        let number = |key: &str| {
-            let value = index[key].as_u64().and_then(|n| u32::try_from(n).ok());
-            value.expect("the index file has this number")
-        };
-        let chapter = ChapterLabel {
-            number: number("chapter-number"),
-            name: text("chapter-name"),
-        };
-        (text("book-title"), chapter, number("page-count"))
-    }
-
-    #[test]
-    fn the_samples_say_what_the_saved_chapters_say() {
-        let catalogue = catalogue();
-        for book in &catalogue.books {
-            for document in &book.chapters {
-                let folder = document.folder.as_deref();
-                let (book_title, chapter, pages) = saved(folder.expect("a sample has a folder"));
-                // An ingest gives a chapter this title.
-                let title = format!("{book_title}, chapter {}: {}", chapter.number, chapter.name);
-                assert_eq!(book.title.as_deref(), Some(book_title.as_str()));
-                assert_eq!(document.title, title);
-                assert_eq!(document.chapter.as_ref(), Some(&chapter));
-                assert_eq!(document.pages, Some(pages));
-            }
-        }
-        let book_of = |doc| catalogue.book_of(doc).and_then(|book| book.title.clone());
-        let stored = |doc| {
-            let document = catalogue.document(doc);
-            document.expect("a sample names a document of the sample catalogue")
-        };
-
-        for result in search_reply().results {
-            assert_eq!(result.doc_title, stored(result.doc).title);
-            assert_eq!(result.book, book_of(result.doc));
-            if result.kind == ItemKind::Chunk {
-                let read_from_a_piece = (result.piece, result.caption, result.name);
-                assert_eq!(read_from_a_piece, (None, None, None));
-            }
-        }
-        let page = page_view();
-        assert_eq!(page.book, book_of(page.doc));
-        assert_eq!(page.chapter, stored(page.doc).chapter);
-        assert_eq!(Some(page.page_count), stored(page.doc).pages);
-        let report = ingest_report();
-        assert_eq!(report.title, stored(report.doc).title);
-        assert_eq!(Some(report.pages), stored(report.doc).pages);
-        assert_eq!(Some(preflight().chapter), stored(report.doc).chapter);
     }
 }

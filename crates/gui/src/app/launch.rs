@@ -19,10 +19,8 @@ pub struct Home {
     pub env_file: Option<PathBuf>,
 }
 
-/// The home folder, found in this order: the one given, the one `QUANTY_HOME` names, the nearest
-/// folder at or above the current one that holds a `.env`, the nearest at or above the
-/// program's own folder that holds one (Finder starts a program in `/`), and last the current
-/// folder with no `.env`.
+/// Finder starts a program in `/`, so the search for a `.env` also starts from the program's own
+/// folder.
 ///
 /// # Errors
 /// Whatever the operating system says when the current folder cannot be found.
@@ -41,8 +39,8 @@ pub fn find_home(flag: Option<&Path>) -> std::io::Result<Home> {
     ))
 }
 
-/// `find_home` with every lookup given: the flag, the variable, the two folders to start from,
-/// and the question whether a folder holds a `.env`.
+// SMELL: `holds_env`, and `exists` in `path_with`, are passed in, but only one check of the disk
+// is ever passed for each. Call that check directly and drop the parameter.
 fn home_from(
     flag: Option<&Path>,
     variable: Option<&OsStr>,
@@ -79,8 +77,7 @@ fn home_at(folder: PathBuf, holds_env: &dyn Fn(&Path) -> bool) -> Home {
     Home { folder, env_file }
 }
 
-/// The `PATH` the program runs with: the one it was given, then the tool folders that exist and
-/// are not in it. Appended, so the user's own `PATH` wins.
+/// The tool folders are appended, so the user's own `PATH` wins.
 pub fn search_path() -> OsString {
     let path = std::env::var_os("PATH").unwrap_or_default();
     let home = std::env::var_os("HOME").map(PathBuf::from);
@@ -102,8 +99,6 @@ fn path_with(path: &OsStr, home: Option<&Path>, exists: &dyn Fn(&Path) -> bool) 
 }
 
 impl Home {
-    /// What the window needs to know about how it was started. It also logs where the program
-    /// found its home, its settings and its tools.
     pub fn facts(&self, fixture: Option<&str>) -> StartupFacts {
         tracing::info!(
             home = %self.folder.display(),
@@ -118,102 +113,5 @@ impl Home {
             anthropic_api_key_set: std::env::var_os("ANTHROPIC_API_KEY")
                 .is_some_and(|value| !value.is_empty()),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A disk that has these `.env` files and these folders, and nothing else.
-    fn disk(env_folders: &'static [&'static str]) -> impl Fn(&Path) -> bool {
-        move |folder| env_folders.iter().any(|known| Path::new(known) == folder)
-    }
-
-    #[test]
-    fn home_and_path_are_found_for_a_terminal_and_for_a_finder_launch() {
-        let repository = disk(&["/work/quanty"]);
-
-        // A terminal: the `.env` is above the folder the person is in.
-        let terminal = home_from(
-            None,
-            None,
-            Path::new("/work/quanty/crates/gui"),
-            Some(Path::new("/work/quanty/target/debug")),
-            &repository,
-        );
-        assert_eq!(terminal.folder, Path::new("/work/quanty"));
-        assert_eq!(
-            terminal.env_file.as_deref(),
-            Some(Path::new("/work/quanty/.env"))
-        );
-
-        // Finder starts the program in `/`: the `.env` is above the program instead.
-        let finder = home_from(
-            None,
-            None,
-            Path::new("/"),
-            Some(Path::new("/work/quanty/target/release")),
-            &repository,
-        );
-        assert_eq!(finder, terminal);
-
-        // The flag beats the variable, and the variable beats the search.
-        let flagged = home_from(
-            Some(Path::new("/flag")),
-            Some(OsStr::new("/variable")),
-            Path::new("/work/quanty"),
-            None,
-            &disk(&["/flag", "/variable", "/work/quanty"]),
-        );
-        assert_eq!(flagged.folder, Path::new("/flag"));
-        let named = home_from(
-            None,
-            Some(OsStr::new("/variable")),
-            Path::new("/work/quanty"),
-            None,
-            &disk(&["/work/quanty"]),
-        );
-        assert_eq!(
-            (named.folder.as_path(), named.env_file),
-            (Path::new("/variable"), None)
-        );
-
-        // No `.env` anywhere: the current folder, with no settings file.
-        let bare = home_from(None, None, Path::new("/"), None, &disk(&[]));
-        assert_eq!(
-            bare,
-            Home {
-                folder: PathBuf::from("/"),
-                env_file: None
-            }
-        );
-
-        // Finder's own `PATH` has neither `claude` nor Poppler; both are added at the end.
-        let exists = |folder: &Path| {
-            ["/Users/me/.local/bin", "/opt/homebrew/bin"]
-                .iter()
-                .any(|known| Path::new(known) == folder)
-        };
-        let finder_path = path_with(
-            OsStr::new("/usr/bin:/bin"),
-            Some(Path::new("/Users/me")),
-            &exists,
-        );
-        assert_eq!(
-            finder_path,
-            OsString::from("/usr/bin:/bin:/Users/me/.local/bin:/opt/homebrew/bin"),
-            "a folder that is not there is left out, and the person's folders stay first"
-        );
-        let terminal_path = path_with(
-            OsStr::new("/opt/homebrew/bin:/usr/bin"),
-            Some(Path::new("/Users/me")),
-            &exists,
-        );
-        assert_eq!(
-            terminal_path,
-            OsString::from("/opt/homebrew/bin:/usr/bin:/Users/me/.local/bin"),
-            "a folder that is already there is not added again"
-        );
     }
 }

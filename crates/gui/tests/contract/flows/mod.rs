@@ -1,7 +1,5 @@
-//! Checks the flows that cross two parts of the app, on the whole app: a choice made in one
-//! panel shows in the others, a follow-up starts a new ask, a source page turns, a service that
-//! is down is named, a chapter is added from the Ingest page, and no control leads to a part that
-//! is not built.
+//! Checks the flows that cross two parts of the app, on the whole app: selection, follow-up,
+//! source pages, failures, ingest, and that no control leads to a part that is not built.
 
 mod dead_controls;
 mod failures;
@@ -26,7 +24,6 @@ fn shared(harness: &Window) -> &Shared {
     harness.state().shared()
 }
 
-/// Where each panel sits at this window size.
 fn panels(size: [f32; 2]) -> ShellRects {
     layout::shell(egui::Rect::from_min_size(
         egui::Pos2::ZERO,
@@ -34,7 +31,6 @@ fn panels(size: [f32; 2]) -> ShellRects {
     ))
 }
 
-/// The first node with this role and name.
 fn node<'a>(harness: &'a Window, role: Role, name: &'a str) -> Node<'a> {
     harness
         .query_all_by_role_and_label(role, name)
@@ -49,23 +45,19 @@ fn has(harness: &Window, role: Role, name: &str) -> bool {
         .is_some()
 }
 
-/// True when some node has `words` in its name.
 fn says(harness: &Window, words: &str) -> bool {
     harness.query_all_by_label_contains(words).next().is_some()
 }
 
-/// Clicks the first node with this role and name, then waits for the app to be idle.
 fn click(harness: &mut Window, role: Role, name: &str) {
     node(harness, role, name).click();
     testkit::settle(harness);
 }
 
-/// True when the first node with this role and name is not faded out.
 fn is_enabled(harness: &Window, role: Role, name: &str) -> bool {
     !node(harness, role, name).accesskit_node().is_disabled()
 }
 
-/// True when the tab of this name is the open one.
 fn is_open_tab(harness: &Window, name: &str) -> bool {
     node(harness, Role::Tab, name)
         .accesskit_node()
@@ -73,15 +65,13 @@ fn is_open_tab(harness: &Window, name: &str) -> bool {
         == Some(true)
 }
 
-/// Which way the wheel turns.
 #[derive(Clone, Copy)]
 enum Wheel {
     Down,
     Up,
 }
 
-/// Turns the wheel over `over` until a node with this role and name is drawn: a row or a chip
-/// that is off screen has no node.
+/// A row or a chip that is off screen has no node, so the wheel is turned until it is drawn.
 fn scroll_to(harness: &mut Window, over: egui::Rect, wheel: Wheel, role: Role, name: &str) {
     let delta = match wheel {
         Wheel::Down => -240.0,
@@ -103,14 +93,12 @@ fn scroll_to(harness: &mut Window, over: egui::Rect, wheel: Wheel, role: Role, n
     panic!("`{name}` never came into view");
 }
 
-/// Presses a key, with one frame for the key alone, then lets the app finish what it started.
 fn press(harness: &mut Window, modifiers: egui::Modifiers, key: egui::Key) {
     harness.key_press_modifiers(modifiers, key);
     harness.step();
     testkit::settle(harness);
 }
 
-/// The first node with this role and name whose middle is inside `area`.
 fn node_in<'a>(
     harness: &'a Window,
     role: Role,
@@ -122,8 +110,6 @@ fn node_in<'a>(
         .find(|node| area.contains(node.rect().center()))
 }
 
-/// Every failure that the shared state holds: the three slots of the ask, the two of Source, the
-/// catalogue, and the ones that the ingest of the Ingest page shows.
 fn failures(shared: &Shared) -> Vec<&gui::contract::Failure> {
     let ingest: Vec<&gui::contract::Failure> = match &shared.ingest {
         IngestJob::CheckFailed { failure, .. } => vec![failure],

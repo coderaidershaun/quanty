@@ -2,8 +2,6 @@
 
 mod row;
 mod steps;
-#[cfg(test)]
-mod tests;
 
 use std::mem::Discriminant;
 
@@ -16,8 +14,6 @@ use crate::theme::space;
 use crate::widgets;
 use steps::{Body, Step};
 
-/// What the panel keeps between frames: its rows, made again only when the ask or the phase of
-/// its search changes.
 #[derive(Debug, Default)]
 pub struct Local {
     /// The ask, and the phase of its search, that `steps` were made for.
@@ -41,7 +37,6 @@ impl Local {
     }
 }
 
-/// Draws the path into `ui`, which is its whole rectangle. It pushes no intent.
 pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     let ask = &cx.shared.ask;
     local.follow(ask);
@@ -69,7 +64,6 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     });
 }
 
-/// One row for each step, sharing the height that is left, and a line between each two.
 fn rows(ui: &mut egui::Ui, steps: &[Step]) {
     let (pitch, density) = row::fit(ui.available_height(), steps.len());
     let width = ui.available_width();

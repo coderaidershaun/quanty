@@ -1,11 +1,12 @@
 //! Changes the labels of a stored media, and with them the copy that every document of it and
-//! every point of those documents carries, without embedding anything or asking a model.
+//! every point of those documents carries, without embedding anything or asking a model. Also
+//! says which category a PDF of a media is named and labelled by.
 
 use std::collections::BTreeSet;
 use std::fmt;
 
 use graph::{GraphError, GraphStore, MediaNode};
-use rag_core::{Category, MediaLabels, Tag, author_list};
+use rag_core::{Category, MediaLabels, Tag, author_list, is_same_name};
 
 use crate::labels::{RelabelError, tag_text};
 use crate::stores::Stores;
@@ -80,7 +81,7 @@ pub async fn relabel_media<G: GraphStore>(
     stores: &Stores<G>,
 ) -> Result<MediaRelabelled, RelabelError> {
     let mut media =
-        stored_media(title, stores)
+        stored_media(title, &stores.graph)
             .await?
             .ok_or_else(|| RelabelError::UnknownMedia {
                 title: title.to_owned(),
@@ -93,7 +94,7 @@ pub async fn relabel_media<G: GraphStore>(
             .labels
             .media
             .as_deref()
-            .is_some_and(|other| same_title(other, &media.title));
+            .is_some_and(|other| is_same_name(other, &media.title));
         if !of_this_media {
             continue;
         }
@@ -112,13 +113,30 @@ pub async fn relabel_media<G: GraphStore>(
     })
 }
 
+/// The category of the media titled `title`. It is the stored media's when the library has one,
+/// whatever `given` says; else `given`; else a book. A PDF of the media is named by it, and a new
+/// media is made with it.
+///
+/// # Errors
+/// [`GraphError`] when the graph cannot list its media.
+pub async fn media_category<G: GraphStore>(
+    title: &str,
+    given: Option<Category>,
+    graph: &G,
+) -> Result<Category, GraphError> {
+    Ok(match stored_media(title, graph).await? {
+        Some(stored) => stored.labels.category,
+        None => given.unwrap_or_default(),
+    })
+}
+
 /// The stored media of that title, or `media` itself after it is added to the graph. An ingest
 /// uses it, so it never changes a media that is stored.
 pub(crate) async fn stored_or_added<G: GraphStore>(
     media: MediaNode,
     stores: &Stores<G>,
 ) -> Result<MediaNode, GraphError> {
-    if let Some(stored) = stored_media(&media.title, stores).await? {
+    if let Some(stored) = stored_media(&media.title, &stores.graph).await? {
         return Ok(stored);
     }
     stores.graph.add_media(&media).await?;
@@ -128,16 +146,10 @@ pub(crate) async fn stored_or_added<G: GraphStore>(
 /// The media whose title is the same as `title`, whatever the capitals and the space at the ends.
 async fn stored_media<G: GraphStore>(
     title: &str,
-    stores: &Stores<G>,
+    graph: &G,
 ) -> Result<Option<MediaNode>, GraphError> {
-    let media = stores.graph.media().await?;
+    let media = graph.media().await?;
     Ok(media
         .into_iter()
-        .find(|stored| same_title(&stored.title, title)))
-}
-
-// SMELL: the desktop app writes this rule again, since its panels may not name this crate. A
-// change to one must be made in both.
-fn same_title(first: &str, second: &str) -> bool {
-    first.trim().to_lowercase() == second.trim().to_lowercase()
+        .find(|stored| is_same_name(&stored.title, title)))
 }

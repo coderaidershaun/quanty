@@ -190,9 +190,6 @@ fn the_source_shows_the_page_its_pickers_and_pager_name() {
 
 /// The paper of the sample library has no folder, so its page fails to open. This step comes last
 /// for that reason.
-///
-/// SMELL: the sample paper has the same title as its one document, so this check would still pass
-/// if the Document list showed the title of the media by mistake.
 fn a_paper_is_named_by_its_title(harness: &mut Window) {
     let (title, document) = shared(harness)
         .library
@@ -206,6 +203,10 @@ fn a_paper_is_named_by_its_title(harness: &mut Window) {
             Some((paper.title.clone()?, paper.documents.first()?.title.clone()))
         })
         .expect("the library has a titled paper with a document");
+    assert_ne!(
+        document, title,
+        "the paper's document has a title of its own, so the Document list cannot show the media's by mistake"
+    );
     open_the_media_list(harness);
     click(harness, Role::Button, &title);
     assert_eq!(shown_document(harness), Some(document));

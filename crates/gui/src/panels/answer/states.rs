@@ -14,11 +14,11 @@ pub(super) fn whole(ui: &mut egui::Ui, pane: &Pane<'_, '_>) {
     match pane.phase {
         Phase::Idle | Phase::NoResults(_) if library_is_empty(pane) => {
             Placeholder::empty(Icon::LIBRARY, "Your library is empty")
-                .hint("Add a chapter on the Ingest tab, then ask about it here.")
+                .hint("Add a PDF on the Ingest tab, then ask about it here.")
                 .show(ui);
         }
         Phase::Idle => {
-            Placeholder::empty(Icon::SEARCH, "Ask your books")
+            Placeholder::empty(Icon::SEARCH, "Ask your library")
                 .hint("Write a question above. The answer comes with the pages it stands on.")
                 .show(ui);
         }

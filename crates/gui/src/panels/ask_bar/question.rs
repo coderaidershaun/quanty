@@ -11,7 +11,7 @@ use crate::panels::PanelCx;
 use crate::theme::Icon;
 use crate::widgets::{Button, ControlSize, Dropdown, TextInput};
 
-const PLACEHOLDER: &str = "Ask a question about your books";
+const PLACEHOLDER: &str = "Ask a question about your library";
 const MODES: [(&str, AskMode); 2] = [
     ("Answer", AskMode::Answer),
     ("Results only", AskMode::ResultsOnly),

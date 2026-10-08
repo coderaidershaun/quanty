@@ -10,9 +10,10 @@ use gui::contract::{
     Catalogue, Category, ChapterLabel, Document, FailureKind, ItemCounts, Media, NewMedia,
 };
 use rag_core::MediaLabels;
+use rag_ingestion::testing::chapter_at;
 use rag_ingestion::{IngestSummary, ingest_chapter};
 
-use super::{catalogue_of, chapter_at, owned, saved};
+use super::{catalogue_of, owned, saved};
 use crate::support::{self, IN_DEPTH, INTUITION, SAMPLE_PAGES, copy_folder, sample_chapter};
 
 #[tokio::test(flavor = "multi_thread")]

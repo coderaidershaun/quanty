@@ -65,7 +65,7 @@ fn timed_out(seconds: u64) -> Verdict {
 fn source_missing(place: &Path) -> Verdict {
     let place = place.display();
     let hint =
-        format!("The chapter's files are not where they were ({place}). Ingest the chapter again.");
+        format!("The document's files are not where they were ({place}). Ingest its PDF again.");
     Verdict::saying(Kind::SourceMissing, hint)
 }
 

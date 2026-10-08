@@ -16,9 +16,9 @@ use crate::widgets::{
 };
 
 const MODES: [&str; 3] = ["Answer", "Search only", "Formulas"];
-const BOOKS: [&str; 2] = [
+const MEDIA_TITLES: [&str; 2] = [
     "Options, Futures, and Other Derivatives",
-    "A book whose title is far too long to fit in its dropdown",
+    "A media whose title is far too long to fit in its dropdown",
 ];
 /// A chip label that does not fit in its width, to show the cut.
 pub(super) const CUT_CHIP: &str = "A concept chip with a label far too long to fit";
@@ -27,7 +27,7 @@ pub(super) const LONG_STEP: &str = "page 5 of 7";
 /// The text of the stepper in the panel header, where the actions run from right to left.
 pub(super) const HEADER_STEP: &str = "2 of 6";
 /// The width of the dropdown whose choice is too long for it, to show that it stays that wide.
-pub(super) const BOOK_WIDTH: f32 = 160.0;
+pub(super) const MEDIA_WIDTH: f32 = 160.0;
 const PLACEHOLDER_AREA: egui::Vec2 = egui::vec2(196.0, 170.0);
 
 pub(super) fn show(ui: &mut egui::Ui, state: &mut State) {
@@ -120,7 +120,7 @@ fn inputs(ui: &mut egui::Ui, state: &mut State) {
     section(ui, "Inputs");
     let demo = &mut state.demo;
     let question = TextInput::new("Question", &mut demo.question)
-        .placeholder("Ask about your books…")
+        .placeholder("Ask about your library…")
         .icon(Icon::SEARCH)
         .trailing(Icon::CLOSE, "Clear question")
         .width(560.0)
@@ -151,16 +151,16 @@ fn inputs(ui: &mut egui::Ui, state: &mut State) {
             state.last_activated = Some("Dropdown");
         }
         let empty = Dropdown::new("Filter", &MODES)
-            .placeholder("All books")
+            .placeholder("All media")
             .show(ui);
         if empty.is_some() {
             state.last_activated = Some("Dropdown::empty");
         }
-        let book = Dropdown::new("Book", &BOOKS)
+        let media = Dropdown::new("Media", &MEDIA_TITLES)
             .selected(Some(1))
-            .width(BOOK_WIDTH)
+            .width(MEDIA_WIDTH)
             .show(ui);
-        if book.is_some() {
+        if media.is_some() {
             state.last_activated = Some("Dropdown::width");
         }
         let large = Dropdown::new("Large mode", &MODES)
@@ -187,8 +187,8 @@ fn inputs(ui: &mut egui::Ui, state: &mut State) {
             state.last_activated = Some("Stepper");
         }
         let first = Stepper::new("p. 1")
-            .previous("Previous chapter", false)
-            .next("Next chapter", true)
+            .previous("Previous page", false)
+            .next("Next page", true)
             .show(ui);
         if first.is_some() {
             state.last_activated = Some("Stepper::first");
@@ -384,7 +384,7 @@ fn notices(ui: &mut egui::Ui, state: &mut State) {
     let info = Notice::info("No sources found")
         .body(
             "I can't answer this question from the ingested documents. Try broadening the \
-             question or adding more relevant chapters.",
+             question or adding more relevant documents.",
         )
         .dismissable()
         .show(ui);
@@ -401,7 +401,7 @@ fn notices(ui: &mut egui::Ui, state: &mut State) {
     Notice::error("The answer could not be written")
         .body("Claude reached its usage limit. Try again after it resets.")
         .show(ui);
-    Notice::success("Chapter ingested").show(ui);
+    Notice::success("PDF ingested").show(ui);
 }
 
 fn placeholders(ui: &mut egui::Ui, state: &mut State) {
@@ -413,7 +413,7 @@ fn placeholders(ui: &mut egui::Ui, state: &mut State) {
                 .action("Ask a question"),
             Placeholder::loading("Loading the page").hint("This takes a moment."),
             Placeholder::error("The page could not be read")
-                .hint("Check that the chapter folder exists.")
+                .hint("Check that the document's folder exists.")
                 .action("Try again"),
         ];
         for placeholder in areas {
@@ -466,9 +466,9 @@ fn confirm(ui: &mut egui::Ui, state: &mut State) {
         state.demo.is_confirm_open = true;
     }
     if state.demo.is_confirm_open {
-        let sheet = Confirm::new(egui::Id::new("gallery-confirm"), "Delete this book?")
+        let sheet = Confirm::new(egui::Id::new("gallery-confirm"), "Delete this document?")
             .body("Its pages are removed from the library. This cannot be undone.")
-            .confirm_label("Delete book")
+            .confirm_label("Delete document")
             .destructive()
             .show(ui.ctx());
         match sheet {

@@ -72,23 +72,23 @@ impl PageFault {
                 Failure::new(
                     FailureKind::SourceMissing,
                     format!(
-                        "no chapter folder was found for document {}: none was given that holds a {CHAPTER_INDEX_FILE}, and no chapter that could be read under {searched} is its chapter",
+                        "no folder was found for document {}: none was given that holds a {CHAPTER_INDEX_FILE}, and no converted folder that could be read under {searched} is its own",
                         target.doc.0
                     ),
                 )
                 .with_hint(format!(
-                    "quanty does not know where this chapter's pages are. Put its chapter folder inside a book folder under {searched}, or ingest its PDF again with rag-ingest pdf."
+                    "quanty does not know where this document's pages are. Put its folder inside its media's folder under {searched}, or ingest its PDF again with rag-ingest pdf."
                 ))
             }
             PageFault::NoSuchPage { page_count } => Failure::new(
                 FailureKind::SourceMissing,
                 format!(
-                    "page {} is not in the chapter of document {}, which has {page_count} pages",
+                    "page {} is not in document {}, which has {page_count} pages",
                     target.page, target.doc.0
                 ),
             )
             .with_hint(format!(
-                "This chapter has {page_count} pages, so page {} is not in it. Run rag-ingest on its chapter folder again.",
+                "This document has {page_count} pages, so page {} is not in it. Ingest its PDF again with rag-ingest pdf.",
                 target.page
             )),
         }

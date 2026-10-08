@@ -40,7 +40,7 @@ fn paper() -> Media {
     let tags = vec!["hawkes".to_owned()];
     let document = Document {
         id: DocId(Uuid::from_u128(4)),
-        title: "Hawkes Processes in Finance".to_owned(),
+        title: "Self-Exciting Order Flow".to_owned(),
         chapter: None,
         authors: authors.clone(),
         media_tags: tags.clone(),
@@ -56,7 +56,7 @@ fn paper() -> Media {
         folder: None,
     };
     Media {
-        title: Some(document.title.clone()),
+        title: Some("Hawkes Processes in Finance".to_owned()),
         category: Category::Paper,
         authors,
         tags,
@@ -66,9 +66,9 @@ fn paper() -> Media {
 
 #[derive(Debug, thiserror::Error)]
 pub(in crate::backend::fake) enum SampleError {
-    #[error("no sample chapter has the document id {doc}")]
+    #[error("no sample document has the id {doc}")]
     UnknownDocument { doc: Uuid },
-    #[error("the sample chapter has {page_count} pages, so page {page} is not in it")]
+    #[error("the sample document has {page_count} pages, so page {page} is not in it")]
     NoSuchPage { page: u32, page_count: u32 },
     #[error("page {page} of the sample document {doc} has no piece {piece}")]
     NoSuchPiece { doc: Uuid, page: u32, piece: u32 },

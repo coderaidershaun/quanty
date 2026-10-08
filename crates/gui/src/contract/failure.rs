@@ -70,7 +70,7 @@ impl FailureKind {
                 "This media is in the library already. Choose it from the Media list."
             }
             FailureKind::SourceMissing => {
-                "The chapter's files are not where they were. Ingest the chapter again."
+                "The document's files are not where they were. Ingest its PDF again."
             }
             FailureKind::Internal => {
                 "Something went wrong inside quanty. Try again; if it stays, rest the pointer on this message to read the error."

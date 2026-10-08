@@ -14,14 +14,14 @@ use tokio::sync::watch;
 
 use super::PdfIngestError;
 use super::jobs::{IngestReport, Stage};
-use super::pdf::{CheckedPdf, Upload};
+use super::pdf::{ReadyPdf, Upload};
 use crate::services::Services;
 
 /// One ingest job, with everything it needs to run on a task of its own.
 pub(super) struct Work<S> {
     pub(super) services: Arc<S>,
     pub(super) config: Config,
-    pub(super) pdf: CheckedPdf,
+    pub(super) pdf: ReadyPdf,
     /// Where the stage is written. The end of the report is written by the task that waits for
     /// this one, not here.
     pub(super) report: watch::Sender<IngestReport>,

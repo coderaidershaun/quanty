@@ -42,7 +42,11 @@ fn a_checked_chapter_runs_to_done_and_loads_the_catalogue_again() {
         has(&harness, Role::Label, "Book"),
         "the card names the category"
     );
-    assert!(has(&harness, Role::Button, "Edit media"));
+    assert!(has(
+        &harness,
+        Role::Button,
+        "Edit Option Volatility and Pricing"
+    ));
     assert!(
         !has(&harness, Role::Button, "Check the chapter"),
         "a check needs no button"

@@ -25,7 +25,7 @@ pub(super) fn show(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
 fn nothing_open(ui: &mut egui::Ui, cx: &PanelCx<'_>) {
     let hint = match cx.shared.library.catalogue.ready() {
         Some(catalogue) if catalogue.documents().next().is_none() => {
-            "The library is empty. Add a chapter on the Ingest tab to read it here."
+            "The library is empty. Add a PDF on the Ingest tab to read it here."
         }
         Some(_) => "Select a result, or choose a media above, to see the page it stands on.",
         None => "Select a result to see the page it stands on.",

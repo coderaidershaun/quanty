@@ -10,6 +10,7 @@ use ocr::{ChapterJob, ConvertError, MediaDocument, PageProgress, read_chapter};
 use rag_core::{Category, DocId, DocumentLabels, ItemKind, MediaLabels};
 use rag_ingestion::{
     ConceptError, IngestError, IngestStep, PdfError, PdfOutcome, chapter_items, document_name,
+    media_category,
 };
 use serde_json::json;
 
@@ -335,4 +336,20 @@ async fn a_paper_pdf_with_a_plain_name_is_ingested_into_its_media_folder_with_th
         assert_eq!(payload["media_tags"], json!(["x"]), "{id}");
         assert!(payload.get("tags").is_none(), "{payload}");
     }
+
+    // A later PDF of this media is named and labelled as a paper, whatever category its caller
+    // gives; the caller's category only makes a media the library does not have.
+    let category_of = async |title: &str, given: Option<Category>| {
+        media_category(title, given, &stores.graph).await.unwrap()
+    };
+    assert_eq!(
+        category_of(" t ", Some(Category::Book)).await,
+        Category::Paper
+    );
+    assert_eq!(category_of("T", None).await, Category::Paper);
+    assert_eq!(category_of("Not Stored", None).await, Category::Book);
+    assert_eq!(
+        category_of("Not Stored", Some(Category::Other)).await,
+        Category::Other
+    );
 }

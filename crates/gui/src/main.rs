@@ -16,7 +16,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 #[derive(Parser)]
 #[command(
     name = "quanty",
-    about = "Ask your books. Answers come with the page they stand on."
+    about = "Ask your library. Answers come with the page they stand on."
 )]
 struct Args {
     /// Run from built-in fixtures, with no store and no model: the name of a scene, or `list`.

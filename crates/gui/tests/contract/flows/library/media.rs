@@ -88,7 +88,7 @@ fn the_pencil_opens_the_form_with_the_labels_of_the_media(harness: &mut Window) 
         "the title names the media, so no box can change it"
     );
     assert!(
-        !is_enabled(harness, Role::Button, "Save"),
+        !is_enabled(harness, Role::Button, "Save media"),
         "nothing was changed, so there is nothing to save"
     );
     assert!(
@@ -118,7 +118,7 @@ fn a_refused_save_shows_its_hint_and_keeps_what_was_typed(
     retype_on_the_card(harness, "Authors", "Ann Writer, Bo Writer");
     retype_on_the_card(harness, "Tags", "Teaching");
     refuses_saves.store(true, Ordering::SeqCst);
-    click_on_the_card(harness, Role::Button, "Save");
+    click_on_the_card(harness, Role::Button, "Save media");
 
     let wanted = MediaEdit {
         title: MEDIA.to_owned(),
@@ -158,7 +158,7 @@ fn the_same_save_goes_through_and_the_card_shows_the_new_labels(
     }
     refuses_saves.store(false, Ordering::SeqCst);
     let loads = seen.count(|command| matches!(command, Command::LoadCatalogue { .. }));
-    click_on_the_card(harness, Role::Button, "Save");
+    click_on_the_card(harness, Role::Button, "Save media");
 
     assert_eq!(sent_media_edits(seen).len(), 2);
     assert_eq!(

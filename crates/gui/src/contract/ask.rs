@@ -116,7 +116,7 @@ impl NothingFound {
                 "No item in your library matches the filters of this question. Clear a filter, then ask again."
             }
             NothingFound::LibraryHoldsNoItems => {
-                "Your library holds no items yet. Add a chapter on the Ingest tab, then ask again."
+                "Your library holds no items yet. Add a PDF on the Ingest tab, then ask again."
             }
         }
     }

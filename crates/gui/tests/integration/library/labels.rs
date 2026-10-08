@@ -12,10 +12,12 @@ use gui::contract::{
 };
 use rag_core::{DocumentLabels, ItemFilter, MediaLabels, Tag};
 use rag_ingestion::ingest_chapter;
-use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores, first_axis};
+use rag_ingestion::testing::{
+    StandInEmbedder, StandInLlm, ThrowawayStores, chapter_at, first_axis,
+};
 use uuid::Uuid;
 
-use super::{catalogue_of, chapter_at, document_tags_saved, media_edited, owned, saved};
+use super::{catalogue_of, document_tags_saved, media_edited, owned, saved};
 use crate::support::{self, IN_DEPTH, INTUITION, sample_chapter};
 
 #[tokio::test(flavor = "multi_thread")]

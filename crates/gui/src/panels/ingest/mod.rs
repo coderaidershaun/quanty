@@ -10,9 +10,10 @@ use std::path::PathBuf;
 use eframe::egui;
 
 use self::document::DocumentFields;
-use self::media::{MediaChoice, MediaForm};
+use self::media::MediaChoice;
 use crate::contract::{Catalogue, Category, IngestRequest, Intent, Media, is_same_title};
 use crate::panels::PanelCx;
+use crate::panels::media_card::MediaFields;
 use crate::state::{IngestJob, MediaEditing, Shared};
 use crate::theme::{TextRole, space};
 use crate::widgets;
@@ -85,10 +86,10 @@ impl Local {
             catalogue.is_some_and(|catalogue| media::titled(catalogue, &request.media).is_none());
         self.pdf = Some(request.pdf.clone());
         self.media = if is_gone {
-            MediaChoice::New(MediaForm {
+            MediaChoice::New(MediaFields {
                 category: request.category,
                 title: request.media.clone(),
-                ..MediaForm::default()
+                ..MediaFields::default()
             })
         } else {
             MediaChoice::Existing {
@@ -156,7 +157,7 @@ impl Local {
             return;
         };
         self.seen_saves = shared.cues.media_saves;
-        if matches!(&self.media, MediaChoice::New(form) if is_same_title(&form.title, saved)) {
+        if matches!(&self.media, MediaChoice::New(fields) if is_same_title(&fields.title, saved)) {
             self.choose(media);
         }
     }
@@ -167,7 +168,7 @@ impl Local {
     fn follow_the_edit(&mut self, media_edit: &MediaEditing) {
         let MediaChoice::Editing {
             title,
-            form,
+            fields,
             is_sent,
             ..
         } = &mut self.media
@@ -185,7 +186,7 @@ impl Local {
         }
         let saved = MediaChoice::Existing {
             title: std::mem::take(title),
-            category: form.category,
+            category: fields.category,
         };
         self.media = saved;
     }
@@ -204,12 +205,12 @@ impl Local {
             *category = stored.category;
             return;
         }
-        let form = MediaForm {
+        let fields = MediaFields {
             category: *category,
             title: std::mem::take(title),
-            ..MediaForm::default()
+            ..MediaFields::default()
         };
-        self.media = MediaChoice::New(form);
+        self.media = MediaChoice::New(fields);
     }
 
     fn follow(&mut self, shared: &Shared) {

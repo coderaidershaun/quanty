@@ -124,6 +124,14 @@ pub fn author_list<S: AsRef<str>>(texts: impl IntoIterator<Item = S>) -> Vec<Str
     authors
 }
 
+/// Two titles of media, or two names of authors, are the same whatever their capitals and the
+/// space at their ends.
+// SMELL: the desktop app writes this rule again as `gui::contract::is_same_title`, because its
+// contract may not name this crate. A change to one must be made in both.
+pub fn is_same_name(one: &str, other: &str) -> bool {
+    one.trim().to_lowercase() == other.trim().to_lowercase()
+}
+
 /// The labels a document carries. A label that is not there is left out of what is stored.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DocumentLabels {
@@ -159,12 +167,12 @@ impl DocumentLabels {
         let media_fits = wanted.media.as_deref().is_none_or(|media| {
             self.media
                 .as_deref()
-                .is_some_and(|have| same_text(have, media))
+                .is_some_and(|have| is_same_name(have, media))
         });
         let author_fits = wanted
             .author
             .as_deref()
-            .is_none_or(|author| self.authors.iter().any(|have| same_text(have, author)));
+            .is_none_or(|author| self.authors.iter().any(|have| is_same_name(have, author)));
         let category_fits = wanted
             .category
             .is_none_or(|category| self.category == Some(category));
@@ -174,10 +182,6 @@ impl DocumentLabels {
             .all(|tag| self.media_tags.contains(tag) || self.tags.contains(tag));
         media_fits && author_fits && category_fits && tags_fit
     }
-}
-
-fn same_text(have: &str, wanted: &str) -> bool {
-    have.to_lowercase() == wanted.to_lowercase()
 }
 
 /// What a search may ask of a document's labels. Each part that is given must fit.

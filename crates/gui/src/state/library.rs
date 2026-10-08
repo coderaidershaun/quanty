@@ -117,13 +117,16 @@ impl Shared {
         effects.push(Effect::Send(Command::SaveMedia { request, media }));
     }
 
-    /// An edit rewrites every document of the media, so it is ignored while an ingest runs and
-    /// while a save or an edit of a media is in flight.
+    /// An edit of a media rewrites every document of it, so none is taken while an ingest runs or
+    /// while a save or an edit of a media is on its way.
+    pub fn can_edit_media(&self) -> bool {
+        !self.ingest.is_running()
+            && !self.library.media_save.is_saving()
+            && !self.library.media_edit.is_saving()
+    }
+
     pub(super) fn edit_media(&mut self, edit: MediaEdit, effects: &mut Vec<Effect>) {
-        if self.ingest.is_running()
-            || self.library.media_save.is_saving()
-            || self.library.media_edit.is_saving()
-        {
+        if !self.can_edit_media() {
             return;
         }
         let request = self.issue_request();

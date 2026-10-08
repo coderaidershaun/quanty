@@ -133,6 +133,7 @@ impl ToolError {
                     | PdfIngestError::ItemStore(_)
                     | PdfIngestError::ConceptStore(_)
                     | PdfIngestError::Graph(_)
+                    | PdfIngestError::ReadMedia(_)
                     | PdfIngestError::Labels(_)
             ),
         }

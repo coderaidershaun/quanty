@@ -30,7 +30,7 @@ cargo run --release -p gui -- --fixture black-scholes
 | --- | --- |
 | Rust (stable, with `cargo`) | Builds every program |
 | Docker, with `docker compose` | Runs the two stores: Qdrant (vectors) and FalkorDB (the graph) |
-| [Poppler](https://poppler.freedesktop.org/) (`brew install poppler`) | Reads a PDF when a chapter is converted |
+| [Poppler](https://poppler.freedesktop.org/) (`brew install poppler`) | Reads a PDF when it is converted |
 | The `claude` CLI, signed in | Reads pages, finds concepts and writes answers, on your `claude` subscription |
 | `EMBEDDING_GEMINI_API_KEY` | Gemini embeddings: every ingest and every question |
 | `CONVERTER_JEV_API_KEY` | The Jev API, which says whether a page holds math: only when a PDF is converted |
@@ -48,7 +48,7 @@ cargo run --release -p rag-ingestion --bin rag-ingest -- health
 
 `health` prints one line each for Qdrant, FalkorDB and `claude`: `ok`, or `FAILED` with what is wrong. It does not check the two keys or `ANTHROPIC_API_KEY`.
 
-Then put a first chapter in and ask a question. One PDF is one chapter, named `chapter-<number>-<name>.pdf`. The repository holds a sample of seven pages:
+Then put a first PDF in and ask a question. The library holds media. A media is a book, a paper or another work, with a title, a category, its authors and its tags. Each PDF is one document of a media: a chapter of a book, or the PDF of a paper or another work, which has a title. A document can also have tags of its own. A book's chapter is named `chapter-<number>-<name>.pdf`. The repository holds a sample of seven pages:
 
 ```bash
 cargo run --release -p rag-ingestion --bin rag-ingest -- pdf \
@@ -59,7 +59,19 @@ cargo run --release -p rag-ingestion --bin rag-ingest -- pdf \
 cargo run --release -p rag-retrieval --bin rag-query -- "What is the Black–Scholes formula for a call option?"
 ```
 
-The ingest is paid work: see [Costs](#costs). `--author` and `--tag` are optional. A 20-page chapter takes about 15 minutes. If it stops, run the same command again and it carries on. On a finished PDF it does nothing and costs nothing.
+The PDF of a paper can have any name, and a paper often has more than one author:
+
+```bash
+cargo run --release -p rag-ingestion --bin rag-ingest -- pdf \
+  --paper "Hawkes Processes in Finance" \
+  --author "First Author" --author "Second Author" --tag hawkes \
+  --doc-tag survey \
+  path/to/hawkes-notes.pdf
+```
+
+`--author`, given once for each author, and `--tag` label the media. They are used only when the library does not have that media yet: change a stored media with `rag-ingest media`. `--doc-tag` tags this PDF only. All three are optional. A media that the library already has keeps its own category, whatever `--book`, `--paper` or `--other` says.
+
+The ingest is paid work: see [Costs](#costs). While it runs, it prints its progress on standard error: `converting 7 of 7 pages (0 already done)`, one line for each page with what the page cost, such as `page 3 converted ($0.14)`, then `writing the graph`, `embedding <n> items`, `storing the items`, `reading the concepts of <n> items` and `linking the concepts of <n> items`. The summary comes last, on standard output. A 20-page PDF takes about 15 minutes. If it stops, run the same command again and it carries on. On a finished PDF it does nothing and costs nothing.
 
 ## Run the desktop app
 
@@ -69,9 +81,9 @@ cargo run --release -p gui    # builds and opens target/release/quanty
 
 The window has three tabs:
 
-- **Ask**: the question with its mode and its book, author and tag filters, the answer with its citations, the page each citation stands on, the concept graph, the steps of the search, and questions to ask next. The mode **Answer** costs one Gemini embedding call and one Sonnet call on your `claude` subscription. **Results only** writes no answer and costs the embedding call alone.
-- **Library**: the stored books and their chapters, each with its pages, items, author and tags. **Copy id** copies the document id that `rag-ingest tag` and `rag-ingest delete-document` take, **Read** opens the chapter in Ask, and **Edit labels** corrects the author and the tags, as `rag-ingest tag` does, at no cost.
-- **Ingest**: adds a chapter. Choose the PDF, choose the book or add a new one, check it, then start. The check is free. A start is paid work, the same as `rag-ingest pdf` above. Keep the app open while it runs; if it stops, start the same PDF again and it carries on. To keep a book in the list before it has a chapter, choose **Add a new book…**, type its title, author and tags, and press **Save book**.
+- **Ask**: the question with its mode and four filters, **Media**, **Authors**, **Tags** and **Category**, then the answer with its citations, the page each citation stands on, the concept graph, the steps of the search, and questions to ask next. The mode **Answer** costs one Gemini embedding call and one Sonnet call on your `claude` subscription. **Results only** writes no answer and costs the embedding call alone.
+- **Library**: a card for each media, with its title, a badge for its category, its authors and its tags. Its pencil, **✎ Edit**, opens a form for the category, the authors and the tags. **Save media** writes them to the media and to every document of it, as `rag-ingest media` does, and **Cancel** closes the form. The title cannot change, because it names the media's folder. In the card, each document shows its chapter or its title, its pages, its items and its own tags. **Copy id** copies the document id that `rag-ingest tag` and `rag-ingest delete-document` take, **Read** opens the document in Ask, and **Edit tags** changes its own tags, as `rag-ingest tag` does. Every edit is free, and no edit can be made while an ingest runs.
+- **Ingest**: the **Add media** journey. Choose a media in the **Media** list, or choose **Add new media…**, pick its category, type its title, authors and tags, and press **Save media**: a saved media stays in the list, also before its first PDF. The media then shows as a card whose labels are fixed, with its pencil to edit them. Press **Choose a PDF**. The PDF of a book takes a chapter number and a chapter name, filled in from a file named `chapter-<number>-<name>.pdf`. The PDF of a paper or another media takes a title, filled in with the media's title. **Tags for this PDF** are the document's own tags. The check then runs by itself, with a bar, and is free: it says how many pages the PDF has and how many are converted already, or what would stop a start. **Start ingest** is paid work, the same as `rag-ingest pdf` above. The bar then shows the stage, such as "Converting the pages — page 3 of 12", with what the pages have cost so far, and then the later stages up to "Linking the concepts". Keep the app open while it runs; if it stops, start the same PDF again and it carries on. **Add another PDF** keeps the media chosen for the next PDF.
 
 | Key | What it does |
 | --- | --- |
@@ -99,9 +111,9 @@ claude mcp add --scope user quanty -- sh -c "cd '$PWD' && exec '$PWD/target/rele
 | `health` | Says whether Qdrant, FalkorDB and the `claude` sign-in are ready | Free |
 | `list_documents` | Lists every stored document | Free |
 | `search` | Finds the stored items nearest to a question | One small Gemini call |
-| `read_page` | Reads one page of a chapter, in reading order | Free |
+| `read_page` | Reads one page of a document, in reading order | Free |
 | `answer` | Writes an answer from what `search` finds, with its sources | A Gemini call and your `claude` subscription usage |
-| `ingest_pdf` | Converts one chapter PDF and stores it | Paid and slow: `claude`, Jev and Gemini |
+| `ingest_pdf` | Converts one PDF of a media and stores it | Paid and slow: `claude`, Jev and Gemini |
 | `ingest_status` | Says how an ingest job is going | Free |
 
 An agent that can write its own answer should call `search`, not `answer`. The arguments, the first calls to try, `.mcp.json`, HTTP and how to send a PDF are in [docs/mcp.md](docs/mcp.md).
@@ -110,9 +122,9 @@ An agent that can write its own answer should call `search`, not `answer`. The a
 
 | Program | What it does | Run it as |
 | --- | --- | --- |
-| `rag-ingest` | Checks the services, ingests, labels and deletes documents | `cargo run --release -p rag-ingestion --bin rag-ingest -- …` |
+| `rag-ingest` | Checks the services, ingests a PDF or a converted document, changes a media (`media`) or the own tags of a document (`tag`), and deletes documents | `cargo run --release -p rag-ingestion --bin rag-ingest -- …` |
 | `rag-query` | Asks the stored items a question, and `--answer` writes an answer | `cargo run --release -p rag-retrieval --bin rag-query -- …` |
-| `ocr` | Converts a chapter PDF into saved files under `content/`, and stores nothing | `cargo run --release -p ocr -- …` |
+| `ocr` | Converts the PDF of a book's chapter into saved files under `content/`, and stores nothing | `cargo run --release -p ocr -- …` |
 
 Every command and flag is in [docs/reference.md](docs/reference.md).
 
@@ -124,7 +136,20 @@ Every command and flag is in [docs/reference.md](docs/reference.md).
 | Jev | Your Jev API key | The pages of a PDF, when they are converted |
 | `claude` (Haiku and Sonnet) | The subscription `claude` is signed in to, never the API | Converting pages, finding concepts and writing an answer |
 
-Converted pages and the answers about concepts are kept on disk, so a run that stopped goes on without paying twice, and a PDF that is already ingested costs nothing. `rag-ingest pdf` checks the Gemini key and both stores before the first page is paid for. These cost nothing: the two stores, which run on your machine, and `health`, `--fixture`, `list_documents`, `read_page`, `ingest_status`, `tag` and `delete-document`.
+Converted pages and the answers about concepts are kept on disk, so a run that stopped goes on without paying twice, and a PDF that is already ingested costs nothing. `rag-ingest pdf` checks the Gemini key and both stores before the first page is paid for. These cost nothing: the two stores, which run on your machine; `health`, `--fixture`, `list_documents`, `read_page`, `ingest_status`, `media`, `tag` and `delete-document`; and the check and every edit of the desktop app.
+
+## Start fresh
+
+To empty the library and begin again, stop the stores and remove the two folders that quanty made on your machine:
+
+```bash
+docker compose down       # stops Qdrant and FalkorDB
+rm -rf data content       # the stores, the kept answers and the converted documents
+docker compose up -d
+cargo run --release -p rag-ingestion --bin rag-ingest -- health
+```
+
+This deletes every stored media and document, every converted page (with the PDFs that the MCP server saved under `content/_uploads`), every kept answer about concepts and the log of concept decisions. It cannot be undone. Nothing in git is touched: `samples/` stays. To ingest the PDFs again is paid work again, because nothing is kept to go on from: see [Costs](#costs). When `.env` names other places with `CONTENT_DIR`, `CONCEPT_CACHE_DIR` or `CONCEPT_DECISION_LOG`, remove those too.
 
 ## Troubleshooting
 
@@ -134,11 +159,12 @@ Converted pages and the answers about concepts are kept on disk, so a run that s
 | `did not answer like FalkorDB; another program may be using that port` | Something else listens on port 6379, such as a local Redis. Stop it, or map the container to another port and set `FALKORDB_URL` to match |
 | `EMBEDDING_GEMINI_API_KEY is not set` or `CONVERTER_JEV_API_KEY is not set` | Put the key in `.env`, and start the command in the quanty folder: `.env` is looked for in the current folder and the folders above it |
 | `ANTHROPIC_API_KEY is set, so claude could bill the API` or `claude is not signed in` | Run `unset ANTHROPIC_API_KEY`, or run `claude` in a terminal and sign in. Then start the program again |
-| "The page was not found" in the app, or `no converted chapter under content has the document id …` from `read_page` | The chapter's folder is not where quanty looks. Put it inside a book folder under `content/`, or ingest its PDF again with `rag-ingest pdf` |
+| "The page was not found" in the app, or `no converted chapter under content has the document id …` from `read_page` | The document's folder is not where quanty looks. Put it inside its media's folder under `content/`, or ingest its PDF again with `rag-ingest pdf` |
+| `… cannot be ingested as a book chapter; rename it to chapter-<number>-<name>.pdf …` or `… so its pdf must be named chapter-<number>-<name>.pdf …` from `rag-ingest pdf` | The media is a book, so the file name gives the chapter. Rename the file. A media that the library does not have yet can be a paper or another media instead: give `--paper` or `--other`, whose PDF can have any name |
 
 ## Layout
 
-Seven crates under `crates/`: `ocr`, `rag-core`, `graph`, `rag-ingestion`, `rag-retrieval`, `gui` and `mcp`. What each one is, and how a search works, is in [docs/reference.md](docs/reference.md#how-it-works). `samples/` holds the sample PDF and converted sample chapters. `content/` (converted chapters) and `data/` (the stores, the kept answers) are made on your machine and are not in git.
+Seven crates under `crates/`: `ocr`, `rag-core`, `graph`, `rag-ingestion`, `rag-retrieval`, `gui` and `mcp`. What each one is, and how a search works, is in [docs/reference.md](docs/reference.md#how-it-works). `samples/` holds the sample PDF and converted sample chapters. `content/` (the converted documents, in one folder for each media) and `data/` (the stores, the kept answers) are made on your machine and are not in git.
 
 ## Licence
 

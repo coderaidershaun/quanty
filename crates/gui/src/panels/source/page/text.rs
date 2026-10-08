@@ -7,7 +7,7 @@ use crate::panels::source::tabs::{SourceTab, TabCx};
 use crate::panels::source::{piece, row};
 use crate::theme::{TextRole, Tone, color, radius, space};
 
-const NOTE: &str = "This chapter has no page pictures. This is its text.";
+const NOTE: &str = "This document has no page pictures. This is its text.";
 
 pub(super) fn show(ui: &mut egui::Ui, cx: &mut TabCx<'_>) {
     let (area, bar) = room_for_bar(ui.available_rect_before_wrap());

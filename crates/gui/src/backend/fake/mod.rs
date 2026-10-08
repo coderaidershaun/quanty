@@ -274,14 +274,14 @@ impl Fake {
         self.wait(PAGE_WAIT).await;
         let view = match script.pages {
             Pages::SourceMissing => Err(self.source_missing(
-                "the scene says this chapter's files are not there".to_owned(),
+                "the scene says this document's files are not there".to_owned(),
             )),
             Pages::Samples => fixtures::page(&self.samples, doc, page).map_err(|error| {
                 match error {
                     fixtures::SampleError::NoSuchPage { page_count, .. } => {
                         Failure::new(FailureKind::SourceMissing, error.to_string()).with_hint(
                             format!(
-                                "This chapter has {page_count} pages, so page {page} is not in it. Ingest the chapter again with rag-ingest pdf."
+                                "This document has {page_count} pages, so page {page} is not in it. Ingest its PDF again with rag-ingest pdf."
                             ),
                         )
                     }
@@ -333,7 +333,7 @@ impl Fake {
 
     fn source_missing(&self, detail: String) -> Failure {
         Failure::new(FailureKind::SourceMissing, detail).with_hint(format!(
-            "quanty does not know where this chapter's pages are. Put its chapter folder inside a book folder under {}, or ingest its PDF again with rag-ingest pdf.",
+            "quanty does not know where this document's pages are. Put its folder inside its media's folder under {}, or ingest its PDF again with rag-ingest pdf.",
             self.samples.display()
         ))
     }

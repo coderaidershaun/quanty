@@ -121,15 +121,17 @@ pub(super) struct PdfMedia {
     #[arg(
         long,
         value_name = "TITLE",
-        help = "The title of the book the PDF is a chapter of. The PDF must be named chapter-<number>-<name>.pdf"
+        help = "The title of the book the PDF is a chapter of. The PDF must be named chapter-<number>-<name>.pdf. A media the library already has keeps its own category"
     )]
     book: Option<String>,
 
-    /// The title of the paper. The PDF can have any name
+    /// The title of the paper. The PDF can have any name. A media the library already has keeps
+    /// its own category
     #[arg(long, value_name = "TITLE")]
     paper: Option<String>,
 
-    /// The title of a media that is neither a book nor a paper. The PDF can have any name
+    /// The title of a media that is neither a book nor a paper. The PDF can have any name. A media
+    /// the library already has keeps its own category
     #[arg(long, value_name = "TITLE")]
     other: Option<String>,
 }

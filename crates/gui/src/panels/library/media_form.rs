@@ -3,33 +3,25 @@
 
 use eframe::egui;
 
-use super::{CANCEL, SAVE, SaveStep, can_send_media_edit, reveal};
-use crate::contract::{Category, Failure, Intent, Media, MediaEdit, is_same_title};
-use crate::panels::labels::{AUTHORS, LIST_PLACEHOLDER, TAGS, caption, list_of, text_of};
+use super::{SaveStep, reveal};
+use crate::contract::{Failure, Intent, Media, is_same_title};
+use crate::panels::media_card::{
+    self, FormSetup, MediaFields, Pressed, Purpose, Save, would_change,
+};
 use crate::state::{Library, MediaEditing, Shared};
-use crate::theme::space;
-use crate::widgets::{Button, Chip, Notice, TextInput};
-
-const CATEGORY: &str = "Category";
 
 #[derive(Debug)]
 pub(super) struct Draft {
-    /// The title as the library has it. It names the media, so it is sent unchanged.
-    title: String,
-    category: Category,
-    authors: String,
-    tags: String,
+    /// Its title is the library's own. It names the media, so it is sent unchanged.
+    fields: MediaFields,
     step: SaveStep,
     should_reveal: bool,
 }
 
 impl Draft {
-    pub(super) fn of(title: &str, media: &Media) -> Draft {
+    pub(super) fn of(media: &Media) -> Draft {
         Draft {
-            title: title.to_owned(),
-            category: media.category,
-            authors: text_of(&media.authors),
-            tags: text_of(&media.tags),
+            fields: MediaFields::of(media),
             step: SaveStep::Typing,
             should_reveal: true,
         }
@@ -37,7 +29,7 @@ impl Draft {
 
     /// The draft keeps the title exactly as the library has it, so an exact match finds its card.
     pub(super) fn is_for(&self, title: &str) -> bool {
-        self.title == title
+        self.fields.title == title
     }
 }
 
@@ -47,12 +39,12 @@ pub(super) fn follow(draft: &mut Draft, library: &Library) -> bool {
     let is_listed = library
         .catalogue
         .ready()
-        .is_some_and(|catalogue| catalogue.media_titled(&draft.title).is_some());
+        .is_some_and(|catalogue| catalogue.media_titled(&draft.fields.title).is_some());
     if !is_listed {
         return false;
     }
     if draft.step == SaveStep::Sent && !library.media_edit.is_saving() {
-        if refusal(draft, library).is_none() {
+        if refusal_of(draft, library).is_none() {
             return false;
         }
         draft.step = SaveStep::Refused;
@@ -63,9 +55,11 @@ pub(super) fn follow(draft: &mut Draft, library: &Library) -> bool {
 
 /// The app keeps one failed edit for all media, and another tab can send an edit of another
 /// media, so the failure counts only when it names the media of this draft.
-fn refusal<'a>(draft: &Draft, library: &'a Library) -> Option<&'a Failure> {
+fn refusal_of<'a>(draft: &Draft, library: &'a Library) -> Option<&'a Failure> {
     match &library.media_edit {
-        MediaEditing::Failed { edit, failure } if is_same_title(&edit.title, &draft.title) => {
+        MediaEditing::Failed { edit, failure }
+            if is_same_title(&edit.title, &draft.fields.title) =>
+        {
             Some(failure)
         }
         _ => None,
@@ -81,61 +75,29 @@ pub(super) fn form(
     intents: &mut Vec<Intent>,
 ) -> bool {
     let top = ui.cursor().top();
-    let is_sent = draft.step == SaveStep::Sent;
-    ui.add_enabled_ui(!is_sent, |ui| fields(ui, draft));
-    let edit = MediaEdit {
-        title: draft.title.clone(),
-        category: draft.category,
-        authors: list_of(&draft.authors),
-        tags: list_of(&draft.tags),
+    let edit = draft.fields.to_edit();
+    let save = if draft.step == SaveStep::Sent {
+        Save::Sent
+    } else if would_change(&edit, media) && shared.can_edit_media() {
+        Save::On
+    } else {
+        Save::Off
     };
-    ui.add_space(space::SM);
-    let mut is_cancelled = false;
-    ui.horizontal(|ui| {
-        let can_save = would_change(&edit, media) && can_send_media_edit(shared) && !is_sent;
-        let save = Button::primary(SAVE).loading(is_sent);
-        if ui.add_enabled(can_save, save).clicked() {
-            draft.step = SaveStep::Sent;
-            intents.push(Intent::EditMedia(edit));
-        }
-        let cancel = Button::secondary(CANCEL);
-        is_cancelled = ui.add_enabled(!is_sent, cancel).clicked();
-    });
-    if draft.step == SaveStep::Refused
-        && let Some(failure) = refusal(draft, &shared.library)
-    {
-        ui.add_space(space::SM);
-        Notice::error(&failure.hint).show(ui);
+    let refusal = match draft.step {
+        SaveStep::Refused => refusal_of(draft, &shared.library),
+        SaveStep::Typing | SaveStep::Sent => None,
+    };
+    let setup = FormSetup {
+        id_salt: "library_media",
+        purpose: Purpose::Edit,
+        save,
+        refusal,
+    };
+    let pressed = media_card::media_form(ui, &mut draft.fields, setup);
+    if pressed == Some(Pressed::Save) {
+        draft.step = SaveStep::Sent;
+        intents.push(Intent::EditMedia(draft.fields.to_edit()));
     }
     reveal(ui, top, &mut draft.should_reveal);
-    is_cancelled
-}
-
-fn fields(ui: &mut egui::Ui, draft: &mut Draft) {
-    caption(ui, CATEGORY);
-    ui.horizontal(|ui| {
-        for category in Category::ALL {
-            let chip = Chip::plain(category.label()).selected(category == draft.category);
-            if ui.add(chip).clicked() {
-                draft.category = category;
-            }
-        }
-    });
-    caption(ui, AUTHORS);
-    TextInput::new(AUTHORS, &mut draft.authors)
-        .id_salt("library_media_authors")
-        .placeholder(LIST_PLACEHOLDER)
-        .show(ui);
-    caption(ui, TAGS);
-    TextInput::new(TAGS, &mut draft.tags)
-        .id_salt("library_media_tags")
-        .placeholder(LIST_PLACEHOLDER)
-        .show(ui);
-}
-
-/// The stores keep the tags in lower case, so "Options" for a stored "options" is no change. A
-/// repeated or reordered author or tag counts as a change, and saving it is harmless.
-fn would_change(edit: &MediaEdit, media: &Media) -> bool {
-    let tags: Vec<String> = edit.tags.iter().map(|tag| tag.to_lowercase()).collect();
-    edit.category != media.category || edit.authors != media.authors || tags != media.tags
+    pressed == Some(Pressed::Cancel)
 }

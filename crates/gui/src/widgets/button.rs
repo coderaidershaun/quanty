@@ -27,6 +27,7 @@ enum Variant {
 /// toolbar, `danger` removes something, and `icon_only` is a small square with an icon.
 pub struct Button<'a> {
     label: &'a str,
+    accessible_name: Option<&'a str>,
     variant: Variant,
     icon: Option<Icon>,
     size: ControlSize,
@@ -47,6 +48,7 @@ impl<'a> Button<'a> {
     fn with_variant(label: &'a str, variant: Variant) -> Self {
         Button {
             label,
+            accessible_name: None,
             variant,
             icon: None,
             size: if variant == Variant::IconOnly {
@@ -84,6 +86,13 @@ impl<'a> Button<'a> {
             icon: Some(icon),
             ..Button::with_variant(label, Variant::IconOnly)
         }
+    }
+
+    /// The accessible name and the hover text, in place of the label, for a button whose label
+    /// alone does not say what it acts on.
+    pub fn accessible_name(mut self, name: &'a str) -> Self {
+        self.accessible_name = Some(name);
+        self
     }
 
     pub fn icon(mut self, icon: Icon) -> Self {
@@ -261,7 +270,8 @@ impl egui::Widget for Button<'_> {
         };
         let (rect, response) = ui.allocate_exact_size(vec2(width, height), sense);
         let is_enabled = ui.is_enabled() && !self.is_loading;
-        response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, is_enabled, self.label));
+        let name = self.accessible_name.unwrap_or(self.label);
+        response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, is_enabled, name));
         if ui.is_rect_visible(rect) {
             let look = if self.is_loading {
                 Look::default()
@@ -270,8 +280,8 @@ impl egui::Widget for Button<'_> {
             };
             self.paint(ui, rect, look, text);
         }
-        if self.variant == Variant::IconOnly {
-            response.on_hover_text(self.label)
+        if self.variant == Variant::IconOnly || self.accessible_name.is_some() {
+            response.on_hover_text(name)
         } else {
             response
         }

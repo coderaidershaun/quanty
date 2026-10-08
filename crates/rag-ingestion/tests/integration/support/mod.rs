@@ -4,7 +4,7 @@
 mod decisions;
 mod stand_in_image_services;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -15,13 +15,13 @@ use graph::{FalkorGraph, GraphStore, MediaNode};
 use qdrant_client::qdrant::ScrollPointsBuilder;
 use qdrant_client::qdrant::point_id::PointIdOptions;
 use qdrant_client::{Payload, Qdrant};
-use rag_core::{Category, Config, MediaLabels, Tag};
-use rag_ingestion::{ChapterFolder, Item};
+use rag_core::{Config, MediaLabels, Tag};
+use rag_ingestion::Item;
 use serde_json::{Value, json};
 
 pub use decisions::{decision_for_mention, decisions_in, mentions_of};
 pub use rag_ingestion::testing::{
-    StandInEmbedder, StandInLlm, ThrowawayStores, first_axis, vector_at,
+    StandInEmbedder, StandInLlm, ThrowawayStores, chapter_at, first_axis, vector_at,
 };
 pub use stand_in_image_services::{CAPTION, LABEL, StandInImageServices};
 
@@ -48,20 +48,6 @@ pub fn intuition_chapter() -> PathBuf {
 /// Written by hand: the derivation and the formulas of the Black–Scholes model.
 pub fn in_depth_chapter() -> PathBuf {
     content_folder().join("quanty-sample-notes/chapter-2")
-}
-
-/// The converted chapter in `folder`. Its media, when the graph does not have it yet, is made
-/// with no labels.
-pub fn chapter_at(folder: &Path) -> ChapterFolder<'_> {
-    static NO_LABELS: MediaLabels = MediaLabels {
-        category: Category::Book,
-        authors: Vec::new(),
-        tags: BTreeSet::new(),
-    };
-    ChapterFolder {
-        folder,
-        new_media: &NO_LABELS,
-    }
 }
 
 /// A chart of a volatility surface, cut from a page of a book on option trading.

@@ -22,7 +22,7 @@ repos:
         pass_filenames: false
       - id: trivy
         name: trivy secrets, vulnerabilities and misconfigurations
-        entry: trivy fs --quiet --skip-version-check --scanners secret,vuln,misconfig --severity HIGH,CRITICAL --exit-code 1 --skip-dirs target,data,content,.scratch,.claude --skip-files .env .
+        entry: trivy fs --timeout 15m --quiet --skip-version-check --scanners secret,vuln,misconfig --severity HIGH,CRITICAL --exit-code 1 --skip-dirs target,data,content,.scratch,.claude --skip-files .env .
         language: system
         pass_filenames: false
       - id: cargo-fmt

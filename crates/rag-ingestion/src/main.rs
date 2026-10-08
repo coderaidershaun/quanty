@@ -10,7 +10,7 @@ use std::process::ExitCode;
 use anyhow::{Context, Result, bail};
 use clap::{CommandFactory, Parser};
 use graph::FalkorGraph;
-use ocr::{ChapterJob, MediaDocument, PageProgress};
+use ocr::{ChapterJob, DocumentName, MediaDocument, PageProgress};
 use rag_core::{
     ApiKey, Category, ClaudeCli, ConceptStore, Config, DocId, GeminiEmbedder, ItemStore,
     MediaLabels, Tag,
@@ -18,7 +18,7 @@ use rag_core::{
 use rag_ingestion::{
     ChapterFolder, ChapterPdf, ConceptExtractor, EXTRACTION_MODEL, IngestStep, IngestSummary,
     LoneImage, MediaChange, Models, Stores, TagChange, delete_document, document_name, health,
-    ingest_chapter, ingest_image, ingest_pdf, relabel_document_tags, relabel_media,
+    ingest_chapter, ingest_image, ingest_pdf, media_category, relabel_document_tags, relabel_media,
 };
 use tracing::Level;
 use tracing_subscriber::filter::Targets;
@@ -188,27 +188,8 @@ async fn ingest(path: &Path, given: &GivenPath) -> Result<()> {
 
 async fn convert_and_ingest(given: &GivenPdf) -> Result<()> {
     let pdf = given.pdf.as_path();
-    let (media_title, category) = given.media.title_and_category()?;
-    let new_media = given.labels.of(category);
+    let (media_title, flag) = given.media.title_and_category()?;
     let config = Config::load().context("could not read the settings")?;
-    // These checks come before anything is set up, so a mistake costs nothing.
-    let title = given
-        .title
-        .as_deref()
-        .filter(|title| !title.trim().is_empty())
-        .unwrap_or(media_title);
-    let name = document_name(category, title, pdf).with_context(|| {
-        format!(
-            "{} cannot be ingested as a book chapter; rename it, or give a paper or other media with --paper or --other, whose pdf can have any name",
-            pdf.display()
-        )
-    })?;
-    let document = MediaDocument {
-        media_title: media_title.to_owned(),
-        name,
-    };
-    let job = ChapterJob::new(document, pdf, &config.content_folder)
-        .with_context(|| format!("could not set up the conversion of {}", pdf.display()))?;
     if !pdf.is_file() {
         bail!("{} is not there; give the pdf to ingest", pdf.display());
     }
@@ -216,6 +197,24 @@ async fn convert_and_ingest(given: &GivenPdf) -> Result<()> {
     // fails before the first page is paid for.
     let models = set_up_models(&config)?;
     let stores = connect_stores(&config).await?;
+    // A media that the library has keeps its own category, and the category says how the PDF is
+    // named, so the graph is read first. The checks below still come before anything is paid for.
+    let category = media_category(media_title, Some(flag), &stores.graph)
+        .await
+        .context("could not read the media that the graph holds")?;
+    if category != flag {
+        eprintln!(
+            "the library has {media_title:?} in the category {category}, so this pdf is named and labelled by that category, not by --{flag}"
+        );
+    }
+    let name = name_of_the_pdf(given, category)?;
+    let new_media = given.labels.of(category);
+    let document = MediaDocument {
+        media_title: media_title.to_owned(),
+        name,
+    };
+    let job = ChapterJob::new(document, pdf, &config.content_folder)
+        .with_context(|| format!("could not set up the conversion of {}", pdf.display()))?;
     // The key goes to the converter as a value, because the settings never enter the process
     // environment.
     let jev_api_key = config.jev_api_key.as_ref().map(ApiKey::expose);
@@ -236,6 +235,36 @@ async fn convert_and_ingest(given: &GivenPdf) -> Result<()> {
     .with_context(|| format!("could not ingest {}", pdf.display()))?;
     println!("{outcome}");
     write_document_tags(outcome.doc_id(), &given.document.change(), &stores).await
+}
+
+/// Names the PDF by `category`, which `media_category` gave for its media. A refusal says "the
+/// library has" only when that category is not the one that the flag gave.
+fn name_of_the_pdf(given: &GivenPdf, category: Category) -> Result<DocumentName> {
+    let pdf = given.pdf.as_path();
+    let (media_title, flag) = given.media.title_and_category()?;
+    let title = given
+        .title
+        .as_deref()
+        .filter(|title| !title.trim().is_empty());
+    // `--title` cannot be given with `--book`, so a book here is the category the library has.
+    if category == Category::Book && title.is_some() {
+        bail!(
+            "the library has {media_title:?} in the category book, and a book's chapter is named by its file name; leave out --title"
+        );
+    }
+    document_name(category, title.unwrap_or(media_title), pdf).with_context(|| {
+        if category == flag {
+            format!(
+                "{} cannot be ingested as a book chapter; rename it to chapter-<number>-<name>.pdf, or, when the library does not have {media_title:?} yet, give --paper or --other, whose pdf can have any name",
+                pdf.display()
+            )
+        } else {
+            format!(
+                "the library has {media_title:?} in the category book, so its pdf must be named chapter-<number>-<name>.pdf; rename {}",
+                pdf.display()
+            )
+        }
+    })
 }
 
 /// The steps go to standard error, so standard output holds only the summary at the end.

@@ -19,7 +19,7 @@ pub use ingest::{
     SkippedItem, chapter_items, image_items, ingest_chapter, ingest_image,
 };
 pub use labels::{RelabelError, Relabelled, TagChange, relabel_document_tags};
-pub use media::{MediaChange, MediaRelabelled, relabel_media};
+pub use media::{MediaChange, MediaRelabelled, media_category, relabel_media};
 pub use pdf::{
     ChapterPdf, PdfError, PdfOutcome, PdfSummary, document_name, ingest_pdf,
     items_of_ingested_document,

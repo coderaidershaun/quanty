@@ -62,19 +62,7 @@ fn reveal(ui: &egui::Ui, form_top: f32, should_reveal: &mut bool) {
 /// A save on its way must not lose its form, and a draft must not be made from labels that a
 /// catalogue on its way is about to replace.
 fn can_edit(shared: &Shared) -> bool {
-    can_send_media_edit(shared)
-        && shared.library.busy.is_empty()
-        && shared.library.pending.is_none()
-}
-
-/// The app ignores an edit of a media while an ingest runs or a media is being saved or edited. A
-/// form that sent such an edit would close as if it was saved, so its Save is off then.
-// SMELL: the state ignores the edit by these same rules, written again there. A change to one must
-// be made in both, or a save is dropped with no word to the person.
-fn can_send_media_edit(shared: &Shared) -> bool {
-    !shared.ingest.is_running()
-        && !shared.library.media_save.is_saving()
-        && !shared.library.media_edit.is_saving()
+    shared.can_edit_media() && shared.library.busy.is_empty() && shared.library.pending.is_none()
 }
 
 /// Each form reads the state and not an event, so an answer that came while another tab was open

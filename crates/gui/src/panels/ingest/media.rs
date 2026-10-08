@@ -5,24 +5,18 @@
 use eframe::egui;
 
 use super::Local;
-use crate::contract::{Catalogue, Category, Intent, Loadable, Media, MediaEdit, NewMedia};
+use crate::contract::{Catalogue, Category, Failure, Intent, Loadable, Media, MediaEdit};
 use crate::panels::PanelCx;
-use crate::panels::labels::{AUTHORS, LIST_PLACEHOLDER, TAGS, caption, list_of, text_of};
-use crate::state::{MediaEditing, MediaSave, Shared};
-use crate::theme::{Icon, TextRole, Tone, color, space};
-use crate::widgets::{Badge, Button, Card, ControlSize, Dropdown, Notice, TextInput};
+use crate::panels::labels::caption;
+use crate::panels::media_card::{
+    self, FormSetup, MediaFields, Pencil, Pressed, Purpose, Save, would_change,
+};
+use crate::state::{MediaEditing, MediaSave};
+use crate::theme::{TextRole, space};
+use crate::widgets::{Card, ControlSize, Dropdown};
 
 const MEDIA: &str = "Media";
 const ADD_NEW_MEDIA: &str = "Add new media…";
-const CATEGORY: &str = "Category";
-const MEDIA_TITLE: &str = "Media title";
-const EDIT_MEDIA: &str = "Edit media";
-const SAVE_MEDIA: &str = "Save media";
-const CANCEL: &str = "Cancel";
-
-const SAVE_NOTE: &str =
-    "A saved media stays in this list with its authors and tags, also before its first PDF.";
-const EDIT_NOTE: &str = "The title names the media's folder, so it cannot change.";
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(super) enum MediaChoice {
@@ -31,12 +25,14 @@ pub(super) enum MediaChoice {
     /// A media of the library, with its title exactly as the library has it.
     Existing { title: String, category: Category },
     /// A media that is typed, which is saved before a PDF of it can be ingested.
-    New(MediaForm),
-    /// The pencil was pressed on the chosen media. `is_sent` is true once its Save was pressed.
+    New(MediaFields),
+    /// The pencil was pressed on the chosen media. `category` is the stored one and `fields` hold
+    /// what is typed, so a chip that is clicked changes neither the draft nor the check. `is_sent`
+    /// is true once its Save was pressed.
     Editing {
         title: String,
         category: Category,
-        form: MediaForm,
+        fields: MediaFields,
         is_sent: bool,
     },
 }
@@ -50,44 +46,6 @@ impl MediaChoice {
                 title, category, ..
             } => Some((title, *category)),
             MediaChoice::Unchosen | MediaChoice::New(_) => None,
-        }
-    }
-}
-
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub(super) struct MediaForm {
-    pub(super) category: Category,
-    pub(super) title: String,
-    pub(super) authors: String,
-    pub(super) tags: String,
-}
-
-impl MediaForm {
-    fn of(media: &Media) -> MediaForm {
-        MediaForm {
-            category: media.category,
-            title: media.title.clone().unwrap_or_default(),
-            authors: text_of(&media.authors),
-            tags: text_of(&media.tags),
-        }
-    }
-
-    fn to_save(&self) -> Option<NewMedia> {
-        let title = self.title.trim();
-        (!title.is_empty()).then(|| NewMedia {
-            title: title.to_owned(),
-            category: self.category,
-            authors: list_of(&self.authors),
-            tags: list_of(&self.tags),
-        })
-    }
-
-    fn to_edit(&self, title: &str) -> MediaEdit {
-        MediaEdit {
-            title: title.to_owned(),
-            category: self.category,
-            authors: list_of(&self.authors),
-            tags: list_of(&self.tags),
         }
     }
 }
@@ -137,12 +95,16 @@ pub(super) fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
             list(ui, local, &offers);
             let chosen = place_of_chosen(&local.media, &offers).and_then(|place| offers.get(place));
             if let Some(chosen) = chosen {
-                let is_pencil_pressed = card(ui, chosen);
-                if is_pencil_pressed {
+                let pencil = if cx.shared.can_edit_media() {
+                    Pencil::On
+                } else {
+                    Pencil::Off
+                };
+                if card(ui, chosen, pencil) {
                     local.media = MediaChoice::Editing {
                         title: chosen.title.clone().unwrap_or_default(),
                         category: chosen.category,
-                        form: MediaForm::of(chosen),
+                        fields: MediaFields::of(chosen),
                         is_sent: false,
                     };
                 }
@@ -183,164 +145,120 @@ fn list(ui: &mut egui::Ui, local: &mut Local, offers: &[&Media]) {
         .show(ui);
     match picked.map(|index| offers.get(index)) {
         Some(Some(media)) => local.choose(media),
-        Some(None) => local.media = MediaChoice::New(MediaForm::default()),
+        Some(None) => local.media = MediaChoice::New(MediaFields::default()),
         None => {}
     }
 }
 
 /// The labels of a chosen media are fixed here: they come from the library, and only the pencil
 /// changes them. Returns true when the pencil was pressed.
-fn card(ui: &mut egui::Ui, media: &Media) -> bool {
+fn card(ui: &mut egui::Ui, media: &Media, pencil: Pencil) -> bool {
     ui.add_space(space::SM);
     let title = media.title.as_deref().unwrap_or_default();
     let shown = Card::new().show(ui, |ui| {
-        let mut is_pressed = false;
-        ui.horizontal(|ui| {
-            ui.label(TextRole::BodyStrong.rich(title));
-            ui.add(Badge::new(media.category.label()).tone(Tone::Blue));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                is_pressed = ui.add(Button::icon_only(Icon::EDIT, EDIT_MEDIA)).clicked();
-            });
-        });
-        if !media.authors.is_empty() {
-            let authors = media.authors.join(", ");
-            ui.label(TextRole::Small.rich(authors).color(color::TEXT_MUTED));
-        }
-        if !media.tags.is_empty() {
-            ui.horizontal_wrapped(|ui| {
-                for tag in &media.tags {
-                    ui.add(Badge::new(tag));
-                }
-            });
-        }
+        let is_pressed = media_card::title_line(ui, title, media.category, pencil);
+        media_card::labels_line(ui, media);
         is_pressed
     });
     shown.inner
 }
 
-/// The title box is off for an edit: the title names the media's folder and cannot change.
-fn fields(ui: &mut egui::Ui, form: &mut MediaForm, is_title_fixed: bool) {
-    caption(ui, CATEGORY);
-    let rows: Vec<&str> = Category::ALL
-        .iter()
-        .map(|category| category.label())
-        .collect();
-    let chosen = Category::ALL
-        .iter()
-        .position(|category| *category == form.category);
-    let picked = Dropdown::new(CATEGORY, &rows)
-        .id_salt("ingest_category")
-        .selected(chosen)
-        .size(ControlSize::Medium)
-        .width(ui.available_width())
-        .show(ui);
-    if let Some(category) = picked.and_then(|index| Category::ALL.get(index)) {
-        form.category = *category;
-    }
-    caption(ui, MEDIA_TITLE);
-    ui.add_enabled_ui(!is_title_fixed, |ui| {
-        TextInput::new(MEDIA_TITLE, &mut form.title)
-            .id_salt("ingest_media_title")
-            .placeholder("The new media's title")
-            .show(ui);
-    });
-    caption(ui, AUTHORS);
-    TextInput::new(AUTHORS, &mut form.authors)
-        .id_salt("ingest_authors")
-        .placeholder(LIST_PLACEHOLDER)
-        .show(ui);
-    caption(ui, TAGS);
-    TextInput::new(TAGS, &mut form.tags)
-        .id_salt("ingest_media_tags")
-        .placeholder(LIST_PLACEHOLDER)
-        .show(ui);
-}
-
 fn new_media(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
-    let MediaChoice::New(form) = &mut local.media else {
+    let MediaChoice::New(fields) = &mut local.media else {
         return;
     };
-    fields(ui, form, false);
-    let save = &cx.shared.library.media_save;
-    let media = form.to_save();
-    ui.add_space(space::MD);
-    let mut is_cancelled = false;
-    ui.horizontal(|ui| {
-        let button = Button::secondary(SAVE_MEDIA).loading(save.is_saving());
-        if ui.add_enabled(media.is_some(), button).clicked()
-            && let Some(media) = media.clone()
-        {
-            cx.intents.push(Intent::SaveMedia(media));
-        }
-        is_cancelled = ui
-            .add_enabled(!save.is_saving(), Button::secondary(CANCEL))
-            .clicked();
-        ui.add(egui::Label::new(TextRole::Small.rich(SAVE_NOTE)).truncate());
-    });
+    let media_save = &cx.shared.library.media_save;
+    let typed = fields.to_new();
     // A person who changes the title no longer sees the refusal of the old one.
-    if let MediaSave::Failed {
-        media: failed,
-        failure,
-    } = save
-        && media.is_some_and(|media| media.title == failed.title)
-    {
-        ui.add_space(space::SM);
-        Notice::error(&failure.hint).show(ui);
-    }
-    // The chosen file and the fields of the PDF stay: they were not typed for the new media.
-    if is_cancelled {
-        local.media = MediaChoice::Unchosen;
+    let typed_title = typed.as_ref().map(|typed| typed.title.as_str());
+    let refusal = match media_save {
+        MediaSave::Failed { media, failure } if typed_title == Some(&media.title) => Some(failure),
+        _ => None,
+    };
+    let save = if media_save.is_saving() {
+        Save::Sent
+    } else if typed.is_some() {
+        Save::On
+    } else {
+        Save::Off
+    };
+    let setup = FormSetup {
+        id_salt: "ingest_new_media",
+        purpose: Purpose::New,
+        save,
+        refusal,
+    };
+    match media_card::media_form(ui, fields, setup) {
+        Some(Pressed::Save) => {
+            if let Some(media) = fields.to_new() {
+                cx.intents.push(Intent::SaveMedia(media));
+            }
+        }
+        // The chosen file and the fields of the PDF stay: they were not typed for the new media.
+        Some(Pressed::Cancel) => local.media = MediaChoice::Unchosen,
+        None => {}
     }
 }
 
-/// An edit rewrites every document of the media, so the state refuses it while an ingest runs
-/// and while a media is saved or edited. Save is off then, so a press is never dropped.
-fn can_edit(shared: &Shared) -> bool {
-    !shared.ingest.is_running()
-        && !shared.library.media_save.is_saving()
-        && !shared.library.media_edit.is_saving()
+/// The refusal shows while the form still holds the edit that was refused.
+fn refusal_of<'a>(media_edit: &'a MediaEditing, edit: &MediaEdit) -> Option<&'a Failure> {
+    match media_edit {
+        MediaEditing::Failed {
+            edit: refused,
+            failure,
+        } if refused == edit => Some(failure),
+        _ => None,
+    }
 }
 
 fn edited_media(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     let MediaChoice::Editing {
         title,
         category,
-        form,
+        fields,
         is_sent,
     } = &mut local.media
     else {
         return;
     };
-    fields(ui, form, true);
-    let edit = form.to_edit(title);
-    let media_edit = &cx.shared.library.media_edit;
-    ui.add_space(space::MD);
-    let mut is_cancelled = false;
-    ui.horizontal(|ui| {
-        let button = Button::secondary(SAVE_MEDIA).loading(*is_sent);
-        if ui.add_enabled(can_edit(cx.shared), button).clicked() {
-            *is_sent = true;
-            cx.intents.push(Intent::EditMedia(edit.clone()));
-        }
-        is_cancelled = ui
-            .add_enabled(!media_edit.is_saving(), Button::secondary(CANCEL))
-            .clicked();
-        ui.add(egui::Label::new(TextRole::Small.rich(EDIT_NOTE)).truncate());
-    });
-    // The refusal shows while the form still holds the edit that was refused.
-    if let MediaEditing::Failed {
-        edit: refused,
-        failure,
-    } = media_edit
-        && *refused == edit
-    {
-        ui.add_space(space::SM);
-        Notice::error(&failure.hint).show(ui);
-    }
-    if is_cancelled {
-        local.media = MediaChoice::Existing {
-            title: std::mem::take(title),
-            category: *category,
+    let library = &cx.shared.library;
+    let edit = fields.to_edit();
+    let stored = library
+        .catalogue
+        .ready()
+        .and_then(|catalogue| titled(catalogue, title));
+    let can_save =
+        stored.is_some_and(|stored| would_change(&edit, stored)) && cx.shared.can_edit_media();
+    let save = if *is_sent {
+        Save::Sent
+    } else if can_save {
+        Save::On
+    } else {
+        Save::Off
+    };
+    let refusal = refusal_of(&library.media_edit, &edit);
+    ui.add_space(space::SM);
+    let shown = Card::new().show(ui, |ui| {
+        media_card::title_line(ui, title, *category, Pencil::Hidden);
+        let setup = FormSetup {
+            id_salt: "ingest_media",
+            purpose: Purpose::Edit,
+            save,
+            refusal,
         };
+        media_card::media_form(ui, fields, setup)
+    });
+    match shown.inner {
+        Some(Pressed::Save) => {
+            *is_sent = true;
+            cx.intents.push(Intent::EditMedia(fields.to_edit()));
+        }
+        Some(Pressed::Cancel) => {
+            local.media = MediaChoice::Existing {
+                title: std::mem::take(title),
+                category: *category,
+            };
+        }
+        None => {}
     }
 }

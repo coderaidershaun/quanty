@@ -23,7 +23,8 @@ pub use embedder::{
 pub use item::{DocId, ItemId, ItemKind, ItemPayload, ParseDocIdError, UnknownItemKind};
 pub use item_store::{ItemFilter, ItemHit, ItemPoint, ItemStore};
 pub use labels::{
-    Category, DocumentLabels, EmptyTag, LabelFilter, MediaLabels, Tag, UnknownCategory, author_list,
+    Category, DocumentLabels, EmptyTag, LabelFilter, MediaLabels, Tag, UnknownCategory,
+    author_list, is_same_name,
 };
 pub use llm::{Llm, LlmError, Question};
 pub use qdrant::StoreError;

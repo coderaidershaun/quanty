@@ -8,7 +8,9 @@ mod work;
 
 use std::sync::Arc;
 
-use rag_core::Config;
+use graph::FalkorGraph;
+use rag_core::{Category, Config};
+use rag_ingestion::media_category;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -28,7 +30,9 @@ pub(crate) struct IngestPdfArgs {
     #[serde(alias = "book")]
     media: String,
     /// `book` (the default), `paper` or `other`. A book's PDF must be named
-    /// `chapter-<number>-<name>.pdf`; a paper or other PDF can have any name.
+    /// `chapter-<number>-<name>.pdf`; a paper or other PDF can have any name. Used only when the
+    /// library does not have this media yet: a stored media keeps its own category, which says
+    /// how the PDF is named.
     category: Option<String>,
     /// The authors of the media. Used only when the library does not have this media yet.
     authors: Option<Vec<String>>,
@@ -38,7 +42,9 @@ pub(crate) struct IngestPdfArgs {
     /// Tags of this PDF only.
     document_tags: Option<Vec<String>>,
     /// The title of this document, for a paper or other media. It defaults to the title of the
-    /// media. Not for a book, whose chapter is named by its file name.
+    /// media. Not for a book, whose chapter is named by its file name. Whether the media is a
+    /// book is up to the library when it has this media already: a stored media keeps its own
+    /// category, which says how the PDF is named.
     document_title: Option<String>,
     /// The absolute path of the PDF on the machine the server runs on. A book's file must be
     /// named `chapter-<number>-<name>.pdf`.
@@ -85,8 +91,8 @@ impl<S: Services> Ingest<S> {
     /// reads, so that the one place that words a tool error is not here.
     ///
     /// # Errors
-    /// A PDF that is refused, an ingest that is already running, or a job that failed before
-    /// the paid work began.
+    /// A PDF that is refused, a graph that cannot say which media the library has, an ingest that
+    /// is already running, or a job that failed before the paid work began.
     pub(crate) async fn start(
         &self,
         args: IngestPdfArgs,
@@ -99,8 +105,15 @@ impl<S: Services> Ingest<S> {
         let checked = tokio::task::spawn_blocking(move || pdf::check(args, &config, max_pdf_bytes))
             .await
             .map_err(PdfIngestError::Stopped)??;
-        let started = self.jobs.start(&checked.media, &checked.file_name)?;
-        self.spawn(checked, started.report, error_text);
+        // A store that is down is reported like a failed job, because sending the same PDF again
+        // goes on from there.
+        let category = self
+            .category_of(&checked)
+            .await
+            .map_err(|error| PdfIngestError::Failed(format!("{} {GO_ON}", error_text(error))))?;
+        let ready = checked.named(category, &self.config)?;
+        let started = self.jobs.start(&ready.media, &ready.file_name)?;
+        self.spawn(ready, started.report, error_text);
         let mut watcher = started.watcher;
         let report = watcher
             .wait_for(|report| report.stage.is_some() || report.state != JobState::Running)
@@ -111,6 +124,15 @@ impl<S: Services> Ingest<S> {
             JobState::Failed => Err(PdfIngestError::Failed(report.error.unwrap_or_default())),
             JobState::Running | JobState::Done | JobState::AlreadyIngested => Ok(report),
         }
+    }
+
+    /// The category that names the PDF: the one the library has for its media, else the one the
+    /// agent gave, else a book.
+    async fn category_of(&self, checked: &pdf::CheckedPdf) -> Result<Category, PdfIngestError> {
+        let graph = FalkorGraph::connect(&self.config).await?;
+        media_category(&checked.media, checked.category, &graph)
+            .await
+            .map_err(PdfIngestError::ReadMedia)
     }
 
     /// The latest report of a job.
@@ -130,14 +152,14 @@ impl<S: Services> Ingest<S> {
     /// the report of the job would say `running` for ever.
     fn spawn(
         &self,
-        checked: pdf::CheckedPdf,
+        ready: pdf::ReadyPdf,
         report: tokio::sync::watch::Sender<IngestReport>,
         error_text: fn(PdfIngestError) -> String,
     ) {
         let work = Work {
             services: Arc::clone(&self.services),
             config: self.config.clone(),
-            pdf: checked,
+            pdf: ready,
             report: report.clone(),
         };
         let running = tokio::spawn(async move { work.run().await });

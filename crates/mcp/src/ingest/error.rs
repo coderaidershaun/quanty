@@ -43,7 +43,7 @@ pub(crate) enum PdfIngestError {
     Tag(#[source] EmptyTag),
 
     #[error(
-        "`document_title` is for a paper or other media, and a book's chapter is named by its file name; leave `document_title` out, or give a `category` of paper or other"
+        "`document_title` is for a paper or other media, and this media is a book, whose chapter is named by its file name; leave `document_title` out, or, when the library does not have this media yet, give a `category` of paper or other; a media the library has keeps its own category"
     )]
     TitleForABook,
 
@@ -93,7 +93,7 @@ pub(crate) enum PdfIngestError {
     Media(#[source] ContentError),
 
     #[error(
-        "the file name is not that of a book chapter; copy or rename the file to chapter-<number>-<name>.pdf, such as chapter-1-financial-contracts.pdf, or give such a `file_name` with `pdf_base64`, or give a `category` of paper or other, whose PDF can have any name"
+        "this media is a book, and the file name is not that of a book chapter; copy or rename the file to chapter-<number>-<name>.pdf, such as chapter-1-financial-contracts.pdf, or give such a `file_name` with `pdf_base64`, or, when the library does not have this media yet, give a `category` of paper or other, whose PDF can have any name; a media the library has keeps its own category"
     )]
     ChapterFileName(#[source] ContentError),
 
@@ -142,6 +142,9 @@ pub(crate) enum PdfIngestError {
 
     #[error("could not connect to the graph")]
     Graph(#[from] GraphError),
+
+    #[error("could not read from the graph which media the library has")]
+    ReadMedia(#[source] GraphError),
 
     #[error("could not ingest the PDF")]
     Pdf(#[source] Box<PdfError>),

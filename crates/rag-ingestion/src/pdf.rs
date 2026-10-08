@@ -148,15 +148,17 @@ where
     })))
 }
 
-/// How a PDF of a media of that category is named. A book's PDF must be named
-/// `chapter-<number>-<name>.pdf`, and `title` is not used. A paper or another media takes `title`:
-/// the caller gives the document's own title when there is one, and else the media's title.
+/// How a PDF of a media of that category is named. `category` must be the one that
+/// [`crate::media_category`] gives, so that a media the library has keeps its own. A book's PDF
+/// must be named `chapter-<number>-<name>.pdf`, and `title` is not used. A paper or another media
+/// takes `title`: the caller gives the document's own title when there is one, and else the
+/// media's title.
 ///
 /// # Errors
 /// [`ContentError::BadFileName`] when the PDF of a book is named in another way.
-// SMELL: the caller gives the category, and it can differ from the category of a media that the
-// library already has. The document is then named by one category and labelled with the other,
-// and nothing checks that the two agree.
+// SMELL: a caller must pass the category that `media_category` gives, and nothing makes it do so.
+// One that passes another names the document by one category and labels it with the stored one.
+// The caller in the `rag-ingest` command has no test.
 pub fn document_name(
     category: Category,
     title: &str,

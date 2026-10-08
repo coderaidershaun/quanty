@@ -4,12 +4,10 @@
 use eframe::egui;
 
 use crate::contract::{ChapterLabel, DocId, DocumentName, Loadable, PageView};
+use crate::panels::media_card::NO_MEDIA;
 use crate::state::Shared;
 use crate::widgets::Dropdown;
 
-/// SMELL: the Library page keeps its own copy of these words for a media with no title, so a
-/// change here must also be made there.
-const NO_MEDIA: &str = "No media";
 const CHOOSE_MEDIA: &str = "Choose a media";
 const CHOOSE_DOCUMENT: &str = "Choose a document";
 

@@ -8,6 +8,7 @@ pub mod follow_up;
 pub mod ingest;
 mod labels;
 pub mod library;
+mod media_card;
 pub mod notices;
 pub mod retrieval_path;
 mod seam;

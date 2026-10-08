@@ -108,7 +108,7 @@ const HEALTHY: Script = Script {
 static SCENES: [Scene; 20] = [
     Scene {
         name: "idle",
-        about: "Healthy, with the three sample chapters and nothing asked.",
+        about: "Healthy, with the sample library and nothing asked.",
         rests: true,
         script: Script {
             opening: Opening::Nothing,
@@ -228,7 +228,7 @@ static SCENES: [Scene; 20] = [
     },
     Scene {
         name: "source-missing",
-        about: "The results are shown and the chapter's files cannot be found.",
+        about: "The results are shown and the document's files cannot be found.",
         rests: true,
         script: Script {
             pages: Pages::SourceMissing,

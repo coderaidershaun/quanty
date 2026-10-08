@@ -234,8 +234,8 @@ impl DocumentTagsEdit {
     }
 }
 
-// SMELL: the ingestion crate writes this rule again, and the contract may not name it. A change to
-// one must be made in both.
+// SMELL: the core crate writes this rule again as `rag_core::is_same_name`, and the contract may not
+// name it. A change to one must be made in both.
 pub fn is_same_title(one: &str, other: &str) -> bool {
     one.trim().to_lowercase() == other.trim().to_lowercase()
 }

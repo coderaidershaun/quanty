@@ -1,6 +1,8 @@
 //! Checks the one PDF that an agent sent, before anything is written, stored or paid for: where it
-//! comes from, how big it is, that it is a PDF, and where an uploaded one is saved.
+//! comes from, how big it is, that it is a PDF, where an uploaded one is saved, and how it is
+//! named once the category of its media is known.
 
+use std::collections::BTreeSet;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::Read;
@@ -21,7 +23,24 @@ const PDF_START: &[u8] = b"%PDF-";
 /// an underscore, so no upload can land in the folder of a media.
 const UPLOADS_FOLDER: &str = "_uploads";
 
+/// A PDF whose arguments and file passed every check. It is not named yet: that needs the
+/// category of its media, which the library may already have.
 pub(super) struct CheckedPdf {
+    pdf_path: PathBuf,
+    pub(super) media: String,
+    /// The category the agent gave. It makes a new media only.
+    pub(super) category: Option<Category>,
+    document_title: Option<String>,
+    file_name: String,
+    upload: Option<Upload>,
+    /// The authors and the tags that the media is made with when the library does not have it yet.
+    authors: Vec<String>,
+    media_tags: BTreeSet<Tag>,
+    document_tags: TagChange,
+}
+
+/// A checked PDF with its name, ready for a job.
+pub(super) struct ReadyPdf {
     pub(super) chapter: ChapterJob,
     pub(super) media: String,
     pub(super) file_name: String,
@@ -54,23 +73,16 @@ pub(super) fn check(
     let category = non_blank(args.category)
         .map(|category| category.parse::<Category>())
         .transpose()
-        .map_err(PdfIngestError::Category)?
-        .unwrap_or_default();
+        .map_err(PdfIngestError::Category)?;
     // The media is checked here, so that the checks below can fail for the document only.
     let media_folder = media_folder_name(&media).map_err(PdfIngestError::Media)?;
     let document_title = non_blank(args.document_title);
-    if category == Category::Book && document_title.is_some() {
-        return Err(PdfIngestError::TitleForABook);
-    }
     let path = non_blank(args.path);
     // The base64 text can be megabytes long, so it is not trimmed or copied here.
     let pdf_base64 = args.pdf_base64.filter(|text| !text.trim().is_empty());
     let file_name = non_blank(args.file_name);
-    let new_media = MediaLabels {
-        category,
-        authors: author_list(args.authors.unwrap_or_default()),
-        tags: tags_of(args.tags)?.into_iter().collect(),
-    };
+    let authors = author_list(args.authors.unwrap_or_default());
+    let media_tags = tags_of(args.tags)?.into_iter().collect();
     let document_tags = TagChange {
         add: tags_of(args.document_tags)?,
         remove: Vec::new(),
@@ -101,23 +113,57 @@ pub(super) fn check(
             (save_to, name, Some(upload))
         }
     };
-    let title = document_title.as_deref().unwrap_or(&media);
-    let name =
-        document_name(category, title, &pdf_path).map_err(PdfIngestError::ChapterFileName)?;
-    let document = MediaDocument {
-        media_title: media.clone(),
-        name,
-    };
-    let chapter = ChapterJob::new(document, &pdf_path, &config.content_folder)
-        .map_err(PdfIngestError::DocumentTitle)?;
     Ok(CheckedPdf {
-        chapter,
+        pdf_path,
         media,
+        category,
+        document_title,
         file_name,
         upload,
-        new_media,
+        authors,
+        media_tags,
         document_tags,
     })
+}
+
+impl CheckedPdf {
+    /// Names the PDF by `category`, which must be the category that
+    /// [`rag_ingestion::media_category`] gives for its media. It writes nothing.
+    ///
+    /// # Errors
+    /// - [`PdfIngestError::TitleForABook`] when a document title was given for a book's PDF
+    /// - [`PdfIngestError::ChapterFileName`] when a book's PDF is not named as a chapter
+    /// - [`PdfIngestError::DocumentTitle`] when the document title cannot name a folder
+    pub(super) fn named(
+        self,
+        category: Category,
+        config: &Config,
+    ) -> Result<ReadyPdf, PdfIngestError> {
+        if category == Category::Book && self.document_title.is_some() {
+            return Err(PdfIngestError::TitleForABook);
+        }
+        let title = self.document_title.as_deref().unwrap_or(&self.media);
+        let name = document_name(category, title, &self.pdf_path)
+            .map_err(PdfIngestError::ChapterFileName)?;
+        let document = MediaDocument {
+            media_title: self.media.clone(),
+            name,
+        };
+        let chapter = ChapterJob::new(document, &self.pdf_path, &config.content_folder)
+            .map_err(PdfIngestError::DocumentTitle)?;
+        Ok(ReadyPdf {
+            chapter,
+            media: self.media,
+            file_name: self.file_name,
+            upload: self.upload,
+            new_media: MediaLabels {
+                category,
+                authors: self.authors,
+                tags: self.media_tags,
+            },
+            document_tags: self.document_tags,
+        })
+    }
 }
 
 fn tags_of(texts: Option<Vec<String>>) -> Result<Vec<Tag>, PdfIngestError> {

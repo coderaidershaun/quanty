@@ -1,6 +1,6 @@
 # The MCP server
 
-`quanty-mcp` lets an AI agent use quanty: search the stored books, read the pages they came from, and send a chapter PDF to be ingested. It speaks the [Model Context Protocol](https://modelcontextprotocol.io), over standard input and output (the default) or over HTTP on this machine.
+`quanty-mcp` lets an AI agent use quanty: search the stored library of books, papers and other media, read the pages of its documents, and send a PDF to be ingested. It speaks the [Model Context Protocol](https://modelcontextprotocol.io), over standard input and output (the default) or over HTTP on this machine.
 
 ## 1. Before you start it
 
@@ -38,10 +38,10 @@ Seven tools. A tool that costs money says so in its description, and so does thi
 | --- | --- | --- |
 | `search` | The stored items (text chunks, formulas, figures, tables) nearest to a question | A small Gemini call |
 | `answer` | An answer written from what `search` finds, with its sources | A Gemini call and your Claude usage; a minute or two |
-| `list_documents` | Every stored document with its book, author, tags and chapter | Nothing |
-| `read_page` | The pieces of one page of a chapter, in reading order | Nothing, and it needs no store |
+| `list_documents` | Every stored document with its media, category, authors, tags and chapter | Nothing |
+| `read_page` | The pieces of one page of a document, in reading order | Nothing, and it needs no store |
 | `health` | Whether Qdrant, FalkorDB and the `claude` sign-in are ready | Nothing |
-| `ingest_pdf` | Converts one chapter PDF and stores it | **Paid and slow**: Claude, Jev and Gemini; minutes for a chapter |
+| `ingest_pdf` | Converts one PDF of a media and stores it | **Paid and slow**: Claude, Jev and Gemini; minutes for each PDF |
 | `ingest_status` | How an ingest job is going | Nothing |
 
 An optional argument can be left out or set to `null`. An optional text that is blank counts as left out.
@@ -58,22 +58,24 @@ First calls to try, in this order:
 | --- | --- |
 | `question` | Required. The question, in plain words |
 | `kind` | `chunk`, `formula`, `figure` or `table` |
-| `book`, `author` | Only documents of this book or author, whatever the capitals |
-| `tags` | Only documents that have every one of these tags |
+| `media` | Only documents of this media, whatever the capitals. The older name `book` is understood too |
+| `author` | Only documents by this author, whatever the capitals. It matches any author of a document |
+| `category` | Only documents of this category: `book`, `paper` or `other` |
+| `tags` | Only documents that have every one of these tags, each as a tag of the media or as an own tag of the document |
 | `limit` | Keep only the first `limit` results (from 1) |
 | `explain` | `true` adds `trace`, which says how the search got to the results |
 
-Gives `results`, best first. Each result has `number`, `document_id`, `document` (title), `book`, `author`, `tags`, `page` (the place in the chapter, from 1), `printed_page` (the number printed in the book: cite with it), `kind`, `label`, `score`, `reason`, `text` and, for a figure, `picture` (the path of its picture on this machine). `reason` is `{"why": "nearest"}`, `{"why": "concept", "concept": …}` or `{"why": "cited", "by": …, "label": …}`. With `explain`, `trace` has `documents_searched`, `seeds`, `question_concepts`, `seed_concepts`, `related_concepts`, `candidates`, `ranked`, `capped` and `kept`. Give the `document_id` and `page` of a result to `read_page` to read around it.
+Gives `results`, best first. Each result has `number`, `document_id`, `document` (its title: the book and the chapter, or a title of its own), `media` (the title of its media; a picture that stands alone has none), `category` (left out when there is no media), `authors`, `media_tags` (the tags of the media), `tags` (the document's own tags), `page` (the place of the page in the document, from 1), `printed_page` (the number printed on the page: cite with it), `kind`, `label`, `score`, `reason`, `text` and, for a figure, `picture` (the path of its picture on this machine). `reason` is `{"why": "nearest"}`, `{"why": "concept", "concept": …}` or `{"why": "cited", "by": …, "label": …}`. With `explain`, `trace` has `documents_searched`, `seeds`, `question_concepts`, `seed_concepts`, `related_concepts`, `candidates`, `ranked`, `capped` and `kept`. Give the `document_id` and `page` of a result to `read_page` to read around it.
 
 ### `answer`
 
-The arguments `question`, `kind`, `book`, `author` and `tags` of `search`. Gives `answered` (false when nothing was found, and then Claude is not asked, or when what was found does not answer the question), `title`, `claims` (each with `heading`, `text` and the `sources` it rests on, by number), `sources` (each item that a claim names, once: `number` and the fields of a search result without `score` and `reason`) and `follow_ups`. The sign-in of `claude` and `ANTHROPIC_API_KEY` are checked before the search, which costs nothing, so nothing is embedded when `claude` cannot answer. An agent that can write its own answer should call `search`.
+The arguments `question`, `kind`, `media`, `author`, `category` and `tags` of `search`. Gives `answered` (false when nothing was found, and then Claude is not asked, or when what was found does not answer the question), `title`, `claims` (each with `heading`, `text` and the `sources` it rests on, by number), `sources` (each item that a claim names, once: `number` and the fields of a search result without `score` and `reason`) and `follow_ups`. The sign-in of `claude` and `ANTHROPIC_API_KEY` are checked before the search, which costs nothing, so nothing is embedded when `claude` cannot answer. An agent that can write its own answer should call `search`.
 
 ### `list_documents`
 
-No arguments. Gives `documents`, sorted by title: `document_id`, `title`, `book`, `author`, `tags` and, when the converted chapter is under the content folder, `chapter_number`, `chapter_name` and `pages`.
+No arguments. Gives `documents`, sorted by title: `document_id`, `title`, `media` and `category` (left out for a picture that stands alone, which belongs to no media), `authors`, `media_tags` (the tags of the media), `tags` (the document's own tags) and, when the converted document is under the content folder, `pages`, with `chapter_number` and `chapter_name` for a book's chapter.
 
-It also gives `unreadable_chapters`: one line for each chapter under the content folder whose `chapter.json` cannot be read, with the file that is at fault. The list is always there, and it is empty when every chapter can be read. The document of such a chapter shows no `chapter_number`, `chapter_name` or `pages`, and `read_page` cannot read it.
+It also gives `unreadable_chapters`: one line for each converted document under the content folder whose `chapter.json` cannot be read, with the file that is at fault. The list is always there, and it is empty when every one can be read. Such a document shows no `chapter_number`, `chapter_name` or `pages`, and `read_page` cannot read it.
 
 ### `read_page`
 
@@ -82,7 +84,7 @@ It also gives `unreadable_chapters`: one line for each chapter under the content
 | `document_id` | Required. From a search result or `list_documents` |
 | `page` | Required. The `page` of a search result (from 1), not the printed number |
 
-Gives `document_id`, `book`, `chapter_number`, `chapter_name`, `page`, `pages`, `printed_page`, `page_image` (the path of the picture of the whole page) and `pieces`: for each, `number`, `kind` (`heading`, `text`, `formula`, `figure`, `table` or `footnote`), `section` (the headings it sits under, outermost first), `label`, `content` and, for a figure, `picture`.
+Gives `document_id`, `media` (the title of its media), `chapter_number` and `chapter_name` (for a book's chapter), `document_title` (for a document with a title of its own, such as a paper's), `page`, `pages`, `printed_page`, `page_image` (the path of the picture of the whole page) and `pieces`: for each, `number`, `kind` (`heading`, `text`, `formula`, `figure`, `table` or `footnote`), `section` (the headings it sits under, outermost first), `label`, `content` and, for a figure, `picture`.
 
 ### `health`
 
@@ -94,7 +96,18 @@ See the next part.
 
 ## 4. Sending a PDF
 
-`ingest_pdf` takes `book` (required: the title of the book), the PDF, and optionally `author` (it replaces the author that the document has) and `tags` (they are added to the tags that the document has).
+`ingest_pdf` takes the media, the PDF and labels:
+
+| Argument | |
+| --- | --- |
+| `media` | Required. The title of the media the PDF belongs to, such as "Option Volatility and Pricing". The older name `book` is understood too |
+| `category` | `book` (the default), `paper` or `other`. Used only when the library does not have this media yet: a stored media keeps its own category, which says how the PDF is named |
+| `authors` | The authors of the media, in order. Used only when the library does not have this media yet |
+| `tags` | The tags of the media. Used only when the library does not have this media yet |
+| `document_tags` | The tags of this PDF only. They are added to the tags that the document has |
+| `document_title` | The title of the document, for a paper or another media. It defaults to the title of the media. Not for a book, whose chapter is named by its file name |
+
+An ingest never changes a stored media: to change its labels, use `rag-ingest media` or the Library tab of the desktop app. The media is found by its title whatever its capitals and the space at its ends.
 
 The PDF is sent one of two ways. Give exactly one of them.
 
@@ -105,22 +118,25 @@ The PDF is sent one of two ways. Give exactly one of them.
 
 Rules:
 
-- The file is named `chapter-<number>-<name>.pdf`, such as `chapter-1-financial-contracts.pdf`. A file with another name must be copied or renamed first.
+- The media is a book when the library has it as a book, and a new media is a book when `category` is left out or is `book`. The PDF of a book is named `chapter-<number>-<name>.pdf`, such as `chapter-1-financial-contracts.pdf`: the chapter comes from the file name. A book's file with another name must be copied or renamed first, and a book takes no `document_title`.
+- The PDF of a paper or another media can have any name.
 - It must be an existing file that starts with `%PDF-` and is at most 50 MiB.
-- An upload (`pdf_base64`) is saved under the content folder, in `_uploads/<book folder>/<file name>`, and never at a path that the caller chooses. A `file_name` with a folder in it is refused.
+- An upload (`pdf_base64`) is saved under the content folder, in `_uploads/<media folder>/<file name>`, and never at a path that the caller chooses. A `file_name` with a folder in it is refused.
+- The converted pages are saved under the content folder, in `<media folder>/chapter-<number>/` for a book's chapter and in `<media folder>/<document title folder>/` for any other document. The folders are made from the titles: lower case, with one dash for each run of characters that are not letters or digits.
 
-The call does not wait for the whole ingest, which takes minutes. It answers once the paid work has begun, with a `job_id` and `state: "running"`. Then the agent asks `ingest_status` with that `job_id` every 20 to 30 seconds until `state` is not `running`. Both tools give the same report: `job_id`, `state`, `book`, `file` (the file name) and, by `state`:
+The call does not wait for the whole ingest, which takes minutes. It answers once the paid work has begun, with a `job_id` and `state: "running"`. Then the agent asks `ingest_status` with that `job_id` every 20 to 30 seconds until `state` is not `running`. Both tools give the same report: `job_id`, `state`, `media` (the title of the media), `file` (the file name) and, by `state`:
 
 | `state` | Meaning |
 | --- | --- |
-| `running` | Going on. `stage` is `converting` (the pages are read: the slow part) or `ingesting`. With no `stage` the stores are being checked |
+| `running` | Going on. `stage` is `converting` (the pages are read: the slow part) or `ingesting` (the converted document is embedded, stored and searched for concepts). With no `stage` the stores are being checked |
 | `done` | Finished. `document_id`, `items` and `summary` (what `rag-ingest pdf` prints) are there |
-| `already_ingested` | Both stores already held this PDF, so nothing was converted or embedded, and it costs nothing. `document_id` and `items` are there. An `author` and `tags` that were sent are still written |
+| `already_ingested` | Both stores already held this PDF, so nothing was converted or embedded, and it costs nothing. `document_id` and `items` are there. The `document_tags` that were sent are still written |
 | `failed` | Stopped. `error` says why. Send the same PDF again to go on: converted pages and kept answers are not paid for twice |
 
 Good to know:
 
-- One ingest runs at a time in a server. A second `ingest_pdf` while one runs is refused, and the refusal names the running `job_id`. This holds inside one server only: do not send the same chapter through two servers, or beside `rag-ingest pdf`, at the same time.
+- One ingest runs at a time in a server. A second `ingest_pdf` while one runs is refused, and the refusal names the running `job_id`. This holds inside one server only: do not send the same PDF through two servers, or beside `rag-ingest pdf`, at the same time.
+- The graph is read before the PDF is named, because a stored media's category says how the PDF is named. So a store that is down shows before a file name that breaks the rule for a book, as a tool error whose text names the store, says to call `health`, and says to send the same PDF again.
 - A store that is down, a missing Gemini key, and a PDF that is already ingested show in the answer of `ingest_pdf` itself. A missing Jev key, `ANTHROPIC_API_KEY` being set, Poppler not installed, and a file that starts with `%PDF-` but is not a PDF are found only after the paid work has begun. So they show in `ingest_status` as `failed`, or, when they are found at once, in the answer of `ingest_pdf` as a tool error with the same text.
 - Jobs live in the memory of the server. Over stdio a running job stops when the client closes the server, and a restarted server forgets its job ids. The server keeps only its last 100 jobs: when it holds 100 and a new one starts, the oldest, which has ended, is forgotten. Send the PDF again: a PDF that is ingested is not ingested twice, and a stopped one goes on from where it ended.
 
@@ -131,12 +147,13 @@ A failure comes back as a tool error (`isError: true`) with a text that says wha
 | What went wrong | What the text says |
 | --- | --- |
 | A store or a service is down, or a key is missing | The error, the address or key it names, and: call the `health` tool |
-| A bad argument: a blank question, an unknown `kind`, a bad `document_id`, a `limit` of 0, both `path` and `pdf_base64` | What was given and what is allowed |
-| `read_page` for a document that has no converted chapter | The id, the content folder, and: call `list_documents` |
-| `read_page` for a document that is not found, when some chapters cannot be read | The id, the content folder, "the document may be one of the chapters that cannot be read" with the file of each, and: call `list_documents` |
-| `read_page` for a page the chapter does not have | The page and how many pages there are |
+| A bad argument: a blank question, an unknown `kind` or `category`, a blank tag, a bad `document_id`, a `limit` of 0, both `path` and `pdf_base64` | What was given and what is allowed |
+| `read_page` for a document that has no converted folder | The id, the content folder, and: call `list_documents` |
+| `read_page` for a document that is not found, when some converted documents cannot be read | The id, the content folder, "the document may be one of the chapters that cannot be read" with the file of each, and: call `list_documents` |
+| `read_page` for a page the document does not have | The page and how many pages there are |
 | `ingest_status` for an unknown `job_id` | Job ids are forgotten when the server restarts, and the server keeps only its last 100 jobs; send the PDF again |
-| A PDF that is refused: no file at the path, not a file, not a PDF, too big, a file name that is not `chapter-<number>-<name>.pdf`, a `file_name` with a folder in it | The reason and the fix |
+| A PDF that is refused: no file at the path, not a file, not a PDF, too big, a `file_name` with a folder in it, a book's file name that is not `chapter-<number>-<name>.pdf`, a `document_title` for a book | The reason and the fix |
+| A store that is down when the PDF is named, before the job starts | `could not connect to the graph`, or `could not read from the graph which media the library has`, with the address it names, and: call the `health` tool, and send the same PDF again |
 | An ingest is already running | Its `job_id`, and: ask `ingest_status`, and send this PDF when that job has ended |
 
 ## 6. Add it to Claude Code

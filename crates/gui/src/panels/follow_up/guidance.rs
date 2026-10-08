@@ -24,7 +24,7 @@ const NONE_OFFERED: &str = "No further question was suggested for this answer.";
 const UNANSWERED_LEAD: &str = "The sources do not answer this. Questions they may answer:";
 const UNANSWERED_TITLE: &str = "No answer in the sources";
 const UNANSWERED_BODY: &str =
-    "The results do not answer this question. Ask it another way, or add a chapter that covers it.";
+    "The results do not answer this question. Ask it another way, or add a PDF that covers it.";
 const NO_LABELS_TITLE: &str = "No document has these labels";
 const NO_SOURCES_TITLE: &str = "No sources found";
 const RESULTS_ONLY: &str = "Results only: no answer is written, so no questions are suggested. Choose Answer in the Ask bar to get them.";

@@ -33,7 +33,6 @@ async fn a_file_that_is_not_a_pdf_or_is_over_the_size_limit_is_refused() {
     };
     let plain_text = file("chapter-1-text.pdf", b"This is plain text, not a PDF.");
     let too_big = file("chapter-2-big.pdf", &pdf_bytes(2000));
-    let wrong_name = file("notes.pdf", &pdf_bytes(100));
     let refused_by_path = |path: &str| {
         call(
             &client,
@@ -54,9 +53,6 @@ async fn a_file_that_is_not_a_pdf_or_is_over_the_size_limit_is_refused() {
     assert!(text.contains("chapter-1-text.pdf"), "{text}");
     let text = error_text(&refused_by_path(too_big.to_str().unwrap()).await);
     assert!(text.contains("over the size limit of 1024 bytes"), "{text}");
-    let text = error_text(&refused_by_path(wrong_name.to_str().unwrap()).await);
-    assert!(text.contains("chapter-<number>-<name>.pdf"), "{text}");
-    assert!(text.contains("rename"), "{text}");
     let text = error_text(&refused_by_path("chapter-1-text.pdf").await);
     assert!(text.contains("absolute"), "{text}");
     let gone = ports.folder().join("chapter-3-gone.pdf");
@@ -141,6 +137,12 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
         "tags": ["Hawkes"],
         "document_tags": ["Options", "volatility"],
     });
+    // The library does not have the media yet, so with no category it is a book, whose PDF must
+    // be named as a chapter.
+    let as_a_book = json!({ "media": "Hawkes Processes in Finance", "path": plain });
+    let text = error_text(&call(&client, "ingest_pdf", as_a_book).await);
+    assert!(text.contains("chapter-<number>-<name>.pdf"), "{text}");
+    assert!(text.contains("rename"), "{text}");
 
     let first = call(&client, "ingest_pdf", sent.clone()).await;
 
@@ -172,7 +174,12 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
         }])
     );
 
-    let second = call(&client, "ingest_pdf", sent).await;
+    // The stored media is a paper, so a send that gives no category, and a title that only a
+    // paper's PDF takes, is named as before.
+    let mut sent_again = sent;
+    sent_again["category"] = json!(null);
+    sent_again["document_title"] = json!("Hawkes Processes in Finance");
+    let second = call(&client, "ingest_pdf", sent_again).await;
 
     let again = structured(&second);
     assert_eq!(again["state"], "already_ingested", "{again}");

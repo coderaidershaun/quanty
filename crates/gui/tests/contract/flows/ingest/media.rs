@@ -94,7 +94,6 @@ fn a_new_paper_is_typed_and_saved_with_no_pdf(harness: &mut Window, seen: &Seen)
         "a media with no title cannot be saved"
     );
 
-    click(harness, Role::ComboBox, "Category");
     click(harness, Role::Button, "Paper");
     type_into(harness, "Media title", SAVED_PAPER);
     type_into(harness, "Authors", "A. Author, B. Author");
@@ -144,11 +143,19 @@ fn the_saved_media_shows_its_labels_each_time_it_is_chosen(harness: &mut Window)
 }
 
 fn the_pencil_edits_the_chosen_media(harness: &mut Window, seen: &Seen) {
-    click(harness, Role::Button, "Edit media");
+    click(harness, Role::Button, "Edit Rough Volatility");
     assert_eq!(field(harness, "Authors").as_deref(), Some(ITS_AUTHORS));
     assert!(
-        !is_enabled(harness, Role::TextInput, "Media title"),
-        "the title names the folder of the media, so it cannot change"
+        !has(harness, Role::TextInput, "Media title"),
+        "the title names the folder of the media, so no box can change it"
+    );
+    assert!(
+        has(harness, Role::Label, SAVED_PAPER),
+        "the title line still names the media"
+    );
+    assert!(
+        !is_enabled(harness, Role::Button, "Save media"),
+        "nothing was changed, so there is nothing to save"
     );
     retype(harness, "Tags", "rough");
     click(harness, Role::Button, "Save media");

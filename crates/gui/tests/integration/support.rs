@@ -35,7 +35,6 @@ impl Services for StandInServices {
     type Embedder = StandInEmbedder;
     type Llm = StandInLlm;
     type Graph = FalkorGraph;
-    type Pages = StubServices;
 
     fn embedder(&self, _config: &Config) -> Result<StandInEmbedder, Failure> {
         Ok((self.embedder)())
@@ -47,13 +46,6 @@ impl Services for StandInServices {
 
     async fn graph(&self, _config: &Config) -> Result<FalkorGraph, Failure> {
         Ok(FalkorGraph::connect(self.stores.config()).await?)
-    }
-
-    async fn page_services(
-        &self,
-        _jev_api_key: Option<&str>,
-    ) -> Result<Arc<StubServices>, ConvertError> {
-        Ok(Arc::clone(&self.pages))
     }
 
     async fn convert(
@@ -93,7 +85,6 @@ impl Services for StandInsOnClosedPorts {
     type Embedder = StandInEmbedder;
     type Llm = StandInLlm;
     type Graph = FalkorGraph;
-    type Pages = StubServices;
 
     fn embedder(&self, _config: &Config) -> Result<StandInEmbedder, Failure> {
         Ok(StandInEmbedder::default())
@@ -105,13 +96,6 @@ impl Services for StandInsOnClosedPorts {
 
     async fn graph(&self, config: &Config) -> Result<FalkorGraph, Failure> {
         Ok(FalkorGraph::connect(config).await?)
-    }
-
-    async fn page_services(
-        &self,
-        _jev_api_key: Option<&str>,
-    ) -> Result<Arc<StubServices>, ConvertError> {
-        Ok(Arc::clone(&self.pages))
     }
 
     async fn convert(

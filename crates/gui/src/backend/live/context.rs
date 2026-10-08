@@ -6,7 +6,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use graph::{FalkorGraph, GraphStore};
-use ocr::convert::services::{LiveServices, PageServices};
 use ocr::{ChapterJob, ConversionSummary, ConvertError};
 use rag_core::{ClaudeCli, ConceptStore, Config, Embedder, GeminiEmbedder, ItemStore, Llm};
 use rag_ingestion::{ConceptExtractor, EXTRACTION_MODEL, Models, Stores};
@@ -22,19 +21,10 @@ pub trait Services: Send + Sync + 'static {
     type Embedder: Embedder + Send + Sync + 'static;
     type Llm: Llm + Send + Sync + 'static;
     type Graph: GraphStore + Send + Sync + 'static;
-    /// The paid calls that a page needs. A test hands out stand-ins here, so a test of an ingest
-    /// can never reach the paid converter.
-    type Pages: PageServices + Send + Sync + 'static;
 
     fn embedder(&self, config: &Config) -> Result<Self::Embedder, Failure>;
     fn llm(&self, model: &str) -> Self::Llm;
     fn graph(&self, config: &Config) -> impl Future<Output = Result<Self::Graph, Failure>> + Send;
-    // SMELL: nothing calls `page_services`, on this trait or on the context, yet every stand-in
-    // of a test must write one. Call it or delete it.
-    fn page_services(
-        &self,
-        jev_api_key: Option<&str>,
-    ) -> impl Future<Output = Result<Arc<Self::Pages>, ConvertError>> + Send;
 
     /// Converts the pages of the chapter that are not converted yet. This is the part of an ingest
     /// that pays for a model call for every page.
@@ -54,7 +44,6 @@ impl Services for RealServices {
     type Embedder = GeminiEmbedder;
     type Llm = ClaudeCli;
     type Graph = FalkorGraph;
-    type Pages = LiveServices;
 
     fn embedder(&self, config: &Config) -> Result<GeminiEmbedder, Failure> {
         Ok(GeminiEmbedder::from_config(config)?)
@@ -66,13 +55,6 @@ impl Services for RealServices {
 
     async fn graph(&self, config: &Config) -> Result<FalkorGraph, Failure> {
         Ok(FalkorGraph::connect(config).await?)
-    }
-
-    async fn page_services(
-        &self,
-        jev_api_key: Option<&str>,
-    ) -> Result<Arc<LiveServices>, ConvertError> {
-        Ok(Arc::new(LiveServices::with_jev_key(jev_api_key).await?))
     }
 
     async fn convert(
@@ -180,16 +162,6 @@ impl<S: Services> LiveContext<S> {
             graph: self.connect_graph().await?,
             concepts: ConceptStore::connect(&self.config).map_err(|error| self.failure(error))?,
         })
-    }
-
-    /// The page services, opened with the Jev key of the settings, so no other code sees the
-    /// key. Ask for them only when a page is left to convert: the real ones call Jev once.
-    ///
-    /// # Errors
-    /// Whatever stops the page services from opening, such as a missing or refused key.
-    pub async fn page_services(&self) -> Result<Arc<S::Pages>, ConvertError> {
-        let key = self.config.jev_api_key.as_ref().map(|key| key.expose());
-        self.services.page_services(key).await
     }
 
     /// Converts the pages of a chapter that are not converted yet, with the Jev key of the

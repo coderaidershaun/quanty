@@ -77,10 +77,10 @@ fn body(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
                 media: &mut *cx.media,
                 intents: &mut *cx.intents,
             };
-            if tab == SourceTab::Page {
-                page::show(ui, &mut local.page, &mut tab_cx);
-            } else {
+            if let SourceTab::Cards(tab) = tab {
                 cards::show(ui, tab, &mut tab_cx);
+            } else {
+                page::show(ui, &mut local.page, &mut tab_cx);
             }
         }
     }

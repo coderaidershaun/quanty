@@ -13,18 +13,24 @@ use crate::widgets::{Tab, TabStrip};
 pub(super) enum SourceTab {
     #[default]
     Page,
+    Cards(CardTab),
+    Concepts,
+}
+
+/// The tabs that show one card for each piece of a kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(super) enum CardTab {
     Figures,
     Formulas,
     Tables,
-    Concepts,
 }
 
 impl SourceTab {
     const ALL: [SourceTab; 5] = [
         SourceTab::Page,
-        SourceTab::Figures,
-        SourceTab::Formulas,
-        SourceTab::Tables,
+        SourceTab::Cards(CardTab::Figures),
+        SourceTab::Cards(CardTab::Formulas),
+        SourceTab::Cards(CardTab::Tables),
         SourceTab::Concepts,
     ];
 
@@ -38,9 +44,9 @@ impl SourceTab {
     const fn label(self) -> &'static str {
         match self {
             SourceTab::Page => "Page",
-            SourceTab::Figures => "Figures",
-            SourceTab::Formulas => "Formulas",
-            SourceTab::Tables => "Tables",
+            SourceTab::Cards(CardTab::Figures) => "Figures",
+            SourceTab::Cards(CardTab::Formulas) => "Formulas",
+            SourceTab::Cards(CardTab::Tables) => "Tables",
             SourceTab::Concepts => "Concepts",
         }
     }
@@ -75,12 +81,11 @@ impl PieceIndex {
         }
     }
 
-    pub(super) fn of(&self, tab: SourceTab) -> &[usize] {
+    pub(super) fn of(&self, tab: CardTab) -> &[usize] {
         match tab {
-            SourceTab::Figures => &self.figures,
-            SourceTab::Formulas => &self.formulas,
-            SourceTab::Tables => &self.tables,
-            SourceTab::Page | SourceTab::Concepts => &[],
+            CardTab::Figures => &self.figures,
+            CardTab::Formulas => &self.formulas,
+            CardTab::Tables => &self.tables,
         }
     }
 }
@@ -110,9 +115,9 @@ pub(super) fn tab_for(page: &PageView, piece: &PagePiece) -> SourceTab {
         return SourceTab::Page;
     }
     match piece.kind {
-        PieceKind::Figure if piece.cut.is_none() => SourceTab::Figures,
-        PieceKind::Formula => SourceTab::Formulas,
-        PieceKind::Table => SourceTab::Tables,
+        PieceKind::Figure if piece.cut.is_none() => SourceTab::Cards(CardTab::Figures),
+        PieceKind::Formula => SourceTab::Cards(CardTab::Formulas),
+        PieceKind::Table => SourceTab::Cards(CardTab::Tables),
         PieceKind::Figure | PieceKind::Heading { .. } | PieceKind::Text | PieceKind::Footnote => {
             SourceTab::Page
         }
@@ -126,9 +131,7 @@ pub(super) fn tab_list(nav: &SourceNav, index: &PieceIndex) -> [Tab<'static>; 5]
         let count = match tab {
             SourceTab::Page => None,
             SourceTab::Concepts => nav.concepts.ready().map(Vec::len),
-            SourceTab::Figures | SourceTab::Formulas | SourceTab::Tables => {
-                has_page.then(|| index.of(tab).len())
-            }
+            SourceTab::Cards(tab) => has_page.then(|| index.of(tab).len()),
         };
         let has_failed = tab == SourceTab::Concepts && matches!(nav.concepts, Loadable::Failed(_));
         Tab {

@@ -108,10 +108,8 @@ impl<'a> Card<'a> {
             inner
         });
         if let Some(label) = self.clickable {
-            // SMELL: this says the card can be used even inside a disabled area. It must say
-            // `ui.is_enabled()`, as a button does.
             scope.response.widget_info(|| {
-                WidgetInfo::selected(WidgetType::Button, true, self.is_selected, label)
+                WidgetInfo::selected(WidgetType::Button, ui.is_enabled(), self.is_selected, label)
             });
         }
         CardResponse {

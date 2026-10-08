@@ -7,6 +7,7 @@ use super::Local;
 use super::books::{self, BookChoice, Offer};
 use crate::contract::{Catalogue, Intent, Loadable};
 use crate::panels::PanelCx;
+use crate::panels::labels::{AUTHOR, TAGS, caption};
 use crate::state::BookSave;
 use crate::theme::{TextRole, color, space};
 use crate::widgets::{Button, ControlSize, Dropdown, Notice, TextInput};
@@ -29,12 +30,14 @@ pub(super) fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
         ui.label(TextRole::Small.rich(RULE));
         ui.add_space(space::MD);
         let has_title_box = book_row(ui, local, cx);
-        caption(ui, "Author");
-        TextInput::new("ingest_author", "Author", &mut local.author)
+        caption(ui, AUTHOR);
+        TextInput::new(AUTHOR, &mut local.author)
+            .id_salt("ingest_author")
             .placeholder("Optional")
             .show(ui);
-        caption(ui, "Tags");
-        TextInput::new("ingest_tags", "Tags", &mut local.tags)
+        caption(ui, TAGS);
+        TextInput::new(TAGS, &mut local.tags)
+            .id_salt("ingest_tags")
             .placeholder("Optional, with commas between them")
             .show(ui);
         if has_title_box {
@@ -44,11 +47,6 @@ pub(super) fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     ui.add_space(space::SM);
     ui.label(TextRole::Small.rich(COST));
     ui.add_space(space::LG);
-}
-
-fn caption(ui: &mut egui::Ui, text: &str) {
-    ui.add_space(space::SM);
-    ui.label(TextRole::Label.rich(text));
 }
 
 fn file_row(ui: &mut egui::Ui, local: &Local, intents: &mut Vec<Intent>) {
@@ -114,7 +112,8 @@ fn list(ui: &mut egui::Ui, local: &mut Local, offers: &[Offer<'_>]) {
         BookChoice::Existing(title) if chosen.is_none() => title,
         _ => "Choose a book",
     };
-    let picked = Dropdown::new("ingest_book_list", "Book", &rows)
+    let picked = Dropdown::new("Book", &rows)
+        .id_salt("ingest_book_list")
         .selected(chosen)
         .placeholder(placeholder)
         .size(ControlSize::Medium)
@@ -128,7 +127,8 @@ fn list(ui: &mut egui::Ui, local: &mut Local, offers: &[Offer<'_>]) {
 }
 
 fn new_book(ui: &mut egui::Ui, title: &mut String) {
-    TextInput::new("ingest_book", "Book title", title)
+    TextInput::new("Book title", title)
+        .id_salt("ingest_book")
         .placeholder("The new book's title")
         .show(ui);
 }

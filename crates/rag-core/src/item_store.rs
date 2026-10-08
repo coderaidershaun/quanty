@@ -96,7 +96,7 @@ impl ItemStore {
     /// Qdrant has applied them. An empty slice makes no call.
     ///
     /// # Errors
-    /// [`StoreError::Payload`] or [`StoreError::PayloadShape`] for a payload that cannot be
+    /// [`StoreError::ItemPayload`] or [`StoreError::ItemPayloadShape`] for a payload that cannot be
     /// sent, [`StoreError::Request`] when Qdrant refuses or cannot be reached.
     pub async fn upsert(&self, points: &[ItemPoint]) -> Result<(), StoreError> {
         for group in points.chunks(UPSERT_GROUP_SIZE) {
@@ -244,11 +244,12 @@ fn points_of(document: DocId) -> Filter {
 }
 
 fn point_struct(point: &ItemPoint) -> Result<PointStruct, StoreError> {
-    let json = serde_json::to_value(&point.payload).map_err(|source| StoreError::Payload {
+    let json = serde_json::to_value(&point.payload).map_err(|source| StoreError::ItemPayload {
         id: point.id,
         source,
     })?;
-    let payload = Payload::try_from(json).map_err(|_| StoreError::PayloadShape { id: point.id })?;
+    let payload =
+        Payload::try_from(json).map_err(|_| StoreError::ItemPayloadShape { id: point.id })?;
     Ok(PointStruct::new(
         point.id.to_string(),
         point.vector.clone(),
@@ -315,7 +316,7 @@ impl ItemStore {
     ///
     /// # Errors
     /// - [`StoreError::Request`] when Qdrant refuses, cannot be reached, or has no such collection
-    /// - [`StoreError::PointId`] and [`StoreError::StoredPayload`] when a stored point is not an
+    /// - [`StoreError::ItemPointId`] and [`StoreError::StoredItemPayload`] when a stored point is not an
     ///   item; one such point fails the whole search
     pub async fn search(
         &self,
@@ -338,7 +339,7 @@ impl ItemStore {
     ///
     /// # Errors
     /// - [`StoreError::Request`] when Qdrant refuses, cannot be reached, or has no such collection
-    /// - [`StoreError::PointId`] and [`StoreError::StoredPayload`] when a stored point is not an
+    /// - [`StoreError::ItemPointId`] and [`StoreError::StoredItemPayload`] when a stored point is not an
     ///   item; one such point fails the whole search
     pub async fn rank(
         &self,
@@ -360,7 +361,7 @@ impl ItemStore {
     ///
     /// # Errors
     /// - [`StoreError::Request`] when Qdrant refuses, cannot be reached, or has no such collection
-    /// - [`StoreError::PointId`] and [`StoreError::StoredPayload`] when a stored point is not an
+    /// - [`StoreError::ItemPointId`] and [`StoreError::StoredItemPayload`] when a stored point is not an
     ///   item; one such point fails the whole search
     pub async fn labelled(
         &self,
@@ -426,14 +427,14 @@ fn item_hit(collection: &str, point: ScoredPoint) -> Result<ItemHit, StoreError>
     let id_text = point_id_text(point.id);
     let id = id_text
         .parse::<ItemId>()
-        .map_err(|source| StoreError::PointId {
+        .map_err(|source| StoreError::ItemPointId {
             collection: collection.to_owned(),
             point: id_text,
             source,
         })?;
     let json = serde_json::Value::from(Payload::from(point.payload));
     let payload = serde_json::from_value::<ItemPayload>(json).map_err(|source| {
-        StoreError::StoredPayload {
+        StoreError::StoredItemPayload {
             id,
             collection: collection.to_owned(),
             source,

@@ -61,6 +61,14 @@ impl<L: Llm> ConceptExtractor<L> {
         self
     }
 
+    /// Costs nothing, so an ingest asks it before it pays for an embedding.
+    ///
+    /// # Errors
+    /// The errors of [`Llm::check_ready`].
+    pub(super) async fn check_model_ready(&self) -> Result<(), LlmError> {
+        self.llm.check_ready().await
+    }
+
     /// Asks about every item, a few at a time, and then writes what was found to the graph in
     /// item order, one concept at a time, so that a later concept sees an earlier one.
     ///

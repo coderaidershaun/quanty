@@ -77,6 +77,13 @@ pub enum ConvertError {
         source: std::io::Error,
     },
 
+    #[error("the model could not be asked to explain the picture {}", picture.display())]
+    ImageCallFailed {
+        picture: PathBuf,
+        #[source]
+        source: ServiceError,
+    },
+
     #[error("the reply for the picture {} was rejected twice", picture.display())]
     ImageReplyRejected {
         picture: PathBuf,

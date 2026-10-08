@@ -4,11 +4,11 @@ use eframe::egui;
 
 use super::piece;
 use super::states::whole_area;
-use super::tabs::{SourceTab, TabCx};
+use super::tabs::{CardTab, SourceTab, TabCx};
 use crate::theme::{Icon, Kind};
 use crate::widgets::{Card, Placeholder};
 
-pub(super) fn show(ui: &mut egui::Ui, tab: SourceTab, cx: &mut TabCx<'_>) {
+pub(super) fn show(ui: &mut egui::Ui, tab: CardTab, cx: &mut TabCx<'_>) {
     let (page, index) = (cx.page, cx.index);
     let places = index.of(tab);
     if places.is_empty() {
@@ -20,7 +20,7 @@ pub(super) fn show(ui: &mut egui::Ui, tab: SourceTab, cx: &mut TabCx<'_>) {
         *cx.reveal = None;
     }
     egui::ScrollArea::vertical()
-        .id_salt(cx.scroll_id(tab))
+        .id_salt(cx.scroll_id(SourceTab::Cards(tab)))
         .auto_shrink([false, false])
         .show(ui, |ui| {
             for piece in places.iter().filter_map(|place| page.pieces.get(*place)) {
@@ -49,13 +49,10 @@ pub(super) fn show(ui: &mut egui::Ui, tab: SourceTab, cx: &mut TabCx<'_>) {
         });
 }
 
-fn nothing_of(tab: SourceTab) -> (Icon, &'static str) {
+fn nothing_of(tab: CardTab) -> (Icon, &'static str) {
     match tab {
-        SourceTab::Figures => (Icon::FIGURE, "No figures on this page"),
-        SourceTab::Formulas => (Icon::FORMULA, "No formulas on this page"),
-        SourceTab::Tables => (Icon::TABLE, "No tables on this page"),
-        // SMELL: the Page and Concepts tabs never come here, so this text is never shown. A type
-        // for the three tabs that list pieces would let the compiler say so.
-        SourceTab::Page | SourceTab::Concepts => (Icon::DOCUMENT, "Nothing on this page"),
+        CardTab::Figures => (Icon::FIGURE, "No figures on this page"),
+        CardTab::Formulas => (Icon::FORMULA, "No formulas on this page"),
+        CardTab::Tables => (Icon::TABLE, "No tables on this page"),
     }
 }

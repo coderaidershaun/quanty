@@ -33,6 +33,7 @@ struct Record {
 #[derive(Clone)]
 pub struct StandInLlm {
     model: String,
+    is_signed_in: bool,
     rule: Arc<Rule>,
     record: Arc<Mutex<Record>>,
 }
@@ -40,6 +41,15 @@ pub struct StandInLlm {
 impl StandInLlm {
     pub fn finding_nothing() -> StandInLlm {
         StandInLlm::replying(|_, _| Ok(json!({ "concepts": [], "relations": [] })))
+    }
+
+    /// A model that cannot answer until the person signs in: the check that costs nothing says
+    /// so, and so does every question.
+    pub fn signed_out() -> StandInLlm {
+        StandInLlm {
+            is_signed_in: false,
+            ..StandInLlm::replying(|_, _| Err(signed_out_error()))
+        }
     }
 
     /// `rule(input, earlier_calls)` gives the answer. `earlier_calls` is how many times this exact
@@ -59,6 +69,7 @@ impl StandInLlm {
     ) -> StandInLlm {
         StandInLlm {
             model: "stand-in".to_owned(),
+            is_signed_in: true,
             rule: Arc::new(rule),
             record: Arc::new(Mutex::new(Record::default())),
         }
@@ -90,9 +101,23 @@ impl StandInLlm {
     }
 }
 
+fn signed_out_error() -> LlmError {
+    LlmError::NotSignedIn {
+        message: "the stand-in is signed out".to_owned(),
+    }
+}
+
 impl Llm for StandInLlm {
     fn model(&self) -> &str {
         &self.model
+    }
+
+    async fn check_ready(&self) -> Result<(), LlmError> {
+        if self.is_signed_in {
+            Ok(())
+        } else {
+            Err(signed_out_error())
+        }
     }
 
     async fn ask(&self, question: Question<'_>) -> Result<Value, LlmError> {

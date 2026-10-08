@@ -12,8 +12,6 @@ use crate::{ConceptId, Config, EMBEDDING_DIMENSIONS, ItemId};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
-// SMELL: this type serves both stores, but `Payload`, `PayloadShape`, `PointId` and
-// `StoredPayload` are errors of the item store only, and their names do not say so.
 #[derive(thiserror::Error, Debug)]
 pub enum StoreError {
     // The Qdrant errors are boxed because they are large and every result would carry that size.
@@ -41,17 +39,17 @@ pub enum StoreError {
     },
 
     #[error("the payload of item {id} could not be written as json")]
-    Payload {
+    ItemPayload {
         id: ItemId,
         #[source]
         source: serde_json::Error,
     },
 
     #[error("the payload of item {id} is not a json object")]
-    PayloadShape { id: ItemId },
+    ItemPayloadShape { id: ItemId },
 
     #[error("a point of the collection {collection} has the id {point}, which is not an item id")]
-    PointId {
+    ItemPointId {
         collection: String,
         point: String,
         #[source]
@@ -61,7 +59,7 @@ pub enum StoreError {
     #[error(
         "the payload stored for item {id} in the collection {collection} is not the payload of an item"
     )]
-    StoredPayload {
+    StoredItemPayload {
         id: ItemId,
         collection: String,
         #[source]

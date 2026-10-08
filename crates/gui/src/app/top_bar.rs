@@ -1,20 +1,13 @@
-//! The top bar: the logo and the strip of tabs. It also says which shortcuts lead to a part that
-//! is not built, so that they stay unbound.
+//! The top bar: the logo and the strip of tabs.
 
 use eframe::egui;
 
 use super::layout;
 use super::region::region;
-use crate::contract::{self, Intent, Shortcut};
+use crate::contract::{self, Intent};
 use crate::panels::PanelCx;
 use crate::theme::{Icon, Tone};
 use crate::widgets::{self, TabStrip};
-
-/// False for a shortcut that leads to a part that is not built: the help sheet and the health
-/// check.
-pub(super) fn is_bound(shortcut: &Shortcut) -> bool {
-    !matches!(shortcut.intent, Intent::ToggleHelp | Intent::RecheckHealth)
-}
 
 fn label(tab: contract::Tab) -> &'static str {
     match tab {

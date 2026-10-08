@@ -1,12 +1,15 @@
 //! Checks that a failure reaches the agent as a tool error whose text says what to do: a store
 //! that is down, a bad argument, a document that is not there, and a chapter that cannot be read.
 
+use mcp::QuantyServer;
 use ocr::testing::sample_pdf;
 use rag_core::DocId;
+use rag_ingestion::testing::StandInLlm;
 use serde_json::json;
 
 use crate::support::{
-    ClosedPorts, call, connect, error_text, sample_content_folder, sample_document_id,
+    ClosedPorts, StandInServices, call, connect, error_text, sample_content_folder,
+    sample_document_id,
 };
 
 #[tokio::test(flavor = "multi_thread")]
@@ -29,6 +32,32 @@ async fn a_store_that_is_down_is_a_tool_error_that_points_at_health() {
     assert!(text.contains("falkor://127.0.0.1:1"), "{text}");
     assert!(text.contains("Call the `health` tool"), "{text}");
     assert!(text.contains("Send the same PDF again"), "{text}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_model_that_is_signed_out_stops_answer_before_anything_is_searched() {
+    // The stores are down, so a call that got as far as the search would name a store, and the
+    // graph is connected before the embedder is paid.
+    let ports = ClosedPorts::new();
+    let signed_out = StandInLlm::signed_out();
+    let services = StandInServices::new().with_llm(signed_out.clone());
+    let client = connect(QuantyServer::new(ports.config.clone(), services)).await;
+
+    let answer = call(&client, "answer", json!({ "question": "what is delta?" })).await;
+
+    let text = error_text(&answer);
+    assert!(text.contains("could not write an answer"), "{text}");
+    assert!(text.contains("claude is not signed in"), "{text}");
+    assert!(text.contains("Call the `health` tool"), "{text}");
+    assert!(!text.contains("127.0.0.1"), "{text}");
+    assert_eq!(signed_out.calls(), 0, "no question is asked");
+
+    let search = call(&client, "search", json!({ "question": "what is delta?" })).await;
+    let text = error_text(&search);
+    assert!(
+        text.contains("falkor://127.0.0.1:1"),
+        "a search needs no model, so it goes on to the stores: {text}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

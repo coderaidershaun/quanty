@@ -9,9 +9,7 @@ use gui::app::layout::DEFAULT_WINDOW;
 use gui::contract::{DocId, Intent, Loadable, PieceKind};
 use gui::testkit;
 
-use super::{Window, click, has, is_enabled, node, press, says, shared};
-
-const COMMAND: egui::Modifiers = egui::Modifiers::COMMAND;
+use super::{COMMAND, Window, click, has, is_enabled, node, press, says, shared};
 
 fn shown_page(harness: &Window) -> Option<u32> {
     shared(harness).source.page.ready().map(|view| view.page)

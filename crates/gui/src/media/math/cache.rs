@@ -48,9 +48,6 @@ enum Slot {
     Ready(Made),
     /// Kept, so that a formula that cannot be typeset is not tried again in every frame. It
     /// holds no texture.
-    // SMELL: a failed formula is never dropped, and its entry keeps the whole source. Memory
-    // grows with every different formula that fails, because the byte budget counts textures
-    // only.
     Failed,
 }
 
@@ -79,6 +76,17 @@ impl Entry {
     fn is_loading(&self) -> bool {
         matches!(self.slot, Slot::Loading)
     }
+
+    /// What the entry takes of the budget. A formula that failed has no texture, but it is kept
+    /// with its source, so that counts: without it, every different formula that fails would
+    /// stay for ever.
+    fn bytes(&self) -> usize {
+        match &self.slot {
+            Slot::Loading => 0,
+            Slot::Ready(made) => made.bytes,
+            Slot::Failed => size_of::<Entry>() + self.latex.len(),
+        }
+    }
 }
 
 pub struct Math {
@@ -87,7 +95,7 @@ pub struct Math {
     /// `&str` allocates nothing. The entry keeps what it was made for, to catch a shared hash.
     entries: HashMap<u64, Entry>,
     budget: usize,
-    /// The bytes of every texture in `entries`.
+    /// What every entry in `entries` takes of the budget.
     bytes: usize,
     /// A formula is wanted when it was asked for since the last poll.
     polls: u64,
@@ -182,12 +190,10 @@ impl Math {
             return;
         }
         entry.slot = match made {
-            Some(made) => {
-                self.bytes += made.bytes;
-                Slot::Ready(made)
-            }
+            Some(made) => Slot::Ready(made),
             None => Slot::Failed,
         };
+        self.bytes += entry.bytes();
     }
 
     /// A job that already runs is left alone: its entry stays until the result arrives.
@@ -220,7 +226,7 @@ impl Math {
         }
     }
 
-    /// A texture asked for since the last poll is on screen and stays.
+    /// A formula asked for since the last poll is on screen and stays.
     fn evict(&mut self, last_drawn: u64) {
         if self.bytes <= self.budget {
             return;
@@ -228,9 +234,7 @@ impl Math {
         let mut idle: Vec<(u64, u64)> = self
             .entries
             .iter()
-            .filter(|(_, entry)| {
-                matches!(entry.slot, Slot::Ready(_)) && entry.last_used < last_drawn
-            })
+            .filter(|(_, entry)| !entry.is_loading() && entry.last_used < last_drawn)
             .map(|(key, entry)| (entry.last_used, *key))
             .collect();
         idle.sort_unstable();
@@ -243,12 +247,8 @@ impl Math {
     }
 
     fn remove(&mut self, key: u64) {
-        if let Some(Entry {
-            slot: Slot::Ready(made),
-            ..
-        }) = self.entries.remove(&key)
-        {
-            self.bytes -= made.bytes;
+        if let Some(entry) = self.entries.remove(&key) {
+            self.bytes -= entry.bytes();
         }
     }
 }

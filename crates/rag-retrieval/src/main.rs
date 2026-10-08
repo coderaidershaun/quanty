@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser};
 use graph::FalkorGraph;
 use rag_core::{
-    ClaudeCli, ConceptStore, Config, DocumentLabels, GeminiEmbedder, ItemKind, ItemStore, Tag,
+    ClaudeCli, ConceptStore, Config, DocumentLabels, GeminiEmbedder, ItemKind, ItemStore, Llm, Tag,
 };
 use rag_retrieval::{ANSWER_MODEL, Retriever, SearchResults, answer};
 use tracing_subscriber::filter::{LevelFilter, Targets};
@@ -120,19 +120,23 @@ async fn ask(question: &str, kind: Option<ItemKind>, wanted: &DocumentLabels) ->
 
 /// Prints the answer and nothing else. When nothing is found there is nothing to write an answer
 /// from, so the model is not asked.
-// SMELL: a `claude` that cannot start, because it is not signed in or `ANTHROPIC_API_KEY` is set,
-// is found only after the search, so Gemini has billed the question by then.
 async fn answer_question(
     question: &str,
     kind: Option<ItemKind>,
     wanted: &DocumentLabels,
 ) -> Result<()> {
+    let claude = ClaudeCli::new(ANSWER_MODEL);
+    // Asked before the search, which Gemini bills: this check costs nothing.
+    claude
+        .check_ready()
+        .await
+        .context("claude cannot write an answer, so nothing was searched for")?;
     let results = search(question, kind, wanted).await?;
     if results.hits.is_empty() {
         println!("{results}");
         return Ok(());
     }
-    let written = answer(&ClaudeCli::new(ANSWER_MODEL), question, &results)
+    let written = answer(&claude, question, &results)
         .await
         .context("could not write an answer")?;
     println!("{written}");

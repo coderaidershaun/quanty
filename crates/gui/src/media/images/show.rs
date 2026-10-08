@@ -9,11 +9,6 @@ use crate::media::Media;
 use crate::theme::{Icon, color, radius, size};
 use crate::widgets::{Placeholder, spinner};
 
-/// Under this height the failure card does not fit, so an icon stands in for it.
-// SMELL: this number belongs to the failure card, which does not give out its least height. If
-// the card grows, this must follow by hand.
-const CARD_LEAST_HEIGHT: f32 = 120.0;
-
 /// A picture fitted inside `max_size`, with its loading and failed states drawn. Senses
 /// clicks. The picture is an `Image` node named `alt`; while loading there is a spinner named
 /// `Loading picture: {alt}`; a failure says `Picture not found` or `Picture cannot be read` and
@@ -77,7 +72,7 @@ fn failed(
     };
     let (rect, response) = ui.allocate_exact_size(room, egui::Sense::click());
     ui.painter().rect_filled(rect, radius::MD, color::RAISED);
-    if room.y < CARD_LEAST_HEIGHT {
+    if room.y < Placeholder::MIN_HEIGHT {
         // A box this small has no room for the Retry button. The failure stays until a caller
         // forgets it, or the picture is shown in a bigger box and Retry is clicked there.
         ui.painter().text(

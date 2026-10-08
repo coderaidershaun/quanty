@@ -140,6 +140,27 @@ fn the_math_cache_stays_under_its_byte_budget() {
         matches!(math.get(&formula(last, 20.0)), MathState::Ready(_)),
         "the formula that is on screen is kept"
     );
+
+    // A formula that failed has no texture, but its source is kept and counts.
+    let mut math = Math::new(&ctx, Offload::Manual).with_budget(0);
+    let broken = formula(BAD_BLOCK, 20.0);
+    assert_eq!(math.get(&broken), MathState::Loading, "a new formula waits");
+    math.run_pending();
+    for _ in 0..3 {
+        math.poll(&ctx);
+        assert_eq!(
+            math.get(&broken),
+            MathState::Failed,
+            "a failed formula that is on screen is not tried again"
+        );
+    }
+    math.poll(&ctx);
+    math.poll(&ctx);
+    assert_eq!(
+        math.get(&broken),
+        MathState::Loading,
+        "over the budget, a failed formula that left the screen is forgotten"
+    );
 }
 
 const GOOD_BLOCK: &str =

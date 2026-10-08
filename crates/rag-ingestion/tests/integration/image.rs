@@ -4,8 +4,10 @@
 use std::path::Path;
 
 use graph::testing::{GraphSize, size, stored_concept_graph, stored_document};
-use ocr::ConvertedImage;
 use ocr::convert::convert_image_with;
+use ocr::convert::reply::TranscribedPage;
+use ocr::convert::services::{Answer, ClaudeError, ImageServices, ServiceError};
+use ocr::{ConvertError, ConvertedImage};
 use rag_core::DocId;
 use rag_ingestion::{LoneImage, ingest_image};
 use serde_json::json;
@@ -163,4 +165,47 @@ async fn a_lone_picture_becomes_a_one_figure_document_and_a_second_ingest_calls_
         concept_points_in(config).await,
     );
     assert_eq!(after_second, after_first);
+}
+
+/// A model that does not answer in time, for every picture.
+struct TimedOutImageServices;
+
+impl ImageServices for TimedOutImageServices {
+    async fn transcribe(
+        &self,
+        _picture: &Path,
+        _correction: Option<&str>,
+    ) -> Result<Answer<TranscribedPage>, ServiceError> {
+        Err(ClaudeError::TimedOut { seconds: 1 }.into())
+    }
+}
+
+#[tokio::test]
+async fn a_picture_whose_paid_call_fails_is_named_with_what_happened_to_the_call() {
+    let content_folder = tempfile::tempdir().unwrap();
+
+    let error = convert_image_with(
+        &support::sample_picture(),
+        content_folder.path(),
+        &TimedOutImageServices,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(
+        matches!(
+            error,
+            ConvertError::ImageCallFailed {
+                source: ServiceError::Claude(ClaudeError::TimedOut { seconds: 1 }),
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+    let message = error.to_string();
+    assert!(message.contains("volatility-surface.png"), "{message}");
+    assert!(
+        !message.contains("could not be started"),
+        "the services were started, and it is the call that failed: {message}"
+    );
 }

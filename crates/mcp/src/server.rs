@@ -144,7 +144,10 @@ impl ToolError {
 /// together are not that, and `health` would call every service ready.
 fn is_service_failure_of_the_ingest(error: &IngestError) -> bool {
     match error {
-        IngestError::Embed(_) | IngestError::Store(_) | IngestError::Graph(_) => true,
+        IngestError::ModelNotReady(_)
+        | IngestError::Embed(_)
+        | IngestError::Store(_)
+        | IngestError::Graph(_) => true,
         IngestError::Concepts(error) => matches!(
             error,
             ConceptError::Stopped { .. }

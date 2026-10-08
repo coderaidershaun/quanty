@@ -211,3 +211,50 @@ async fn claude_cli_refuses_to_start_while_an_api_key_is_set() {
         "nothing may be started while the key is set"
     );
 }
+
+#[tokio::test]
+async fn the_check_that_claude_is_ready_asks_the_sign_in_and_no_question() {
+    let signed_in = StandIn::printing("", 0);
+    let environment = signed_in.environment(&[
+        ("CLAUDECODE", "1"),
+        ("EMBEDDING_GEMINI_API_KEY", "not-a-real-key"),
+        ("CLAUDE_CONFIG_DIR", "/somewhere/claude-config"),
+    ]);
+    let claude = ClaudeCli::with_environment("haiku", environment);
+
+    claude.check_ready().await.unwrap();
+
+    assert_eq!(signed_in.recorded("arguments"), b"auth\0status\0");
+    let environment = String::from_utf8(signed_in.recorded("environment")).unwrap();
+    let lines: Vec<&str> = environment.lines().collect();
+    assert!(
+        !lines
+            .iter()
+            .any(|line| line.starts_with("CLAUDECODE=")
+                || line.starts_with("EMBEDDING_GEMINI_API_KEY=")),
+        "the check gets the variables a question gets and no others: {environment}"
+    );
+    assert!(lines.contains(&"CLAUDE_CONFIG_DIR=/somewhere/claude-config"));
+
+    let signed_out = StandIn::printing("", 1);
+    let claude = ClaudeCli::with_environment("haiku", signed_out.environment(&[]));
+    let error = claude.check_ready().await.unwrap_err();
+    assert!(matches!(error, LlmError::NotSignedIn { .. }), "{error:?}");
+    assert!(error.stops_the_run());
+
+    let with_key = StandIn::printing("", 0);
+    let environment = with_key.environment(&[("ANTHROPIC_API_KEY", "set-for-this-test")]);
+    let claude = ClaudeCli::with_environment("haiku", environment);
+    let error = claude.check_ready().await.unwrap_err();
+    assert!(matches!(error, LlmError::ApiKeySet), "{error:?}");
+    assert!(
+        !with_key.was_started(),
+        "nothing may be started while the key is set"
+    );
+
+    let nowhere = tempfile::tempdir().unwrap();
+    let no_claude = [("PATH", nowhere.path().display().to_string())];
+    let claude = ClaudeCli::with_environment("haiku", no_claude);
+    let error = claude.check_ready().await.unwrap_err();
+    assert!(matches!(error, LlmError::Start(_)), "{error:?}");
+}

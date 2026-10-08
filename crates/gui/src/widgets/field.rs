@@ -10,8 +10,8 @@ use crate::theme::{Icon, TextRole, Tone, color, radius, size, space, stroke};
 
 /// It is the one widget that edits the caller's own text, because egui needs a `&mut String`.
 pub struct TextInput<'a> {
-    id_salt: &'a str,
     label: &'a str,
+    id_salt: &'a str,
     text: &'a mut String,
     hint: Option<&'a str>,
     leading: Option<Icon>,
@@ -29,13 +29,13 @@ pub struct TextInputResponse {
 }
 
 impl<'a> TextInput<'a> {
-    /// `id_salt` must be different for each box in the same `Ui`, because the focus and the
-    /// cursor are kept under it. `label` is the accessible name.
-    pub fn new(id_salt: &'a str, label: &'a str, text: &'a mut String) -> Self {
-        // SMELL: `id_salt` and `label` are both `&str`, so a call that swaps them still compiles.
+    /// `label` is the accessible name. The focus and the cursor are kept under it, so a box
+    /// that shares its label with another box in the same `Ui`, or whose label changes, needs
+    /// an `id_salt`.
+    pub fn new(label: &'a str, text: &'a mut String) -> Self {
         TextInput {
-            id_salt,
             label,
+            id_salt: label,
             text,
             hint: None,
             leading: None,
@@ -45,17 +45,20 @@ impl<'a> TextInput<'a> {
         }
     }
 
+    /// The name the focus and the cursor are kept under, in place of the label.
+    pub fn id_salt(mut self, id_salt: &'a str) -> Self {
+        self.id_salt = id_salt;
+        self
+    }
+
     pub fn placeholder(mut self, hint: &'a str) -> Self {
         self.hint = Some(hint);
         self
     }
 
-    pub fn icon(self, _icon: Icon) -> Self {
-        // SMELL: `_icon` is used, so its underscore is wrong. Rename it to `icon`.
-        TextInput {
-            leading: Some(_icon),
-            ..self
-        }
+    pub fn icon(mut self, icon: Icon) -> Self {
+        self.leading = Some(icon);
+        self
     }
 
     /// A button after the text, with an icon and an accessible label.
@@ -156,8 +159,8 @@ fn finite_or(width: f32, fallback: f32) -> f32 {
 /// A closed box that opens a list of choices. It never keeps the choice: it reports the index
 /// the person picked, and the caller passes the chosen one back in with `selected`.
 pub struct Dropdown<'a, S> {
-    id_salt: &'a str,
     label: &'a str,
+    id_salt: &'a str,
     options: &'a [S],
     selected: Option<usize>,
     placeholder: &'a str,
@@ -166,19 +169,25 @@ pub struct Dropdown<'a, S> {
 }
 
 impl<'a, S: AsRef<str>> Dropdown<'a, S> {
-    /// `id_salt` must be different for each dropdown in the same `Ui`, because the open list is
-    /// kept under it. `label` is the accessible name.
-    pub fn new(id_salt: &'a str, label: &'a str, options: &'a [S]) -> Self {
-        // SMELL: `id_salt` and `label` are both `&str`, so a call that swaps them still compiles.
+    /// `label` is the accessible name. The open list is kept under it, so a dropdown that
+    /// shares its label with another one in the same `Ui`, or whose label changes, needs an
+    /// `id_salt`.
+    pub fn new(label: &'a str, options: &'a [S]) -> Self {
         Dropdown {
-            id_salt,
             label,
+            id_salt: label,
             options,
             selected: None,
             placeholder: "",
             size: ControlSize::Small,
             width: None,
         }
+    }
+
+    /// The name the open list is kept under, in place of the label.
+    pub fn id_salt(mut self, id_salt: &'a str) -> Self {
+        self.id_salt = id_salt;
+        self
     }
 
     pub fn selected(mut self, index: Option<usize>) -> Self {
@@ -191,12 +200,9 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
         self
     }
 
-    pub fn size(self, _size: ControlSize) -> Self {
-        // SMELL: `_size` is used, so its underscore is wrong. Rename it to `size`.
-        Dropdown {
-            size: _size,
-            ..self
-        }
+    pub fn size(mut self, size: ControlSize) -> Self {
+        self.size = size;
+        self
     }
 
     pub fn width(mut self, width: f32) -> Self {

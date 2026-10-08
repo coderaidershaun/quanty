@@ -216,10 +216,9 @@ impl egui::Widget for Chip<'_> {
         let galley = ui.painter().layout_job(job);
         let side = egui::vec2(before + badge + galley.size().x + after, size::CHIP);
         let (rect, response) = ui.allocate_exact_size(side, egui::Sense::click());
-        // SMELL: this says the chip can be used even inside a disabled area. It must say
-        // `ui.is_enabled()`, as the citation chip does.
         response.widget_info(|| {
-            WidgetInfo::selected(WidgetType::Button, true, self.is_selected, self.label)
+            let is_enabled = ui.is_enabled();
+            WidgetInfo::selected(WidgetType::Button, is_enabled, self.is_selected, self.label)
         });
         if ui.is_rect_visible(rect) {
             self.paint(ui, rect, self.forced.unwrap_or_else(|| Look::of(&response)));
@@ -256,12 +255,9 @@ impl<'a> Badge<'a> {
         self
     }
 
-    pub const fn icon(self, _icon: Icon) -> Self {
-        // SMELL: `_icon` is used, so its underscore is wrong. Rename it to `icon`.
-        Badge {
-            icon: Some(_icon),
-            ..self
-        }
+    pub const fn icon(mut self, icon: Icon) -> Self {
+        self.icon = Some(icon);
+        self
     }
 }
 

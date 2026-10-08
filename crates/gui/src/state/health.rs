@@ -1,5 +1,7 @@
 //! What is known about the six services, and the one word that sums it up.
 
+use std::collections::BTreeMap;
+
 use super::shared::{Shared, push_cancel};
 use crate::contract::{
     Command, Effect, Failure, FailureKind, RequestId, Service, ServiceState, StartupFacts,
@@ -10,7 +12,8 @@ pub struct Health {
     pub facts: StartupFacts,
     /// `Some` while a check is running.
     pub pending: Option<RequestId>,
-    states: [ServiceState; 6],
+    /// A service with no entry is `Unknown`.
+    states: BTreeMap<Service, ServiceState>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -29,23 +32,26 @@ impl Health {
             ..Health::default()
         };
         if health.facts.anthropic_api_key_set {
-            health.states[slot(Service::Claude)] = ServiceState::Down(Failure::new(
-                FailureKind::ClaudeApiKeySet,
-                "the ANTHROPIC_API_KEY variable is set",
-            ));
+            health.states.insert(
+                Service::Claude,
+                ServiceState::Down(Failure::new(
+                    FailureKind::ClaudeApiKeySet,
+                    "the ANTHROPIC_API_KEY variable is set",
+                )),
+            );
         }
         health
     }
 
     pub fn of(&self, service: Service) -> &ServiceState {
-        &self.states[slot(service)]
+        self.states.get(&service).unwrap_or(&ServiceState::Unknown)
     }
 
     /// `Down` when no ask can work: a store or the embedding key is down. `Limited` when some
     /// other service is down.
     pub fn level(&self) -> HealthLevel {
         let is_down = |service| matches!(self.of(service), ServiceState::Down(_));
-        let any = |state: &ServiceState| self.states.contains(state);
+        let is_unknown = |service| *self.of(service) == ServiceState::Unknown;
         if [Service::Qdrant, Service::FalkorDb, Service::EmbeddingKey]
             .into_iter()
             .any(is_down)
@@ -53,9 +59,9 @@ impl Health {
             HealthLevel::Down
         } else if Service::ALL.into_iter().any(is_down) {
             HealthLevel::Limited
-        } else if any(&ServiceState::Checking) {
+        } else if self.is_checking() {
             HealthLevel::Checking
-        } else if any(&ServiceState::Unknown) {
+        } else if Service::ALL.into_iter().any(is_unknown) {
             HealthLevel::Unknown
         } else {
             HealthLevel::Ready
@@ -67,15 +73,14 @@ impl Health {
         if service == Service::Claude && self.facts.anthropic_api_key_set {
             return;
         }
-        self.states[slot(service)] = state;
+        self.states.insert(service, state);
     }
-}
 
-/// It follows the order of `Service::ALL`.
-// SMELL: the number of services is written twice, in `states` and in `Service::ALL`. A new
-// service compiles with both unchanged, and then `of` and `set` index past the end of `states`.
-fn slot(service: Service) -> usize {
-    service as usize
+    fn is_checking(&self) -> bool {
+        self.states
+            .values()
+            .any(|state| *state == ServiceState::Checking)
+    }
 }
 
 impl Shared {
@@ -101,7 +106,7 @@ impl Shared {
             return;
         }
         self.health.set(service, state);
-        if !self.health.states.contains(&ServiceState::Checking) {
+        if !self.health.is_checking() {
             self.health.pending = None;
         }
     }

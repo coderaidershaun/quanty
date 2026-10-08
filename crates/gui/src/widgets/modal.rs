@@ -36,7 +36,7 @@ pub enum Choice {
 
 /// A yes-or-no question over the window. Call `show` on every frame until it answers.
 pub struct Confirm<'a> {
-    id_salt: &'a str,
+    id: egui::Id,
     title: &'a str,
     body: Option<&'a str>,
     confirm_label: &'a str,
@@ -45,11 +45,10 @@ pub struct Confirm<'a> {
 }
 
 impl<'a> Confirm<'a> {
-    /// `id_salt` must be different for each sheet of the window. `title` is the question.
-    pub fn new(id_salt: &'a str, title: &'a str) -> Self {
-        // SMELL: `id_salt` and `title` are both `&str`, so a call that swaps them still compiles.
+    /// `id` must be different for each sheet of the window. `title` is the question.
+    pub fn new(id: egui::Id, title: &'a str) -> Self {
         Confirm {
-            id_salt,
+            id,
             title,
             body: None,
             confirm_label: "Confirm",
@@ -81,7 +80,7 @@ impl<'a> Confirm<'a> {
     /// `None` while the person has not decided. Escape and a click outside count as cancel.
     pub fn show(self, ctx: &egui::Context) -> Option<Choice> {
         let mut choice = None;
-        let sheet = modal(ctx, egui::Id::new(self.id_salt), |ui| {
+        let sheet = modal(ctx, self.id, |ui| {
             ui.set_width(CONFIRM_WIDTH);
             ui.label(TextRole::Heading.rich(self.title));
             if let Some(body) = self.body {

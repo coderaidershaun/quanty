@@ -18,7 +18,7 @@ use crate::panels::{
 };
 use crate::state::Shared;
 use crate::theme::{self, color, space};
-use crate::widgets::gallery::{self, GalleryState};
+use crate::widgets::gallery;
 
 /// How long `logic` may spend on backend events before it hands the frame back.
 const DRAIN_BUDGET: Duration = Duration::from_millis(4);
@@ -30,7 +30,7 @@ type FilePicker = Box<dyn FnMut() -> Option<PathBuf>>;
 pub struct App {
     shared: Shared,
     locals: Locals,
-    gallery: GalleryState,
+    gallery: gallery::State,
     media: Media,
     backend: Backend,
     intents: Vec<Intent>,
@@ -60,7 +60,7 @@ impl App {
         Ok(App {
             shared: Shared::new(facts),
             locals: Locals::default(),
-            gallery: GalleryState::default(),
+            gallery: gallery::State::default(),
             media,
             backend,
             intents,

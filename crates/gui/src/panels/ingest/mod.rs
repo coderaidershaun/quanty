@@ -12,7 +12,7 @@ use eframe::egui;
 use self::books::{BookChoice, Offer};
 use crate::contract::{Catalogue, IngestRequest, Intent, NewBook, is_same_title};
 use crate::panels::PanelCx;
-use crate::panels::labels::{author_label, tag_labels};
+use crate::panels::labels::{author_label, author_text, tag_labels, tags_text};
 use crate::state::{IngestJob, Shared};
 use crate::widgets;
 
@@ -30,12 +30,19 @@ pub struct Local {
 }
 
 impl Local {
-    fn draft(&self) -> Option<IngestRequest> {
+    /// A typed title that names a book of the library is sent as the library has it, so a
+    /// chapter never starts a second book that differs only in capitals.
+    fn draft(&self, catalogue: Option<&Catalogue>) -> Option<IngestRequest> {
         let pdf = self.pdf.clone()?;
         let book = match &self.book {
             BookChoice::Unchosen => return None,
             BookChoice::Existing(title) => title.as_str(),
-            BookChoice::New(text) => text.trim(),
+            BookChoice::New(text) => {
+                let typed = text.trim();
+                catalogue
+                    .and_then(|catalogue| catalogue.stored_title(typed))
+                    .unwrap_or(typed)
+            }
         };
         if book.is_empty() {
             return None;
@@ -74,14 +81,14 @@ impl Local {
         } else {
             BookChoice::New(request.book.clone())
         };
-        self.author = request.author.clone().unwrap_or_default();
-        self.tags = request.tags.join(", ");
+        self.author = author_text(request.author.as_deref());
+        self.tags = tags_text(&request.tags);
     }
 
     fn choose(&mut self, offer: &Offer<'_>) {
         self.book = BookChoice::Existing(offer.title.to_owned());
-        self.author = offer.author.unwrap_or_default().to_owned();
-        self.tags = offer.tags.join(", ");
+        self.author = author_text(offer.author);
+        self.tags = tags_text(&offer.tags);
     }
 
     /// Nothing is carried over from the book that was chosen before.
@@ -145,7 +152,7 @@ impl Local {
         {
             self.book = BookChoice::New(title.clone());
         }
-        let draft = self.draft();
+        let draft = self.draft(catalogue.ready());
         let is_checked = matches!(
             shared.ingest,
             IngestJob::Checking { .. }

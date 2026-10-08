@@ -91,6 +91,43 @@ pub struct RetrievalTrace {
     pub cited: Option<Vec<String>>,
 }
 
+/// Why a search found nothing. A search has no score limit, so there is no other reason.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum NothingFound {
+    /// The search stopped before it looked at any item.
+    NoDocumentHasTheLabels,
+    NoItemMatchesTheFilters,
+    LibraryHoldsNoItems,
+}
+
+impl NothingFound {
+    /// What the person can do about it, in words that fit any place in the window.
+    pub fn hint(self) -> &'static str {
+        match self {
+            NothingFound::NoDocumentHasTheLabels => {
+                "Nothing was searched. Clear a filter in the Ask bar and ask again."
+            }
+            NothingFound::NoItemMatchesTheFilters => {
+                "No item in your library matches the filters of this question. Clear a filter, then ask again."
+            }
+            NothingFound::LibraryHoldsNoItems => {
+                "Your library holds no items yet. Add a chapter on the Ingest tab, then ask again."
+            }
+        }
+    }
+}
+
+impl RetrievalTrace {
+    /// Why a search with no result found nothing.
+    pub fn why_nothing_was_found(&self) -> NothingFound {
+        match self.documents_searched {
+            Some(0) => NothingFound::NoDocumentHasTheLabels,
+            Some(_) => NothingFound::NoItemMatchesTheFilters,
+            None => NothingFound::LibraryHoldsNoItems,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
 pub struct SearchReply {
     pub results: Vec<ResultItem>,

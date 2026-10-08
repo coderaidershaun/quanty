@@ -2,6 +2,7 @@
 //! what the model is given and what is printed are seen without a model call.
 
 use std::path::PathBuf;
+use std::process::Command;
 
 use rag_core::{DocId, DocumentLabels, ItemHit, ItemId, ItemKind, ItemPayload};
 use rag_ingestion::testing::StandInLlm;
@@ -292,4 +293,26 @@ async fn a_line_break_between_the_math_marks_is_the_lost_backslash_of_a_command(
         "The vega \\( \\nu \\) and the slope \\(\\nabla V\\) are named.\nNothing else is.",
         "a line break before a letter is put back between the marks, and one outside them is kept"
     );
+}
+
+#[test]
+fn rag_query_stops_before_the_search_when_claude_cannot_write_an_answer() {
+    // Nothing listens on these ports, and the settings of a real `.env` stay out, so a run that
+    // got as far as the search would name a store and could not reach the embedder. With the key
+    // set, the check ends before any `claude` is started.
+    let output = Command::new(env!("CARGO_BIN_EXE_rag-query"))
+        .args(["--answer", "what is delta?"])
+        .current_dir(std::env::temp_dir())
+        .env_clear()
+        .env("ANTHROPIC_API_KEY", "set-for-this-test")
+        .env("QDRANT_URL", "http://127.0.0.1:1")
+        .env("FALKORDB_URL", "falkor://127.0.0.1:1")
+        .output()
+        .expect("the rag-query binary should start");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("nothing was searched for"), "{stderr}");
+    assert!(stderr.contains("ANTHROPIC_API_KEY is set"), "{stderr}");
+    assert!(!stderr.contains("127.0.0.1"), "{stderr}");
 }

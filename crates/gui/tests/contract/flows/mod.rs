@@ -22,6 +22,8 @@ use gui::testkit;
 
 type Window = Harness<'static, App>;
 
+const COMMAND: egui::Modifiers = egui::Modifiers::COMMAND;
+
 fn shared(harness: &Window) -> &Shared {
     harness.state().shared()
 }
@@ -58,6 +60,27 @@ fn click(harness: &mut Window, role: Role, name: &str) {
 
 fn is_enabled(harness: &Window, role: Role, name: &str) -> bool {
     !node(harness, role, name).accesskit_node().is_disabled()
+}
+
+fn field(harness: &Window, name: &str) -> Option<String> {
+    node(harness, Role::TextInput, name).value()
+}
+
+/// A box takes the text only when it has the keyboard, so it is clicked first.
+fn type_into(harness: &mut Window, name: &str, text: &str) {
+    node(harness, Role::TextInput, name).click();
+    node(harness, Role::TextInput, name).type_text(text);
+    harness.run_ok();
+}
+
+/// A box takes the text only when it has the keyboard. All of its text is selected first, so what
+/// is typed replaces what the box held.
+fn retype(harness: &mut Window, name: &str, text: &str) {
+    click(harness, Role::TextInput, name);
+    harness.key_press_modifiers(COMMAND, egui::Key::A);
+    harness.step();
+    node(harness, Role::TextInput, name).type_text(text);
+    harness.run_ok();
 }
 
 fn copied(harness: &Window) -> Vec<String> {

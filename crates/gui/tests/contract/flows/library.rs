@@ -21,9 +21,11 @@ use gui::testkit;
 use uuid::Uuid;
 
 use super::recording::{self, Seen};
-use super::{Window, click, copied_by, has, is_enabled, is_open_tab, node, press, says, shared};
+use super::{
+    COMMAND, Window, click, copied_by, field, has, is_enabled, is_open_tab, node, press, retype,
+    says, shared,
+};
 
-const COMMAND: egui::Modifiers = egui::Modifiers::COMMAND;
 const REFUSED_HINT: &str = "Start Qdrant at http://localhost:6334, then try again.";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -268,20 +270,6 @@ fn sent_edits(seen: &Seen) -> Vec<LabelEdit> {
         .collect()
 }
 
-/// A box takes the text only when it has the keyboard. All of its text is selected first, so what
-/// is typed replaces what the box held.
-fn retype(harness: &mut Window, name: &str, text: &str) {
-    click(harness, Role::TextInput, name);
-    harness.key_press_modifiers(COMMAND, egui::Key::A);
-    harness.step();
-    node(harness, Role::TextInput, name).type_text(text);
-    harness.run_ok();
-}
-
-fn box_holds(harness: &Window, name: &str) -> Option<String> {
-    node(harness, Role::TextInput, name).value()
-}
-
 fn a_refused_save_shows_its_hint_and_keeps_what_was_typed(
     harness: &mut Window,
     seen: &Seen,
@@ -289,11 +277,8 @@ fn a_refused_save_shows_its_hint_and_keeps_what_was_typed(
 ) {
     let before = documents_of(harness).remove(0);
     click(harness, Role::Button, "Edit labels");
-    assert_eq!(box_holds(harness, "Author").as_deref(), Some(""));
-    assert_eq!(
-        box_holds(harness, "Tags").as_deref(),
-        Some("book, volatility")
-    );
+    assert_eq!(field(harness, "Author").as_deref(), Some(""));
+    assert_eq!(field(harness, "Tags").as_deref(), Some("book, volatility"));
     assert!(
         !is_enabled(harness, Role::Button, "Save"),
         "nothing was changed, so there is nothing to save"
@@ -314,11 +299,11 @@ fn a_refused_save_shows_its_hint_and_keeps_what_was_typed(
     assert_eq!(sent_edits(seen), [wanted]);
     assert!(says(harness, REFUSED_HINT), "the refusal says what to do");
     assert_eq!(
-        box_holds(harness, "Author").as_deref(),
+        field(harness, "Author").as_deref(),
         Some("Sheldon Natenberg")
     );
     assert_eq!(
-        box_holds(harness, "Tags").as_deref(),
+        field(harness, "Tags").as_deref(),
         Some("Volatility, greeks")
     );
     assert_eq!(
@@ -366,7 +351,7 @@ fn the_same_save_goes_through_and_the_new_labels_show_everywhere(
     click(harness, Role::ComboBox, "Book");
     click(harness, Role::Button, "Option Volatility and Pricing");
     assert_eq!(
-        box_holds(harness, "Author").as_deref(),
+        field(harness, "Author").as_deref(),
         Some("Sheldon Natenberg")
     );
 }

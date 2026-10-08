@@ -10,11 +10,9 @@ use crate::theme::{TextRole, space};
 
 const TOKENS_WIDTH: f32 = 680.0;
 
-// SMELL: the path already says `gallery`, so `gallery::GalleryState` says it twice. `State` is
-// enough.
 /// What the gallery keeps between frames. Whoever shows the gallery owns it.
 #[derive(Debug, Default)]
-pub struct GalleryState {
+pub struct State {
     pub last_activated: Option<&'static str>,
     demo: Demo,
 }
@@ -47,7 +45,7 @@ impl Default for Demo {
     }
 }
 
-pub fn show(ui: &mut egui::Ui, state: &mut GalleryState) {
+pub fn show(ui: &mut egui::Ui, state: &mut State) {
     egui::ScrollArea::vertical()
         .auto_shrink(false)
         .show(ui, |ui| {

@@ -1,6 +1,6 @@
 //! Every word of Follow up and the rule that picks what shows under the box.
 
-use crate::contract::{Answer, AskMode, Loadable};
+use crate::contract::{Answer, AskMode, Loadable, NothingFound};
 use crate::state::AskSession;
 
 pub(super) const TITLE: &str = "Follow up";
@@ -26,12 +26,7 @@ const UNANSWERED_TITLE: &str = "No answer in the sources";
 const UNANSWERED_BODY: &str =
     "The results do not answer this question. Ask it another way, or add a chapter that covers it.";
 const NO_LABELS_TITLE: &str = "No document has these labels";
-const NO_LABELS_BODY: &str = "Nothing was searched. Clear a filter in the Ask bar and ask again.";
 const NO_SOURCES_TITLE: &str = "No sources found";
-const LABELS_NO_ITEMS_BODY: &str =
-    "No item in your library matches the filters of this question. Clear a filter, then ask again.";
-const EMPTY_LIBRARY_BODY: &str =
-    "Your library holds no items yet. Add a chapter on the Ingest tab, then ask again.";
 const RESULTS_ONLY: &str = "Results only: no answer is written, so no questions are suggested. Choose Answer in the Ask bar to get them.";
 
 #[derive(Debug)]
@@ -71,7 +66,7 @@ pub(super) fn guidance(ask: &AskSession) -> Option<Guidance<'_>> {
             hint: Some(&failure.hint),
         },
         Loadable::Ready(reply) if reply.results.is_empty() => {
-            no_sources(reply.trace.documents_searched)
+            no_sources(reply.trace.why_nothing_was_found())
         }
         Loadable::Loading | Loadable::Ready(_) if ask.mode == AskMode::ResultsOnly => {
             Message::line(RESULTS_ONLY)
@@ -85,25 +80,16 @@ pub(super) fn guidance(ask: &AskSession) -> Option<Guidance<'_>> {
     })
 }
 
-/// A search has no score limit, so it finds nothing only when no document carries the labels or
-/// nothing is stored. The notice names which.
-fn no_sources(documents_searched: Option<usize>) -> Message<'static> {
-    // SMELL: the Answer pane and the retrieval path tell these three cases apart too, each in
-    // its own code, and the Answer pane writes two of these hints out again letter for letter.
-    // A change to one of the three leaves the others saying something else.
-    match documents_searched {
-        Some(0) => Message::Notice {
-            title: NO_LABELS_TITLE,
-            body: NO_LABELS_BODY,
-        },
-        Some(_) => Message::Notice {
-            title: NO_SOURCES_TITLE,
-            body: LABELS_NO_ITEMS_BODY,
-        },
-        None => Message::Notice {
-            title: NO_SOURCES_TITLE,
-            body: EMPTY_LIBRARY_BODY,
-        },
+fn no_sources(reason: NothingFound) -> Message<'static> {
+    let title = match reason {
+        NothingFound::NoDocumentHasTheLabels => NO_LABELS_TITLE,
+        NothingFound::NoItemMatchesTheFilters | NothingFound::LibraryHoldsNoItems => {
+            NO_SOURCES_TITLE
+        }
+    };
+    Message::Notice {
+        title,
+        body: reason.hint(),
     }
 }
 

@@ -61,7 +61,10 @@ pub enum ClaudeCliError {
 /// - [`ClaudeCliError::TimedOut`] when it does not finish in time
 /// - [`ClaudeCliError::NotSignedIn`] when it exits with failure
 pub async fn check_signed_in() -> Result<(), ClaudeCliError> {
-    let mut command = Command::new("claude");
+    auth_status(Command::new("claude")).await
+}
+
+async fn auth_status(mut command: Command) -> Result<(), ClaudeCliError> {
     command
         .args(["auth", "status"])
         .stdin(Stdio::null())
@@ -121,10 +124,23 @@ impl ClaudeCli {
             .any(|(name, value)| name == API_KEY_VARIABLE && !value.is_empty())
     }
 
+    /// `claude` with the variables it may get and no others, so the check of the sign-in and a
+    /// question see the same sign-in.
+    fn claude(&self) -> Command {
+        let mut command = Command::new("claude");
+        command.env_clear();
+        for (name, value) in &self.environment {
+            if !is_withheld(name) {
+                command.env(name, value);
+            }
+        }
+        command
+    }
+
     fn command(&self, question: Question<'_>) -> Command {
         // Never add `--bare`: it skips the sign-in of the subscription, so `claude` would find no
         // login.
-        let mut command = Command::new("claude");
+        let mut command = self.claude();
         command
             .arg("-p")
             // Do not remove: without it the run loads the instructions, hooks and plugins of the
@@ -144,13 +160,7 @@ impl ClaudeCli {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .kill_on_drop(true)
-            .env_clear();
-        for (name, value) in &self.environment {
-            if !is_withheld(name) {
-                command.env(name, value);
-            }
-        }
+            .kill_on_drop(true);
         // Without this, `claude` lets the model think for thousands of words before it answers
         // an item: measured at ten times the cost and twenty times the time, for the same answer.
         command.env("MAX_THINKING_TOKENS", "0");
@@ -168,6 +178,23 @@ fn is_withheld(name: &OsStr) -> bool {
 impl Llm for ClaudeCli {
     fn model(&self) -> &str {
         &self.model
+    }
+
+    async fn check_ready(&self) -> Result<(), LlmError> {
+        if self.api_key_is_set() {
+            return Err(LlmError::ApiKeySet);
+        }
+        auth_status(self.claude())
+            .await
+            .map_err(|error| match error {
+                ClaudeCliError::Start(source) => LlmError::Start(source),
+                ClaudeCliError::TimedOut { seconds } => LlmError::TimedOut { seconds },
+                ClaudeCliError::NotSignedIn { status, stderr } => LlmError::NotSignedIn {
+                    message: format!(
+                        "`claude auth status` ended with {status}, stderr: {stderr:?}"
+                    ),
+                },
+            })
     }
 
     async fn ask(&self, question: Question<'_>) -> Result<Value, LlmError> {

@@ -17,7 +17,11 @@ use crate::contract::{
 };
 
 /// Sends exactly one catalogue, also when it cannot be read, so the window never waits for one.
-pub async fn load_catalogue<S: Services>(cx: &LiveContext<S>, request: RequestId, reply: &Reply) {
+pub(super) async fn load_catalogue<S: Services>(
+    cx: &LiveContext<S>,
+    request: RequestId,
+    reply: &Reply,
+) {
     let result = read_catalogue(cx).await;
     reply.send(Event::Catalogue { request, result });
 }
@@ -40,7 +44,7 @@ async fn read_catalogue<S: Services>(cx: &LiveContext<S>) -> Result<Catalogue, F
 }
 
 /// Sends exactly one answer, also when the labels cannot be written.
-pub async fn set_labels<S: Services>(
+pub(super) async fn set_labels<S: Services>(
     cx: &LiveContext<S>,
     request: RequestId,
     edit: &LabelEdit,
@@ -63,7 +67,7 @@ async fn write_labels<S: Services>(cx: &LiveContext<S>, edit: &LabelEdit) -> Res
         .map_err(|error| cx.failure(error))
 }
 
-pub async fn delete<S: Services>(
+pub(super) async fn delete<S: Services>(
     _cx: &LiveContext<S>,
     request: RequestId,
     doc: DocId,
@@ -77,7 +81,7 @@ pub async fn delete<S: Services>(
 }
 
 /// Sends exactly one answer, also when the book is refused or cannot be stored.
-pub async fn save_book<S: Services>(
+pub(super) async fn save_book<S: Services>(
     cx: &LiveContext<S>,
     request: RequestId,
     book: &NewBook,

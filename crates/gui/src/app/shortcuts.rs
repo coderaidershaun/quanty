@@ -1,9 +1,15 @@
-//! Turns the keys a person presses into intents.
+//! Turns the keys a person presses into intents. A shortcut that leads to a part that is not
+//! built stays unbound.
 
 use eframe::egui;
 
-use super::top_bar::is_bound;
-use crate::contract::{Chord, Intent, KeyName, SHORTCUTS, When};
+use crate::contract::{Chord, Intent, KeyName, SHORTCUTS, Shortcut, When};
+
+/// False for a shortcut that leads to a part that is not built: the help sheet and the health
+/// check.
+fn is_bound(shortcut: &Shortcut) -> bool {
+    !matches!(shortcut.intent, Intent::ToggleHelp | Intent::RecheckHealth)
+}
 
 /// A row that matches takes its key away, so a widget never sees it too.
 pub(super) fn read(ctx: &egui::Context, intents: &mut Vec<Intent>) {

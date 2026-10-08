@@ -1,6 +1,6 @@
 //! Names what the pane has to show from the ask alone, so drawing never guesses.
 
-use crate::contract::{Answer, AskMode, Failure, ItemKind, Loadable};
+use crate::contract::{Answer, AskMode, Failure, ItemKind, Loadable, NothingFound};
 use crate::state::AskSession;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -59,7 +59,7 @@ pub(super) enum Phase<'a> {
     Searching,
     SearchStopped,
     SearchFailed(&'a Failure),
-    NoResults,
+    NoResults(NothingFound),
     Found { written: Written<'a> },
 }
 
@@ -84,7 +84,7 @@ impl<'a> Phase<'a> {
             Loadable::Ready(reply) => reply,
         };
         if reply.results.is_empty() {
-            return Phase::NoResults;
+            return Phase::NoResults(reply.trace.why_nothing_was_found());
         }
         let written = match &ask.answer {
             Loadable::Loading => Written::Writing,

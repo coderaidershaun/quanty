@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use graph::{BookNode, GraphStore};
-use gui::backend::live::{LiveContext, RealServices, Services, library};
+use gui::backend::live::{LiveContext, RealServices, Services};
 use gui::backend::{Handler, Reply};
 use gui::contract::{
     Book, Catalogue, ChapterLabel, Command, DocId, Document, Event, Failure, FailureKind,
@@ -257,72 +257,59 @@ async fn a_save_of_labels_answers_once_when_the_stores_are_down() {
     );
 }
 
-/// The `Send` bound is a proof at compile time that the window can run the load on any thread of
-/// its runtime.
-async fn catalogue_of<S: Services>(cx: &LiveContext<S>) -> Result<Catalogue, Failure> {
-    fn assert_send<F: Future + Send>(future: F) -> F {
-        future
-    }
+/// Sends one command and returns its one answer.
+async fn one_answer<S: Services>(cx: &LiveContext<S>, command: Command) -> Event {
     let (reply, events, _stop) = Reply::collecting();
-    assert_send(library::load_catalogue(cx, REQUEST, &reply)).await;
-    let sent: Vec<Event> = events.try_iter().collect();
-    let [
+    cx.serve(command, reply).await;
+    let mut sent: Vec<Event> = events.try_iter().collect();
+    assert_eq!(sent.len(), 1, "expected one answer: {sent:#?}");
+    sent.remove(0)
+}
+
+async fn catalogue_of<S: Services>(cx: &LiveContext<S>) -> Result<Catalogue, Failure> {
+    let command = Command::LoadCatalogue { request: REQUEST };
+    match one_answer(cx, command).await {
         Event::Catalogue {
             request: REQUEST,
             result,
-        },
-    ] = sent.as_slice()
-    else {
-        panic!("expected one catalogue, for {REQUEST:?}: {sent:#?}");
-    };
-    result.clone()
+        } => result,
+        other => panic!("expected a catalogue, for {REQUEST:?}: {other:#?}"),
+    }
 }
 
-/// Sends the save of one book and returns its one answer.
 async fn saved<S: Services>(cx: &LiveContext<S>, book: &NewBook) -> Result<(), Failure> {
-    let (reply, events, _stop) = Reply::collecting();
     let command = Command::SaveBook {
         request: REQUEST,
         book: book.clone(),
     };
-    cx.serve(command, reply).await;
-    let sent: Vec<Event> = events.try_iter().collect();
-    let [
+    match one_answer(cx, command).await {
         Event::BookSaved {
             request: REQUEST,
             result,
-        },
-    ] = sent.as_slice()
-    else {
-        panic!("expected one answer to the save, for {REQUEST:?}: {sent:#?}");
-    };
-    result.clone()
+        } => result,
+        other => panic!("expected an answer to the save, for {REQUEST:?}: {other:#?}"),
+    }
 }
 
-/// Sends the save of one change of labels and returns its one answer.
 async fn relabelled<S: Services>(cx: &LiveContext<S>, edit: &LabelEdit) -> Result<(), Failure> {
-    let (reply, events, _stop) = Reply::collecting();
     let command = Command::SetLabels {
         request: REQUEST,
         edit: edit.clone(),
     };
-    cx.serve(command, reply).await;
-    let sent: Vec<Event> = events.try_iter().collect();
-    let [
+    match one_answer(cx, command).await {
         Event::LabelsSaved {
             request: REQUEST,
             doc,
             result,
-        },
-    ] = sent.as_slice()
-    else {
-        panic!("expected one answer to the save, for {REQUEST:?}: {sent:#?}");
-    };
-    assert_eq!(
-        *doc, edit.doc,
-        "the answer names the document that was saved"
-    );
-    result.clone()
+        } => {
+            assert_eq!(
+                doc, edit.doc,
+                "the answer names the document that was saved"
+            );
+            result
+        }
+        other => panic!("expected an answer to the save, for {REQUEST:?}: {other:#?}"),
+    }
 }
 
 async fn only_document_of<S: Services>(cx: &LiveContext<S>) -> Document {

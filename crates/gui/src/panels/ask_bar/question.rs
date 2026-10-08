@@ -22,7 +22,8 @@ impl Local {
         let takes_focus = cx.shared.cues.focus_ask_bar > self.seen_focus_cue;
         self.seen_focus_cue = cx.shared.cues.focus_ask_bar;
         let input = slot(ui, "question", rects.question, |ui| {
-            TextInput::new("question", "Question", &mut self.draft.question)
+            TextInput::new("Question", &mut self.draft.question)
+                .id_salt("question")
                 .placeholder(PLACEHOLDER)
                 .icon(Icon::SEARCH)
                 .size(ControlSize::Large)
@@ -90,7 +91,8 @@ impl Local {
         let labels = MODES.map(|(label, _)| label);
         let selected = MODES.iter().position(|(_, mode)| *mode == self.draft.mode);
         let chosen = slot(ui, "mode", rects.mode, |ui| {
-            Dropdown::new("mode", "Mode", &labels)
+            Dropdown::new("Mode", &labels)
+                .id_salt("mode")
                 .selected(selected)
                 .size(ControlSize::Large)
                 .width(rects.mode.width())

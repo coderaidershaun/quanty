@@ -18,6 +18,15 @@ pub trait Llm {
     /// answers of two models apart.
     fn model(&self) -> &str;
 
+    /// Says whether a question could be asked now. It asks none, so it costs nothing: a caller
+    /// asks this before it pays another service for work that only the model can finish. A usage
+    /// limit is not seen here, because only a question finds it.
+    ///
+    /// # Errors
+    /// [`LlmError::ApiKeySet`], [`LlmError::Start`], [`LlmError::NotSignedIn`] and
+    /// [`LlmError::TimedOut`] when no question can be answered until the person acts.
+    fn check_ready(&self) -> impl Future<Output = Result<(), LlmError>> + Send;
+
     /// # Errors
     /// - [`LlmError::ApiKeySet`], [`LlmError::Start`], [`LlmError::NotSignedIn`] and
     ///   [`LlmError::UsageLimit`] when no question can be answered until the person acts

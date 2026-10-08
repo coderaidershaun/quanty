@@ -3,9 +3,10 @@
 use eframe::egui;
 
 use super::Local;
-use super::edit::{self, AUTHOR, Draft, NO_AUTHOR, TAGS};
+use super::edit::{self, Draft, NO_AUTHOR};
 use crate::contract::{Document, Intent};
 use crate::panels::PanelCx;
+use crate::panels::labels::{AUTHOR, TAGS};
 use crate::theme::{Icon, TextRole, Tone, color, space};
 use crate::widgets::{Badge, Button, Card, ControlSize};
 
@@ -37,10 +38,13 @@ pub(super) fn show(
             );
         }
         ui.add_space(space::XS);
-        if is_edited {
-            edit::form(ui, document, &mut local.editing, cx.shared, cx.intents);
-        } else {
-            labels(ui, document);
+        match &mut local.editing {
+            Some(draft) if draft.doc == document.id => {
+                if edit::form(ui, document, draft, cx.shared, cx.intents) {
+                    local.editing = None;
+                }
+            }
+            _ => labels(ui, document),
         }
         ui.add_space(space::SM);
         buttons(ui, document, is_edited, local, cx);

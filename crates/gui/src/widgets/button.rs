@@ -79,20 +79,16 @@ impl<'a> Button<'a> {
     }
 
     /// `label` is the accessible name and the tooltip.
-    pub fn icon_only(_icon: Icon, label: &'a str) -> Self {
-        // SMELL: `_icon` is used, so its underscore is wrong. Rename it to `icon`.
+    pub fn icon_only(icon: Icon, label: &'a str) -> Self {
         Button {
-            icon: Some(_icon),
+            icon: Some(icon),
             ..Button::with_variant(label, Variant::IconOnly)
         }
     }
 
-    pub fn icon(self, _icon: Icon) -> Self {
-        // SMELL: `_icon` is used, so its underscore is wrong. Rename it to `icon`.
-        Button {
-            icon: Some(_icon),
-            ..self
-        }
+    pub fn icon(mut self, icon: Icon) -> Self {
+        self.icon = Some(icon);
+        self
     }
 
     pub fn size(mut self, size: ControlSize) -> Self {

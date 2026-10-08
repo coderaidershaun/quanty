@@ -8,7 +8,7 @@ mod dispatch;
 mod failure;
 pub mod health;
 pub mod ingest;
-pub mod library;
+mod library;
 pub mod query;
 pub mod source;
 

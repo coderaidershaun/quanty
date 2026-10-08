@@ -134,7 +134,8 @@ pub(super) struct Picker<'a> {
 impl Picker<'_> {
     pub(super) fn show(&self, ui: &mut egui::Ui, width: f32) -> Option<DocId> {
         let shown = ui.add_enabled_ui(self.is_enabled, |ui| {
-            Dropdown::new(self.salt, self.label, self.options)
+            Dropdown::new(self.label, self.options)
+                .id_salt(self.salt)
                 .selected(self.selected)
                 .placeholder(self.placeholder)
                 .width(width)

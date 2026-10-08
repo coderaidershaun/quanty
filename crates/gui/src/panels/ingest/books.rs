@@ -19,6 +19,8 @@ pub(super) struct Offer<'a> {
     pub(super) tags: Vec<&'a str>,
 }
 
+/// The comparison is exact, so that a library which already holds two titles that differ only in
+/// capitals still offers each of them.
 pub(super) fn has_titled(catalogue: &Catalogue, title: &str) -> bool {
     catalogue
         .books

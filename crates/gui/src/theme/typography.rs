@@ -35,7 +35,7 @@ impl TextRole {
         }
     }
 
-    const fn color(self) -> Color32 {
+    pub const fn color(self) -> Color32 {
         match self {
             TextRole::Small => color::TEXT_SECONDARY,
             _ => color::TEXT,

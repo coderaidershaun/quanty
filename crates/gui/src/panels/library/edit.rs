@@ -3,14 +3,14 @@
 use eframe::egui;
 
 use crate::contract::{DocId, Document, Intent, LabelEdit};
-use crate::panels::labels::{author_label, tag_labels};
+use crate::panels::labels::{
+    AUTHOR, TAGS, author_label, author_text, caption, tag_labels, tags_text,
+};
 use crate::state::{Library, Shared};
 use crate::theme::{TextRole, color, space};
 use crate::widgets::{Button, Notice, TextInput};
 
-pub(super) const AUTHOR: &str = "Author";
 pub(super) const NO_AUTHOR: &str = "No author";
-pub(super) const TAGS: &str = "Tags";
 const TAGS_HINT: &str = "With commas between them";
 const SAVE: &str = "Save";
 const CANCEL: &str = "Cancel";
@@ -34,8 +34,8 @@ impl Draft {
     pub(super) fn of(document: &Document) -> Draft {
         Draft {
             doc: document.id,
-            author: document.author.clone().unwrap_or_default(),
-            tags: document.tags.join(", "),
+            author: author_text(document.author.as_deref()),
+            tags: tags_text(&document.tags),
             step: SaveStep::Typing,
         }
     }
@@ -71,24 +71,24 @@ pub(super) fn follow(editing: &mut Option<Draft>, library: &Library) {
     }
 }
 
+/// Returns true when the person gave the form up, so the caller closes it.
 pub(super) fn form(
     ui: &mut egui::Ui,
     document: &Document,
-    editing: &mut Option<Draft>,
+    draft: &mut Draft,
     shared: &Shared,
     intents: &mut Vec<Intent>,
-) {
-    let Some(draft) = editing.as_mut() else {
-        return;
-    };
+) -> bool {
     let is_sent = draft.step == SaveStep::Sent;
     ui.add_enabled_ui(!is_sent, |ui| {
         caption(ui, AUTHOR);
-        TextInput::new("library_author", AUTHOR, &mut draft.author)
+        TextInput::new(AUTHOR, &mut draft.author)
+            .id_salt("library_author")
             .placeholder(NO_AUTHOR)
             .show(ui);
         caption(ui, TAGS);
-        TextInput::new("library_tags", TAGS, &mut draft.tags)
+        TextInput::new(TAGS, &mut draft.tags)
+            .id_salt("library_tags")
             .placeholder(TAGS_HINT)
             .show(ui);
     });
@@ -119,12 +119,5 @@ pub(super) fn form(
         ui.add_space(space::SM);
         Notice::error(&failure.hint).show(ui);
     }
-    if is_cancelled {
-        *editing = None;
-    }
-}
-
-fn caption(ui: &mut egui::Ui, text: &str) {
-    ui.add_space(space::SM);
-    ui.label(TextRole::Label.rich(text));
+    is_cancelled
 }

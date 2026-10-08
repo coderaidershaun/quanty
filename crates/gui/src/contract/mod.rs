@@ -14,8 +14,8 @@ mod shortcut;
 mod source;
 
 pub use ask::{
-    Answer, AnswerBlock, AskDraft, AskMode, Filters, ItemKind, Reason, ResultItem, RetrievalTrace,
-    SearchReply,
+    Answer, AnswerBlock, AskDraft, AskMode, Filters, ItemKind, NothingFound, Reason, ResultItem,
+    RetrievalTrace, SearchReply,
 };
 pub use concept_graph::{ConceptGraph, EdgeKind, GraphEdge, GraphNode, NodeId, NodeKind};
 pub use failure::{Failure, FailureKind, Loadable};

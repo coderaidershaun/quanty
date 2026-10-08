@@ -134,8 +134,6 @@ enum Fill {
     Error,
 }
 
-/// A placeholder is at least this high, so it stays readable in a small panel.
-const PLACEHOLDER_MIN_HEIGHT: f32 = 120.0;
 const PLACEHOLDER_TEXT_WIDTH: f32 = 360.0;
 const PLACEHOLDER_ICON: f32 = 32.0;
 
@@ -152,6 +150,9 @@ pub struct PlaceholderResponse {
 }
 
 impl<'a> Placeholder<'a> {
+    /// A placeholder is at least this high, so it stays readable in a small panel.
+    pub const MIN_HEIGHT: f32 = 120.0;
+
     fn with_fill(fill: Fill, title: &'a str) -> Self {
         Placeholder {
             fill,
@@ -161,9 +162,8 @@ impl<'a> Placeholder<'a> {
         }
     }
 
-    pub fn empty(_icon: Icon, title: &'a str) -> Self {
-        // SMELL: `_icon` is used, so its underscore is wrong. Rename it to `icon`.
-        Placeholder::with_fill(Fill::Empty(_icon), title)
+    pub fn empty(icon: Icon, title: &'a str) -> Self {
+        Placeholder::with_fill(Fill::Empty(icon), title)
     }
 
     pub fn loading(title: &'a str) -> Self {
@@ -187,9 +187,9 @@ impl<'a> Placeholder<'a> {
     pub fn show(self, ui: &mut egui::Ui) -> PlaceholderResponse {
         let area = ui.available_size();
         let height = if area.y.is_finite() {
-            area.y.max(PLACEHOLDER_MIN_HEIGHT)
+            area.y.max(Self::MIN_HEIGHT)
         } else {
-            PLACEHOLDER_MIN_HEIGHT
+            Self::MIN_HEIGHT
         };
         let width = if area.x.is_finite() {
             area.x

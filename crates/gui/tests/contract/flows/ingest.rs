@@ -9,14 +9,12 @@ use eframe::egui::accesskit::Role;
 use gui::app::layout::{DEFAULT_WINDOW, MIN_WINDOW};
 use gui::backend::fake::Fake;
 use gui::backend::{Handler, Reply};
-use gui::contract::{Book, Command, Intent, NewBook, Tab};
+use gui::contract::{Book, Command, IngestRequest, Intent, NewBook, Tab};
 use gui::state::IngestJob;
 use gui::testkit;
 
 use super::recording::{self, Seen};
-use super::{Window, click, has, is_enabled, node, press, says, shared};
-
-const COMMAND: egui::Modifiers = egui::Modifiers::COMMAND;
+use super::{COMMAND, Window, click, field, has, is_enabled, node, press, says, shared, type_into};
 
 fn is_preflight(command: &Command) -> bool {
     matches!(command, Command::Preflight { .. })
@@ -30,10 +28,6 @@ fn open(scene: &str, size: [f32; 2]) -> (Window, Seen) {
     let (mut harness, seen) = recording::open(scene, size);
     testkit::settle(&mut harness);
     (harness, seen)
-}
-
-fn field(harness: &Window, name: &str) -> Option<String> {
-    node(harness, Role::TextInput, name).value()
 }
 
 fn place_of(seen: &Seen, is: fn(&Command) -> bool) -> Option<usize> {
@@ -161,13 +155,6 @@ fn saved_books(seen: &Seen) -> Vec<NewBook> {
         .collect()
 }
 
-/// A box takes the text only when it has the keyboard, so it is clicked first.
-fn type_into(harness: &mut Window, name: &str, text: &str) {
-    node(harness, Role::TextInput, name).click();
-    node(harness, Role::TextInput, name).type_text(text);
-    harness.run_ok();
-}
-
 fn open_the_form_of_a_new_book(harness: &mut Window) {
     click(harness, Role::ComboBox, "Book");
     click(harness, Role::Button, "Add a new book…");
@@ -272,6 +259,18 @@ fn the_saved_book_fills_author_and_tags_each_time_it_is_chosen(harness: &mut Win
     );
 }
 
+fn last_checked(seen: &Seen) -> IngestRequest {
+    let checked = seen
+        .all()
+        .into_iter()
+        .rev()
+        .find_map(|command| match command {
+            Command::Preflight { ingest, .. } => Some(ingest),
+            _ => None,
+        });
+    checked.expect("the chapter was not checked")
+}
+
 fn a_chapter_of_the_saved_book_is_labelled_with_what_was_saved(harness: &mut Window, seen: &Seen) {
     harness
         .state_mut()
@@ -279,13 +278,7 @@ fn a_chapter_of_the_saved_book_is_labelled_with_what_was_saved(harness: &mut Win
     testkit::settle(harness);
     click(harness, Role::Button, "Check the chapter");
 
-    let Some(Command::Preflight { ingest, .. }) = seen
-        .all()
-        .into_iter()
-        .rfind(|command| matches!(command, Command::Preflight { .. }))
-    else {
-        panic!("the chapter was not checked");
-    };
+    let ingest = last_checked(seen);
     assert_eq!(ingest.book, "Natenberg on Options");
     assert_eq!(ingest.author.as_deref(), Some("Sheldon Natenberg"));
     assert_eq!(ingest.tags, ["options", "volatility"]);
@@ -382,6 +375,33 @@ fn cancel_clears_a_check_that_was_made_for_the_new_book(harness: &mut Window, se
     assert!(matches!(shared(harness).ingest, IngestJob::Checked { .. }));
 }
 
+fn a_typed_title_of_a_stored_book_is_sent_as_the_library_has_it() {
+    let (mut harness, seen) = open("idle", DEFAULT_WINDOW);
+    click(&mut harness, Role::Tab, "Ingest");
+    open_the_form_of_a_new_book(&mut harness);
+    type_into(
+        &mut harness,
+        "Book title",
+        " option volatility AND pricing ",
+    );
+    harness
+        .state_mut()
+        .push(Intent::PdfPicked(PathBuf::from("chapter-4-vega.pdf")));
+    testkit::settle(&mut harness);
+    click(&mut harness, Role::Button, "Check the chapter");
+
+    assert_eq!(
+        last_checked(&seen).book,
+        "Option Volatility and Pricing",
+        "the title as it was typed would start a second book"
+    );
+    assert!(
+        matches!(shared(&harness).ingest, IngestJob::Checked { .. }),
+        "the check stands: {:?}",
+        shared(&harness).ingest
+    );
+}
+
 fn with_no_book_in_the_library_the_list_is_there_to_go_back_to() {
     let (mut harness, _) = open("empty-library", DEFAULT_WINDOW);
     click(&mut harness, Role::Tab, "Ingest");
@@ -442,6 +462,7 @@ fn a_book_is_saved_with_no_pdf_is_offered_after_and_is_refused_a_second_time() {
     a_book_with_no_chapter_is_not_a_filter_and_not_in_the_source_pickers(&mut harness);
     a_second_book_with_the_same_title_is_refused_by_name(&mut harness, &seen);
     cancel_clears_a_check_that_was_made_for_the_new_book(&mut harness, &seen);
+    a_typed_title_of_a_stored_book_is_sent_as_the_library_has_it();
     with_no_book_in_the_library_the_list_is_there_to_go_back_to();
     cancel_is_off_while_the_save_runs();
 }

@@ -3,7 +3,7 @@
 
 use eframe::egui::{self, Response};
 
-use super::{GalleryState, column, section};
+use super::{State, column, section};
 use crate::theme::{Icon, Kind, TextRole, Tone, size, space};
 use crate::widgets::look::Look;
 use crate::widgets::{
@@ -27,7 +27,7 @@ pub(super) const HEADER_STEP: &str = "2 of 6";
 pub(super) const BOOK_WIDTH: f32 = 160.0;
 const PLACEHOLDER_AREA: egui::Vec2 = egui::vec2(196.0, 170.0);
 
-pub(super) fn show(ui: &mut egui::Ui, state: &mut GalleryState) {
+pub(super) fn show(ui: &mut egui::Ui, state: &mut State) {
     buttons(ui, state);
     inputs(ui, state);
     tabs(ui, state);
@@ -40,13 +40,13 @@ pub(super) fn show(ui: &mut egui::Ui, state: &mut GalleryState) {
     confirm(ui, state);
 }
 
-fn used(state: &mut GalleryState, response: &Response, name: &'static str) {
+fn used(state: &mut State, response: &Response, name: &'static str) {
     if response.clicked() {
         state.last_activated = Some(name);
     }
 }
 
-fn buttons(ui: &mut egui::Ui, state: &mut GalleryState) {
+fn buttons(ui: &mut egui::Ui, state: &mut State) {
     section(ui, "Buttons");
     ui.horizontal_wrapped(|ui| {
         for (label, look) in [
@@ -113,10 +113,10 @@ fn buttons(ui: &mut egui::Ui, state: &mut GalleryState) {
     });
 }
 
-fn inputs(ui: &mut egui::Ui, state: &mut GalleryState) {
+fn inputs(ui: &mut egui::Ui, state: &mut State) {
     section(ui, "Inputs");
     let demo = &mut state.demo;
-    let question = TextInput::new("gallery-question", "Question", &mut demo.question)
+    let question = TextInput::new("Question", &mut demo.question)
         .placeholder("Ask about your books…")
         .icon(Icon::SEARCH)
         .trailing(Icon::CLOSE, "Clear question")
@@ -129,7 +129,7 @@ fn inputs(ui: &mut egui::Ui, state: &mut GalleryState) {
         state.demo.question.clear();
         state.last_activated = Some("TextInput::trailing");
     }
-    let follow = TextInput::new("gallery-follow", "Follow up", &mut state.demo.follow_up)
+    let follow = TextInput::new("Follow up", &mut state.demo.follow_up)
         .placeholder("Ask a follow-up question…")
         .trailing(Icon::SEND, "Send")
         .size(ControlSize::Small)
@@ -139,7 +139,7 @@ fn inputs(ui: &mut egui::Ui, state: &mut GalleryState) {
         state.last_activated = Some("TextInput::send");
     }
     ui.horizontal_wrapped(|ui| {
-        let mode = Dropdown::new("gallery-mode", "Mode", &MODES)
+        let mode = Dropdown::new("Mode", &MODES)
             .selected(state.demo.mode)
             .placeholder("Choose a mode")
             .show(ui);
@@ -147,20 +147,20 @@ fn inputs(ui: &mut egui::Ui, state: &mut GalleryState) {
             state.demo.mode = mode;
             state.last_activated = Some("Dropdown");
         }
-        let empty = Dropdown::new("gallery-empty", "Filter", &MODES)
+        let empty = Dropdown::new("Filter", &MODES)
             .placeholder("All books")
             .show(ui);
         if empty.is_some() {
             state.last_activated = Some("Dropdown::empty");
         }
-        let book = Dropdown::new("gallery-book", "Book", &BOOKS)
+        let book = Dropdown::new("Book", &BOOKS)
             .selected(Some(1))
             .width(BOOK_WIDTH)
             .show(ui);
         if book.is_some() {
             state.last_activated = Some("Dropdown::width");
         }
-        let large = Dropdown::new("gallery-large", "Large mode", &MODES)
+        let large = Dropdown::new("Large mode", &MODES)
             .selected(Some(0))
             .size(ControlSize::Large)
             .show(ui);
@@ -200,7 +200,7 @@ fn inputs(ui: &mut egui::Ui, state: &mut GalleryState) {
     });
 }
 
-fn tabs(ui: &mut egui::Ui, state: &mut GalleryState) {
+fn tabs(ui: &mut egui::Ui, state: &mut State) {
     section(ui, "Tabs");
     let counted = [
         Tab::new("Answer"),
@@ -241,7 +241,7 @@ fn tabs(ui: &mut egui::Ui, state: &mut GalleryState) {
     TabStrip::new(&hovered, 0).preview(Look::HOVERED).show(ui);
 }
 
-fn cards(ui: &mut egui::Ui, state: &mut GalleryState) {
+fn cards(ui: &mut egui::Ui, state: &mut State) {
     section(ui, "Cards");
     let width = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
     ui.horizontal_top(|ui| {
@@ -292,7 +292,7 @@ fn cards(ui: &mut egui::Ui, state: &mut GalleryState) {
     }
 }
 
-fn chips(ui: &mut egui::Ui, state: &mut GalleryState) {
+fn chips(ui: &mut egui::Ui, state: &mut State) {
     section(ui, "Chips, badges and markers");
     ui.horizontal_wrapped(|ui| {
         for (number, look, is_selected) in [
@@ -376,7 +376,7 @@ fn chips(ui: &mut egui::Ui, state: &mut GalleryState) {
     logo(ui);
 }
 
-fn notices(ui: &mut egui::Ui, state: &mut GalleryState) {
+fn notices(ui: &mut egui::Ui, state: &mut State) {
     section(ui, "Notices");
     let info = Notice::info("No sources found")
         .body(
@@ -401,7 +401,7 @@ fn notices(ui: &mut egui::Ui, state: &mut GalleryState) {
     Notice::success("Chapter ingested").show(ui);
 }
 
-fn placeholders(ui: &mut egui::Ui, state: &mut GalleryState) {
+fn placeholders(ui: &mut egui::Ui, state: &mut State) {
     section(ui, "Placeholders");
     ui.horizontal_top(|ui| {
         let areas = [
@@ -440,7 +440,7 @@ fn progress(ui: &mut egui::Ui) {
     });
 }
 
-fn panel_header(ui: &mut egui::Ui, state: &mut GalleryState) {
+fn panel_header(ui: &mut egui::Ui, state: &mut State) {
     section_header(ui, "A panel header", |ui| {
         ui.add(Button::icon_only(Icon::FIT, "Fit to width"));
         let paged = Stepper::new(HEADER_STEP)
@@ -455,14 +455,14 @@ fn panel_header(ui: &mut egui::Ui, state: &mut GalleryState) {
     ui.add_space(space::SM);
 }
 
-fn confirm(ui: &mut egui::Ui, state: &mut GalleryState) {
+fn confirm(ui: &mut egui::Ui, state: &mut State) {
     section(ui, "Confirm");
     let open = ui.add(Button::secondary("Open the dialog"));
     if open.clicked() {
         state.demo.is_confirm_open = true;
     }
     if state.demo.is_confirm_open {
-        let sheet = Confirm::new("gallery-confirm", "Delete this book?")
+        let sheet = Confirm::new(egui::Id::new("gallery-confirm"), "Delete this book?")
             .body("Its pages are removed from the library. This cannot be undone.")
             .confirm_label("Delete book")
             .destructive()

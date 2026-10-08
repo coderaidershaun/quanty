@@ -5,19 +5,14 @@ use eframe::egui;
 
 use super::pane::Pane;
 use super::phase::{Phase, Written};
-use crate::contract::{Failure, Loadable};
+use crate::contract::{Failure, Loadable, NothingFound};
 use crate::theme::{Icon, TextRole};
 use crate::widgets::{self, Placeholder};
-
-const NO_ITEMS_HINT: &str =
-    "Your library holds no items yet. Add a chapter on the Ingest tab, then ask again.";
-const NO_ITEM_MATCHES_HINT: &str =
-    "No item in your library matches the filters of this question. Clear a filter, then ask again.";
 
 /// The whole body, for a search that has no result to show.
 pub(super) fn whole(ui: &mut egui::Ui, pane: &Pane<'_, '_>) {
     match pane.phase {
-        Phase::Idle | Phase::NoResults if library_is_empty(pane) => {
+        Phase::Idle | Phase::NoResults(_) if library_is_empty(pane) => {
             Placeholder::empty(Icon::LIBRARY, "Your library is empty")
                 .hint("Add a chapter on the Ingest tab, then ask about it here.")
                 .show(ui);
@@ -38,14 +33,17 @@ pub(super) fn whole(ui: &mut egui::Ui, pane: &Pane<'_, '_>) {
                 .hint("Ask again when you are ready.")
                 .show(ui);
         }
-        Phase::NoResults if no_document_has_the_labels(pane) => {
+        // The filters are beside the question here, so the hint points at them.
+        Phase::NoResults(NothingFound::NoDocumentHasTheLabels) => {
             Placeholder::empty(Icon::TAG, "No document has these labels")
                 .hint("Change or remove a filter beside the question, then ask again.")
                 .show(ui);
         }
-        Phase::NoResults => {
+        Phase::NoResults(
+            reason @ (NothingFound::NoItemMatchesTheFilters | NothingFound::LibraryHoldsNoItems),
+        ) => {
             Placeholder::empty(Icon::SEARCH, "No results")
-                .hint(why_nothing_was_found(pane))
+                .hint(reason.hint())
                 .show(ui);
         }
         Phase::Found { .. } => {}
@@ -108,28 +106,4 @@ fn library_is_empty(pane: &Pane<'_, '_>) -> bool {
         &pane.cx.shared.library.catalogue,
         Loadable::Ready(catalogue) if catalogue.documents().next().is_none()
     )
-}
-
-/// A search has no score limit, so it finds nothing only when the library holds no items or the
-/// filters of the question leave none. A search that had a filter reports how many documents
-/// matched it.
-fn why_nothing_was_found(pane: &Pane<'_, '_>) -> &'static str {
-    let had_a_filter = pane
-        .ask
-        .search
-        .ready()
-        .is_some_and(|reply| reply.trace.documents_searched.is_some());
-    if had_a_filter {
-        NO_ITEM_MATCHES_HINT
-    } else {
-        NO_ITEMS_HINT
-    }
-}
-
-/// A filter that matched no document: the search stopped before it looked at any item.
-fn no_document_has_the_labels(pane: &Pane<'_, '_>) -> bool {
-    pane.ask
-        .search
-        .ready()
-        .is_some_and(|reply| reply.trace.documents_searched == Some(0))
 }

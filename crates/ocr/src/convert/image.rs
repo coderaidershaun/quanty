@@ -51,7 +51,7 @@ pub async fn convert_image(
 /// # Errors
 /// - [`ConvertError::NotAPicture`] when the file name does not end in `.png`, `.jpg` or `.jpeg`
 /// - [`ConvertError::PictureUnreadable`] when the file cannot be read
-/// - [`ConvertError::Services`] when the paid call fails
+/// - [`ConvertError::ImageCallFailed`] when the paid call fails
 /// - [`ConvertError::ImageReplyRejected`] when both replies broke a rule
 /// - [`ConvertError::Content`] when the saved files cannot be read or written
 pub async fn convert_image_with<S: ImageServices>(
@@ -85,9 +85,13 @@ pub async fn convert_image_with<S: ImageServices>(
     let mut calls = Vec::new();
     let mut correction: Option<String> = None;
     let figure = loop {
-        // SMELL: a call that fails here is reported in the words for services that "could not be
-        // started", which is not what happened to it.
-        let answer = services.transcribe(&copy, correction.as_deref()).await?;
+        let answer = services
+            .transcribe(&copy, correction.as_deref())
+            .await
+            .map_err(|source| ConvertError::ImageCallFailed {
+                picture: picture.to_path_buf(),
+                source,
+            })?;
         calls.push(call_record(CallStep::Transcribe, &answer.usage));
         match only_figure(answer) {
             Ok(figure) => break figure,

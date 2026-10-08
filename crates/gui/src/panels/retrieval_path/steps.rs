@@ -1,7 +1,7 @@
 //! Every word of the path and the rule that picks it: what the panel says when it has no steps
 //! to show, and the five steps themselves.
 
-use crate::contract::{Failure, Loadable, RetrievalTrace};
+use crate::contract::{Failure, Loadable, NothingFound, RetrievalTrace};
 use crate::state::AskSession;
 use crate::theme::{Icon, Kind, Tone};
 
@@ -84,21 +84,27 @@ const NOT_REACHED: &str = "Not reached";
 
 fn nearest(trace: &RetrievalTrace) -> Outcome {
     let items = counted(trace.nearest, "item", "items");
-    let (badge, line) = match (trace.documents_searched, trace.nearest) {
-        (Some(0), _) => (
-            counted(0, "document", "documents"),
-            Some("No document has these labels. Nothing was searched.".to_owned()),
-        ),
-        (Some(_), 0) => (items, Some("No item matches the filters.".to_owned())),
-        (None, 0) => (items, Some("The library holds no items.".to_owned())),
-        (Some(documents), _) => (
+    let (badge, line) = match (trace.nearest, trace.documents_searched) {
+        (0, _) => match trace.why_nothing_was_found() {
+            NothingFound::NoDocumentHasTheLabels => (
+                counted(0, "document", "documents"),
+                Some("No document has these labels. Nothing was searched.".to_owned()),
+            ),
+            NothingFound::NoItemMatchesTheFilters => {
+                (items, Some("No item matches the filters.".to_owned()))
+            }
+            NothingFound::LibraryHoldsNoItems => {
+                (items, Some("The library holds no items.".to_owned()))
+            }
+        },
+        (_, Some(documents)) => (
             items,
             Some(format!(
                 "The closest items in the {} with these labels.",
                 counted(documents, "document", "documents")
             )),
         ),
-        (None, _) => (items, None),
+        (_, None) => (items, None),
     };
     Outcome {
         progress: Progress::Taken,

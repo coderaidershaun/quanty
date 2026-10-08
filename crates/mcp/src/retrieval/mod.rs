@@ -8,8 +8,8 @@ use std::collections::BTreeSet;
 
 use graph::{FalkorGraph, GraphError};
 use rag_core::{
-    ConceptStore, Config, DocumentLabels, EmbedError, EmptyTag, ItemKind, ItemStore, StoreError,
-    Tag, UnknownItemKind,
+    ConceptStore, Config, DocumentLabels, EmbedError, EmptyTag, ItemKind, ItemStore, Llm,
+    StoreError, Tag, UnknownItemKind,
 };
 use rag_retrieval::{ANSWER_MODEL, AnswerError, Retriever, SearchError};
 use schemars::JsonSchema;
@@ -148,7 +148,8 @@ pub(crate) async fn search<S: Services>(
 }
 
 /// Writes an answer from the items found for the question. The model is not asked when nothing
-/// was found.
+/// was found. Whether the model can answer at all is checked first, which costs nothing, so a
+/// model that is not ready stops the call before the search is billed.
 ///
 /// # Errors
 /// - a bad argument: a blank question, an unknown kind or a blank tag
@@ -159,6 +160,8 @@ pub(crate) async fn answer<S: Services>(
     args: QuestionArgs,
 ) -> Result<AnswerResult, RetrievalError> {
     let asked = args.read()?;
+    let llm = services.llm(ANSWER_MODEL);
+    llm.check_ready().await.map_err(AnswerError::Llm)?;
     let retriever = retriever(config, services).await?;
     let results = retriever
         .search(&asked.question, asked.kind, &asked.wanted)
@@ -166,8 +169,7 @@ pub(crate) async fn answer<S: Services>(
     if results.hits.is_empty() {
         return Ok(AnswerResult::unanswered());
     }
-    let written =
-        rag_retrieval::answer(&services.llm(ANSWER_MODEL), &asked.question, &results).await?;
+    let written = rag_retrieval::answer(&llm, &asked.question, &results).await?;
     Ok(written.into())
 }
 

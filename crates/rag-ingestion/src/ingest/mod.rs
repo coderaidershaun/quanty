@@ -10,7 +10,9 @@ use std::path::{Path, PathBuf};
 
 use graph::{DocumentNode, GraphError, GraphStore, ItemNode};
 use ocr::ReadChapterError;
-use rag_core::{DocumentInput, DocumentLabels, EmbedError, Embedder, ItemPoint, Llm, StoreError};
+use rag_core::{
+    DocumentInput, DocumentLabels, EmbedError, Embedder, ItemPoint, Llm, LlmError, StoreError,
+};
 
 pub use concepts::{
     ASK_SCORE, ConceptError, ConceptExtractor, ConceptSummary, EXTRACTION_MODEL, LINK_SCORE,
@@ -36,6 +38,11 @@ pub enum IngestError {
 
     #[error("could not read the converted chapter")]
     Read(#[from] ReadChapterError),
+
+    #[error(
+        "claude cannot be asked for the concepts of the document, so nothing was embedded or stored"
+    )]
+    ModelNotReady(#[source] LlmError),
 
     #[error("could not embed the items of the document")]
     Embed(#[from] EmbedError),
@@ -64,6 +71,9 @@ struct Document {
     items: Vec<Item>,
 }
 
+/// The language model is asked first whether it can answer, which costs nothing, so a `claude`
+/// that is not signed in fails the run before anything is written or paid for.
+///
 /// The collections are prepared and the graph is written before anything is embedded, so a store
 /// that is down fails the run before an embedding call is paid for. A run that stops after that
 /// leaves the chapter in the graph with no points yet, and running it again stores them. A point
@@ -85,6 +95,8 @@ struct Document {
 /// # Errors
 /// - [`IngestError::ChapterFolder`] when the folder does not exist
 /// - [`IngestError::Read`] when it is not a finished converted chapter
+/// - [`IngestError::ModelNotReady`] when the language model cannot be asked anything until the
+///   person acts
 /// - [`IngestError::Embed`], [`IngestError::Store`] and [`IngestError::Graph`] when the outside
 ///   calls fail
 /// - [`IngestError::VectorCount`] when the embedder returns another number of vectors than
@@ -151,6 +163,11 @@ async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
     models: &Models<E, L>,
     stores: &Stores<G>,
 ) -> Result<IngestSummary, IngestError> {
+    models
+        .concepts
+        .check_model_ready()
+        .await
+        .map_err(IngestError::ModelNotReady)?;
     let Document {
         mut node,
         mut items,
@@ -201,9 +218,6 @@ async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
     stores.items.upsert(&points).await?;
     let points_in_collection = stores.items.count().await?;
 
-    // SMELL: a `claude` that cannot answer at all, because a key is set, it is not signed in or
-    // it is not installed, is found only here, after the embedding of the whole chapter was paid
-    // for. Running the command again pays for the embedding again.
     let embedded = EmbeddedItems {
         items: &items,
         vectors: &vectors,

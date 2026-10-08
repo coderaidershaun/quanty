@@ -1,6 +1,6 @@
 //! What a usage limit does: it stops the run, and the next run goes on from the cache.
 
-use graph::testing::stored_concept_graph;
+use graph::testing::{GraphSize, size, stored_concept_graph};
 use rag_core::LlmError;
 use rag_ingestion::{ConceptError, IngestError, Models, ingest_chapter};
 use serde_json::{Value, json};
@@ -158,4 +158,37 @@ async fn a_stop_while_the_concepts_are_linked_counts_the_item_that_was_skipped_b
         }
         other => panic!("expected the run to stop at the usage limit, got {other:?}"),
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored concepts::"]
+async fn a_model_that_is_signed_out_stops_the_ingest_before_anything_is_embedded_or_written() {
+    let throwaway = ThrowawayStores::new("concepts-signed-out");
+    let stores = throwaway.connect().await;
+    let model = StandInLlm::signed_out();
+    let models = throwaway.models(model.clone());
+
+    let error = ingest_chapter(&support::intuition_chapter(), &models, &stores)
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(
+            error,
+            IngestError::ModelNotReady(LlmError::NotSignedIn { .. })
+        ),
+        "{error:?}"
+    );
+    let message = chain_of(&error);
+    assert!(
+        message.contains("nothing was embedded or stored"),
+        "{message}"
+    );
+    assert!(message.contains("sign in"), "{message}");
+    assert!(
+        models.embedder.received().is_empty(),
+        "no embedding is paid for"
+    );
+    assert_eq!(model.calls(), 0, "no question is asked");
+    assert_eq!(size(&stores.graph).await, GraphSize { nodes: 0, edges: 0 });
 }

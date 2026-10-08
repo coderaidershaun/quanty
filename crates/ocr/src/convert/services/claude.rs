@@ -89,6 +89,9 @@ pub enum ClaudeError {
     #[error("could not start the claude command; check that it is installed and on PATH")]
     Spawn(#[source] std::io::Error),
 
+    #[error("claude was started but waiting for it to finish failed; run the same command again")]
+    Wait(#[source] std::io::Error),
+
     #[error("claude did not answer within {seconds} seconds")]
     TimedOut { seconds: u64 },
 
@@ -215,14 +218,14 @@ pub(super) async fn run<T: DeserializeOwned>(
     let mut command = locked_down_command(call, prompt, page_folder);
 
     let started = Instant::now();
+    let child = command.spawn().map_err(ClaudeError::Spawn)?;
     // Dropping the timed-out future drops the process handle, which kills `claude`.
-    let output = tokio::time::timeout(call.timeout, command.output())
+    let output = tokio::time::timeout(call.timeout, child.wait_with_output())
         .await
         .map_err(|_| ClaudeError::TimedOut {
             seconds: call.timeout.as_secs(),
         })?
-        // SMELL: a failure while waiting for `claude` is also reported as a failure to start it.
-        .map_err(ClaudeError::Spawn)?;
+        .map_err(ClaudeError::Wait)?;
 
     read_answer(&output, call.model, started.elapsed())
 }
@@ -293,6 +296,8 @@ fn locked_down_command(call: &ClaudeCall<'_>, prompt: String, page_folder: &Path
         .current_dir(page_folder)
         // Without this, `claude` waits a few seconds for input on the caller's stdin.
         .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .kill_on_drop(true);
     if let Some(effort) = call.effort {
         command.args(["--effort", effort]);

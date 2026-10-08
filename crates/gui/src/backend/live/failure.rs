@@ -217,7 +217,9 @@ fn convert(error: &ConvertError) -> Verdict {
             Verdict::saying(Kind::ChapterTaken, hint)
         }
         ConvertError::Poppler(error) => poppler(error),
-        ConvertError::Services(error) => service(error),
+        ConvertError::Services(error) | ConvertError::ImageCallFailed { source: error, .. } => {
+            service(error)
+        }
         ConvertError::PageFailed { position, .. } => {
             let hint = format!(
                 "Page {position} could not be converted. Start again: the pages already done are kept."
@@ -246,6 +248,7 @@ fn ingest(error: &IngestError) -> Verdict {
     match error {
         IngestError::ChapterFolder { path, .. } => source_missing(path),
         IngestError::Read(error) => read_chapter(error),
+        IngestError::ModelNotReady(error) => llm(error),
         IngestError::Embed(error) => embed(error),
         IngestError::Store(error) => store(error),
         IngestError::Graph(error) => graph(error),

@@ -62,7 +62,8 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
 }
 
 fn ask_box(ui: &mut egui::Ui, draft: &mut String) -> Option<String> {
-    let outcome = widgets::TextInput::new("follow_up", guidance::BOX_LABEL, draft)
+    let outcome = widgets::TextInput::new(guidance::BOX_LABEL, draft)
+        .id_salt("follow_up")
         .placeholder(guidance::BOX_HINT)
         .trailing(Icon::SEND, guidance::SEND_LABEL)
         .size(widgets::ControlSize::Medium)

@@ -22,21 +22,25 @@ impl Fake {
             .expect("the catalogue of the fake is not poisoned")
     }
 
-    pub(super) async fn load_catalogue(&self, request: RequestId, reply: &Reply) {
+    /// Waits as a store would, then answers, or fails when the library of the scene fails.
+    async fn after_wait<T>(
+        &self,
+        answer: impl FnOnce() -> Result<T, Failure>,
+    ) -> Result<T, Failure> {
         self.wait(CATALOGUE_WAIT).await;
-        let result = match self.scene.script.library {
+        match self.scene.script.library {
             Library::Fails(kind) => Err(self.failure(kind)),
-            Library::Samples | Library::Empty => Ok(self.catalogue().clone()),
-        };
+            Library::Samples | Library::Empty => answer(),
+        }
+    }
+
+    pub(super) async fn load_catalogue(&self, request: RequestId, reply: &Reply) {
+        let result = self.after_wait(|| Ok(self.catalogue().clone())).await;
         reply.send(Event::Catalogue { request, result });
     }
 
     pub(super) async fn save_book(&self, request: RequestId, book: &NewBook, reply: &Reply) {
-        self.wait(CATALOGUE_WAIT).await;
-        let result = match self.scene.script.library {
-            Library::Fails(kind) => Err(self.failure(kind)),
-            Library::Samples | Library::Empty => self.add_book(book),
-        };
+        let result = self.after_wait(|| self.add_book(book)).await;
         reply.send(Event::BookSaved { request, result });
     }
 
@@ -66,11 +70,7 @@ impl Fake {
     }
 
     pub(super) async fn set_labels(&self, request: RequestId, edit: &LabelEdit, reply: &Reply) {
-        self.wait(CATALOGUE_WAIT).await;
-        let result = match self.scene.script.library {
-            Library::Fails(kind) => Err(self.failure(kind)),
-            Library::Samples | Library::Empty => self.relabel(edit),
-        };
+        let result = self.after_wait(|| self.relabel(edit)).await;
         reply.send(Event::LabelsSaved {
             request,
             doc: edit.doc,

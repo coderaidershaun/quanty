@@ -35,18 +35,14 @@ pub fn find_home(flag: Option<&Path>) -> std::io::Result<Home> {
         variable.as_deref(),
         &current,
         program.as_deref(),
-        &|folder| folder.join(ENV_FILE).is_file(),
     ))
 }
 
-// SMELL: `holds_env`, and `exists` in `path_with`, are passed in, but only one check of the disk
-// is ever passed for each. Call that check directly and drop the parameter.
 fn home_from(
     flag: Option<&Path>,
     variable: Option<&OsStr>,
     current: &Path,
     program: Option<&Path>,
-    holds_env: &dyn Fn(&Path) -> bool,
 ) -> Home {
     let given = flag
         .map(Path::to_path_buf)
@@ -55,7 +51,7 @@ fn home_from(
         // The program moves into this folder next, so a relative path must mean what it
         // means now.
         let folder = std::path::absolute(&folder).unwrap_or(folder);
-        return home_at(folder, holds_env);
+        return home_at(folder);
     }
     let nearest = |start: &Path| {
         start
@@ -64,7 +60,7 @@ fn home_from(
             .map(Path::to_path_buf)
     };
     match nearest(current).or_else(|| program.and_then(nearest)) {
-        Some(folder) => home_at(folder, holds_env),
+        Some(folder) => home_at(folder),
         None => Home {
             folder: current.to_path_buf(),
             env_file: None,
@@ -72,7 +68,11 @@ fn home_from(
     }
 }
 
-fn home_at(folder: PathBuf, holds_env: &dyn Fn(&Path) -> bool) -> Home {
+fn holds_env(folder: &Path) -> bool {
+    folder.join(ENV_FILE).is_file()
+}
+
+fn home_at(folder: PathBuf) -> Home {
     let env_file = holds_env(&folder).then(|| folder.join(ENV_FILE));
     Home { folder, env_file }
 }
@@ -81,17 +81,17 @@ fn home_at(folder: PathBuf, holds_env: &dyn Fn(&Path) -> bool) -> Home {
 pub fn search_path() -> OsString {
     let path = std::env::var_os("PATH").unwrap_or_default();
     let home = std::env::var_os("HOME").map(PathBuf::from);
-    path_with(&path, home.as_deref(), &|folder| folder.is_dir())
+    path_with(&path, home.as_deref())
 }
 
-fn path_with(path: &OsStr, home: Option<&Path>, exists: &dyn Fn(&Path) -> bool) -> OsString {
+fn path_with(path: &OsStr, home: Option<&Path>) -> OsString {
     let mut folders: Vec<PathBuf> = std::env::split_paths(path).collect();
     let extra = home
         .map(|home| home.join(HOME_TOOL_FOLDER))
         .into_iter()
         .chain(TOOL_FOLDERS.iter().map(PathBuf::from));
     for folder in extra {
-        if !folders.contains(&folder) && exists(&folder) {
+        if !folders.contains(&folder) && folder.is_dir() {
             folders.push(folder);
         }
     }

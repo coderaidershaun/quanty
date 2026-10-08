@@ -46,13 +46,6 @@ pub(super) struct TableLook {
 
 pub(super) fn text_look(role: TextRole) -> TextLook {
     let font = role.font();
-    // SMELL: the theme keeps the colour of a role to itself, so its rule is repeated here. If
-    // the theme changes the rule, this copy must follow by hand.
-    let text_color = if role == TextRole::Small {
-        color::TEXT_SECONDARY
-    } else {
-        color::TEXT
-    };
     TextLook {
         role,
         foot_font: FontId {
@@ -63,7 +56,7 @@ pub(super) fn text_look(role: TextRole) -> TextLook {
         font,
         strong_font: role.strong_font(),
         code_font: role.code_font(),
-        color: text_color,
+        color: role.color(),
         strong_color: color::TEXT,
         foot_color: color::TEXT_MUTED,
         code_fill: color::RAISED_HOVER,

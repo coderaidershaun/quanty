@@ -9,6 +9,7 @@ use rag_core::{ConceptId, Embedder, Llm, LlmError};
 use super::ask::ItemAnswer;
 use super::resolve::{Resolved, Resolver, normalised};
 use super::{ConceptError, ConceptSummary};
+use crate::ingest::{IngestStep, OnStep};
 
 enum ReplyConcepts {
     Resolved {
@@ -41,10 +42,11 @@ pub(super) async fn write<L: Llm, E: Embedder, G: GraphStore>(
     resolver: &Resolver<'_, L, E, G>,
     answers: &[ItemAnswer],
     items: usize,
+    on_step: OnStep<'_>,
 ) -> Result<ConceptSummary, ConceptError> {
     let graph = &resolver.stores.graph;
     let mut summary = ConceptSummary::default();
-    for answer in answers {
+    for (index, answer) in answers.iter().enumerate() {
         let (names, mentions) = match resolve_concepts(resolver, answer, &mut summary).await? {
             ReplyConcepts::Resolved { names, mentions } => (names, mentions),
             ReplyConcepts::Stopped(source) => {
@@ -63,6 +65,10 @@ pub(super) async fn write<L: Llm, E: Embedder, G: GraphStore>(
         summary.mentions_written += mentions.len();
         summary.relations_written += relations.kept.len();
         summary.relations_dropped += relations.dropped;
+        on_step(IngestStep::LinkingConcepts {
+            done: index + 1,
+            total: answers.len(),
+        });
     }
     Ok(summary)
 }

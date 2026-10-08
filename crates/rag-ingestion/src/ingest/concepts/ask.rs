@@ -12,6 +12,7 @@ use super::cache::{Cache, key_of};
 use super::question::{Extraction, SCHEMA, SYSTEM_PROMPT, input_for, related_material};
 use super::{ConceptError, ConceptExtractor, EmbeddedItems, SkippedItem};
 use crate::ingest::items::Item;
+use crate::ingest::{IngestStep, OnStep};
 
 const CALLS_AT_A_TIME: usize = 4;
 /// How many of the stored items nearest to a lone item are added to its question.
@@ -73,6 +74,7 @@ impl<L: Llm> ConceptExtractor<L> {
         cache: &Cache,
         embedded: &EmbeddedItems<'_>,
         stored_items: &ItemStore,
+        on_step: OnStep<'_>,
     ) -> Result<Answers, ConceptError> {
         let items = embedded.items;
         let related = match (items, embedded.vectors) {
@@ -121,6 +123,10 @@ impl<L: Llm> ConceptExtractor<L> {
                 }
             }
             taken += 1;
+            on_step(IngestStep::ReadingConcepts {
+                done: taken,
+                total: items.len(),
+            });
         }
         Ok(answers)
     }

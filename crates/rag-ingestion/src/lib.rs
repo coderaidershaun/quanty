@@ -15,10 +15,13 @@ pub mod testing;
 pub use delete::{DeleteError, DeleteSummary, delete_document};
 pub use ingest::{
     ASK_SCORE, ChapterFolder, ConceptError, ConceptExtractor, ConceptSummary, EXTRACTION_MODEL,
-    IngestError, IngestSummary, Item, ItemCounts, LINK_SCORE, LoneImage, Models, SkippedItem,
-    chapter_items, image_items, ingest_chapter, ingest_image,
+    IngestError, IngestStep, IngestSummary, Item, ItemCounts, LINK_SCORE, LoneImage, Models,
+    SkippedItem, chapter_items, image_items, ingest_chapter, ingest_image,
 };
 pub use labels::{RelabelError, Relabelled, TagChange, relabel_document_tags};
 pub use media::{MediaChange, MediaRelabelled, relabel_media};
-pub use pdf::{ChapterPdf, PdfError, PdfOutcome, PdfSummary, document_name, ingest_pdf};
+pub use pdf::{
+    ChapterPdf, PdfError, PdfOutcome, PdfSummary, document_name, ingest_pdf,
+    items_of_ingested_document,
+};
 pub use stores::Stores;

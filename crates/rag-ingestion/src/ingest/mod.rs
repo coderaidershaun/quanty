@@ -20,7 +20,8 @@ pub use concepts::{
     SkippedItem,
 };
 pub use items::{Item, LoneImage, chapter_items, image_items};
-pub use summary::{IngestSummary, ItemCounts};
+pub(crate) use summary::OnStep;
+pub use summary::{IngestStep, IngestSummary, ItemCounts};
 
 use concepts::EmbeddedItems;
 use items::{document_id, document_title};
@@ -124,6 +125,16 @@ pub async fn ingest_chapter<E: Embedder, L: Llm, G: GraphStore>(
     models: &Models<E, L>,
     stores: &Stores<G>,
 ) -> Result<IngestSummary, IngestError> {
+    ingest_chapter_reporting(chapter, models, stores, &mut |_| {}).await
+}
+
+/// [`ingest_chapter`], telling each step to `on_step` as it happens.
+pub(crate) async fn ingest_chapter_reporting<E: Embedder, L: Llm, G: GraphStore>(
+    chapter: ChapterFolder<'_>,
+    models: &Models<E, L>,
+    stores: &Stores<G>,
+    on_step: OnStep<'_>,
+) -> Result<IngestSummary, IngestError> {
     // SMELL: the stored picture paths are absolute, so they stop working when the chapter
     // folder is moved, until the chapter is ingested again.
     let folder =
@@ -144,7 +155,7 @@ pub async fn ingest_chapter<E: Embedder, L: Llm, G: GraphStore>(
             labels: chapter.new_media.clone(),
         }),
     };
-    ingest_items(document, models, stores).await
+    ingest_items(document, models, stores, on_step).await
 }
 
 /// Ingests a picture that stands alone as a document of one figure, in the same steps and with
@@ -172,13 +183,14 @@ pub async fn ingest_image<E: Embedder, L: Llm, G: GraphStore>(
         items,
         media: None,
     };
-    ingest_items(document, models, stores).await
+    ingest_items(document, models, stores, &mut |_| {}).await
 }
 
 async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
     document: Document,
     models: &Models<E, L>,
     stores: &Stores<G>,
+    on_step: OnStep<'_>,
 ) -> Result<IngestSummary, IngestError> {
     models
         .concepts
@@ -209,12 +221,14 @@ async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
     // SMELL: nothing removes the item nodes of an earlier run either, with their `NEXT` edges. A
     // chapter that is cut into items differently ends up with two chains of items in the graph,
     // until its document is deleted and ingested again.
+    on_step(IngestStep::WritingGraph);
     stores.graph.upsert_document(&node).await?;
     // A run that stops after this line must not leave the mark that an earlier run set.
     stores.graph.set_ingested_items(node.id, None).await?;
     stores.graph.upsert_items(node.id, &nodes).await?;
 
     let inputs: Vec<DocumentInput> = items.iter().map(|item| item.input.clone()).collect();
+    on_step(IngestStep::Embedding { items: items.len() });
     let vectors = models.embedder.embed_document(&inputs).await?;
     if vectors.len() != items.len() {
         return Err(IngestError::VectorCount {
@@ -235,6 +249,7 @@ async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
     // SMELL: nothing removes the points of an earlier run. When the way a chapter is cut into
     // items changes, its items get other positions and so other identifiers, and the old points
     // of the chapter stay in the collection beside the new ones.
+    on_step(IngestStep::Storing);
     stores.items.upsert(&points).await?;
     let points_in_collection = stores.items.count().await?;
 
@@ -244,7 +259,7 @@ async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
     };
     let concepts = models
         .concepts
-        .extract(&embedded, &models.embedder, stores)
+        .extract(&embedded, &models.embedder, stores, on_step)
         .await?;
     // An item that was skipped was not read for its concepts, so the document is not whole yet.
     // Keep this the last step: a step that failed after it would leave the mark on a run that did

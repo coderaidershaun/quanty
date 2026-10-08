@@ -1,5 +1,6 @@
-//! What a chapter run reports. Routes, piece counts and the pages to look at are always read
-//! from the saved `page.json` files, so a fresh run and a re-run print the same.
+//! What a chapter run reports, as it works and when it ends. Routes, piece counts and the pages
+//! to look at are always read from the saved `page.json` files, so a fresh run and a re-run print
+//! the same.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -17,6 +18,19 @@ const LOW_WORD_MATCH: f64 = 0.60;
 /// A figure picture that covers more than this share of its page is listed as a page to check: a
 /// figure is rarely that big, so a rectangle that large is more likely to be wrong.
 const MOST_OF_THE_PAGE_PERCENT: i64 = 80;
+
+/// What a chapter run tells its caller while it works, as it happens.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PageProgress {
+    /// The pages are known, before any page is cut out or paid for: `total` in the PDF, and
+    /// `done_before` of them saved by an earlier run. It comes once, before the first page is cut
+    /// out, on every run of a chapter that is not finished.
+    Pages { total: u32, done_before: u32 },
+    /// One more page is saved. `cost_usd` is what its calls cost. Pages end in any order.
+    PageDone { position: u32, cost_usd: f64 },
+    /// A page failed. No new page starts; the pages that are running finish first.
+    PageFailed { position: u32 },
+}
 
 /// The paid calls a run made. A corrected retry counts as a call of its own.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]

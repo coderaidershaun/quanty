@@ -1,7 +1,8 @@
 //! The free check of a document before a start: what is already converted or ingested, and
 //! what would stop a start that can be known without paying.
 
-use graph::GraphStore;
+use std::path::Path;
+
 use ocr::content::{PageIndex, page_folder_name};
 use ocr::{ChapterIndex, ContentError, ConvertError};
 
@@ -30,70 +31,70 @@ async fn check<S: Services>(
     let source_sha256 = job.source_sha256().map_err(|error| cx.failure(error))?;
     let document = rag_core::DocId::from_source_sha256(&source_sha256);
     let stores = cx.stores().await?;
-    let marked = stores
-        .graph
-        .ingested_items(document)
+    let ingested = rag_ingestion::items_of_ingested_document(document, &stores)
         .await
         .map_err(|error| cx.failure(error))?;
-    // The collection is asked only for a document that the graph marks, because asking about a
-    // collection that does not exist is an error and creating it would write.
-    if let Some(items) = marked {
-        let stored = stores
-            .items
-            .count_document(document)
-            .await
-            .map_err(|error| cx.failure(error))?;
-        if stored == items {
-            return Ok(Preflight {
-                name,
-                pages: None,
-                state: Some(ChapterState::Ingested { items }),
-                blockers: Vec::new(),
-            });
-        }
-    }
-
-    let folder = job.chapter_folder();
-    let saved = match ChapterIndex::read(&folder) {
-        Ok(saved) => saved,
-        Err(ContentError::Read { source, .. }) if source.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(Preflight {
-                name,
-                pages: None,
-                state: Some(ChapterState::New),
-                blockers: Vec::new(),
-            });
-        }
-        Err(error) => return Err(cx.failure(error)),
-    };
-    if saved.source_sha256 != source_sha256 {
-        let taken = ConvertError::DifferentSource {
-            folder,
-            saved_file: saved.source_file,
-            given_file: file_name_of(&ingest.pdf),
-        };
+    // A start of an ingested document pays for nothing, so nothing can block it.
+    if let Some(items) = ingested {
         return Ok(Preflight {
             name,
             pages: None,
-            state: None,
-            blockers: vec![cx.failure(taken)],
+            state: Some(ChapterState::Ingested { items }),
+            blockers: Vec::new(),
         });
     }
-    let state = if saved.finished {
-        ChapterState::Converted
-    } else {
-        let mut pages_done = 0;
-        for position in 1..=saved.page_count {
-            if PageIndex::read(&folder.join(page_folder_name(position))).is_ok() {
-                pages_done += 1;
+
+    let folder = job.chapter_folder();
+    let mut blockers = Vec::new();
+    let (pages, state) = match ChapterIndex::read(&folder) {
+        Ok(saved) if saved.source_sha256 != source_sha256 => {
+            let taken = ConvertError::DifferentSource {
+                folder,
+                saved_file: saved.source_file,
+                given_file: file_name_of(&ingest.pdf),
+            };
+            return Ok(Preflight {
+                name,
+                pages: None,
+                state: None,
+                blockers: vec![cx.failure(taken)],
+            });
+        }
+        Ok(saved) => (Some(saved.page_count), converted_so_far(&folder, &saved)),
+        Err(ContentError::Read { source, .. }) if source.kind() == std::io::ErrorKind::NotFound => {
+            match ocr::pdf_page_count(&ingest.pdf).await {
+                Ok(pages) => (Some(pages), ChapterState::New),
+                // A PDF whose pages cannot be counted cannot be converted either.
+                Err(error) => {
+                    blockers.push(cx.failure(ConvertError::from(error)));
+                    (None, ChapterState::New)
+                }
             }
         }
-        ChapterState::PartlyConverted { pages_done }
+        Err(error) => return Err(cx.failure(error)),
     };
+    // `claude` is asked last, because a document that is ingested already, or whose folder holds
+    // another PDF, needs no answer from it.
+    if let Err(failure) = cx.claude_ready().await {
+        blockers.push(failure);
+    }
     Ok(Preflight {
         name,
-        pages: Some(saved.page_count),
+        pages,
         state: Some(state),
-        blockers: Vec::new(),
+        blockers,
     })
+}
+
+fn converted_so_far(folder: &Path, saved: &ChapterIndex) -> ChapterState {
+    if saved.finished {
+        return ChapterState::Converted;
+    }
+    let mut pages_done = 0;
+    for position in 1..=saved.page_count {
+        if PageIndex::read(&folder.join(page_folder_name(position))).is_ok() {
+            pages_done += 1;
+        }
+    }
+    ChapterState::PartlyConverted { pages_done }
 }

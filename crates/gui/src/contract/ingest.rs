@@ -38,6 +38,7 @@ pub struct Preflight {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum IngestStage {
+    /// Reading the PDF: its pages are cut out before the first one is converted.
     PreparingPages,
     Converting,
     WritingGraph,
@@ -50,6 +51,9 @@ pub enum IngestStage {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct IngestProgress {
     pub stage: IngestStage,
+    /// PreparingPages: `total` is the number of pages. Converting: pages saved of all pages.
+    /// Embedding: `total` is the number of items. ReadingConcepts and LinkingConcepts: items done
+    /// of all items. `None` where a stage has no count.
     pub done: Option<u32>,
     pub total: Option<u32>,
     pub pages_failed: u32,

@@ -2,13 +2,16 @@
 //! chapter or paper is converted, stored and labelled, and a store that is down fails the run with
 //! nothing paid for.
 
+use std::sync::Arc;
+
 use gui::backend::live::{LiveContext, Services};
 use gui::backend::{Handler, Reply};
 use gui::contract::{
     Catalogue, Category, ChapterState, Command, DocumentName, Event, Failure, FailureKind,
     IngestOutcome, IngestProgress, IngestRequest, IngestStage, NewMedia, Preflight, RequestId,
 };
-use ocr::testing::sample_pdf;
+use ocr::testing::{Scenario, StubServices, sample_pdf};
+use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores};
 
 use crate::support;
 
@@ -106,6 +109,39 @@ async fn started<S: Services>(
     (progress, result.clone())
 }
 
+/// The seven pages of the sample are counted up one at a time, whatever order they end in, and
+/// each later stage counts the `items` of the document. The cost of the last step is the cost of
+/// the run.
+fn assert_progress_of_one_run(progress: &[IngestProgress], items: u32, cost_usd: f64) {
+    let counted: Vec<(IngestStage, Option<u32>, Option<u32>)> = progress
+        .iter()
+        .map(|progress| (progress.stage, progress.done, progress.total))
+        .collect();
+    let mut expected = vec![(IngestStage::PreparingPages, None, Some(7))];
+    expected.extend((1..=7).map(|done| (IngestStage::Converting, Some(done), Some(7))));
+    expected.extend([
+        (IngestStage::WritingGraph, None, None),
+        (IngestStage::Embedding, None, Some(items)),
+        (IngestStage::Storing, None, None),
+    ]);
+    expected
+        .extend((1..=items).map(|done| (IngestStage::ReadingConcepts, Some(done), Some(items))));
+    expected
+        .extend((1..=items).map(|done| (IngestStage::LinkingConcepts, Some(done), Some(items))));
+    assert_eq!(counted, expected);
+    assert!(
+        progress
+            .windows(2)
+            .all(|pair| pair[0].cost_usd <= pair[1].cost_usd),
+        "the cost never goes down: {progress:?}"
+    );
+    let last = progress.last().map(|progress| progress.cost_usd);
+    assert!(
+        last.is_some_and(|last| (last - cost_usd).abs() < 1e-9),
+        "the last progress says {last:?}, the run cost {cost_usd}"
+    );
+}
+
 async fn catalogue_of<S: Services>(cx: &LiveContext<S>) -> Catalogue {
     let command = Command::LoadCatalogue { request: REQUEST };
     let events = events_of(cx, command).await;
@@ -141,7 +177,7 @@ async fn a_checked_chapter_is_ingested_with_its_labels_and_a_second_start_finds_
 
     let new = Preflight {
         name: wanted.name.clone(),
-        pages: None,
+        pages: Some(7),
         state: Some(ChapterState::New),
         blockers: Vec::new(),
     };
@@ -149,8 +185,6 @@ async fn a_checked_chapter_is_ingested_with_its_labels_and_a_second_start_finds_
 
     let (progress, finished) = started(&cx, &wanted).await;
 
-    let stages: Vec<IngestStage> = progress.iter().map(|progress| progress.stage).collect();
-    assert_eq!(stages, [IngestStage::Converting, IngestStage::WritingGraph]);
     let Ok(IngestOutcome::Ingested(report)) = finished else {
         panic!("expected the chapter to be ingested: {finished:#?}");
     };
@@ -158,10 +192,8 @@ async fn a_checked_chapter_is_ingested_with_its_labels_and_a_second_start_finds_
     let counts = report.items;
     let items = counts.chunks + counts.formulas + counts.figures + counts.tables;
     assert!(items > 0, "{report:#?}");
-    assert!(
-        report.cost_usd.is_some(),
-        "pages were converted in this run"
-    );
+    let cost_usd = report.cost_usd.expect("pages were converted in this run");
+    assert_progress_of_one_run(&progress, items as u32, cost_usd);
     let catalogue = catalogue_of(&cx).await;
     let book = catalogue
         .media_of(report.doc)
@@ -237,7 +269,7 @@ async fn a_paper_pdf_with_a_plain_name_is_checked_and_ingested_under_its_saved_m
 
     let new = Preflight {
         name: DocumentName::Title(paper.to_owned()),
-        pages: None,
+        pages: Some(7),
         state: Some(ChapterState::New),
         blockers: Vec::new(),
     };
@@ -289,6 +321,37 @@ async fn a_paper_pdf_with_a_plain_name_is_checked_and_ingested_under_its_saved_m
         Some(paper),
         "the page names the paper by its title"
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p gui --test integration -- --ignored ingest::"]
+async fn a_signed_out_claude_blocks_the_check_of_a_new_pdf() {
+    let stores = ThrowawayStores::new("ingest-signed-out");
+    let config = stores.config().clone();
+    let pages = Arc::new(StubServices::new(Scenario::SampleChapter));
+    let services = support::StandInServices {
+        stores,
+        embedder: Box::new(StandInEmbedder::default),
+        llm: Box::new(|_model| StandInLlm::signed_out()),
+        pages: Arc::clone(&pages),
+    };
+    let cx = LiveContext::new(config, services);
+
+    let preflight = checked(&cx, &request())
+        .await
+        .expect("a check of a readable pdf over stores that answer");
+
+    assert_eq!(
+        (preflight.state, preflight.pages),
+        (Some(ChapterState::New), Some(7))
+    );
+    let kinds: Vec<FailureKind> = preflight
+        .blockers
+        .iter()
+        .map(|blocker| blocker.kind)
+        .collect();
+    assert_eq!(kinds, [FailureKind::ClaudeSignedOut]);
+    assert_eq!(pages.calls(), [], "no page was converted");
 }
 
 #[tokio::test]

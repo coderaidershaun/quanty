@@ -1,11 +1,33 @@
-//! What an ingest run reports.
+//! What an ingest run reports, as it works and when it ends.
 
 use std::fmt;
 
+use ocr::PageProgress;
 use rag_core::{DocId, ItemKind};
 
 use super::concepts::ConceptSummary;
 use super::items::Item;
+
+/// One step of an ingest, told as it happens.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum IngestStep {
+    /// A step of the conversion of the PDF's pages.
+    Converting(PageProgress),
+    /// The document and its items are about to be written to the graph.
+    WritingGraph,
+    /// All `items` are about to be embedded, in one call.
+    Embedding { items: usize },
+    /// The points are about to be stored.
+    Storing,
+    /// `done` of `total` items were read for their concepts (a skipped item counts as read).
+    ReadingConcepts { done: usize, total: usize },
+    /// The concepts of `done` of `total` read items were written to the graph.
+    LinkingConcepts { done: usize, total: usize },
+}
+
+/// Where the steps of a run are told. It is `Send` because the app and the agent server run an
+/// ingest on a task of its own.
+pub(crate) type OnStep<'a> = &'a mut (dyn FnMut(IngestStep) + Send);
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ItemCounts {

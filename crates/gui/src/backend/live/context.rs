@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use graph::{FalkorGraph, GraphStore};
-use ocr::{ChapterJob, ConversionSummary, ConvertError};
+use ocr::{ChapterJob, ConversionSummary, ConvertError, PageProgress};
 use rag_core::{ClaudeCli, ConceptStore, Config, Embedder, GeminiEmbedder, ItemStore, Llm};
 use rag_ingestion::{ConceptExtractor, EXTRACTION_MODEL, Models, Stores};
 use rag_retrieval::{ANSWER_MODEL, Retriever};
@@ -26,8 +26,9 @@ pub trait Services: Send + Sync + 'static {
     fn llm(&self, model: &str) -> Self::Llm;
     fn graph(&self, config: &Config) -> impl Future<Output = Result<Self::Graph, Failure>> + Send;
 
-    /// Converts the pages of the chapter that are not converted yet. This is the part of an ingest
-    /// that pays for a model call for every page.
+    /// Converts the pages of the chapter that are not converted yet, and tells each page to
+    /// `on_page` as it ends. This is the part of an ingest that pays for a model call for every
+    /// page.
     ///
     /// # Errors
     /// The errors of `ocr::convert_chapter_with_jev_key`.
@@ -35,6 +36,7 @@ pub trait Services: Send + Sync + 'static {
         &self,
         job: &ChapterJob,
         jev_api_key: Option<&str>,
+        on_page: &mut (dyn FnMut(PageProgress) + Send),
     ) -> impl Future<Output = Result<ConversionSummary, ConvertError>> + Send;
 }
 
@@ -61,8 +63,9 @@ impl Services for RealServices {
         &self,
         job: &ChapterJob,
         jev_api_key: Option<&str>,
+        on_page: &mut (dyn FnMut(PageProgress) + Send),
     ) -> Result<ConversionSummary, ConvertError> {
-        ocr::convert_chapter_with_jev_key(job, jev_api_key).await
+        ocr::convert_chapter_with_jev_key(job, jev_api_key, on_page).await
     }
 }
 
@@ -165,16 +168,31 @@ impl<S: Services> LiveContext<S> {
     }
 
     /// Converts the pages of a chapter that are not converted yet, with the Jev key of the
-    /// settings, so no other code sees the key.
+    /// settings, so no other code sees the key. Each page is told to `on_page` as it ends.
     ///
     /// # Errors
     /// The errors of the conversion, such as a missing key or a page that fails.
     pub async fn convert_chapter(
         &self,
         job: &ChapterJob,
+        on_page: &mut (dyn FnMut(PageProgress) + Send),
     ) -> Result<ConversionSummary, ConvertError> {
         let key = self.config.jev_api_key.as_ref().map(|key| key.expose());
-        self.services.convert(job, key).await
+        self.services.convert(job, key, on_page).await
+    }
+
+    /// Asks `claude` whether it can answer, which costs nothing: a signed-out `claude` or a set
+    /// `ANTHROPIC_API_KEY` says no. It asks through the services, so a stand-in can answer in
+    /// its place.
+    ///
+    /// # Errors
+    /// A failure that says what the person must do before `claude` can answer.
+    pub async fn claude_ready(&self) -> Result<(), Failure> {
+        self.services
+            .llm(EXTRACTION_MODEL)
+            .check_ready()
+            .await
+            .map_err(|error| self.failure(error))
     }
 
     /// # Errors

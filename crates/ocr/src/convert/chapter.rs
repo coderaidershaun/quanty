@@ -2,6 +2,7 @@
 //! pages out, convert them a few at a time, and mark the chapter finished last.
 
 use std::path::Path;
+use std::pin::pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use futures_util::StreamExt;
@@ -10,8 +11,8 @@ use futures_util::stream;
 use super::page::convert_page;
 use super::services::{PageServices, PageSource};
 use super::{
-    CallTally, ChapterJob, ConversionSummary, ConvertError, PageError, is_saved, poppler,
-    write_error,
+    CallTally, ChapterJob, ConversionSummary, ConvertError, PageError, PageProgress, is_saved,
+    poppler, write_error,
 };
 use crate::content::{
     ChapterIndex, ContentError, FORMAT_VERSION, PAGE_IMAGE_FILE, PAGE_PDF_FILE, TEXT_LAYER_FILE,
@@ -25,6 +26,7 @@ pub(super) async fn run<S: PageServices>(
     job: &ChapterJob,
     source_sha256: &str,
     services: &S,
+    mut on_progress: impl FnMut(PageProgress),
 ) -> Result<ConversionSummary, ConvertError> {
     let folder = &job.chapter_folder;
     let page_count = poppler::page_count(&job.chapter_pdf).await?;
@@ -43,12 +45,16 @@ pub(super) async fn run<S: PageServices>(
     index.write(folder)?;
 
     let to_do = pages_to_do(folder, page_count)?;
+    on_progress(PageProgress::Pages {
+        total: page_count,
+        done_before: page_count - to_do.len() as u32,
+    });
     let mut sources = Vec::new();
     for &position in &to_do {
         sources.push(cut_page_out(job, position).await?);
     }
 
-    let calls = convert_pages(services, folder, sources).await?;
+    let calls = convert_pages(services, folder, sources, on_progress).await?;
 
     index.finished = true;
     index.write(folder)?;
@@ -59,16 +65,17 @@ pub(super) async fn run<S: PageServices>(
     )?)
 }
 
-/// Converts the pages a few at a time and adds up what their calls cost. When pages fail, the
-/// error is for the one with the lowest position.
+/// Converts the pages a few at a time and adds up what their calls cost, telling each page as it
+/// ends. When pages fail, the error is for the one with the lowest position.
 async fn convert_pages<S: PageServices>(
     services: &S,
     chapter_folder: &Path,
     sources: Vec<PageSource>,
+    mut on_progress: impl FnMut(PageProgress),
 ) -> Result<CallTally, ConvertError> {
     let failed = AtomicBool::new(false);
     let failed = &failed;
-    let results: Vec<(u32, Option<Result<CallTally, PageError>>)> = stream::iter(sources)
+    let results = stream::iter(sources)
         .map(|source| async move {
             if failed.load(Ordering::Relaxed) {
                 return (source.position, None);
@@ -79,23 +86,30 @@ async fn convert_pages<S: PageServices>(
             }
             (source.position, Some(outcome))
         })
-        .buffer_unordered(PARALLEL_PAGES)
-        .collect()
-        .await;
+        .buffer_unordered(PARALLEL_PAGES);
+    let mut results = pin!(results);
 
     let mut calls = CallTally::default();
     let mut first_failure: Option<(u32, PageError)> = None;
-    for (position, outcome) in results {
+    while let Some((position, outcome)) = results.next().await {
         match outcome {
-            Some(Ok(page_calls)) => calls.add(&page_calls),
-            Some(Err(error))
+            Some(Ok(page_calls)) => {
+                calls.add(&page_calls);
+                on_progress(PageProgress::PageDone {
+                    position,
+                    cost_usd: page_calls.cost_usd,
+                });
+            }
+            Some(Err(error)) => {
+                on_progress(PageProgress::PageFailed { position });
                 if first_failure
                     .as_ref()
-                    .is_none_or(|(lowest, _)| position < *lowest) =>
-            {
-                first_failure = Some((position, error));
+                    .is_none_or(|(lowest, _)| position < *lowest)
+                {
+                    first_failure = Some((position, error));
+                }
             }
-            _ => {}
+            None => {}
         }
     }
     match first_failure {

@@ -22,6 +22,6 @@ pub use logo::logo;
 pub use look::ControlSize;
 pub use modal::{Choice, Confirm, modal};
 pub use notice::{Notice, NoticeResponse, Placeholder, PlaceholderResponse};
-pub use progress::{progress_bar, spinner};
+pub use progress::{indeterminate_bar, progress_bar, spinner};
 pub use section::{panel_frame, section_header, separator};
 pub use tabs::{Tab, TabStrip};

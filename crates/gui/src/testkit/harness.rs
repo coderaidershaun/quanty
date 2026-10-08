@@ -174,6 +174,22 @@ pub fn settle_within(harness: &mut Harness<'_, App>, limit: Duration) {
     }
 }
 
+/// For work that never ends, where `settle` would wait for ever: frames run until `done` holds.
+///
+/// # Panics
+/// When `done` still does not hold after five seconds. The message names `what`.
+pub fn run_until(harness: &mut Harness<'_, App>, what: &str, done: impl Fn(&Shared) -> bool) {
+    let started = Instant::now();
+    while !done(harness.state().shared()) {
+        assert!(
+            started.elapsed() < SETTLE_LIMIT,
+            "gave up waiting for {what}"
+        );
+        harness.run_ok();
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}
+
 pub fn save_png<S>(harness: &mut Harness<'_, S>, name: &str) {
     let Some(folder) = std::env::var_os("QUANTY_PNG_DIR") else {
         return;

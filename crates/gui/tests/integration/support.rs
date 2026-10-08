@@ -8,7 +8,7 @@ use graph::{ConceptNode, FalkorGraph, GraphStore, Mention, Relation, RelationKin
 use gui::backend::live::{LiveContext, RealServices, Services};
 use gui::contract::{DocId, Failure};
 use ocr::testing::{Scenario, StubServices};
-use ocr::{ChapterIndex, ChapterJob, ConversionSummary, ConvertError};
+use ocr::{ChapterIndex, ChapterJob, ConversionSummary, ConvertError, PageProgress};
 use rag_core::{ApiKey, Config, ItemKind, MediaLabels};
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores, first_axis, vector_at};
 use rag_ingestion::{ChapterFolder, Item, chapter_items, ingest_chapter};
@@ -52,8 +52,9 @@ impl Services for StandInServices {
         &self,
         job: &ChapterJob,
         _jev_api_key: Option<&str>,
+        on_page: &mut (dyn FnMut(PageProgress) + Send),
     ) -> Result<ConversionSummary, ConvertError> {
-        ocr::convert::convert_chapter_with(job, &*self.pages).await
+        ocr::convert::convert_chapter_with_progress(job, &*self.pages, on_page).await
     }
 }
 
@@ -102,8 +103,9 @@ impl Services for StandInsOnClosedPorts {
         &self,
         job: &ChapterJob,
         _jev_api_key: Option<&str>,
+        on_page: &mut (dyn FnMut(PageProgress) + Send),
     ) -> Result<ConversionSummary, ConvertError> {
-        ocr::convert::convert_chapter_with(job, &*self.pages).await
+        ocr::convert::convert_chapter_with_progress(job, &*self.pages, on_page).await
     }
 }
 

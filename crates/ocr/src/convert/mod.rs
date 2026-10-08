@@ -30,7 +30,8 @@ pub use image::{ConvertedImage, convert_image, convert_image_with};
 pub use page::PageError;
 pub use poppler::PopplerError;
 pub use summary::{
-    CallTally, ConversionSummary, OutOfSequence, PageToCheck, PieceCounts, RouteCounts,
+    CallTally, ConversionSummary, OutOfSequence, PageProgress, PageToCheck, PieceCounts,
+    RouteCounts,
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -175,18 +176,22 @@ enum Prepared {
 /// - [`ConvertError::PageFailed`] for the lowest page that failed; finished pages stay saved
 pub async fn convert_chapter(job: &ChapterJob) -> Result<ConversionSummary, ConvertError> {
     let jev_api_key = std::env::var(services::JEV_API_KEY_VARIABLE).ok();
-    convert_chapter_with_jev_key(job, jev_api_key.as_deref()).await
+    convert_chapter_with_jev_key(job, jev_api_key.as_deref(), |_| {}).await
 }
 
 /// Like [`convert_chapter`], with the Jev key given by the caller and not read from the
 /// environment, for a program that keeps its settings out of the process environment. `None` is
 /// an error only when a page is left to convert.
 ///
+/// `on_progress` hears the page count first, then each page as it ends. A finished chapter
+/// hears nothing.
+///
 /// # Errors
 /// The same as [`convert_chapter`]. A key that is `None` gives [`ConvertError::Services`].
 pub async fn convert_chapter_with_jev_key(
     job: &ChapterJob,
     jev_api_key: Option<&str>,
+    on_progress: impl FnMut(PageProgress),
 ) -> Result<ConversionSummary, ConvertError> {
     if services::api_key_is_set() {
         return Err(ConvertError::ApiKeySet);
@@ -195,7 +200,7 @@ pub async fn convert_chapter_with_jev_key(
         Prepared::Finished(summary) => Ok(summary),
         Prepared::ToDo { source_sha256 } => {
             let services = LiveServices::with_jev_key(jev_api_key).await?;
-            chapter::run(job, &source_sha256, &services).await
+            chapter::run(job, &source_sha256, &services, on_progress).await
         }
     }
 }
@@ -209,10 +214,33 @@ pub async fn convert_chapter_with<S: PageServices>(
     job: &ChapterJob,
     services: &S,
 ) -> Result<ConversionSummary, ConvertError> {
+    convert_chapter_with_progress(job, services, |_| {}).await
+}
+
+/// Like [`convert_chapter_with`], and `on_progress` hears the page count first, then each page
+/// as it ends. A finished chapter hears nothing.
+///
+/// # Errors
+/// The same as [`convert_chapter_with`].
+pub async fn convert_chapter_with_progress<S: PageServices>(
+    job: &ChapterJob,
+    services: &S,
+    on_progress: impl FnMut(PageProgress),
+) -> Result<ConversionSummary, ConvertError> {
     match prepare(job)? {
         Prepared::Finished(summary) => Ok(summary),
-        Prepared::ToDo { source_sha256 } => chapter::run(job, &source_sha256, services).await,
+        Prepared::ToDo { source_sha256 } => {
+            chapter::run(job, &source_sha256, services, on_progress).await
+        }
     }
+}
+
+/// The number of pages of a PDF, read with `pdfinfo`. It costs nothing and writes nothing.
+///
+/// # Errors
+/// [`PopplerError`] when `pdfinfo` cannot run or reads no page count from the file.
+pub async fn pdf_page_count(pdf: &Path) -> Result<u32, PopplerError> {
+    poppler::page_count(pdf).await
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {

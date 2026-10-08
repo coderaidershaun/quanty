@@ -7,7 +7,9 @@ use crate::contract::{FailureKind, Service};
 pub struct Scene {
     pub name: &'static str,
     pub about: &'static str,
-    /// True when the app settles and asks for no repaint once it has opened.
+    /// True when the app settles and asks for no repaint once it has opened, and settles again
+    /// after any of its controls is pressed. The tests that press every control, or that wait for
+    /// rest, take only these scenes.
     pub rests: bool,
     pub(super) script: Script,
 }
@@ -76,6 +78,8 @@ pub(super) enum Concepts {
 pub(super) enum Ingest {
     Done,
     Fails(FailureKind),
+    /// The ingest plays to page 3 of 12 and never ends.
+    Stalls,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -101,7 +105,7 @@ const HEALTHY: Script = Script {
     ingest: Ingest::Done,
 };
 
-static SCENES: [Scene; 19] = [
+static SCENES: [Scene; 20] = [
     Scene {
         name: "idle",
         about: "Healthy, with the three sample chapters and nothing asked.",
@@ -277,6 +281,16 @@ static SCENES: [Scene; 19] = [
         rests: true,
         script: Script {
             ingest: Ingest::Fails(FailureKind::PageFailed),
+            opening: Opening::ChecksAChapter,
+            ..HEALTHY
+        },
+    },
+    Scene {
+        name: "ingest-running",
+        about: "The Ingest tab, with a chapter checked and a start that stops at page 3 of 12 and never ends.",
+        rests: false,
+        script: Script {
+            ingest: Ingest::Stalls,
             opening: Opening::ChecksAChapter,
             ..HEALTHY
         },

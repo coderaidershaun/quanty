@@ -14,7 +14,7 @@ use gui::contract::{
     SearchReply, StartupFacts, Tab,
 };
 use gui::state::{HealthLevel, IngestJob, Shared};
-use gui::testkit::{self, sample};
+use gui::testkit::{self, run_until, sample};
 
 use super::sample_pages;
 
@@ -24,15 +24,6 @@ fn fake_of(scene: &str) -> Fake {
     Fake::scene(scene, &testkit::samples_folder())
         .unwrap_or_else(|error| panic!("scene `{scene}` does not start: {error}"))
         .instant()
-}
-
-fn run_until(harness: &mut Harness<'_, App>, what: &str, done: impl Fn(&Shared) -> bool) {
-    let started = Instant::now();
-    while !done(harness.state().shared()) {
-        assert!(started.elapsed() < LIMIT, "gave up waiting for {what}");
-        harness.run_ok();
-        std::thread::sleep(Duration::from_millis(2));
-    }
 }
 
 fn next_event(backend: &mut Backend) -> Event {
@@ -94,7 +85,7 @@ fn assert_scene(name: &str, shared: &Shared) {
                 && source.page.ready().is_some()
                 && is_failed(&source.concepts, FailureKind::FalkorDbDown)
         }
-        "ingest-ready" | "ingest-failed" => {
+        "ingest-ready" | "ingest-failed" | "ingest-running" => {
             let is_checked = matches!(
                 &shared.ingest,
                 IngestJob::Checked { preflight, .. }
@@ -120,6 +111,9 @@ fn open_scene(name: &str, rests: bool) -> Harness<'static, App> {
         "gallery" => ("the catalogue", |shared| {
             shared.library.catalogue.ready().is_some()
         }),
+        "ingest-running" => ("the check", |shared| {
+            matches!(shared.ingest, IngestJob::Checked { .. })
+        }),
         _ => ("the ask to start", |shared| shared.ask.is_running()),
     };
     run_until(&mut harness, what, arrived);
@@ -128,7 +122,7 @@ fn open_scene(name: &str, rests: bool) -> Harness<'static, App> {
 
 #[test]
 fn every_scene_opens_and_every_sample_page_loads() {
-    assert_eq!(fake::scenes().len(), 19);
+    assert_eq!(fake::scenes().len(), 20);
     for scene in fake::scenes() {
         let mut harness = open_scene(scene.name, scene.rests);
         assert_scene(scene.name, harness.state().shared());

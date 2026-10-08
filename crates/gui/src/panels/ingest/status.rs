@@ -1,56 +1,73 @@
-//! What follows the form: the check, the running ingest and the way it ended, each with the
-//! buttons that go on from there.
+//! What follows the PDF: what the draft still lacks, the check, the running ingest and the way it
+//! ended, each with the buttons that go on from there.
 
 use eframe::egui;
 
-use super::Local;
+use super::{Local, Missing};
 use crate::contract::{
-    ChapterState, DocumentName, Failure, IngestOutcome, IngestProgress, IngestReport,
-    IngestRequest, IngestStage, Intent, Preflight,
+    ChapterState, Failure, IngestOutcome, IngestProgress, IngestReport, IngestRequest, IngestStage,
+    Intent, Preflight,
 };
 use crate::panels::PanelCx;
 use crate::state::IngestJob;
-use crate::theme::{TextRole, space};
+use crate::theme::{TextRole, color, space};
 use crate::widgets::{self, Button, Notice};
 
-/// `draft` is the request the form holds now.
+const CHECKING: &str = "Checking the PDF";
+const READING: &str = "Reading the PDF";
+const TRY_AGAIN: &str = "Try again";
+const COST: &str = "Checking is free. Starting is paid work: claude and Jev convert each page, Gemini embeds the items, and claude reads the concepts.";
+const KEEP_OPEN: &str = "Keep the app open until this is done. If it stops, start the same PDF again: pages that are converted are not paid for twice.";
+
+/// `draft` is what the form holds now, made of its settled fields.
 pub(super) fn show(
     ui: &mut egui::Ui,
     local: &mut Local,
     cx: &mut PanelCx<'_>,
-    draft: Option<&IngestRequest>,
+    draft: &Result<IngestRequest, Missing>,
 ) {
     match &cx.shared.ingest {
-        IngestJob::Idle => check_button(ui, draft, cx.intents),
-        IngestJob::Checking { .. } => {
-            ui.horizontal(|ui| {
-                widgets::spinner(ui, "Checking the chapter");
-                ui.label(TextRole::BodyStrong.rich("Checking the chapter"));
-            });
-        }
-        IngestJob::Checked { preflight, .. } if preflight.blockers.is_empty() => {
-            chapter_lines(ui, preflight);
-            ui.add_space(space::MD);
-            if ui.add(Button::primary("Start ingest")).clicked() {
-                cx.intents.push(Intent::StartIngest);
+        // A draft that is complete is checked in this frame, so it needs no words.
+        IngestJob::Idle => {
+            if let Err(missing) = draft {
+                ui.label(TextRole::Small.rich(missing.hint()));
             }
         }
+        IngestJob::Checking { .. } => {
+            widgets::indeterminate_bar(ui, CHECKING);
+            ui.label(TextRole::Small.rich(CHECKING));
+        }
+        IngestJob::Checked { request, preflight } if preflight.blockers.is_empty() => {
+            checked_line(ui, preflight);
+            ui.add_space(space::MD);
+            // A box may still have the keyboard, so Start reads the boxes as typed. A typed change
+            // that makes another request is not checked yet, and a start would run the old one.
+            let can_start = local.draft_of(&local.typed).as_ref() == Ok(request);
+            if ui
+                .add_enabled(can_start, Button::primary("Start ingest"))
+                .clicked()
+            {
+                cx.intents.push(Intent::StartIngest);
+            }
+            ui.add_space(space::SM);
+            ui.label(TextRole::Small.rich(COST));
+        }
         IngestJob::Checked { preflight, .. } => {
-            chapter_title(ui, &preflight.name);
+            ui.label(TextRole::BodyStrong.rich(preflight.name.label()));
             for blocker in &preflight.blockers {
                 Notice::error(&blocker.hint).show(ui);
                 detail(ui, blocker);
             }
             ui.add_space(space::MD);
-            check_button(ui, draft, cx.intents);
+            try_again(ui, draft, cx.intents);
         }
         IngestJob::CheckFailed { failure, .. } => {
-            Notice::error("The chapter cannot be ingested yet")
+            Notice::error("The PDF cannot be ingested yet")
                 .body(&failure.hint)
                 .show(ui);
             detail(ui, failure);
             ui.add_space(space::MD);
-            check_button(ui, draft, cx.intents);
+            try_again(ui, draft, cx.intents);
         }
         IngestJob::Running { progress, .. } | IngestJob::Stopping { progress, .. } => {
             running(ui, progress.as_ref());
@@ -61,10 +78,12 @@ pub(super) fn show(
     }
 }
 
-fn check_button(ui: &mut egui::Ui, draft: Option<&IngestRequest>, intents: &mut Vec<Intent>) {
-    let button = Button::primary("Check the chapter");
-    if ui.add_enabled(draft.is_some(), button).clicked()
-        && let Some(request) = draft
+/// After a sign-in or a store that started, the draft is the same, so nothing else would check it
+/// again.
+fn try_again(ui: &mut egui::Ui, draft: &Result<IngestRequest, Missing>, intents: &mut Vec<Intent>) {
+    let button = Button::primary(TRY_AGAIN);
+    if ui.add_enabled(draft.is_ok(), button).clicked()
+        && let Ok(request) = draft
     {
         intents.push(Intent::CheckIngest(request.clone()));
     }
@@ -74,53 +93,94 @@ fn detail(ui: &mut egui::Ui, failure: &Failure) {
     ui.label(TextRole::Small.rich(&failure.detail));
 }
 
-fn chapter_title(ui: &mut egui::Ui, name: &DocumentName) {
-    ui.label(TextRole::BodyStrong.rich(name.label()));
-}
-
-fn chapter_lines(ui: &mut egui::Ui, preflight: &Preflight) {
-    chapter_title(ui, &preflight.name);
-    let pages = preflight.pages;
-    let line = match preflight.state {
-        None => return,
-        Some(ChapterState::New) => "Not converted yet.".to_owned(),
-        Some(ChapterState::PartlyConverted { pages_done }) => match pages {
-            Some(pages) => format!(
-                "{pages_done} of {pages} pages are converted already and are not paid for again."
-            ),
-            None => {
-                format!("{pages_done} pages are converted already and are not paid for again.")
-            }
-        },
-        Some(ChapterState::Converted) => {
-            let all = pages.map_or_else(
-                || "All pages".to_owned(),
-                |pages| format!("All {pages} pages"),
-            );
-            format!(
-                "{all} are converted already: only the embedding and the concepts are paid for."
-            )
-        }
-        Some(ChapterState::Ingested { items }) => format!(
-            "Already ingested with {items} items: a start converts nothing and pays for nothing."
+fn checked_line(ui: &mut egui::Ui, preflight: &Preflight) {
+    let mut line = preflight.name.label();
+    if let Some(pages) = preflight.pages {
+        line.push_str(&format!(" — {pages} pages"));
+    }
+    let words = match preflight.state {
+        None => None,
+        Some(ChapterState::New) => Some("Not converted yet.".to_owned()),
+        Some(ChapterState::PartlyConverted { pages_done }) => Some(format!(
+            "{pages_done} are converted already and are not paid for again."
+        )),
+        Some(ChapterState::Converted) => Some(
+            "All are converted already: only the embedding and the concepts are paid for."
+                .to_owned(),
         ),
+        Some(ChapterState::Ingested { items }) => Some(format!(
+            "Already ingested with {items} items: a start converts nothing and pays for nothing."
+        )),
     };
+    if let Some(words) = words {
+        line.push_str(". ");
+        line.push_str(&words);
+    }
     ui.label(TextRole::Body.rich(line));
 }
 
-fn running(ui: &mut egui::Ui, progress: Option<&IngestProgress>) {
-    let words = match progress.map(|progress| progress.stage) {
-        None => "Starting: reading the PDF and asking the stores",
-        Some(IngestStage::PreparingPages | IngestStage::Converting) => "Converting the pages",
-        Some(_) => "Storing the items and reading the concepts",
+fn stage_words(progress: Option<&IngestProgress>) -> String {
+    let Some(progress) = progress else {
+        return READING.to_owned();
     };
+    let counted = |stage: &str| match (progress.done, progress.total) {
+        (Some(done), Some(total)) => format!("{stage} — {done} of {total}"),
+        _ => stage.to_owned(),
+    };
+    match progress.stage {
+        IngestStage::PreparingPages => READING.to_owned(),
+        IngestStage::Converting => match (progress.done, progress.total) {
+            (Some(done), Some(total)) => format!("Converting the pages — page {done} of {total}"),
+            _ => "Converting the pages".to_owned(),
+        },
+        IngestStage::WritingGraph => "Writing the graph".to_owned(),
+        IngestStage::Embedding => match progress.total {
+            Some(total) => format!("Embedding {total} items"),
+            None => "Embedding the items".to_owned(),
+        },
+        IngestStage::Storing => "Storing the items".to_owned(),
+        IngestStage::ReadingConcepts => counted("Reading the concepts"),
+        IngestStage::LinkingConcepts => counted("Linking the concepts"),
+    }
+}
+
+/// The share of a stage that is done, for the stages that count what they do.
+fn share_done(progress: Option<&IngestProgress>) -> Option<f32> {
+    let progress = progress?;
+    let is_counted = matches!(
+        progress.stage,
+        IngestStage::Converting | IngestStage::ReadingConcepts | IngestStage::LinkingConcepts
+    );
+    match (progress.done, progress.total) {
+        (Some(done), Some(total)) if is_counted && total > 0 => Some(done as f32 / total as f32),
+        _ => None,
+    }
+}
+
+fn running(ui: &mut egui::Ui, progress: Option<&IngestProgress>) {
+    let words = stage_words(progress);
     ui.horizontal(|ui| {
-        widgets::spinner(ui, words);
-        ui.label(TextRole::BodyStrong.rich(words));
+        ui.label(TextRole::BodyStrong.rich(&words));
+        if let Some(progress) = progress {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                cost_so_far(ui, progress);
+            });
+        }
     });
-    ui.label(TextRole::Small.rich(
-        "Keep the app open until this is done. If it stops, start the same PDF again: pages that are converted are not paid for twice.",
-    ));
+    ui.add_space(space::XS);
+    match share_done(progress) {
+        Some(share) => widgets::progress_bar(ui, &words, share),
+        None => widgets::indeterminate_bar(ui, &words),
+    };
+    ui.add_space(space::SM);
+    ui.label(TextRole::Small.rich(KEEP_OPEN));
+}
+
+fn cost_so_far(ui: &mut egui::Ui, progress: &IngestProgress) {
+    if progress.cost_usd > 0.0 {
+        let cost = format!("≈ ${:.2} so far", progress.cost_usd);
+        ui.label(TextRole::Small.rich(cost).color(color::TEXT_MUTED));
+    }
 }
 
 fn finished(
@@ -161,12 +221,12 @@ fn finished(
     }
     ui.add_space(space::MD);
     ui.horizontal(|ui| {
-        if result.is_err() && ui.add(Button::primary("Try again")).clicked() {
+        if result.is_err() && ui.add(Button::primary(TRY_AGAIN)).clicked() {
             intents.push(Intent::CheckIngest(request.clone()));
         }
-        if ui.add(Button::secondary("Add another chapter")).clicked() {
+        if ui.add(Button::secondary("Add another PDF")).clicked() {
             intents.push(Intent::ClearIngest);
-            local.pdf = None;
+            local.add_another_pdf();
         }
     });
 }

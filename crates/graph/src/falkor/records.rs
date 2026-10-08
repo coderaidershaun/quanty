@@ -1,6 +1,5 @@
 //! The read of every document with the mark that it is ingested whole, its folder and how many
-//! items of each kind it has. It is one statement, so the documents and their counts are of the
-//! same moment.
+//! items of each kind it has. It is one statement, so all of it is read at the same moment.
 
 use std::path::PathBuf;
 
@@ -54,9 +53,6 @@ fn count_of(items: &mut ItemsByKind, kind: ItemKind) -> &mut u64 {
     }
 }
 
-/// Reads a row of eight values: the five of a document, then its count of items or null, then its
-/// folder or null, then its items by kind. Any other row comes back as the text that the error
-/// shows.
 fn record_from_row(row: Vec<FalkorValue>) -> Result<DocumentRecord, String> {
     let row = <[FalkorValue; 8]>::try_from(row).map_err(|row| format!("{row:?}"))?;
     let [id, title, book, author, tags, mark, folder, items_by_kind] = row;
@@ -88,9 +84,7 @@ fn record_from_row(row: Vec<FalkorValue>) -> Result<DocumentRecord, String> {
     })
 }
 
-/// Reads a pair of a kind of item and a count that is not negative. The pair of a document with
-/// no items, which has no kind and a count of zero, gives `None`. Any other value comes back as
-/// the text that the error shows.
+/// The pair of a document with no items, which has no kind and a count of zero, gives `None`.
 fn items_of_kind_from_pair(pair: FalkorValue) -> Result<Option<(ItemKind, u64)>, String> {
     let FalkorValue::Array(pair) = pair else {
         return Err(format!("{pair:?}"));

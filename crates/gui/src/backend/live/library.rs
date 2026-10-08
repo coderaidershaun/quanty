@@ -155,8 +155,6 @@ fn catalogue_from(
     catalogue
 }
 
-/// A saved book gives its author and tags to the books of the documents that have its title, and
-/// is a book with no chapter when none has.
 fn join_saved_book(books: &mut Vec<Book>, saved: BookNode) {
     let author = saved.author;
     let tags: Vec<String> = saved.tags.iter().map(ToString::to_string).collect();

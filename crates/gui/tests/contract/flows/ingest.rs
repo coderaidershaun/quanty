@@ -1,6 +1,5 @@
 //! A chapter is checked and started from the Ingest page and runs to its end on the fake backend,
 //! the catalogue is loaded again when it is stored, and a start that fails says so with its hint.
-//! A book is saved from the same page with no PDF, is offered after, and is refused a second time.
 
 use std::path::PathBuf;
 

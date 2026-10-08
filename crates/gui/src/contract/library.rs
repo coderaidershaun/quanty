@@ -71,7 +71,6 @@ pub struct Book {
     pub chapters: Vec<Document>,
 }
 
-/// The author and the tags that a list shows for a book.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BookLabels<'a> {
     pub author: Option<&'a str>,
@@ -137,7 +136,6 @@ pub struct NewBook {
     pub tags: Vec<String>,
 }
 
-/// Two titles name one book when they differ only in capitals and in space at the ends.
 pub fn is_same_title(one: &str, other: &str) -> bool {
     one.trim().to_lowercase() == other.trim().to_lowercase()
 }

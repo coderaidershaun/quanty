@@ -1,6 +1,5 @@
 //! Support for tests of other crates: a graph that is removed when the test ends, and reads of
-//! what a graph holds. The product has no way to read a graph or to remove a whole one, so this
-//! is behind the cargo feature `testing`. On a failure it panics with a clear message.
+//! what a graph holds. The product cannot read or remove a whole graph, so it is behind a feature.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -78,7 +77,6 @@ impl Drop for ThrowawayGraph {
     }
 }
 
-/// A document node and the items it points at, as stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredDocument {
     pub title: String,
@@ -86,7 +84,6 @@ pub struct StoredDocument {
     pub items: Vec<StoredItem>,
 }
 
-/// The values of an item node, as stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredItem {
     pub id: String,
@@ -95,14 +92,12 @@ pub struct StoredItem {
     pub printed_page: Option<String>,
 }
 
-/// How many nodes and edges a whole graph holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GraphSize {
     pub nodes: u64,
     pub edges: u64,
 }
 
-/// A concept node, as stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredConcept {
     pub id: String,
@@ -130,7 +125,6 @@ pub struct StoredRelation {
     pub item: String,
 }
 
-/// Every concept, mention and relation of a graph, each list in a fixed order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredConceptGraph {
     pub concepts: Vec<StoredConcept>,
@@ -139,8 +133,7 @@ pub struct StoredConceptGraph {
 }
 
 /// The document with this id and its items in reading order, or `None` when the graph has no
-/// such document. The first item is the one of the document that no `NEXT` edge points to, and
-/// the others follow along the `NEXT` edges.
+/// such document.
 pub async fn stored_document(graph: &FalkorGraph, id: DocId) -> Option<StoredDocument> {
     let id = id.to_string();
     let titles = read(
@@ -177,7 +170,6 @@ pub async fn stored_document(graph: &FalkorGraph, id: DocId) -> Option<StoredDoc
     Some(StoredDocument { title, items })
 }
 
-/// The number of nodes and of edges of the whole graph.
 pub async fn size(graph: &FalkorGraph) -> GraphSize {
     let count = |rows: Vec<Vec<FalkorValue>>| {
         let value = rows
@@ -193,9 +185,8 @@ pub async fn size(graph: &FalkorGraph) -> GraphSize {
     }
 }
 
-/// Every concept, mention and relation of the whole graph. Concepts are sorted by normalised
-/// name, mentions by item and then concept, and relations by the concept they start at, their
-/// kind and the concept they end at.
+/// Concepts are sorted by normalised name, mentions by item and then concept, and relations by
+/// the concept they start at, their kind and the concept they end at.
 pub async fn stored_concept_graph(graph: &FalkorGraph) -> StoredConceptGraph {
     StoredConceptGraph {
         concepts: stored_concepts(graph).await,

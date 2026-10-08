@@ -55,7 +55,6 @@ impl Local {
         })
     }
 
-    /// There is a book to save only while the form holds a typed title that is not blank.
     fn book_to_save(&self) -> Option<NewBook> {
         let BookChoice::New(text) = &self.book else {
             return None;
@@ -91,7 +90,6 @@ impl Local {
         self.tags = tags_text(&offer.tags);
     }
 
-    /// Nothing is carried over from the book that was chosen before.
     fn start_new_book(&mut self) {
         self.book = BookChoice::New(String::new());
         self.author.clear();

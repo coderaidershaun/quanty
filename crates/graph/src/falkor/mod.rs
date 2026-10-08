@@ -1,5 +1,4 @@
-//! The connection to FalkorDB and the check that the store behind it answers. The statements
-//! that write are in `writes`, and the statements that read are in `reads`, `records` and `edges`.
+//! The connection to FalkorDB and the check that the store behind it answers.
 
 mod edges;
 mod reads;

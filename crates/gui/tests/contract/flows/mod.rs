@@ -1,6 +1,5 @@
 //! Checks the flows that cross two parts of the app, on the whole app: selection, follow-up,
-//! source pages, failures, ingest, the library, and that no control leads to a part that is not
-//! built.
+//! source, failures, ingest, the library, and that no control leads to a part that is not built.
 
 mod dead_controls;
 mod failures;

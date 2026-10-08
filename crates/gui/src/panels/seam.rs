@@ -10,8 +10,7 @@ use crate::media::Media;
 use crate::state::Shared;
 use crate::theme::{TextRole, color, radius};
 
-/// What a panel may use. It reads `shared`, starts work through `media`, and answers by
-/// pushing to `intents`, which the app applies after the frame.
+/// The app applies the pushed `intents` after the frame.
 pub struct PanelCx<'a> {
     pub shared: &'a Shared,
     pub media: &'a mut Media,

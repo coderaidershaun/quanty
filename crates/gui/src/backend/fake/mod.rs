@@ -291,7 +291,6 @@ impl Fake {
         });
     }
 
-    /// Plays the two moments of a real ingest and then its end.
     async fn ingest(&self, request: RequestId, ingest: &IngestRequest, reply: &Reply) {
         for stage in [IngestStage::Converting, IngestStage::WritingGraph] {
             self.wait(INGEST_WAIT).await;

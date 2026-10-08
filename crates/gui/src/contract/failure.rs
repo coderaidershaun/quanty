@@ -1,5 +1,5 @@
-//! What went wrong, in words a person can act on, and the three-state value that holds a result
-//! that is still on its way.
+//! What went wrong, in words a person can act on, and the value that holds a result that is still
+//! on its way.
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Failure {

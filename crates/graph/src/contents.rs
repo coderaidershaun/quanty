@@ -18,7 +18,6 @@ pub struct BookNode {
     pub tags: BTreeSet<Tag>,
 }
 
-/// A document as the graph holds it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DocumentNode {
     pub id: DocId,
@@ -26,7 +25,7 @@ pub struct DocumentNode {
     pub labels: DocumentLabels,
 }
 
-/// An item as the graph holds it. Its id is also the id of its point in Qdrant.
+/// Its id is also the id of its point in Qdrant.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ItemNode {
     pub id: ItemId,
@@ -35,8 +34,8 @@ pub struct ItemNode {
     pub printed_page: Option<String>,
 }
 
-/// A concept as the graph holds it. It belongs to no document. It starts with no aliases, and
-/// only [`GraphStore::add_alias`] adds one.
+/// It belongs to no document. It starts with no aliases, and only [`GraphStore::add_alias`]
+/// adds one.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ConceptNode {
     pub id: ConceptId,
@@ -48,7 +47,6 @@ pub struct ConceptNode {
     pub definition: String,
 }
 
-/// One more name for a stored concept.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ConceptAlias {
     pub concept: ConceptId,
@@ -66,7 +64,6 @@ pub struct ItemMentions {
     pub concepts: Vec<ConceptId>,
 }
 
-/// An item discusses a concept.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Mention {
     pub item: ItemId,
@@ -75,8 +72,8 @@ pub struct Mention {
     pub wording: String,
 }
 
-/// Declares an enum together with `ALL`, the list of its kinds. Both are written from the one
-/// list of names, so a kind cannot be in the enum and missing from `ALL`.
+/// The enum and `ALL` are written from the one list of names, so a kind cannot be in the enum and
+/// missing from `ALL`.
 macro_rules! enum_with_all {
     (
         $(#[$attribute:meta])*
@@ -93,7 +90,6 @@ macro_rules! enum_with_all {
 }
 
 enum_with_all! {
-    /// How one concept relates to another. The list is fixed: a new kind is a change to this type.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub enum RelationKind {
         DerivedFrom,
@@ -117,7 +113,6 @@ impl RelationKind {
     }
 }
 
-/// The text that was given as a kind of relation is not the name of any kind.
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error(
     "`{given}` is not a kind of relation; the kinds are {kinds}",
@@ -140,7 +135,6 @@ impl FromStr for RelationKind {
     }
 }
 
-/// One concept relates to another.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Relation {
     pub from: ConceptId,
@@ -150,7 +144,6 @@ pub struct Relation {
     pub item: ItemId,
 }
 
-/// How many items of each kind a document holds.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct ItemsByKind {
     pub chunks: u64,
@@ -159,7 +152,6 @@ pub struct ItemsByKind {
     pub tables: u64,
 }
 
-/// A document with everything the graph keeps about it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DocumentRecord {
     pub node: DocumentNode,

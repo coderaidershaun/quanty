@@ -65,8 +65,7 @@ pub enum GraphError {
     FolderNotUnicode { folder: PathBuf },
 }
 
-/// The graph of documents, items, concepts and saved books. Every write can be repeated: a second
-/// call with the same values changes nothing.
+/// Every write can be repeated: a second call with the same values changes nothing.
 pub trait GraphStore {
     /// Creates the document node, or updates its title and its labels: a label that `document`
     /// does not have is taken away from the stored node. Repeating it changes nothing.

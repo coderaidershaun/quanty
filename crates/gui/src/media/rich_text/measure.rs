@@ -291,7 +291,6 @@ fn metrics_of(ui: &Ui, look: &TextLook) -> LineMetrics {
     }
 }
 
-/// The first chip sticks to the last word.
 fn add_chips(ui: &Ui, cites: &[usize], look: &TextLook, lines: &mut [MeasuredLine]) {
     let Some(line) = lines.last_mut() else {
         return;

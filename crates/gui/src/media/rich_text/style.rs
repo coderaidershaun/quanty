@@ -70,7 +70,6 @@ pub(super) fn text_look(role: TextRole) -> TextLook {
     }
 }
 
-/// The look of the first row of a table: small type in the strong font.
 pub(super) fn header_look() -> TextLook {
     let small = text_look(TextRole::Small);
     TextLook {

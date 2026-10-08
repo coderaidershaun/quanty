@@ -49,7 +49,6 @@ async fn a_page_that_cannot_be_shown_says_what_to_do() {
     assert!(failure.detail.contains(&unknown.doc.0.to_string()));
     assert!(failure.detail.contains(&searched));
 
-    // A page that the chapter does not have, on either side.
     let cx = closed(Path::new(NO_CONTENT_FOLDER));
     for page in [0, 8] {
         let chapter = sample_chapter(VOLATILITY);
@@ -181,7 +180,6 @@ async fn a_page_lists_the_concepts_its_items_mention() {
 
     let (page, concepts) = loaded(&cx, &target).await;
 
-    // No chapter is on disk for this document, and the concepts come all the same.
     let failure = page.expect_err("no chapter is saved for this document");
     assert_eq!(failure.kind, FailureKind::SourceMissing);
     let listed = |concept: &ConceptNode| PageConcept {

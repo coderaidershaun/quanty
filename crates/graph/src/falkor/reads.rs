@@ -151,7 +151,6 @@ pub(super) async fn ingested_items(
     }
 }
 
-/// The first row of the reply as a concept, or `None` when the reply has no row.
 async fn read_concept(
     graph: &FalkorGraph,
     action: &'static str,
@@ -162,7 +161,6 @@ async fn read_concept(
     Ok(concepts.into_iter().next())
 }
 
-/// Every row of the reply as a concept.
 async fn read_concepts(
     graph: &FalkorGraph,
     action: &'static str,
@@ -274,8 +272,6 @@ pub(super) fn id_list(ids: &[impl ToString + Copy]) -> FalkorValue {
     FalkorValue::Array(ids.iter().copied().map(id_value).collect())
 }
 
-/// Reads a row of an id, a title, a book or null, an author or null and a list of tags or null.
-/// Any other row comes back as the text that the error shows.
 pub(super) fn document_from_row(row: Vec<FalkorValue>) -> Result<DocumentNode, String> {
     let row = <[FalkorValue; 5]>::try_from(row).map_err(|row| format!("{row:?}"))?;
     let [
@@ -300,8 +296,6 @@ pub(super) fn document_from_row(row: Vec<FalkorValue>) -> Result<DocumentNode, S
     })
 }
 
-/// Reads a row of a title, an author or null and a list of tags or null. Any other row comes
-/// back as the text that the error shows.
 fn book_from_row(row: Vec<FalkorValue>) -> Result<BookNode, String> {
     let row = <[FalkorValue; 3]>::try_from(row).map_err(|row| format!("{row:?}"))?;
     let [FalkorValue::String(title), author, tags] = row else {
@@ -322,7 +316,6 @@ fn text_or_null(value: FalkorValue) -> Result<Option<String>, String> {
     }
 }
 
-/// Reads a list of tags, or null for no tag.
 fn tag_set(value: FalkorValue) -> Result<BTreeSet<Tag>, String> {
     let tags = match value {
         FalkorValue::None => return Ok(BTreeSet::new()),
@@ -337,8 +330,6 @@ fn tag_set(value: FalkorValue) -> Result<BTreeSet<Tag>, String> {
         .collect()
 }
 
-/// Reads a row of four texts: an id, a name, a normalised name and a definition. Any other row
-/// comes back as the text that the error shows.
 fn concept_from_row(row: Vec<FalkorValue>) -> Result<ConceptNode, String> {
     let row = <[FalkorValue; 4]>::try_from(row).map_err(|row| format!("{row:?}"))?;
     let [
@@ -359,8 +350,6 @@ fn concept_from_row(row: Vec<FalkorValue>) -> Result<ConceptNode, String> {
     })
 }
 
-/// Reads a row of one value: a count of items, or null for a document that is not marked as
-/// ingested whole. Any other row comes back as the text that the error shows.
 fn ingested_items_from_row(row: Vec<FalkorValue>) -> Result<Option<u64>, String> {
     let row = <[FalkorValue; 1]>::try_from(row).map_err(|row| format!("{row:?}"))?;
     match row {
@@ -372,8 +361,6 @@ fn ingested_items_from_row(row: Vec<FalkorValue>) -> Result<Option<u64>, String>
     }
 }
 
-/// Reads a row of an id and a list of ids. Any other row comes back as the text that the error
-/// shows.
 fn item_mentions_from_row(row: Vec<FalkorValue>) -> Result<ItemMentions, String> {
     let row = <[FalkorValue; 2]>::try_from(row).map_err(|row| format!("{row:?}"))?;
     let [FalkorValue::String(item), FalkorValue::Array(concepts)] = row else {

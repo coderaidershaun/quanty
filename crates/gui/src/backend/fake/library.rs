@@ -22,7 +22,6 @@ impl Fake {
             .expect("the catalogue of the fake is not poisoned")
     }
 
-    /// Waits as a store would, then answers, or fails when the library of the scene fails.
     async fn after_wait<T>(
         &self,
         answer: impl FnOnce() -> Result<T, Failure>,

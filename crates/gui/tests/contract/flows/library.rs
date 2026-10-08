@@ -1,6 +1,5 @@
 //! The Library tab lists the stored books and their chapters, copies the id of a chapter, opens it
-//! to read, and says what no sample shows. A book gets its author and its tags from its chapters
-//! once it has one, on the Ingest tab and on the Library tab alike.
+//! to read, and says what no sample shows. A book with a chapter has the labels of its chapters.
 
 use std::path::PathBuf;
 use std::sync::Arc;

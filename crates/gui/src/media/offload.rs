@@ -16,9 +16,7 @@ pub enum Offload {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Urgency {
-    /// Goes to the front of the queue.
     Now,
-    /// Goes to the back of the queue.
     Later,
 }
 
@@ -42,8 +40,6 @@ struct ByHand<Job, Done> {
     sender: Sender<Done>,
 }
 
-/// In `Threads` mode a few named threads take the jobs; in `Manual` mode `run_pending` does it on
-/// the caller's thread.
 pub struct Workers<Job, Done> {
     queue: Arc<Queue<Job>>,
     done: Receiver<Done>,

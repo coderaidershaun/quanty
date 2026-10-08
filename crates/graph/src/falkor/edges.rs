@@ -65,9 +65,6 @@ pub(super) async fn mentions_between(
         .map_err(|found| unreadable_reply(graph, action, MENTION_ROW, found))
 }
 
-/// Reads a row of four texts: the id of the concept the relation leaves, the id of the concept it
-/// reaches, its kind and the id of the item that stated it. Any other row comes back as the text
-/// that the error shows.
 fn relation_from_row(row: Vec<FalkorValue>) -> Result<Relation, String> {
     let row = <[FalkorValue; 4]>::try_from(row).map_err(|row| format!("{row:?}"))?;
     let [
@@ -87,8 +84,6 @@ fn relation_from_row(row: Vec<FalkorValue>) -> Result<Relation, String> {
     })
 }
 
-/// Reads a row of three texts: an item id, a concept id and the wording. Any other row comes back
-/// as the text that the error shows.
 fn mention_from_row(row: Vec<FalkorValue>) -> Result<Mention, String> {
     let row = <[FalkorValue; 3]>::try_from(row).map_err(|row| format!("{row:?}"))?;
     let [

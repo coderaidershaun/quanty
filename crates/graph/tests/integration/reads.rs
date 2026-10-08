@@ -1,6 +1,5 @@
 //! Reads what the Library, the concept graph and the source page ask of the store, on a throwaway
-//! graph, because only a real FalkorDB shows that it accepts the statements and groups and orders
-//! their rows as they promise.
+//! graph, because only a real FalkorDB shows that it accepts the statements and orders their rows.
 
 use std::collections::BTreeSet;
 use std::iter::repeat_n;
@@ -236,7 +235,6 @@ async fn the_edges_among_what_was_asked_and_the_concepts_of_a_page_come_back_and
     );
     assert_eq!(graph.concepts_on_page(document_a, 3).await.unwrap(), vec![]);
 
-    // Nothing asked about means no call and no row.
     assert_eq!(graph.relations_among(&[]).await.unwrap(), vec![]);
     assert_eq!(graph.mentions_between(&[], &[c1.id]).await.unwrap(), vec![]);
     assert_eq!(graph.mentions_between(&[i2.id], &[]).await.unwrap(), vec![]);

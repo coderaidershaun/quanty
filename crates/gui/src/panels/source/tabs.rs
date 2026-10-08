@@ -17,7 +17,6 @@ pub(super) enum SourceTab {
     Concepts,
 }
 
-/// The tabs that show one card for each piece of a kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum CardTab {
     Figures,

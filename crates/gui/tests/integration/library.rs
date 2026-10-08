@@ -1,6 +1,5 @@
-//! Checks that the live backend lists the stored documents, each with the chapter that is on
-//! disk for it, that a book saved before any chapter is kept between two starts of the app, and
-//! that new labels of a document are written to both stores with no model asked.
+//! Checks that the live backend lists stored documents with their chapters on disk, keeps a book
+//! saved before any chapter between starts, and writes new labels to both stores with no model asked.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -210,7 +209,6 @@ async fn the_labels_a_person_saves_are_in_the_next_catalogue_and_on_every_point_
     )
     .await;
 
-    // A change of the author, a tag added and a tag taken away, in one save.
     let second = LabelEdit::toward(
         &after_first,
         Some("S. Natenberg"),
@@ -257,7 +255,6 @@ async fn a_save_of_labels_answers_once_when_the_stores_are_down() {
     );
 }
 
-/// Sends one command and returns its one answer.
 async fn one_answer<S: Services>(cx: &LiveContext<S>, command: Command) -> Event {
     let (reply, events, _stop) = Reply::collecting();
     cx.serve(command, reply).await;

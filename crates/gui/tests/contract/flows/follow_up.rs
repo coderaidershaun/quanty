@@ -1,14 +1,16 @@
-//! A follow-up starts a new ask with the same mode and filters, a plain key stays in the question
-//! box, and every way to copy reaches the clipboard.
+//! The filters offer what the library holds and an ask sends what was chosen, a follow-up starts a
+//! new ask with the same mode and filters, a plain key stays in the question box, and every way to
+//! copy reaches the clipboard.
 
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::contract::AnswerBlock;
+use gui::contract::{AnswerBlock, Category, Command, Filters};
 use gui::testkit;
 
-use super::{Window, click, copied_by, has, is_open_tab, node, press, shared};
+use super::recording::{self, Seen};
+use super::{Window, click, click_in, copied_by, has, is_open_tab, node, panels, press, shared};
 
 fn question_box(harness: &Window) -> Option<String> {
     node(harness, Role::TextInput, "Question").value()
@@ -22,31 +24,9 @@ fn assert_new_ask(harness: &Window, generation: u64, question: &str) {
 
 #[test]
 fn a_follow_up_starts_a_new_ask_and_copies_reach_the_clipboard() {
-    let mut harness = testkit::app("black-scholes", DEFAULT_WINDOW);
+    let (mut harness, seen) = recording::open("black-scholes", DEFAULT_WINDOW);
     testkit::settle(&mut harness);
 
-    let books: Vec<String> = shared(&harness)
-        .library
-        .catalogue
-        .ready()
-        .map(|catalogue| {
-            catalogue
-                .media
-                .iter()
-                .filter_map(|media| media.title.clone())
-                .collect()
-        })
-        .unwrap_or_default();
-    assert!(!books.is_empty(), "the library has books");
-    click(&mut harness, Role::ComboBox, "Books");
-    assert!(has(&harness, Role::Button, "All books"));
-    for book in &books {
-        assert!(
-            has(&harness, Role::Button, book),
-            "`{book}` is a row of Books"
-        );
-    }
-    click(&mut harness, Role::Button, &books[0]);
     let before = shared(&harness).ask.generation;
     let question = shared(&harness).ask.question.clone();
     assert_eq!(
@@ -54,9 +34,8 @@ fn a_follow_up_starts_a_new_ask_and_copies_reach_the_clipboard() {
         Some(question.as_str()),
         "the bar holds the question of the ask on screen"
     );
-    click(&mut harness, Role::Button, "Ask");
+    the_filters_offer_the_library_and_an_ask_sends_them(&mut harness, &seen);
     assert_new_ask(&harness, before, &question);
-    assert_eq!(shared(&harness).ask.filters.media.as_ref(), Some(&books[0]));
 
     click(&mut harness, Role::Tab, "Results");
     let follow_up = shared(&harness)
@@ -125,6 +104,82 @@ fn a_follow_up_starts_a_new_ask_and_copies_reach_the_clipboard() {
     );
 
     copies_reach_the_clipboard(&mut harness);
+}
+
+/// The four filters together fit only the paper of the library, so the ask still has an answer
+/// for the follow-up to start from.
+fn the_filters_offer_the_library_and_an_ask_sends_them(harness: &mut Window, seen: &Seen) {
+    let catalogue = shared(harness)
+        .library
+        .catalogue
+        .ready()
+        .expect("the library loaded")
+        .clone();
+    let with_a_document: Vec<&str> = catalogue
+        .media
+        .iter()
+        .filter(|media| !media.documents.is_empty())
+        .filter_map(|media| media.title.as_deref())
+        .collect();
+    let paper = catalogue
+        .media
+        .iter()
+        .find(|media| media.category == Category::Paper)
+        .expect("the library has a paper");
+    let title = paper.title.clone().expect("the paper has a title");
+    let author = paper
+        .authors
+        .first()
+        .expect("the paper has authors")
+        .clone();
+    let media_tag = paper.tags.first().expect("the paper has a tag").clone();
+    let bar = panels(DEFAULT_WINDOW).ask_bar;
+
+    click_in(harness, Role::ComboBox, "Media", bar);
+    assert!(has(harness, Role::Button, "All media"));
+    for media in &with_a_document {
+        assert!(
+            has(harness, Role::Button, media),
+            "`{media}` is a row of Media"
+        );
+    }
+    click(harness, Role::Button, &title);
+
+    click_in(harness, Role::ComboBox, "Authors", bar);
+    click(harness, Role::Button, &author);
+
+    click_in(harness, Role::ComboBox, "Tags", bar);
+    click(harness, Role::CheckBox, &media_tag);
+    press(harness, egui::Modifiers::NONE, egui::Key::Escape);
+
+    click_in(harness, Role::ComboBox, "Category", bar);
+    for row in ["Any category", "Book", "Paper", "Other"] {
+        assert!(
+            has(harness, Role::Button, row),
+            "`{row}` is a row of Category"
+        );
+    }
+    click(harness, Role::Button, "Paper");
+
+    click(harness, Role::Button, "Ask");
+    let sent = seen
+        .all()
+        .into_iter()
+        .rev()
+        .find_map(|command| match command {
+            Command::Ask { ask, .. } => Some(ask.filters),
+            _ => None,
+        });
+    assert_eq!(
+        sent,
+        Some(Filters {
+            media: Some(title),
+            author: Some(author),
+            tags: vec![media_tag],
+            category: Some(Category::Paper),
+        }),
+        "the ask sends the filters that were chosen"
+    );
 }
 
 fn copies_reach_the_clipboard(harness: &mut Window) {

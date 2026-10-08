@@ -180,3 +180,12 @@ fn failures(shared: &Shared) -> Vec<&gui::contract::Failure> {
     .chain(ingest)
     .collect()
 }
+
+/// The Ask bar and the Source panel each have a list named "Media", so a control is found by the
+/// panel it is in.
+fn click_in(harness: &mut Window, role: Role, name: &str, area: egui::Rect) {
+    node_in(harness, role, name, area)
+        .unwrap_or_else(|| panic!("no {role:?} named `{name}` is in {area:?}"))
+        .click();
+    testkit::settle(harness);
+}

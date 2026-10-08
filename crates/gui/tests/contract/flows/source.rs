@@ -1,15 +1,16 @@
 //! The Source panel shows the page its pickers and its pager name, turns to the next page with
-//! no spinner in between, and shows a chapter with no page pictures as its pieces.
+//! no spinner in between, and shows a chapter with no page pictures as its pieces. The pickers
+//! name a chapter as "Chapter N · Name" and a paper's document by its title.
 
 use std::time::{Duration, Instant};
 
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::contract::{DocId, Intent, Loadable, PieceKind};
+use gui::contract::{Category, DocId, Intent, Loadable, PieceKind};
 use gui::testkit;
 
-use super::{COMMAND, Window, click, has, is_enabled, node, press, says, shared};
+use super::{COMMAND, Window, click, click_in, has, is_enabled, node, panels, press, says, shared};
 
 fn shown_page(harness: &Window) -> Option<u32> {
     shared(harness).source.page.ready().map(|view| view.page)
@@ -34,14 +35,23 @@ fn assert_page(harness: &Window, doc: DocId, page: u32) {
     assert!(has(harness, Role::Label, &page_label(harness)));
 }
 
-fn book_of(harness: &Window, doc: DocId) -> String {
+fn media_of(harness: &Window, doc: DocId) -> String {
     let catalogue = shared(harness)
         .library
         .catalogue
         .ready()
         .expect("the library loaded");
-    let book = catalogue.media_of(doc).expect("the document is in a media");
-    book.title.clone().expect("the media has a title")
+    let media = catalogue.media_of(doc).expect("the document is in a media");
+    media.title.clone().expect("the media has a title")
+}
+
+fn open_the_media_list(harness: &mut Window) {
+    let source = panels(DEFAULT_WINDOW).source;
+    click_in(harness, Role::ComboBox, "Media", source);
+}
+
+fn shown_document(harness: &Window) -> Option<String> {
+    node(harness, Role::ComboBox, "Document").value()
 }
 
 /// Queues a click and runs no frame, so that a test can look at every frame that follows.
@@ -59,10 +69,10 @@ fn queue_click(harness: &mut Window, role: Role, name: &str) {
 }
 
 fn a_chapter_with_no_page_pictures_shows_its_pieces(harness: &mut Window, doc: DocId) {
-    let notes_book = book_of(harness, doc);
-    click(harness, Role::ComboBox, "Book");
-    click(harness, Role::Button, &notes_book);
-    click(harness, Role::ComboBox, "Chapter");
+    let notes_media = media_of(harness, doc);
+    open_the_media_list(harness);
+    click(harness, Role::Button, &notes_media);
+    click(harness, Role::ComboBox, "Document");
     let chapter = shared(harness)
         .library
         .catalogue
@@ -70,11 +80,9 @@ fn a_chapter_with_no_page_pictures_shows_its_pieces(harness: &mut Window, doc: D
         .and_then(|catalogue| catalogue.document(doc))
         .and_then(|document| document.chapter.clone())
         .expect("the chapter of the formula has a label");
-    click(
-        harness,
-        Role::Button,
-        &format!("Chapter {}: {}", chapter.number, chapter.name),
-    );
+    let row = format!("Chapter {} · {}", chapter.number, chapter.name);
+    click(harness, Role::Button, &row);
+    assert_eq!(shown_document(harness), Some(row));
     assert_page(harness, doc, 1);
     let view = shared(harness)
         .source
@@ -117,9 +125,9 @@ fn the_source_shows_the_page_its_pickers_and_pager_name() {
         .clone();
     let with_pictures = figure.doc;
 
-    let book = book_of(&harness, with_pictures);
-    click(&mut harness, Role::ComboBox, "Book");
-    click(&mut harness, Role::Button, &book);
+    let media = media_of(&harness, with_pictures);
+    open_the_media_list(&mut harness);
+    click(&mut harness, Role::Button, &media);
     assert_page(&harness, with_pictures, 1);
     assert!(has(&harness, Role::Image, "Picture of page 1"));
 
@@ -177,4 +185,28 @@ fn the_source_shows_the_page_its_pickers_and_pager_name() {
     testkit::save_png(&mut harness, "app-source");
 
     a_chapter_with_no_page_pictures_shows_its_pieces(&mut harness, notes.doc);
+    a_paper_is_named_by_its_title(&mut harness);
+}
+
+/// The paper of the sample library has no folder, so its page fails to open. This step comes last
+/// for that reason.
+///
+/// SMELL: the sample paper has the same title as its one document, so this check would still pass
+/// if the Document list showed the title of the media by mistake.
+fn a_paper_is_named_by_its_title(harness: &mut Window) {
+    let (title, document) = shared(harness)
+        .library
+        .catalogue
+        .ready()
+        .and_then(|catalogue| {
+            let paper = catalogue
+                .media
+                .iter()
+                .find(|media| media.category == Category::Paper)?;
+            Some((paper.title.clone()?, paper.documents.first()?.title.clone()))
+        })
+        .expect("the library has a titled paper with a document");
+    open_the_media_list(harness);
+    click(harness, Role::Button, &title);
+    assert_eq!(shown_document(harness), Some(document));
 }

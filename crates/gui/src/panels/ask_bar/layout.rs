@@ -1,5 +1,5 @@
 //! Where each control of the bar sits. Every control has a fixed slot, so nothing moves when a
-//! book title is long or the window is narrow.
+//! media title is long or the window is narrow.
 
 use eframe::egui;
 
@@ -11,15 +11,18 @@ pub(super) const CONTENT_HEIGHT: f32 = size::CONTROL_LG + space::SM + size::CONT
 /// kit makes its buttons wider, Ask and Stop leave their slot.
 const ASK_WIDTH: f32 = 2.4 * size::CONTROL_LG;
 const PICKER_WIDTH: f32 = 4.5 * size::CONTROL_LG;
+/// The category list holds short words, so its slot is narrower and leaves the note more room.
+const CATEGORY_WIDTH: f32 = 3.5 * size::CONTROL_LG;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Rects {
     pub(super) question: egui::Rect,
     pub(super) mode: egui::Rect,
     pub(super) ask: egui::Rect,
-    pub(super) books: egui::Rect,
+    pub(super) media: egui::Rect,
     pub(super) authors: egui::Rect,
     pub(super) tags: egui::Rect,
+    pub(super) category: egui::Rect,
     pub(super) note: egui::Rect,
 }
 
@@ -53,17 +56,22 @@ pub(super) fn rects(content: egui::Rect) -> Rects {
         )
     };
     let tags = picker(2.0);
+    let category = egui::Rect::from_min_size(
+        egui::pos2(tags.right() + space::SM, second.top()),
+        egui::vec2(CATEGORY_WIDTH, size::CONTROL_SM),
+    );
     let note = egui::Rect::from_min_max(
-        egui::pos2(tags.right() + space::MD, second.top()),
+        egui::pos2(category.right() + space::MD, second.top()),
         second.max,
     );
     Rects {
         question,
         mode,
         ask,
-        books: picker(0.0),
+        media: picker(0.0),
         authors: picker(1.0),
         tags,
+        category,
         note,
     }
 }

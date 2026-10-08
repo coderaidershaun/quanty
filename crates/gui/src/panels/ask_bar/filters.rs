@@ -1,18 +1,20 @@
-//! The second row of the bar: the book, author and tags filters, and what each one offers.
+//! The second row of the bar: the media, author, tags and category filters, and what each one
+//! offers.
 
 use std::iter::once;
 
 use eframe::egui;
 
 use super::layout::{Rects, slot};
-use crate::contract::Filters;
+use crate::contract::{Category, Filters};
 use crate::state::Library;
 use crate::theme::{Icon, color, size};
 use crate::widgets::Dropdown;
 
-const ALL_BOOKS: &str = "All books";
+const ALL_MEDIA: &str = "All media";
 const ALL_AUTHORS: &str = "All authors";
 const ALL_TAGS: &str = "All tags";
+const ANY_CATEGORY: &str = "Any category";
 
 #[derive(Debug, Default)]
 pub(super) struct Choices {
@@ -20,9 +22,11 @@ pub(super) struct Choices {
     revision: Option<u64>,
     /// True when the lists come from a catalogue that has loaded.
     is_known: bool,
-    /// "All books" comes first, then each titled book that has a chapter in catalogue order. A
-    /// book with no chapter would be a filter that finds nothing.
-    books: Vec<String>,
+    /// True when the catalogue has loaded and holds a document, so a category can find something.
+    has_documents: bool,
+    /// "All media" comes first, then each titled media that has a document, in catalogue order. A
+    /// media with no document would be a filter that finds nothing.
+    media: Vec<String>,
     /// "All authors" comes first, then each author once, sorted.
     authors: Vec<String>,
     /// The list holds each tag once, sorted.
@@ -37,7 +41,9 @@ impl Choices {
         self.revision = Some(library.revision);
         let catalogue = library.catalogue.ready();
         self.is_known = catalogue.is_some();
-        self.books = once(ALL_BOOKS)
+        self.has_documents =
+            catalogue.is_some_and(|catalogue| catalogue.documents().next().is_some());
+        self.media = once(ALL_MEDIA)
             .chain(
                 catalogue
                     .into_iter()
@@ -63,7 +69,8 @@ impl Choices {
         true
     }
 
-    /// A filter on a book that is gone would find nothing and not say why.
+    /// A filter on a media, an author or a tag that is gone would find nothing and not say why.
+    /// Every category is always offered, so the category is kept.
     pub(super) fn keep_known(&self, filters: &mut Filters) {
         if !self.is_known {
             return;
@@ -73,7 +80,7 @@ impl Choices {
             |options: &[String], value: &str| options.iter().skip(1).any(|option| option == value);
         filters
             .media
-            .take_if(|media| !is_offered(&self.books, media));
+            .take_if(|media| !is_offered(&self.media, media));
         filters
             .author
             .take_if(|author| !is_offered(&self.authors, author));
@@ -81,12 +88,12 @@ impl Choices {
     }
 
     pub(super) fn show(&self, ui: &mut egui::Ui, rects: &Rects, filters: &mut Filters) {
-        slot(ui, "books", rects.books, |ui| {
+        slot(ui, "media", rects.media, |ui| {
             let pick = Pick {
-                label: "Books",
-                all: ALL_BOOKS,
-                options: &self.books,
-                width: rects.books.width(),
+                label: "Media",
+                all: ALL_MEDIA,
+                options: &self.media,
+                width: rects.media.width(),
             };
             pick_one(ui, &pick, &mut filters.media);
         });
@@ -101,6 +108,11 @@ impl Choices {
         });
         slot(ui, "tags", rects.tags, |ui| {
             pick_several(ui, &self.tags, rects.tags.width(), &mut filters.tags);
+        });
+        slot(ui, "category", rects.category, |ui| {
+            ui.add_enabled_ui(self.has_documents, |ui| {
+                pick_category(ui, rects.category.width(), &mut filters.category);
+            });
         });
     }
 }
@@ -132,6 +144,29 @@ fn pick_one(ui: &mut egui::Ui, pick: &Pick<'_>, value: &mut Option<String>) {
             *value = (index > 0).then(|| pick.options[index].clone());
         }
     });
+}
+
+/// Row 0 is "Any category" and means no filter. The rows after it follow `Category::ALL`.
+fn pick_category(ui: &mut egui::Ui, width: f32, value: &mut Option<Category>) {
+    let [book, paper, other] = Category::ALL.map(Category::label);
+    let options = [ANY_CATEGORY, book, paper, other];
+    let selected = match *value {
+        None => Some(0),
+        Some(current) => Category::ALL
+            .iter()
+            .position(|&category| category == current)
+            .map(|place| place + 1),
+    };
+    let chosen = Dropdown::new("Category", &options)
+        .selected(selected)
+        .width(width)
+        .show(ui);
+    if let Some(index) = chosen {
+        *value = index
+            .checked_sub(1)
+            .and_then(|place| Category::ALL.get(place))
+            .copied();
+    }
 }
 
 /// The kit has no list of which the person ticks any number of rows.

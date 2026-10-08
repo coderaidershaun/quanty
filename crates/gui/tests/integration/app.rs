@@ -9,7 +9,7 @@ use egui::accesskit::Role;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use gui::app::App;
-use gui::app::layout::DEFAULT_WINDOW;
+use gui::app::layout::{self, DEFAULT_WINDOW};
 use gui::contract::{
     AskDraft, Failure, FailureKind, Filters, Intent, ItemKind, Loadable, NodeId, NodeKind,
     PieceKind, ResultItem, StartupFacts,
@@ -41,13 +41,12 @@ fn an_ask_runs_from_the_question_to_the_cited_page_on_the_live_adapters() {
     let catalogue = harness.state().shared().library.catalogue.ready();
     let documents = catalogue.map(|catalogue| catalogue.documents().count());
     assert_eq!(documents, Some(3));
-    harness.get_by_label("Books").click();
-    harness.run_ok();
+    open_in_the_ask_bar(&mut harness, "Media");
     for title in [VOLATILITY_BOOK, NOTES_BOOK] {
         harness.get_by_role_and_label(Role::Button, title);
     }
     harness
-        .get_by_role_and_label(Role::Button, "All books")
+        .get_by_role_and_label(Role::Button, "All media")
         .click();
     harness.run_ok();
 
@@ -198,7 +197,7 @@ fn an_ask_runs_from_the_question_to_the_cited_page_on_the_live_adapters() {
     assert!(ask.search.ready().is_some() && ask.graph.ready().is_some());
     assert!(ask.answer.ready().is_some());
 
-    choose(&mut harness, "Books", VOLATILITY_BOOK);
+    choose(&mut harness, "Media", VOLATILITY_BOOK);
     choose(&mut harness, "Mode", "Results only");
     ask_in_the_box(&mut harness, None);
     let ask = &harness.state().shared().ask;
@@ -312,9 +311,21 @@ fn ask_in_the_box(harness: &mut Harness<'_, App>, question: Option<&str>) {
     settle(harness);
 }
 
-fn choose(harness: &mut Harness<'_, App>, list: &str, row: &str) {
-    harness.get_by_label(list).click();
+/// The Ask bar and the Source panel each have a list named "Media", so the list is found by the
+/// panel it is in.
+fn open_in_the_ask_bar(harness: &mut Harness<'_, App>, list: &str) {
+    let window = egui::Rect::from_min_size(egui::Pos2::ZERO, DEFAULT_WINDOW.into());
+    let bar = layout::shell(window).ask_bar;
+    harness
+        .query_all_by_role_and_label(Role::ComboBox, list)
+        .find(|node| bar.contains(node.rect().center()))
+        .unwrap_or_else(|| panic!("no list named `{list}` is in the Ask bar"))
+        .click();
     harness.run_ok();
+}
+
+fn choose(harness: &mut Harness<'_, App>, list: &str, row: &str) {
+    open_in_the_ask_bar(harness, list);
     harness.get_by_role_and_label(Role::Button, row).click();
     settle(harness);
 }

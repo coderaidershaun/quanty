@@ -1,18 +1,21 @@
-//! Checks that an ask on the live backend finds the stored items and writes the answer.
+//! Checks that an ask on the live backend finds the stored items and writes the answer, and that a
+//! category filter keeps only the items of that category.
 
 use gui::backend::Reply;
 use gui::backend::live::{LiveContext, query};
 use gui::contract::{
-    AnswerBlock, AskDraft, AskMode, ConceptId, DocId, EdgeKind, Event, Filters, GraphEdge,
-    GraphNode, ItemId, ItemKind, NodeId, NodeKind, Reason, RequestId, ResultItem,
+    AnswerBlock, AskDraft, AskMode, Category, ConceptId, DocId, EdgeKind, Event, Filters,
+    GraphEdge, GraphNode, ItemId, ItemKind, NodeId, NodeKind, Reason, RequestId, ResultItem,
 };
-use rag_core::Config;
+use rag_core::{Config, MediaLabels};
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores};
+use rag_ingestion::{ChapterFolder, ingest_chapter};
 use rag_retrieval::RESULTS_PER_QUERY;
 use serde_json::json;
 
 use crate::support::{
-    Folders, IN_DEPTH, INTUITION, QUESTION, StandInServices, context_over, context_with, fill,
+    Folders, IN_DEPTH, INTUITION, QUESTION, SAMPLE_PAGES, StandInServices, context_over,
+    context_with, fill, sample_chapter,
 };
 
 const REQUEST: RequestId = RequestId(7);
@@ -38,8 +41,13 @@ async fn an_ask_sends_the_results_with_their_trace_then_the_graph_then_the_answe
         }))
     });
     let world = fill("query-ask", &answering, FOLDERS).await;
+    let draft = AskDraft {
+        question: QUESTION.to_owned(),
+        mode: AskMode::Answer,
+        filters: Filters::default(),
+    };
 
-    let events = ask(&world.cx).await;
+    let events = ask(&world.cx, &draft).await;
 
     let [
         Event::Search {
@@ -169,8 +177,13 @@ async fn an_ask_with_nothing_stored_sends_an_empty_search_and_asks_no_model() {
     let answering = StandInLlm::finding_nothing();
     let stores = ThrowawayStores::new("query-empty");
     let cx = context_with(stores, &answering, StandInEmbedder::default);
+    let draft = AskDraft {
+        question: QUESTION.to_owned(),
+        mode: AskMode::Answer,
+        filters: Filters::default(),
+    };
 
-    let events = ask(&cx).await;
+    let events = ask(&cx, &draft).await;
 
     let [
         Event::Search {
@@ -194,7 +207,7 @@ async fn an_ask_with_nothing_stored_sends_an_empty_search_and_asks_no_model() {
     };
     let cx = context_over(config, stores, &answering, StandInEmbedder::default);
 
-    let events = ask(&cx).await;
+    let events = ask(&cx, &draft).await;
 
     let [
         Event::Search {
@@ -206,6 +219,66 @@ async fn an_ask_with_nothing_stored_sends_an_empty_search_and_asks_no_model() {
         panic!("expected a failed search alone, with id 7: {events:#?}");
     };
     assert_eq!(answering.calls(), 0);
+}
+
+/// The two chapters are of two different media, because a document takes the category of its
+/// media, and a media that is stored already keeps the labels it has.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p gui --test integration -- --ignored query::"]
+async fn a_category_filter_finds_only_the_items_of_that_category() {
+    let stores = ThrowawayStores::new("query-category");
+    let connected = stores.connect().await;
+    let models =
+        stores.models_with_embedder(StandInEmbedder::default(), StandInLlm::finding_nothing());
+    let store = async |chapter: &str, new_media: &MediaLabels| {
+        let folder = ChapterFolder {
+            folder: &sample_chapter(chapter),
+            new_media,
+        };
+        let summary = ingest_chapter(folder, &models, &connected).await;
+        DocId::from(summary.expect("a sample chapter should be ingested").doc_id)
+    };
+    let book = store(IN_DEPTH, &MediaLabels::default()).await;
+    let paper_labels = MediaLabels {
+        category: rag_core::Category::Paper,
+        ..MediaLabels::default()
+    };
+    let paper = store(SAMPLE_PAGES, &paper_labels).await;
+    let cx = context_with(
+        stores,
+        &StandInLlm::finding_nothing(),
+        StandInEmbedder::default,
+    );
+
+    for (category, doc) in [(Category::Paper, paper), (Category::Book, book)] {
+        let draft = AskDraft {
+            question: QUESTION.to_owned(),
+            mode: AskMode::ResultsOnly,
+            filters: Filters {
+                category: Some(category),
+                ..Filters::default()
+            },
+        };
+
+        let events = ask(&cx, &draft).await;
+
+        let Some(Event::Search {
+            result: Ok(search), ..
+        }) = events.first()
+        else {
+            panic!("expected the search first: {events:#?}");
+        };
+        assert!(
+            !search.results.is_empty(),
+            "the {category:?} filter finds items"
+        );
+        assert!(
+            search.results.iter().all(|result| result.doc == doc),
+            "the {category:?} filter keeps only the items of {doc:?}: {:#?}",
+            search.results
+        );
+        assert_eq!(search.trace.documents_searched, Some(1));
+    }
 }
 
 fn paragraph(text: &str, cites: &[usize]) -> AnswerBlock {
@@ -239,16 +312,11 @@ fn on_disk(result: &ResultItem) -> (Option<u32>, Option<&str>, Option<&str>) {
 
 /// The `Send` bound is a proof at compile time that the window can run the ask on any thread of
 /// its runtime.
-async fn ask(cx: &LiveContext<StandInServices>) -> Vec<Event> {
+async fn ask(cx: &LiveContext<StandInServices>, draft: &AskDraft) -> Vec<Event> {
     fn assert_send<F: Future + Send>(future: F) -> F {
         future
     }
-    let draft = AskDraft {
-        question: QUESTION.to_owned(),
-        mode: AskMode::Answer,
-        filters: Filters::default(),
-    };
     let (reply, events, _stop) = Reply::collecting();
-    assert_send(query::ask(cx, REQUEST, &draft, &reply)).await;
+    assert_send(query::ask(cx, REQUEST, draft, &reply)).await;
     events.try_iter().collect()
 }

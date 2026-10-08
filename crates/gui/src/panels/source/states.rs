@@ -27,7 +27,7 @@ fn nothing_open(ui: &mut egui::Ui, cx: &PanelCx<'_>) {
         Some(catalogue) if catalogue.documents().next().is_none() => {
             "The library is empty. Add a chapter on the Ingest tab to read it here."
         }
-        Some(_) => "Select a result, or choose a book above, to see the page it stands on.",
+        Some(_) => "Select a result, or choose a media above, to see the page it stands on.",
         None => "Select a result to see the page it stands on.",
     };
     whole_area(

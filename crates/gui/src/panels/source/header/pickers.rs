@@ -1,26 +1,33 @@
-//! The book and chapter pickers: the lists they choose from, and what they show while the library
-//! is not read.
+//! The media and document pickers: the lists they choose from, and what they show while the
+//! library is not read.
 
 use eframe::egui;
 
-use crate::contract::{ChapterLabel, DocId, Loadable, PageView};
+use crate::contract::{ChapterLabel, DocId, DocumentName, Loadable, PageView};
 use crate::state::Shared;
 use crate::widgets::Dropdown;
 
-/// The books of the library and the chapters of the open document's book, as texts to choose from.
+/// SMELL: the Library page keeps its own copy of these words for a media with no title, so a
+/// change here must also be made there.
+const NO_MEDIA: &str = "No media";
+const CHOOSE_MEDIA: &str = "Choose a media";
+const CHOOSE_DOCUMENT: &str = "Choose a document";
+
+/// The media of the library and the documents of the open document's media, as texts to choose
+/// from.
 #[derive(Debug, Default)]
 pub(super) struct Lists {
     key: Option<(u64, Option<DocId>, Option<DocId>)>,
-    books: Vec<String>,
-    first_chapters: Vec<DocId>,
-    chapters: Vec<String>,
-    chapter_docs: Vec<DocId>,
-    /// The places of the open document's book and chapter in the lists above.
-    open_book: Option<usize>,
-    open_chapter: Option<usize>,
+    media: Vec<String>,
+    first_document_ids: Vec<DocId>,
+    documents: Vec<String>,
+    document_ids: Vec<DocId>,
+    /// The places of the open document's media and of the open document in the lists above.
+    open_media: Option<usize>,
+    open_document: Option<usize>,
     /// What the pickers show while the library is not read: the shown page's own labels.
-    page_book: Option<String>,
-    page_chapter: Option<String>,
+    page_media: Option<String>,
+    page_document: Option<String>,
 }
 
 impl Lists {
@@ -33,40 +40,40 @@ impl Lists {
         }
         *self = Lists {
             key: Some(key),
-            page_book: shown.map(book_text),
-            page_chapter: shown.and_then(document_text),
+            page_media: shown.map(media_text),
+            page_document: shown.and_then(document_text),
             ..Lists::default()
         };
         let Some(catalogue) = shared.library.catalogue.ready() else {
             return;
         };
-        let with_chapters = catalogue
+        let with_documents = catalogue
             .media
             .iter()
             .filter_map(|media| media.documents.first().map(|first| (media, first.id)));
-        for (media, first) in with_chapters {
+        for (media, first) in with_documents {
             let is_open = media
                 .documents
                 .iter()
                 .any(|document| Some(document.id) == open);
             if is_open {
-                self.open_book = Some(self.books.len());
+                self.open_media = Some(self.media.len());
                 for document in &media.documents {
                     if Some(document.id) == open {
-                        self.open_chapter = Some(self.chapters.len());
+                        self.open_document = Some(self.documents.len());
                     }
-                    self.chapters.push(
+                    self.documents.push(
                         document
                             .chapter
                             .as_ref()
                             .map_or_else(|| document.title.clone(), chapter_text),
                     );
-                    self.chapter_docs.push(document.id);
+                    self.document_ids.push(document.id);
                 }
             }
-            self.books
-                .push(media.title.clone().unwrap_or_else(|| "No book".to_owned()));
-            self.first_chapters.push(first);
+            self.media
+                .push(media.title.clone().unwrap_or_else(|| NO_MEDIA.to_owned()));
+            self.first_document_ids.push(first);
         }
     }
 
@@ -78,41 +85,41 @@ impl Lists {
             Loadable::Failed(failure) => Some(failure.hint.as_str()),
             Loadable::Idle | Loadable::Loading => Some("Reading the library…"),
         };
-        let (book, chapter) = if is_read {
-            ("Choose a book", "Choose a chapter")
+        let (media, document) = if is_read {
+            (CHOOSE_MEDIA, CHOOSE_DOCUMENT)
         } else {
             (
-                self.page_book.as_deref().unwrap_or("Choose a book"),
-                self.page_chapter.as_deref().unwrap_or("Choose a chapter"),
+                self.page_media.as_deref().unwrap_or(CHOOSE_MEDIA),
+                self.page_document.as_deref().unwrap_or(CHOOSE_DOCUMENT),
             )
         };
         [
             Picker {
-                salt: "book",
-                label: "Book",
-                options: &self.books,
-                opens: &self.first_chapters,
-                selected: self.open_book,
-                placeholder: book,
-                is_enabled: is_read && !self.books.is_empty(),
+                salt: "media",
+                label: "Media",
+                options: &self.media,
+                opens: &self.first_document_ids,
+                selected: self.open_media,
+                placeholder: media,
+                is_enabled: is_read && !self.media.is_empty(),
                 why_off,
             },
             Picker {
-                salt: "chapter",
-                label: "Chapter",
-                options: &self.chapters,
-                opens: &self.chapter_docs,
-                selected: self.open_chapter,
-                placeholder: chapter,
-                is_enabled: is_read && !self.chapters.is_empty(),
+                salt: "document",
+                label: "Document",
+                options: &self.documents,
+                opens: &self.document_ids,
+                selected: self.open_document,
+                placeholder: document,
+                is_enabled: is_read && !self.documents.is_empty(),
                 why_off,
             },
         ]
     }
 }
 
-fn book_text(page: &PageView) -> String {
-    page.media.clone().unwrap_or_else(|| "No book".to_owned())
+fn media_text(page: &PageView) -> String {
+    page.media.clone().unwrap_or_else(|| NO_MEDIA.to_owned())
 }
 
 fn document_text(page: &PageView) -> Option<String> {
@@ -120,8 +127,13 @@ fn document_text(page: &PageView) -> Option<String> {
     chapter.or_else(|| page.document_title.clone())
 }
 
+/// A chapter reads the same here as everywhere else in the app.
 fn chapter_text(chapter: &ChapterLabel) -> String {
-    format!("Chapter {}: {}", chapter.number, chapter.name)
+    DocumentName::Chapter {
+        number: chapter.number,
+        name: chapter.name.clone(),
+    }
+    .label()
 }
 
 #[derive(Debug)]

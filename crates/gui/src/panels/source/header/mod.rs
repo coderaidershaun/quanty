@@ -1,4 +1,4 @@
-//! The top of the source panel: its title, the book and chapter pickers, and the page pager.
+//! The top of the source panel: its title, the media and document pickers, and the page pager.
 
 mod pager;
 mod pickers;
@@ -16,8 +16,8 @@ const TITLE: &str = "Source in Context";
 /// The panel's inner height from which the header has three rows. Below it the pager moves up
 /// beside the title and the two pickers share a row, so the page keeps its room.
 const FOLD_BELOW: f32 = 440.0;
-/// The part of a row that the book picker takes when the chapter picker is beside it.
-const BOOK_SHARE: f32 = 0.55;
+/// The part of a row that the media picker takes when the document picker is beside it.
+const MEDIA_SHARE: f32 = 0.5;
 
 #[derive(Debug, Default)]
 pub(super) struct Cache {
@@ -39,17 +39,17 @@ pub(super) fn show(ui: &mut egui::Ui, cache: &mut Cache, cx: &mut PanelCx<'_>) {
     } else {
         Rows::Two
     };
-    let [book, chapter] = cache.lists.pickers(shared);
-    let (mut opened_book, mut opened_chapter, mut turn) = (None, None, None);
+    let [media, document] = cache.lists.pickers(shared);
+    let (mut opened_media, mut opened_document, mut turn) = (None, None, None);
     match rows {
         Rows::Three => {
             section_header(ui, TITLE, |_| {});
             let room = ui.available_width();
-            opened_book = book.show(ui, room);
+            opened_media = media.show(ui, room);
             row::show(ui, |ui| {
                 let gap = ui.spacing().item_spacing.x;
                 let rest = ui.available_width() - gap - cache.pager.width();
-                opened_chapter = chapter.show(ui, rest.max(0.0));
+                opened_document = document.show(ui, rest.max(0.0));
                 turn = cache.pager.show(ui, &shared.source);
             });
         }
@@ -58,12 +58,12 @@ pub(super) fn show(ui: &mut egui::Ui, cache: &mut Cache, cx: &mut PanelCx<'_>) {
                 section_header(ui, TITLE, |ui| cache.pager.show(ui, &shared.source))
             });
             row::show(ui, |ui| {
-                opened_book = book.show(ui, BOOK_SHARE * ui.available_width());
-                opened_chapter = chapter.show(ui, ui.available_width());
+                opened_media = media.show(ui, MEDIA_SHARE * ui.available_width());
+                opened_document = document.show(ui, ui.available_width());
             });
         }
     }
-    for doc in [opened_book, opened_chapter].into_iter().flatten() {
+    for doc in [opened_media, opened_document].into_iter().flatten() {
         cx.intents.push(Intent::OpenSource {
             doc,
             page: 1,

@@ -300,12 +300,13 @@ fn a_paper_pdf_of_the_saved_paper_is_checked_and_ingested(harness: &mut Window, 
 
 fn a_media_with_no_document_is_not_a_filter_and_not_in_the_source_pickers(harness: &mut Window) {
     click(harness, Role::Tab, "Ask");
-    click(harness, Role::ComboBox, "Books");
-    assert!(has(harness, Role::Button, "All books"));
+    let panels = super::panels(DEFAULT_WINDOW);
+    super::click_in(harness, Role::ComboBox, "Media", panels.ask_bar);
+    assert!(has(harness, Role::Button, "All media"));
     assert!(!has(harness, Role::Button, SAVED_PAPER));
     close_the_open_list(harness);
 
-    click(harness, Role::ComboBox, "Book");
+    super::click_in(harness, Role::ComboBox, "Media", panels.source);
     assert!(
         has(harness, Role::Button, "Quanty Sample Notes"),
         "the list of the Source panel is open"

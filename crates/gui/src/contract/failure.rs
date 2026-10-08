@@ -26,6 +26,7 @@ pub enum FailureKind {
     BadFile,
     PageFailed,
     ChapterTaken,
+    BookExists,
     SourceMissing,
     Internal,
 }
@@ -65,6 +66,9 @@ impl FailureKind {
             FailureKind::ChapterTaken => {
                 "Another PDF is already converted as this book and chapter. Change the book title, or remove that chapter's folder."
             }
+            FailureKind::BookExists => {
+                "This book is in the library already. Choose it from the Book list."
+            }
             FailureKind::SourceMissing => {
                 "The chapter's files are not where they were. Ingest the chapter again."
             }
@@ -98,6 +102,18 @@ impl Failure {
     pub fn not_built(what: &str) -> Failure {
         Failure::internal(format!("{what} is not built yet"))
             .with_hint("This part of quanty is not built yet.")
+    }
+
+    /// The refusal of a book whose title the library has. `title` is the title as the library
+    /// has it, so the person sees which row of the Book list to choose.
+    pub fn book_exists(title: &str) -> Failure {
+        Failure::new(
+            FailureKind::BookExists,
+            format!("the library already has a book titled {title}"),
+        )
+        .with_hint(format!(
+            "{title} is in the library already. Choose it from the Book list."
+        ))
     }
 }
 

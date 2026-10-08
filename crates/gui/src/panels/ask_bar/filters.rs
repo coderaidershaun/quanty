@@ -20,7 +20,8 @@ pub(super) struct Choices {
     revision: Option<u64>,
     /// True when the lists come from a catalogue that has loaded.
     is_known: bool,
-    /// "All books" comes first, then each titled book in catalogue order.
+    /// "All books" comes first, then each titled book that has a chapter in catalogue order. A
+    /// book with no chapter would be a filter that finds nothing.
     books: Vec<String>,
     /// "All authors" comes first, then each author once, sorted.
     authors: Vec<String>,
@@ -41,6 +42,7 @@ impl Choices {
                 catalogue
                     .into_iter()
                     .flat_map(|catalogue| &catalogue.books)
+                    .filter(|book| !book.chapters.is_empty())
                     .filter_map(|book| book.title.as_deref()),
             )
             .map(str::to_owned)

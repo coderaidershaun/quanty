@@ -8,8 +8,8 @@ mod store;
 pub mod testing;
 
 pub use contents::{
-    ConceptAlias, ConceptNode, DocumentNode, DocumentRecord, ItemMentions, ItemNode, ItemsByKind,
-    Mention, Relation, RelationKind, UnknownRelationKind,
+    BookNode, ConceptAlias, ConceptNode, DocumentNode, DocumentRecord, ItemMentions, ItemNode,
+    ItemsByKind, Mention, Relation, RelationKind, UnknownRelationKind,
 };
 pub use falkor::FalkorGraph;
 pub use store::{GraphError, GraphStore};

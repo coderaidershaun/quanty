@@ -7,7 +7,7 @@ PDFs are turned into searchable items (text, LaTeX formulas and figures). An LLM
 ## How it works
 
 - **Qdrant** stores every vector (items and concepts).
-- **FalkorDB** stores the graph: documents, items and concepts, joined by `HAS_ITEM`, `NEXT`, `MENTIONS` and `RELATES_TO` edges.
+- **FalkorDB** stores the graph: documents, items and concepts, joined by `HAS_ITEM`, `NEXT`, `MENTIONS` and `RELATES_TO` edges, and the books saved in the desktop app (a `Book` node has no edge).
 - **Gemini Embedding 2** embeds text, LaTeX and images into one vector space.
 - **Claude** (via `claude -p`) extracts and resolves concepts, and writes answers.
 - Retrieval finds the closest items by vector search, then follows concepts across documents to pull in related material.
@@ -216,6 +216,8 @@ A citation opens its page when the chapter's folder is found. The chapter is loo
 `--fixture <scene>` runs the whole window on built-in data from `samples/content`, with no store, no model and no cost. `--fixture list` prints the scenes: each is one state of the screen, such as `black-scholes` (a full answer), `stores-down` or `first-run`.
 
 The **Ingest** tab adds one chapter to the library: choose a chapter PDF named `chapter-<number>-<name>.pdf`, choose the book or add a new one, check the chapter, then start. The check is free; a start is paid work, the same as `rag-ingest pdf`. Keep the app open while it runs. If it stops, start the same PDF again and it carries on.
+
+To keep a book in the Book list before it has a chapter, choose **Add a new book…**, type its title, and its author and tags if you want them (tags with commas between them), and press **Save book**: the book is then in the list each time the app starts, and choosing it fills in the author and the tags. A title that the library already has, whatever its capitals, is refused.
 
 Not built yet: the Library page, the notices tray, the help sheet and the health check. Labels are changed and documents are deleted with `rag-ingest`.
 

@@ -1,17 +1,19 @@
 //! Checks that the live backend lists the stored documents, each with the chapter that is on
-//! disk for it.
+//! disk for it, and that a book saved before any chapter is kept between two starts of the app.
 
+use std::collections::BTreeSet;
 use std::path::Path;
 
-use graph::GraphStore;
-use gui::backend::Reply;
+use graph::{BookNode, GraphStore};
 use gui::backend::live::{LiveContext, RealServices, Services, library};
+use gui::backend::{Handler, Reply};
 use gui::contract::{
-    Book, Catalogue, ChapterLabel, Document, Event, Failure, ItemCounts, RequestId,
+    Book, Catalogue, ChapterLabel, Command, Document, Event, Failure, FailureKind, ItemCounts,
+    NewBook, RequestId,
 };
 use rag_ingestion::{IngestSummary, ingest_chapter};
 
-use crate::support::{self, IN_DEPTH, INTUITION, copy_folder, sample_chapter};
+use crate::support::{self, IN_DEPTH, INTUITION, SAMPLE_PAGES, copy_folder, sample_chapter};
 
 const REQUEST: RequestId = RequestId(7);
 
@@ -47,6 +49,8 @@ async fn the_catalogue_joins_stored_documents_with_their_chapter_folders() {
     let expected = Catalogue {
         books: vec![Book {
             title: Some("Quanty Sample Notes".to_owned()),
+            author: None,
+            tags: Vec::new(),
             chapters: vec![
                 shown(&first, 1, "Options Pricing Intuition", &intuition),
                 shown(&second, 2, "Black Scholes In Depth", &copy),
@@ -54,6 +58,102 @@ async fn the_catalogue_joins_stored_documents_with_their_chapter_folders() {
         }],
     };
     assert_eq!(result, Ok(expected));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p gui --test integration -- --ignored library::"]
+async fn a_saved_book_is_listed_after_a_second_start_shows_its_chapter_and_is_not_saved_twice() {
+    // Every save and every ingest goes to the first start, and every catalogue is read by the
+    // second one, so a saved book that is only in the memory of the first is not found.
+    let first = support::context("library-books");
+    let stores = first.stores().await.expect("the stores should open");
+    let models = first.models().expect("the models should be made");
+    let sample_pages = sample_chapter(SAMPLE_PAGES);
+    let stored = ingest_chapter(&sample_pages, &models, &stores).await;
+    stored.expect("the first chapter should be ingested");
+
+    let natenberg = NewBook {
+        title: "Quanty Sample Notes".to_owned(),
+        author: Some("Sheldon Natenberg".to_owned()),
+        tags: vec![
+            "Volatility".to_owned(),
+            "options".to_owned(),
+            " ".to_owned(),
+        ],
+    };
+    assert_eq!(saved(&first, &natenberg).await, Ok(()));
+    // The commonest save: no author and no tags are sent to the store as a null and an empty list.
+    let hedging = NewBook {
+        title: "Dynamic Hedging".to_owned(),
+        ..NewBook::default()
+    };
+    assert_eq!(saved(&first, &hedging).await, Ok(()));
+
+    let second = support::started_again(&first);
+    let before = catalogue_of(&second).await.expect("the catalogue is read");
+    let hedging_book = ("Dynamic Hedging", None, &[][..], 0);
+    let pricing_book = ("Option Volatility and Pricing", None, &[][..], 1);
+    let notes_book = (
+        "Quanty Sample Notes",
+        Some("Sheldon Natenberg"),
+        &["options", "volatility"][..],
+        0,
+    );
+    assert_eq!(
+        books_shown(&before),
+        books_shown_as(&[hedging_book, pricing_book, notes_book])
+    );
+
+    let intuition = sample_chapter(INTUITION);
+    let stored = ingest_chapter(&intuition, &models, &stores).await;
+    stored.expect("the chapter of the saved book should be ingested");
+    let notes_with_chapter = ("Quanty Sample Notes", notes_book.1, notes_book.2, 1);
+    let after = catalogue_of(&second).await.expect("the catalogue is read");
+    assert_eq!(
+        books_shown(&after),
+        books_shown_as(&[hedging_book, pricing_book, notes_with_chapter])
+    );
+
+    let shouted = NewBook {
+        title: " quanty SAMPLE notes ".to_owned(),
+        ..NewBook::default()
+    };
+    let label_only = NewBook {
+        title: "option volatility and pricing".to_owned(),
+        ..NewBook::default()
+    };
+    let no_folder_name = NewBook {
+        title: "!!!".to_owned(),
+        ..NewBook::default()
+    };
+    let refused = saved(&first, &shouted).await;
+    let refused = refused.expect_err("a stored book is there already");
+    assert_eq!(refused.kind, FailureKind::BookExists);
+    assert!(
+        refused
+            .hint
+            .starts_with("Quanty Sample Notes is in the library"),
+        "{refused:?}"
+    );
+    let refused = saved(&first, &label_only).await;
+    let refused = refused.expect_err("a label on stored documents is there already");
+    assert_eq!(refused.kind, FailureKind::BookExists);
+    let refused = saved(&first, &no_folder_name).await;
+    let refused = refused.expect_err("no chapter folder can be named after this title");
+    assert_eq!(refused.kind, FailureKind::BadFile);
+
+    let overwrite = BookNode {
+        title: "Quanty Sample Notes".to_owned(),
+        author: Some("Someone Else".to_owned()),
+        tags: BTreeSet::new(),
+    };
+    stores
+        .graph
+        .add_book(&overwrite)
+        .await
+        .expect("the graph accepts the same title again");
+    let unchanged = catalogue_of(&second).await.expect("the catalogue is read");
+    assert_eq!(unchanged, after, "a stored book is never written over");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -84,6 +184,59 @@ async fn catalogue_of<S: Services>(cx: &LiveContext<S>) -> Result<Catalogue, Fai
         panic!("expected one catalogue, for {REQUEST:?}: {sent:#?}");
     };
     result.clone()
+}
+
+/// Sends the save of one book and returns its one answer.
+async fn saved<S: Services>(cx: &LiveContext<S>, book: &NewBook) -> Result<(), Failure> {
+    let (reply, events, _stop) = Reply::collecting();
+    let command = Command::SaveBook {
+        request: REQUEST,
+        book: book.clone(),
+    };
+    cx.serve(command, reply).await;
+    let sent: Vec<Event> = events.try_iter().collect();
+    let [
+        Event::BookSaved {
+            request: REQUEST,
+            result,
+        },
+    ] = sent.as_slice()
+    else {
+        panic!("expected one answer to the save, for {REQUEST:?}: {sent:#?}");
+    };
+    result.clone()
+}
+
+type BookShown = (Option<String>, Option<String>, Vec<String>, usize);
+
+/// What a test compares of each book: title, saved author, saved tags and number of chapters.
+fn books_shown(catalogue: &Catalogue) -> Vec<BookShown> {
+    catalogue
+        .books
+        .iter()
+        .map(|book| {
+            (
+                book.title.clone(),
+                book.author.clone(),
+                book.tags.clone(),
+                book.chapters.len(),
+            )
+        })
+        .collect()
+}
+
+fn books_shown_as(books: &[(&str, Option<&str>, &[&str], usize)]) -> Vec<BookShown> {
+    books
+        .iter()
+        .map(|(title, author, tags, chapters)| {
+            (
+                Some((*title).to_owned()),
+                author.map(str::to_owned),
+                tags.iter().map(|tag| (*tag).to_owned()).collect(),
+                *chapters,
+            )
+        })
+        .collect()
 }
 
 /// The document that a chapter of three pages makes, as the catalogue shows it.

@@ -70,7 +70,7 @@ cargo run --release -p gui    # builds and opens target/release/quanty
 The window has two tabs:
 
 - **Ask**: the question with its mode and its book, author and tag filters, the answer with its citations, the page each citation stands on, the concept graph, the steps of the search, and questions to ask next. The mode **Answer** costs one Gemini embedding call and one Sonnet call on your `claude` subscription. **Results only** writes no answer and costs the embedding call alone.
-- **Ingest**: adds a chapter. Choose the PDF, choose the book or add a new one, check it, then start. The check is free. A start is paid work, the same as `rag-ingest pdf` above. Keep the app open while it runs; if it stops, start the same PDF again and it carries on.
+- **Ingest**: adds a chapter. Choose the PDF, choose the book or add a new one, check it, then start. The check is free. A start is paid work, the same as `rag-ingest pdf` above. Keep the app open while it runs; if it stops, start the same PDF again and it carries on. To keep a book in the list before it has a chapter, choose **Add a new book…**, type its title, author and tags, and press **Save book**.
 
 | Key | What it does |
 | --- | --- |

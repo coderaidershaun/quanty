@@ -25,7 +25,9 @@ pub use ingest::{
     ChapterState, IngestOutcome, IngestProgress, IngestReport, IngestRequest, IngestStage,
     PageToCheck, Preflight,
 };
-pub use library::{Book, Catalogue, ChapterLabel, Document, ItemCounts, LabelEdit};
+pub use library::{
+    Book, Catalogue, ChapterLabel, Document, ItemCounts, LabelEdit, NewBook, is_same_title,
+};
 pub use message::{Command, Effect, Event, Intent, Tab};
 pub use notice::{Notice, NoticeKind};
 pub use shortcut::{Chord, KeyName, PANEL_KEYS, SHORTCUTS, Shortcut, When};

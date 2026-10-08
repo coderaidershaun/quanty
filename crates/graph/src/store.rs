@@ -6,8 +6,8 @@ use falkordb::FalkorDBError;
 use rag_core::{ConceptId, DocId, ItemId};
 
 use crate::contents::{
-    ConceptAlias, ConceptNode, DocumentNode, DocumentRecord, ItemMentions, ItemNode, Mention,
-    Relation,
+    BookNode, ConceptAlias, ConceptNode, DocumentNode, DocumentRecord, ItemMentions, ItemNode,
+    Mention, Relation,
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -65,8 +65,8 @@ pub enum GraphError {
     FolderNotUnicode { folder: PathBuf },
 }
 
-/// The graph of documents, items and concepts. Every write can be repeated: a second call with
-/// the same values changes nothing.
+/// The graph of documents, items, concepts and saved books. Every write can be repeated: a second
+/// call with the same values changes nothing.
 pub trait GraphStore {
     /// Creates the document node, or updates its title and its labels: a label that `document`
     /// does not have is taken away from the stored node. Repeating it changes nothing.
@@ -100,6 +100,22 @@ pub trait GraphStore {
     fn document_records(
         &self,
     ) -> impl Future<Output = Result<Vec<DocumentRecord>, GraphError>> + Send;
+
+    /// Creates the book node. A book with exactly this title that is in the graph stays as it
+    /// is, with the author and the tags it has, so repeating it changes nothing. Titles are
+    /// compared as they are given: the caller decides whether two spellings name one book.
+    ///
+    /// # Errors
+    /// [`GraphError::Query`] when the store refuses or cannot be reached.
+    fn add_book(&self, book: &BookNode) -> impl Future<Output = Result<(), GraphError>> + Send;
+
+    /// Every saved book, ordered by title. A book that is only a label on documents is not one.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   book
+    fn books(&self) -> impl Future<Output = Result<Vec<BookNode>, GraphError>> + Send;
 
     /// Writes the items of a document: a node for each item, an edge `HAS_ITEM` from the
     /// document to each item, and an edge `NEXT` from each item to the one after it. Creates the

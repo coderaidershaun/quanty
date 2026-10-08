@@ -29,6 +29,9 @@ impl<S: Services> Handler for LiveContext<S> {
             Command::DeleteDocument { request, doc } => {
                 library::delete(self, request, doc, &reply).await;
             }
+            Command::SaveBook { request, book } => {
+                library::save_book(self, request, &book, &reply).await;
+            }
             Command::Preflight { request, ingest } => {
                 ingest::preflight(self, request, &ingest, &reply).await;
             }

@@ -3,7 +3,7 @@
 use std::cmp::Reverse;
 use std::collections::HashMap;
 
-use crate::contract::{Catalogue, Document};
+use crate::contract::{Catalogue, Document, is_same_title};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(super) enum BookChoice {
@@ -29,18 +29,35 @@ pub(super) fn has_titled(catalogue: &Catalogue, title: &str) -> bool {
         .any(|book| book.title.as_deref() == Some(title))
 }
 
+/// Every titled book, also one with no chapter yet. What was saved with a book comes first, and
+/// what its chapters say fills in what was not saved.
 pub(super) fn offers(catalogue: &Catalogue) -> Vec<Offer<'_>> {
     catalogue
         .books
         .iter()
         .filter_map(|book| {
+            let title = book.title.as_deref()?;
+            let tags = if book.tags.is_empty() {
+                shared_tags(&book.chapters)
+            } else {
+                book.tags.iter().map(String::as_str).collect()
+            };
             Some(Offer {
-                title: book.title.as_deref()?,
-                author: common_author(&book.chapters),
-                tags: shared_tags(&book.chapters),
+                title,
+                author: book
+                    .author
+                    .as_deref()
+                    .or_else(|| common_author(&book.chapters)),
+                tags,
             })
         })
         .collect()
+}
+
+pub(super) fn offer_titled<'o, 'a>(offers: &'o [Offer<'a>], title: &str) -> Option<&'o Offer<'a>> {
+    offers
+        .iter()
+        .find(|offer| is_same_title(offer.title, title))
 }
 
 fn common_author(documents: &[Document]) -> Option<&str> {

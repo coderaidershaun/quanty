@@ -62,6 +62,7 @@ impl Failure {
             | FailureKind::BadFile
             | FailureKind::PageFailed
             | FailureKind::ChapterTaken
+            | FailureKind::BookExists
             | FailureKind::SourceMissing
             | FailureKind::Internal => None,
         }

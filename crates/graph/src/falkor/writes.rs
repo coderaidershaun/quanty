@@ -1,14 +1,16 @@
-//! The statements that write documents, items, concepts, mentions and relations, with the code
-//! that runs each one and the rows it takes.
+//! The statements that write documents, saved books, items, concepts, mentions and relations,
+//! with the code that runs each one and the rows it takes.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 
 use falkordb::FalkorValue;
-use rag_core::DocId;
+use rag_core::{DocId, Tag};
 
 use super::{FalkorGraph, id_value};
-use crate::contents::{ConceptAlias, ConceptNode, DocumentNode, ItemNode, Mention, Relation};
+use crate::contents::{
+    BookNode, ConceptAlias, ConceptNode, DocumentNode, ItemNode, Mention, Relation,
+};
 use crate::store::GraphError;
 
 /// Rows go in groups of this size, so that one statement stays quick also when the graph is
@@ -20,6 +22,12 @@ const ROWS_PER_STATEMENT: usize = 200;
 const UPSERT_DOCUMENT: &str = "\
 MERGE (d:Document {id: $id})
 SET d.title = $title, d.book = $book, d.author = $author, d.tags = $tags";
+
+// Only a new book gets its author and its tags, so a second save of a title never writes over the
+// book that is stored.
+const ADD_BOOK: &str = "\
+MERGE (b:Book {title: $title})
+ON CREATE SET b.author = $author, b.tags = $tags";
 
 const SET_INGESTED_ITEMS: &str = "MATCH (d:Document {id: $id}) SET d.ingested_items = $items";
 
@@ -82,25 +90,26 @@ pub(super) async fn upsert_document(
     document: &DocumentNode,
 ) -> Result<(), GraphError> {
     let labels = &document.labels;
-    let text_or_null = |text: &Option<String>| match text {
-        Some(text) => FalkorValue::String(text.clone()),
-        None => FalkorValue::None,
-    };
-    let tags = labels
-        .tags
-        .iter()
-        .map(|tag| FalkorValue::String(tag.to_string()))
-        .collect();
     let parameters = vec![
         ("id", id_value(document.id)),
         ("title", FalkorValue::String(document.title.clone())),
-        ("book", text_or_null(&labels.book)),
-        ("author", text_or_null(&labels.author)),
-        ("tags", FalkorValue::Array(tags)),
+        ("book", text_or_null(labels.book.as_deref())),
+        ("author", text_or_null(labels.author.as_deref())),
+        ("tags", tag_list(&labels.tags)),
     ];
     graph
         .run("write the document", UPSERT_DOCUMENT, parameters)
         .await?;
+    Ok(())
+}
+
+pub(super) async fn add_book(graph: &FalkorGraph, book: &BookNode) -> Result<(), GraphError> {
+    let parameters = vec![
+        ("title", FalkorValue::String(book.title.clone())),
+        ("author", text_or_null(book.author.as_deref())),
+        ("tags", tag_list(&book.tags)),
+    ];
+    graph.run("write the book", ADD_BOOK, parameters).await?;
     Ok(())
 }
 
@@ -262,11 +271,22 @@ pub(super) async fn add_alias(graph: &FalkorGraph, alias: &ConceptAlias) -> Resu
     Ok(())
 }
 
-fn item_row(item: &ItemNode) -> FalkorValue {
-    let printed_page = match &item.printed_page {
-        Some(printed_page) => FalkorValue::String(printed_page.clone()),
+fn text_or_null(text: Option<&str>) -> FalkorValue {
+    match text {
+        Some(text) => FalkorValue::String(text.to_owned()),
         None => FalkorValue::None,
-    };
+    }
+}
+
+fn tag_list(tags: &BTreeSet<Tag>) -> FalkorValue {
+    FalkorValue::Array(
+        tags.iter()
+            .map(|tag| FalkorValue::String(tag.to_string()))
+            .collect(),
+    )
+}
+
+fn item_row(item: &ItemNode) -> FalkorValue {
     FalkorValue::Map(HashMap::from([
         ("id".to_owned(), id_value(item.id)),
         (
@@ -274,7 +294,10 @@ fn item_row(item: &ItemNode) -> FalkorValue {
             FalkorValue::String(item.kind.as_str().to_owned()),
         ),
         ("page".to_owned(), FalkorValue::I64(i64::from(item.page))),
-        ("printed_page".to_owned(), printed_page),
+        (
+            "printed_page".to_owned(),
+            text_or_null(item.printed_page.as_deref()),
+        ),
     ]))
 }
 

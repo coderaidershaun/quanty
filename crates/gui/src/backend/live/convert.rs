@@ -1,4 +1,4 @@
-//! The ids, the item kind and the two label shapes, to and from the types of the backend. Every
+//! The ids, the item kind and the three label shapes, to and from the types of the backend. Every
 //! part of the live backend converts through these and writes none of its own.
 
 use std::collections::BTreeSet;
@@ -7,7 +7,7 @@ use rag_core::{DocumentLabels, Tag};
 use rag_ingestion::LabelChange;
 use uuid::Uuid;
 
-use crate::contract::{ConceptId, DocId, Filters, ItemId, ItemKind, LabelEdit};
+use crate::contract::{ConceptId, DocId, Filters, ItemId, ItemKind, LabelEdit, NewBook};
 
 fn uuid_of(text: &str) -> Uuid {
     Uuid::parse_str(text).expect("a backend id prints as a UUID")
@@ -98,6 +98,22 @@ impl From<&LabelEdit> for LabelChange {
             author: edit.author.clone(),
             add: tags(&edit.add).collect(),
             remove: tags(&edit.remove).collect(),
+        }
+    }
+}
+
+/// A blank author is none, and a blank tag is dropped.
+impl From<&NewBook> for graph::BookNode {
+    fn from(book: &NewBook) -> graph::BookNode {
+        graph::BookNode {
+            title: book.title.trim().to_owned(),
+            author: book
+                .author
+                .as_deref()
+                .map(str::trim)
+                .filter(|author| !author.is_empty())
+                .map(str::to_owned),
+            tags: tags(&book.tags).collect(),
         }
     }
 }

@@ -26,6 +26,9 @@ pub struct Cues {
     pub picked_pdf: Option<PathBuf>,
     /// The source view shows its target again.
     pub source_shows: u64,
+    /// The Ingest panel chooses the book `saved_book` once the catalogue that holds it arrives.
+    pub book_saves: u64,
+    pub saved_book: Option<String>,
 }
 
 /// `Default` is for tests; the app makes it with `new`.
@@ -79,6 +82,7 @@ impl Shared {
             Intent::RefreshCatalogue => self.refresh_catalogue(effects),
             Intent::SetLabels(edit) => self.set_labels(edit, effects),
             Intent::DeleteDocument(doc) => self.delete_document(doc, effects),
+            Intent::SaveBook(book) => self.save_book(book, effects),
             Intent::PickPdf => effects.push(Effect::PickFile),
             Intent::PdfPicked(path) => {
                 self.cues.picked_pdf = Some(path);
@@ -120,6 +124,7 @@ impl Shared {
                 doc,
                 result,
             } => self.deleted(request, doc, result, effects),
+            Event::BookSaved { request, result } => self.book_saved(request, result, effects),
             Event::Preflight { request, result } => self.preflight_arrived(request, result),
             Event::IngestProgress { request, progress } => self.progress_arrived(request, progress),
             Event::IngestFinished { request, result } => {

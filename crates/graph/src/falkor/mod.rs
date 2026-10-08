@@ -17,8 +17,8 @@ use falkordb::{
 use rag_core::{ConceptId, Config, DocId, ItemId};
 
 use crate::contents::{
-    ConceptAlias, ConceptNode, DocumentNode, DocumentRecord, ItemMentions, ItemNode, Mention,
-    Relation,
+    BookNode, ConceptAlias, ConceptNode, DocumentNode, DocumentRecord, ItemMentions, ItemNode,
+    Mention, Relation,
 };
 use crate::store::{GraphError, GraphStore};
 
@@ -109,6 +109,14 @@ impl GraphStore for FalkorGraph {
 
     async fn document_records(&self) -> Result<Vec<DocumentRecord>, GraphError> {
         records::document_records(self).await
+    }
+
+    async fn add_book(&self, book: &BookNode) -> Result<(), GraphError> {
+        writes::add_book(self, book).await
+    }
+
+    async fn books(&self) -> Result<Vec<BookNode>, GraphError> {
+        reads::books(self).await
     }
 
     async fn upsert_items(&self, document: DocId, items: &[ItemNode]) -> Result<(), GraphError> {

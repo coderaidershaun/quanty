@@ -230,6 +230,8 @@ pub(in crate::backend::fake) fn catalogue(samples: &Path) -> Result<Catalogue, S
             }
             _ => books.push(Book {
                 title: Some(title),
+                author: None,
+                tags: Vec::new(),
                 chapters: vec![document],
             }),
         }

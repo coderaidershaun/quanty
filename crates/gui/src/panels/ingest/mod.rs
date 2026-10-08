@@ -1,5 +1,5 @@
-//! The panel that adds a chapter PDF to the library: the form, then what the one ingest of the
-//! app is doing.
+//! The panel that adds a chapter PDF to the library, or saves a book before its first chapter:
+//! the form, then what the one ingest of the app is doing.
 
 mod books;
 mod form;
@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use eframe::egui;
 
 use self::books::{BookChoice, Offer};
-use crate::contract::{Catalogue, IngestRequest, Intent};
+use crate::contract::{Catalogue, IngestRequest, Intent, NewBook, is_same_title};
 use crate::panels::PanelCx;
 use crate::state::{IngestJob, Shared};
 use crate::widgets;
@@ -25,6 +25,7 @@ pub struct Local {
     author: String,
     tags: String,
     seen_picks: u64,
+    seen_saves: u64,
 }
 
 impl Local {
@@ -38,19 +39,39 @@ impl Local {
         if book.is_empty() {
             return None;
         }
-        let author = self.author.trim();
         Some(IngestRequest {
             pdf,
             book: book.to_owned(),
-            author: (!author.is_empty()).then(|| author.to_owned()),
-            tags: self
-                .tags
-                .split(',')
-                .map(str::trim)
-                .filter(|tag| !tag.is_empty())
-                .map(str::to_owned)
-                .collect(),
+            author: self.author_label(),
+            tags: self.tag_labels(),
         })
+    }
+
+    /// There is a book to save only while the form holds a typed title that is not blank.
+    fn book_to_save(&self) -> Option<NewBook> {
+        let BookChoice::New(text) = &self.book else {
+            return None;
+        };
+        let title = text.trim();
+        (!title.is_empty()).then(|| NewBook {
+            title: title.to_owned(),
+            author: self.author_label(),
+            tags: self.tag_labels(),
+        })
+    }
+
+    fn author_label(&self) -> Option<String> {
+        let author = self.author.trim();
+        (!author.is_empty()).then(|| author.to_owned())
+    }
+
+    fn tag_labels(&self) -> Vec<String> {
+        self.tags
+            .split(',')
+            .map(str::trim)
+            .filter(|tag| !tag.is_empty())
+            .map(str::to_owned)
+            .collect()
     }
 
     fn is_untouched(&self) -> bool {
@@ -83,6 +104,29 @@ impl Local {
         self.tags.clear();
     }
 
+    /// Chooses the book that was just saved, once the catalogue that holds it has arrived. The
+    /// cue is used up whether or not the form still shows that title, so a title typed later
+    /// does not choose the book again.
+    fn choose_saved_book(&mut self, shared: &Shared) {
+        if shared.cues.book_saves == self.seen_saves {
+            return;
+        }
+        let Some(saved) = shared.cues.saved_book.as_deref() else {
+            return;
+        };
+        let Some(catalogue) = shared.library.catalogue.ready() else {
+            return;
+        };
+        let offers = books::offers(catalogue);
+        let Some(offer) = books::offer_titled(&offers, saved) else {
+            return;
+        };
+        self.seen_saves = shared.cues.book_saves;
+        if matches!(&self.book, BookChoice::New(text) if is_same_title(text, saved)) {
+            self.choose(offer);
+        }
+    }
+
     /// A check that was made for another request is cleared, because the form changed after it.
     fn follow(&mut self, shared: &Shared, intents: &mut Vec<Intent>) -> Option<IngestRequest> {
         if shared.cues.pdf_picks != self.seen_picks {
@@ -97,6 +141,7 @@ impl Local {
         {
             self.fill_from(request, catalogue.ready());
         }
+        self.choose_saved_book(shared);
         // A book that left the library, after a delete, stays as the title of a new book.
         if let BookChoice::Existing(title) = &self.book
             && catalogue

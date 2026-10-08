@@ -1,4 +1,5 @@
-//! The fields of the form: the file, the book, the author and the tags.
+//! The fields of the form: the file, the book, the author and the tags, and the button that saves
+//! a new book without a file.
 
 use eframe::egui;
 
@@ -6,13 +7,17 @@ use super::Local;
 use super::books::{self, BookChoice, Offer};
 use crate::contract::{Catalogue, Intent, Loadable};
 use crate::panels::PanelCx;
+use crate::state::BookSave;
 use crate::theme::{TextRole, color, space};
-use crate::widgets::{Button, ControlSize, Dropdown, TextInput};
+use crate::widgets::{Button, ControlSize, Dropdown, Notice, TextInput};
 
 /// The button that goes back to the list of books is this wide.
 const BACK_WIDTH: f32 = 200.0;
 
 const ADD_A_NEW_BOOK: &str = "Add a new book…";
+
+const SAVE_NOTE: &str =
+    "A saved book stays in this list with its author and tags, also before its first chapter.";
 
 pub(super) const RULE: &str =
     "The file must be named chapter-<number>-<name>.pdf, for example chapter-3-greeks.pdf.";
@@ -26,7 +31,7 @@ pub(super) fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
         file_row(ui, local, cx.intents);
         ui.label(TextRole::Small.rich(RULE));
         ui.add_space(space::MD);
-        book_row(ui, local, cx);
+        let has_title_box = book_row(ui, local, cx);
         caption(ui, "Author");
         TextInput::new("ingest_author", "Author", &mut local.author)
             .placeholder("Optional")
@@ -35,6 +40,9 @@ pub(super) fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
         TextInput::new("ingest_tags", "Tags", &mut local.tags)
             .placeholder("Optional, with commas between them")
             .show(ui);
+        if has_title_box {
+            save_row(ui, local, cx);
+        }
     });
     ui.add_space(space::SM);
     ui.label(TextRole::Small.rich(COST));
@@ -69,7 +77,8 @@ fn file_row(ui: &mut egui::Ui, local: &Local, intents: &mut Vec<Intent>) {
     });
 }
 
-fn book_row(ui: &mut egui::Ui, local: &mut Local, cx: &PanelCx<'_>) {
+/// Returns whether the box for the title of a new book is on screen.
+fn book_row(ui: &mut egui::Ui, local: &mut Local, cx: &PanelCx<'_>) -> bool {
     caption(ui, "Book");
     let catalogue = &cx.shared.library.catalogue;
     let offers = catalogue.ready().map(books::offers).unwrap_or_default();
@@ -77,10 +86,13 @@ fn book_row(ui: &mut egui::Ui, local: &mut Local, cx: &PanelCx<'_>) {
     if offers.is_empty() {
         ui.label(TextRole::Small.rich(why_no_list(catalogue)));
         new_book(ui, local, false);
+        true
     } else if is_new {
         new_book(ui, local, true);
+        true
     } else {
         list(ui, local, &offers);
+        false
     }
 }
 
@@ -143,4 +155,29 @@ fn new_book(ui: &mut egui::Ui, local: &mut Local, has_list: bool) {
             local.book = BookChoice::Unchosen;
         }
     });
+}
+
+fn save_row(ui: &mut egui::Ui, local: &Local, cx: &mut PanelCx<'_>) {
+    let save = &cx.shared.library.book_save;
+    let book = local.book_to_save();
+    ui.add_space(space::MD);
+    ui.horizontal(|ui| {
+        let button = Button::secondary("Save book").loading(save.is_saving());
+        if ui.add_enabled(book.is_some(), button).clicked()
+            && let Some(book) = book.clone()
+        {
+            cx.intents.push(Intent::SaveBook(book));
+        }
+        ui.add(egui::Label::new(TextRole::Small.rich(SAVE_NOTE)).truncate());
+    });
+    // A person who changes the title no longer sees the refusal of the old one.
+    if let BookSave::Failed {
+        book: failed,
+        failure,
+    } = save
+        && book.is_some_and(|book| book.title == failed.title)
+    {
+        ui.add_space(space::SM);
+        Notice::error(&failure.hint).show(ui);
+    }
 }

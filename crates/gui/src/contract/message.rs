@@ -7,7 +7,7 @@ use super::failure::Failure;
 use super::health::{Service, ServiceState};
 use super::ids::{ConceptId, DocId, NoticeId, RequestId};
 use super::ingest::{IngestOutcome, IngestProgress, IngestRequest, Preflight};
-use super::library::{Catalogue, LabelEdit};
+use super::library::{Catalogue, LabelEdit, NewBook};
 use super::source::{PageConcept, PageView};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -44,6 +44,7 @@ pub enum Intent {
     RefreshCatalogue,
     SetLabels(LabelEdit),
     DeleteDocument(DocId),
+    SaveBook(NewBook),
     /// The Ingest panel asks for the file dialog. It never opens one itself.
     PickPdf,
     /// The shell's answer to `PickPdf`.
@@ -83,6 +84,10 @@ pub enum Command {
         request: RequestId,
         doc: DocId,
     },
+    SaveBook {
+        request: RequestId,
+        book: NewBook,
+    },
     Preflight {
         request: RequestId,
         ingest: IngestRequest,
@@ -106,6 +111,7 @@ impl Command {
             | Command::LoadCatalogue { request }
             | Command::SetLabels { request, .. }
             | Command::DeleteDocument { request, .. }
+            | Command::SaveBook { request, .. }
             | Command::Preflight { request, .. }
             | Command::Ingest { request, .. }
             | Command::CheckHealth { request } => *request,
@@ -155,6 +161,10 @@ impl Command {
             Command::DeleteDocument { request, doc } => vec![Event::Deleted {
                 request: *request,
                 doc: *doc,
+                result: Err(failure.clone()),
+            }],
+            Command::SaveBook { request, .. } => vec![Event::BookSaved {
+                request: *request,
                 result: Err(failure.clone()),
             }],
             Command::Preflight { request, .. } => vec![Event::Preflight {
@@ -212,6 +222,10 @@ pub enum Event {
     Deleted {
         request: RequestId,
         doc: DocId,
+        result: Result<(), Failure>,
+    },
+    BookSaved {
+        request: RequestId,
         result: Result<(), Failure>,
     },
     Preflight {

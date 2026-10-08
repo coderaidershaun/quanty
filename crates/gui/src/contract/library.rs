@@ -1,5 +1,5 @@
-//! The documents that are stored, grouped by book, and the change a person can make to a
-//! document's labels.
+//! The documents that are stored, grouped by book, the books a person saved before any chapter,
+//! and the change a person can make to a document's labels.
 
 use super::ids::DocId;
 
@@ -39,7 +39,28 @@ pub struct Document {
 pub struct Book {
     /// `None`: the documents have no book.
     pub title: Option<String>,
+    /// What was saved with the book. A book that is only a label on documents has neither.
+    pub author: Option<String>,
+    /// Each tag is lower case.
+    pub tags: Vec<String>,
+    /// Empty for a book that was saved and has no chapter yet.
     pub chapters: Vec<Document>,
+}
+
+/// A book as a person saves it, before any chapter of it is added. The panel sends a title that is
+/// not blank and has no space at its ends, and a backend still trims it, because a stored book
+/// cannot be changed yet.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+pub struct NewBook {
+    pub title: String,
+    pub author: Option<String>,
+    /// As the person typed them. The backend stores them lower case, each once.
+    pub tags: Vec<String>,
+}
+
+/// Two titles name one book when they differ only in capitals and in space at the ends.
+pub fn is_same_title(one: &str, other: &str) -> bool {
+    one.trim().to_lowercase() == other.trim().to_lowercase()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -48,6 +69,28 @@ pub struct Catalogue {
 }
 
 impl Catalogue {
+    /// The title, as the library has it, of the book that `title` names. Capitals and the space at
+    /// the ends do not count.
+    pub fn stored_title(&self, title: &str) -> Option<&str> {
+        self.books
+            .iter()
+            .filter_map(|book| book.title.as_deref())
+            .find(|stored| is_same_title(stored, title))
+    }
+
+    /// Puts the books in the order that every list shows them in: by title with no regard to
+    /// capitals, then by the title as written, and the documents with no book last. The backends
+    /// share it, so a saved book lands in the same place whichever one answers.
+    pub fn sort_books(&mut self) {
+        self.books.sort_by_cached_key(|book| {
+            (
+                book.title.is_none(),
+                book.title.as_deref().map(str::to_lowercase),
+                book.title.clone(),
+            )
+        });
+    }
+
     pub fn documents(&self) -> impl Iterator<Item = &Document> {
         self.books.iter().flat_map(|book| book.chapters.iter())
     }

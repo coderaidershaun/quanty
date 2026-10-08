@@ -1,17 +1,38 @@
-//! The catalogue of stored documents, and the rules for refreshing it, relabelling a document
-//! and deleting one.
+//! The catalogue of stored documents, and the rules for refreshing it, relabelling a document,
+//! deleting one and saving a new book.
 
 use std::collections::BTreeMap;
 
 use super::shared::{Shared, counts_text, push_cancel};
 use crate::contract::{
-    Catalogue, Command, DocId, Effect, Failure, LabelEdit, Loadable, NoticeKind, RequestId,
+    Catalogue, Command, DocId, Effect, Failure, LabelEdit, Loadable, NewBook, NoticeKind, RequestId,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Busy {
     Saving(RequestId),
     Deleting(RequestId),
+}
+
+/// The save of a new book that the Ingest tab asked for.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+pub enum BookSave {
+    #[default]
+    Idle,
+    Saving {
+        book: NewBook,
+        id: RequestId,
+    },
+    Failed {
+        book: NewBook,
+        failure: Failure,
+    },
+}
+
+impl BookSave {
+    pub fn is_saving(&self) -> bool {
+        matches!(self, BookSave::Saving { .. })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -25,6 +46,7 @@ pub struct Library {
     pub busy: BTreeMap<DocId, Busy>,
     /// The last failed save or delete of each document.
     pub failures: BTreeMap<DocId, Failure>,
+    pub book_save: BookSave,
 }
 
 impl Shared {
@@ -59,6 +81,18 @@ impl Shared {
         effects.push(Effect::Send(Command::DeleteDocument { request, doc }));
     }
 
+    pub(super) fn save_book(&mut self, book: NewBook, effects: &mut Vec<Effect>) {
+        if self.library.book_save.is_saving() {
+            return;
+        }
+        let request = self.issue_request();
+        self.library.book_save = BookSave::Saving {
+            book: book.clone(),
+            id: request,
+        };
+        effects.push(Effect::Send(Command::SaveBook { request, book }));
+    }
+
     pub(super) fn catalogue_arrived(
         &mut self,
         request: RequestId,
@@ -91,6 +125,32 @@ impl Shared {
             Err(failure) => {
                 self.mark_down(&failure);
                 self.library.failures.insert(doc, failure);
+            }
+        }
+    }
+
+    pub(super) fn book_saved(
+        &mut self,
+        request: RequestId,
+        result: Result<(), Failure>,
+        effects: &mut Vec<Effect>,
+    ) {
+        let BookSave::Saving { book, id } = self.library.book_save.clone() else {
+            return;
+        };
+        if id != request {
+            return;
+        }
+        match result {
+            Ok(()) => {
+                self.library.book_save = BookSave::Idle;
+                self.cues.saved_book = Some(book.title);
+                self.cues.book_saves += 1;
+                self.refresh_catalogue(effects);
+            }
+            Err(failure) => {
+                self.mark_down(&failure);
+                self.library.book_save = BookSave::Failed { book, failure };
             }
         }
     }
@@ -144,5 +204,6 @@ impl Shared {
         self.library.pending.is_some()
             || self.library.catalogue.is_loading()
             || !self.library.busy.is_empty()
+            || self.library.book_save.is_saving()
     }
 }

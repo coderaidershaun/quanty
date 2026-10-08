@@ -19,6 +19,9 @@ pub const IN_DEPTH: &str = "quanty-sample-notes/chapter-2";
 pub const INTUITION: &str = "quanty-sample-notes/chapter-1";
 pub const SAMPLE_PAGES: &str = "option-volatility-and-pricing/chapter-1";
 
+/// Every throwaway graph has a name that starts with this, and the real graph never does.
+const THROWAWAY_GRAPH_PREFIX: &str = "test-graph-";
+
 /// The graph is the throwaway graph of `stores`, and `pages` is kept so a test can read the calls
 /// the stub received.
 pub struct StandInServices {
@@ -118,6 +121,26 @@ impl Services for StandInsOnClosedPorts {
     ) -> Result<ConversionSummary, ConvertError> {
         ocr::convert::convert_chapter_with(job, &*self.pages).await
     }
+}
+
+/// The app after it is started again: a second context made from a throwaway one. It shares
+/// nothing with the first but the settings, so it reads the same throwaway graph and holds nothing
+/// that the first one kept in memory.
+///
+/// # Panics
+/// When the settings of `first` do not name a throwaway graph: the second context connects to
+/// the graph that the settings name, and that must never be the real one.
+pub fn started_again(first: &LiveContext<StandInServices>) -> LiveContext<StandInsOnClosedPorts> {
+    let config = first.config().clone();
+    assert!(
+        config.falkordb_graph.starts_with(THROWAWAY_GRAPH_PREFIX),
+        "the graph `{}` is not a throwaway graph",
+        config.falkordb_graph
+    );
+    let services = StandInsOnClosedPorts {
+        pages: Arc::new(StubServices::new(Scenario::SampleChapter)),
+    };
+    LiveContext::new(config, services)
 }
 
 /// A context with stand-in pages whose stores nothing listens on, and the stub pages, so a test

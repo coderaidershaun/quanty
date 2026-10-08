@@ -5,12 +5,13 @@ mod fixtures;
 mod scenes;
 
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
 use super::{Handler, Reply};
 use crate::contract::{
-    AskDraft, AskMode, Catalogue, Command, DocId, Event, Failure, FailureKind, Filters,
-    IngestOutcome, IngestProgress, IngestRequest, IngestStage, Intent, RequestId, Service,
+    AskDraft, AskMode, Book, Catalogue, Command, DocId, Event, Failure, FailureKind, Filters,
+    IngestOutcome, IngestProgress, IngestRequest, IngestStage, Intent, NewBook, RequestId, Service,
     ServiceState, Tab,
 };
 
@@ -48,11 +49,13 @@ enum Pace {
     Instant,
 }
 
-#[derive(Debug, Clone)]
+/// The catalogue is behind a lock because a saved book changes it, and a command is served by
+/// `&self`.
+#[derive(Debug)]
 pub struct Fake {
     scene: &'static Scene,
     samples: PathBuf,
-    catalogue: Catalogue,
+    catalogue: Mutex<Catalogue>,
     pace: Pace,
 }
 
@@ -83,10 +86,10 @@ impl Fake {
         Ok(Fake {
             scene,
             samples,
-            catalogue: match scene.script.library {
+            catalogue: Mutex::new(match scene.script.library {
                 Library::Samples => catalogue,
                 Library::Empty | Library::Fails(_) => Catalogue::default(),
-            },
+            }),
             pace: Pace::Real,
         })
     }
@@ -129,6 +132,13 @@ impl Fake {
                 Intent::CheckIngest(fixtures::ingest::request()),
             ],
         }
+    }
+
+    /// Never hold the guard across an `await`.
+    fn catalogue(&self) -> MutexGuard<'_, Catalogue> {
+        self.catalogue
+            .lock()
+            .expect("the catalogue of the fake is not poisoned")
     }
 
     async fn wait(&self, time: Duration) {
@@ -175,7 +185,7 @@ impl Fake {
             })
         };
         let count = self
-            .catalogue
+            .catalogue()
             .books
             .iter()
             .flat_map(|book| book.chapters.iter().map(move |document| (book, document)))
@@ -282,6 +292,47 @@ impl Fake {
         });
     }
 
+    async fn save_book(&self, request: RequestId, book: &NewBook, reply: &Reply) {
+        self.wait(CATALOGUE_WAIT).await;
+        let result = match self.scene.script.library {
+            Library::Fails(kind) => Err(self.failure(kind)),
+            Library::Samples | Library::Empty => self.add_book(book),
+        };
+        reply.send(Event::BookSaved { request, result });
+    }
+
+    /// Adds the book the way the live backend stores it: the title and the author trimmed, a blank
+    /// author none, and the tags in lower case, each once, in order.
+    // SMELL: how a saved book is stored is written here and again in the live backend, which
+    // does it with the types of the stores. A change to one must be made in both.
+    fn add_book(&self, book: &NewBook) -> Result<(), Failure> {
+        let mut catalogue = self.catalogue();
+        if let Some(stored) = catalogue.stored_title(&book.title) {
+            return Err(Failure::book_exists(stored));
+        }
+        let mut tags: Vec<String> = book
+            .tags
+            .iter()
+            .map(|tag| tag.trim().to_lowercase())
+            .filter(|tag| !tag.is_empty())
+            .collect();
+        tags.sort();
+        tags.dedup();
+        catalogue.books.push(Book {
+            title: Some(book.title.trim().to_owned()),
+            author: book
+                .author
+                .as_deref()
+                .map(str::trim)
+                .filter(|author| !author.is_empty())
+                .map(str::to_owned),
+            tags,
+            chapters: Vec::new(),
+        });
+        catalogue.sort_books();
+        Ok(())
+    }
+
     async fn preflight(&self, request: RequestId, ingest: &IngestRequest, reply: &Reply) {
         self.wait(PREFLIGHT_WAIT).await;
         reply.send(Event::Preflight {
@@ -361,10 +412,11 @@ impl Handler for Fake {
                 self.wait(CATALOGUE_WAIT).await;
                 let result = match self.scene.script.library {
                     Library::Fails(kind) => Err(self.failure(kind)),
-                    Library::Samples | Library::Empty => Ok(self.catalogue.clone()),
+                    Library::Samples | Library::Empty => Ok(self.catalogue().clone()),
                 };
                 reply.send(Event::Catalogue { request, result });
             }
+            Command::SaveBook { request, book } => self.save_book(request, &book, &reply).await,
             Command::CheckHealth { request } => self.check_health(request, &reply),
             Command::Preflight { request, ingest } => {
                 self.preflight(request, &ingest, &reply).await;

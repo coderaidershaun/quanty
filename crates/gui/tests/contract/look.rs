@@ -24,6 +24,7 @@ enum Start {
     AsItOpens,
     AfterAClickOnTheFigureCitation,
     AfterAClickOnStartIngest,
+    AfterANewBookIsTyped,
 }
 
 struct Row {
@@ -33,7 +34,7 @@ struct Row {
     start: Start,
 }
 
-const ROWS: [Row; 10] = [
+const ROWS: [Row; 11] = [
     Row {
         picture: "ask-idle",
         scene: "idle",
@@ -94,6 +95,12 @@ const ROWS: [Row; 10] = [
         window: DEFAULT_WINDOW,
         start: Start::AfterAClickOnStartIngest,
     },
+    Row {
+        picture: "ingest-new-book",
+        scene: "idle",
+        window: DEFAULT_WINDOW,
+        start: Start::AfterANewBookIsTyped,
+    },
 ];
 
 /// Turns the wheel over the Answer pane until the chip is wholly inside it, then clicks it. A chip
@@ -127,6 +134,33 @@ fn click_the_figure_citation(harness: &mut Window, window: [f32; 2]) {
     testkit::settle(harness);
 }
 
+fn click(harness: &mut Window, role: Role, name: &str) {
+    harness.get_by_role_and_label(role, name).click();
+    testkit::settle(harness);
+}
+
+/// A box takes the text only when it has the keyboard, so it is clicked first.
+fn type_into(harness: &mut Window, name: &str, text: &str) {
+    harness.get_by_role_and_label(Role::TextInput, name).click();
+    harness
+        .get_by_role_and_label(Role::TextInput, name)
+        .type_text(text);
+    harness.run_ok();
+}
+
+/// Escape at the end leaves no box with the keyboard: a box that has it draws a caret that
+/// blinks, and the picture must be the same on every run.
+fn type_a_new_book(harness: &mut Window) {
+    click(harness, Role::Tab, "Ingest");
+    click(harness, Role::ComboBox, "Book");
+    click(harness, Role::Button, "Add a new book…");
+    type_into(harness, "Book title", "Natenberg on Options");
+    type_into(harness, "Author", "Sheldon Natenberg");
+    type_into(harness, "Tags", "Volatility, options");
+    harness.key_press(egui::Key::Escape);
+    testkit::settle(harness);
+}
+
 impl Row {
     /// Draws the scene at rest and compares it with the kept picture. The error says how.
     fn compare(&self, options: &SnapshotOptions) -> Result<(), String> {
@@ -143,6 +177,7 @@ impl Row {
                     .click();
                 testkit::settle(&mut harness);
             }
+            Start::AfterANewBookIsTyped => type_a_new_book(&mut harness),
         }
         // The pointer is painted in the picture until a frame has run without it.
         harness.remove_cursor();

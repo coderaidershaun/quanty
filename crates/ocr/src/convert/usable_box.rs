@@ -1,6 +1,5 @@
 //! The converter's rules for a figure's rectangle: which ones can be cut, and how much is added
-//! around one. A rectangle that passed them has a type of its own, so nothing that cuts has to
-//! check it again.
+//! around one. A rectangle that passed them has its own type, so nothing checks it again.
 
 use crate::content::PageBox;
 
@@ -50,7 +49,6 @@ impl UsableBox {
     }
 }
 
-/// Grown by [`FIGURE_PADDING`] on every side and kept inside the page.
 pub(super) fn padded(area: PageBox) -> PageBox {
     PageBox {
         left: (area.left - FIGURE_PADDING).max(0),

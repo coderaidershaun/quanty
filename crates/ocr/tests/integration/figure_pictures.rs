@@ -77,8 +77,7 @@ pub fn assert_figures_cut(chapter: &Path) {
 
 /// Pages 4 and 5 each get two faulty replies, and the one whose only fault is its rectangle must
 /// be the one saved. On page 4 that is the second reply. On page 5 it is the first, because the
-/// second has a broken formula as well as a bad rectangle. Both pages fall back to the whole
-/// page, are listed, and keep a formula that balances.
+/// second has a broken formula as well as a bad rectangle.
 pub fn assert_hard_fallbacks(chapter: &Path, stubs: &StubServices) {
     for position in [4, 5] {
         let folder = page_folder(chapter, position);

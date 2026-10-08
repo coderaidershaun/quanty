@@ -11,15 +11,13 @@ use crate::ingest::items::Item;
 pub(super) const SYSTEM_PROMPT: &str = include_str!("prompts/extract.md");
 pub(super) const SCHEMA: &str = include_str!("prompts/extract.schema.json");
 
-/// The model that answers the questions.
 pub const EXTRACTION_MODEL: &str = "haiku";
 
 // Raise this to ask about every item again, for example after a change to how replies are read.
 // The answers that are kept under the old version are then no longer used.
 pub(super) const PROMPT_VERSION: &str = "1";
 
-/// The whole message the model reads for an item: where the item sits, then the text that is
-/// embedded for it. A figure is sent as its explanation, with no picture.
+/// A figure is sent as its explanation, with no picture.
 pub(super) fn input_for(item: &Item) -> String {
     if item.input.title.is_empty() {
         return item.input.text.clone();
@@ -27,7 +25,6 @@ pub(super) fn input_for(item: &Item) -> String {
     format!("{}\n\n{}", item.input.title, item.input.text)
 }
 
-/// The line that opens the part of a message that holds material from other documents.
 const RELATED_HEADING: &str = "Possibly related material";
 
 /// The part that is added to the message of an item that has no neighbour in its own document: the
@@ -55,7 +52,6 @@ pub(super) fn related_material(hits: &[ItemHit]) -> String {
     format!("\n\n{RELATED_HEADING}\n\n{}", passages.join("\n\n"))
 }
 
-/// What a good reply holds.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Extraction {
     pub concepts: Vec<ExtractedConcept>,
@@ -110,8 +106,7 @@ struct ReplyRelation {
 }
 
 impl Extraction {
-    /// Reads the JSON that the model gave. A reply that does not fit is refused as a whole.
-    /// Names and definitions are trimmed.
+    /// A reply that does not fit is refused as a whole. Names and definitions are trimmed.
     ///
     /// # Errors
     /// - [`ReplyError::Shape`] when a field is missing or has the wrong kind of value

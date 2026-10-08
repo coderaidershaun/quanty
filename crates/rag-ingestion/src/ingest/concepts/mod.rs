@@ -1,7 +1,6 @@
-//! Reads every item for the concepts it discusses and writes them to the graph: the concepts, the
-//! items that mention them, and the relations between them. A name that means a stored concept
-//! is linked to it and not made again. Each answer of the model is kept in a folder, so that the
-//! same question is asked once, and each decision about a name is added to a log.
+//! Reads every item for the concepts it discusses and writes the concepts, their mentions and
+//! their relations to the graph. Each answer of the model is kept in a folder, so that the same
+//! question is asked once, and each decision about a name is added to a log.
 
 mod ask;
 mod cache;
@@ -103,7 +102,6 @@ impl<L: Llm> ConceptExtractor<L> {
     }
 }
 
-/// What one run of extraction did.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ConceptSummary {
     pub concepts_created: usize,

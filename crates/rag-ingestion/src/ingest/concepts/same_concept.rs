@@ -18,7 +18,6 @@ struct Reply {
     same: bool,
 }
 
-/// Both concepts with their names and definitions, the new one first.
 fn input_for(new: &ExtractedConcept, stored: &ConceptNode) -> String {
     format!(
         "First concept\nname: {}\ndefinition: {}\n\nSecond concept\nname: {}\ndefinition: {}",

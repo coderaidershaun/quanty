@@ -1,7 +1,6 @@
 //! Takes one converted chapter folder, or one picture that stands alone, from disk to stored
-//! points, graph nodes and concepts: read, map to items, write the graph, embed, store, extract
-//! the concepts. Running it again on the same chapter or picture writes the same points and the
-//! same nodes over themselves, and asks the language model nothing.
+//! points, graph nodes and concepts. Running it again on the same chapter or picture writes the
+//! same points and the same nodes over themselves, and asks the language model nothing.
 
 mod concepts;
 mod items;
@@ -65,10 +64,6 @@ struct Document {
     items: Vec<Item>,
 }
 
-/// Reads the chapter in `chapter_folder`, writes its document and items to the graph, embeds the
-/// items, stores them as points, and then writes the concepts that the items discuss to the
-/// graph.
-///
 /// The collections are prepared and the graph is written before anything is embedded, so a store
 /// that is down fails the run before an embedding call is paid for. A run that stops after that
 /// leaves the chapter in the graph with no points yet, and running it again stores them. A point

@@ -1,7 +1,5 @@
-//! Runs `rag-ingest delete-document` as a person would, against a throwaway collection of the
-//! local Qdrant and a throwaway graph of the local FalkorDB, because only that shows that the
-//! command removes one document from both stores and leaves the others alone. Concepts belong to
-//! no document, so they stay.
+//! Runs `rag-ingest delete-document` against throwaway stores, to show that it removes one
+//! document from both and leaves the others alone. Concepts belong to no document, so they stay.
 
 use std::collections::BTreeSet;
 use std::process::Output;

@@ -9,10 +9,8 @@ use rag_core::{ConceptHit, ConceptId, ConceptStore, Embedding, ItemHit, ItemId};
 use super::results::Reason;
 use super::{MAX_EXPANSION_ITEMS, QUESTION_CONCEPTS, SearchError};
 
-/// A concept with the name it is shown under.
 type NamedConcept = (ConceptId, String);
 
-/// The candidates of a search, and the concepts that led to them.
 pub(super) struct Expansion {
     /// The seeds and the items that the graph adds, each with the reason it is a candidate.
     pub(super) candidates: BTreeMap<ItemId, Reason>,
@@ -24,9 +22,6 @@ pub(super) struct Expansion {
     pub(super) related_concepts: Vec<ConceptNode>,
 }
 
-/// The seeds and the items that the graph adds, each with the reason it is a candidate, and the
-/// concepts that led to them.
-///
 /// The concepts come in this order, each once: the ones nearest to the question, then the ones
 /// that the seeds mention, then the ones one `RELATES_TO` edge away from those. An item that the
 /// graph adds is shown under the first concept in that order that it mentions.

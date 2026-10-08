@@ -6,7 +6,6 @@ use rag_core::{DocumentInput, ItemKind};
 
 use super::{BLOCK_SEPARATOR, Draft, context_line};
 
-/// A chunk is closed before a paragraph that would take it past this.
 const MAX_CHUNK_TOKENS: usize = 500;
 
 /// A rough count, four characters to a token. It only shapes chunks, and the embedding model
@@ -15,8 +14,7 @@ fn estimated_tokens(text: &str) -> usize {
     text.chars().count().div_ceil(4)
 }
 
-/// The labels of the figures, tables and equations that a text piece or a footnote points at, as
-/// printed. A footnote marker is not one of them: it points at a note, and a note is not an item.
+/// A footnote marker is left out: it points at a note, and a note is not an item.
 fn cited_labels(piece: &ChapterPiece) -> impl Iterator<Item = &str> {
     let cites: &[Cite] = match &piece.detail {
         PieceDetail::Text { cites } | PieceDetail::Footnote { cites, .. } => cites,
@@ -32,7 +30,6 @@ fn cited_labels(piece: &ChapterPiece) -> impl Iterator<Item = &str> {
         .filter(|label| !label.is_empty())
 }
 
-/// Adds the label unless the list has it, so a list keeps each label once, in reading order.
 fn keep_once(labels: &mut Vec<String>, label: &str) {
     if !labels.iter().any(|kept| kept == label) {
         labels.push(label.to_owned());

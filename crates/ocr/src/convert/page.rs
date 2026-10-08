@@ -164,7 +164,6 @@ impl<S: PageServices> PageRun<'_, S> {
         })
     }
 
-    /// Asks Haiku for a plain copy and keeps it only when nothing about it is in doubt.
     async fn copy_checked(&mut self) -> Result<CopyOutcome, PageError> {
         let copy = self.services.copy(self.source).await?;
         self.ledger.add(CallStep::Copy, &copy.usage);
@@ -175,8 +174,7 @@ impl<S: PageServices> PageRun<'_, S> {
         ))
     }
 
-    /// Asks Sonnet for one cleaned reply and checks it. `correction` says why the last one was
-    /// rejected.
+    /// `correction` says why the last reply was rejected.
     async fn transcribe_once(
         &mut self,
         correction: Option<&str>,

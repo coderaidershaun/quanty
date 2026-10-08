@@ -28,7 +28,6 @@ pub(crate) fn text_layer_word_count(text_layer: &str) -> usize {
     words(text_layer).len()
 }
 
-/// The words in the piece files of the copied kinds: headings, text, footnotes and tables.
 pub(crate) fn piece_word_count(page: &TranscribedPage) -> usize {
     page.pieces
         .iter()
@@ -110,7 +109,6 @@ fn counts(words: &[String]) -> HashMap<&str, usize> {
     counts
 }
 
-/// Both match ratios between the copied words of `page` and `text_layer`, to three decimals.
 pub(crate) fn word_match(page: &TranscribedPage, text_layer: &str) -> WordMatch {
     let page_words = words(&copied_strings(page).join(" "));
     let layer_words = words(text_layer);

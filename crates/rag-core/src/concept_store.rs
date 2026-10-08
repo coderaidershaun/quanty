@@ -24,7 +24,6 @@ pub fn concept_input(name: &str, definition: &str) -> DocumentInput {
     }
 }
 
-/// A concept ready to be stored.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConceptPoint {
     pub id: ConceptId,
@@ -33,7 +32,6 @@ pub struct ConceptPoint {
     pub aliases: Vec<String>,
 }
 
-/// A stored concept that a search found.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConceptHit {
     pub id: ConceptId,
@@ -43,8 +41,7 @@ pub struct ConceptHit {
     pub aliases: Vec<String>,
 }
 
-/// Reads and writes the one collection of concepts that the config names. Its payload holds only
-/// the name and the aliases: the definition lives in the graph.
+/// The payload of a point holds only the name and the aliases: the definition lives in the graph.
 pub struct ConceptStore {
     collection: Collection,
 }

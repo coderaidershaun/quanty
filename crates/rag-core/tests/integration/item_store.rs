@@ -1,6 +1,5 @@
 //! Asks the real Qdrant whether a collection is there, makes it, and searches it by kind, because
-//! only the real server tells a collection that is missing from a request that failed, refuses a
-//! collection that is made twice, and accepts or refuses an index.
+//! only the real server shows how it treats a missing collection, one made twice, and an index.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -56,7 +55,6 @@ async fn a_collection_that_is_missing_is_told_from_one_that_is_there() {
     assert!(there.unwrap(), "a collection that was made is there");
 }
 
-/// The settings with a collection of items that only this test uses.
 fn throwaway_items(test_name: &str) -> Config {
     let settings = Config::load().expect("the settings should load");
     let config = Config {

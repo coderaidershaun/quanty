@@ -28,7 +28,6 @@ impl StandInEmbedder {
             .expect("the lock of the received inputs should not be poisoned")
     }
 
-    /// Every input and every question whose text is exactly `text` gets `vector`.
     pub fn placing(mut self, text: &str, vector: Embedding) -> StandInEmbedder {
         self.placed.insert(text.to_owned(), vector);
         self

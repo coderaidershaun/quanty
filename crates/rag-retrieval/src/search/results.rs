@@ -8,24 +8,24 @@ use rag_core::{ItemHit, ItemPayload};
 /// Why an item is in the results.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reason {
-    /// It is among the items nearest to the question.
     Nearest,
     /// It came in through the graph: the name of the concept that led to it.
     Concept(String),
     /// A paragraph that is shown cites it by this printed label. `by` is the number, from 1, of
     /// that result.
-    Cited { by: usize, label: String },
+    Cited {
+        by: usize,
+        label: String,
+    },
 }
 
-/// An item that a search found, and why it is there.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SearchHit {
     pub item: ItemHit,
     pub reason: Reason,
 }
 
-/// What a search found: the ranked items first, then the items that they cite. It prints as one
-/// block for each result.
+/// The ranked items come first, then the items that they cite.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SearchResults {
     pub hits: Vec<SearchHit>,
@@ -46,8 +46,6 @@ impl fmt::Display for SearchResults {
     }
 }
 
-/// The page as a person is told it: the printed number, or the place in the chapter with the
-/// words that say there is no printed number.
 pub(crate) fn page_text(payload: &ItemPayload) -> String {
     match &payload.printed_page {
         Some(printed) => printed.clone(),

@@ -34,7 +34,6 @@ struct ConceptRef<'a> {
     name: &'a str,
 }
 
-/// One decision. A field that does not apply to its rule is left out of the line.
 #[derive(Serialize)]
 pub(super) struct Decision<'a> {
     item: ItemId,
@@ -50,7 +49,6 @@ pub(super) struct Decision<'a> {
     /// The cosine score of the nearest stored concept.
     #[serde(skip_serializing_if = "Option::is_none")]
     score: Option<f32>,
-    /// The new concept.
     #[serde(skip_serializing_if = "Option::is_none")]
     created: Option<ConceptId>,
 }
@@ -137,7 +135,7 @@ impl DecisionLog {
         })
     }
 
-    /// Adds one line. A decision is added after the writes it led to have succeeded.
+    /// A decision is added after the writes it led to have succeeded.
     ///
     /// # Errors
     /// [`ConceptError::DecisionLog`] when the line cannot be written.

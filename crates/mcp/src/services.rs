@@ -32,7 +32,6 @@ pub trait Services: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ConversionSummary, ConvertError>> + Send;
 }
 
-/// The real Gemini embedder, the real `claude` command and the real page converter.
 pub struct PaidServices;
 
 impl Services for PaidServices {

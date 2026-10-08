@@ -53,8 +53,8 @@ pub enum ClaudeCliError {
     NotSignedIn { status: ExitStatus, stderr: String },
 }
 
-/// Ok when `claude auth status` exits with success. That command makes no model call. Its
-/// standard output is thrown away, because it can hold the account name.
+/// `claude auth status` makes no model call. Its standard output is thrown away, because it can
+/// hold the account name.
 ///
 /// # Errors
 /// - [`ClaudeCliError::Start`] when the command cannot be started
@@ -92,13 +92,12 @@ pub struct ClaudeCli {
 }
 
 impl ClaudeCli {
-    /// Runs `claude` with the environment of this process.
     pub fn new(model: impl Into<String>) -> ClaudeCli {
         ClaudeCli::with_environment(model, std::env::vars_os())
     }
 
-    /// Runs `claude` with the environment given, and no other. A caller that must control the
-    /// `PATH` or the key has no need to change the environment of the whole process.
+    /// A caller that must control the `PATH` or the key has no need to change the environment of
+    /// the whole process.
     pub fn with_environment<K, V>(
         model: impl Into<String>,
         environment: impl IntoIterator<Item = (K, V)>,
@@ -223,8 +222,8 @@ struct Envelope {
     model_usage: Map<String, Value>,
 }
 
-/// A run is good only when the exit code is 0 and the answer is there. Standard output is read
-/// before the exit code: a run that fails still prints a JSON result that says why.
+/// Standard output is read before the exit code: a run that fails still prints a JSON result that
+/// says why.
 fn read_answer(output: &Output, asked_model: &str, elapsed: Duration) -> Result<Value, LlmError> {
     let mut envelope: Envelope =
         serde_json::from_slice(&output.stdout).map_err(|source| LlmError::UnreadableOutput {

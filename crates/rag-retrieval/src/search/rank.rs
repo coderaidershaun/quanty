@@ -8,7 +8,6 @@ use rag_core::{DocId, Embedding, ItemFilter, ItemHit, ItemId, ItemStore};
 use super::results::{Reason, SearchHit};
 use super::{MAX_RESULTS_PER_DOCUMENT, RESULTS_PER_QUERY, SearchError};
 
-/// What the ranking kept, and what it left out.
 pub(super) struct Ranking {
     /// How many of the candidates the item store gave back.
     pub(super) ranked: usize,
@@ -18,10 +17,6 @@ pub(super) struct Ranking {
     pub(super) capped: Vec<ItemHit>,
 }
 
-/// The candidates, nearest to the question first. A candidate is left out when its document
-/// already has [`MAX_RESULTS_PER_DOCUMENT`] results, and the first [`RESULTS_PER_QUERY`] that are
-/// left are kept.
-///
 /// # Errors
 /// [`SearchError::Items`] when the items cannot be searched.
 pub(super) async fn ranked_within_the_cap(

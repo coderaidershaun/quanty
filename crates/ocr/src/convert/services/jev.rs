@@ -21,7 +21,7 @@ const WORDS_YES_THRESHOLD: f64 = 0.5;
 const FORMULA_QUESTION: &str = "Does `line` contain a `symbolic_formula`, as described in `guide`?";
 const WORDS_QUESTION: &str = "Does `line` contain words of an ordinary sentence, not only a heading, label, caption, number or formula?";
 
-/// Client for the Jev API. Build one and reuse it for every page, so connections are shared.
+/// Build one and reuse it for every page, so connections are shared.
 #[derive(Clone)]
 pub struct Jev {
     http: reqwest::Client,
@@ -75,7 +75,6 @@ impl Jev {
         })
     }
 
-    /// Builds a client from `CONVERTER_JEV_API_KEY` in the process environment.
     pub fn from_env() -> Result<Self, JevError> {
         let api_key = std::env::var(JEV_API_KEY_VARIABLE).map_err(|_| JevError::MissingApiKey)?;
         Self::new(api_key)

@@ -1,6 +1,5 @@
-//! Runs one traced search over throwaway stores that are filled by hand, so that what each step
-//! must produce is known before the search runs, with an embedder that makes up its vectors, so
-//! nothing is billed.
+//! Runs one traced search over throwaway stores filled by hand, so that what each step must
+//! produce is known beforehand, with an embedder that makes up its vectors, so nothing is billed.
 
 use std::path::Path;
 
@@ -129,7 +128,6 @@ async fn a_traced_search_gives_the_results_of_a_search_and_what_each_step_produc
     assert_eq!(texts(&traced.trace.capped), ["a4", "a5", "a6", "a7", "a8"]);
     assert_eq!(traced.trace.kept, 3);
 
-    // No document is tagged `rates`, so no step runs.
     let traced = retriever
         .search_traced(QUESTION, None, &tagged(&["rates"]))
         .await

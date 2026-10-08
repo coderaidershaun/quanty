@@ -98,7 +98,6 @@ fn finding_volatility() -> Value {
     })
 }
 
-/// A language model that is at its usage limit for every question.
 fn at_the_usage_limit() -> StandInLlm {
     StandInLlm::replying(|_, _| {
         Err(LlmError::UsageLimit {
@@ -117,8 +116,6 @@ fn chain_of(error: &dyn std::error::Error) -> String {
     text
 }
 
-/// What the stand-in prints as the page number of a page: its position, except that page 6 shows
-/// 9 and page 7 shows 10.
 fn printed_page_of(position: u64) -> String {
     match position {
         6 => "9".to_owned(),

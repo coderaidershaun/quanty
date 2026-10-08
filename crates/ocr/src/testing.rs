@@ -1,6 +1,5 @@
 //! Support for tests, behind the cargo feature `testing`: stand-ins for the two paid services, so
-//! the whole chapter run can be tried offline, and small helpers for the sample chapter. Poppler,
-//! the file system and every module of the crate stay real. Every helper panics when it fails.
+//! the whole chapter run can be tried offline, and small helpers for the sample chapter.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -206,7 +205,6 @@ fn canned_figure(
     }
 }
 
-/// A rectangle the reply check refuses: its left edge is past its right edge.
 const UNUSABLE_BOUNDS: PageBox = PageBox {
     left: 700,
     top: 200,

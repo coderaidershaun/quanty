@@ -15,14 +15,12 @@ use rag_ingestion::LabelChange;
 
 use super::{IngestPdfArgs, PdfIngestError};
 
-/// What every PDF starts with.
 const PDF_START: &[u8] = b"%PDF-";
 
 /// The folder under the content folder that uploads are saved in. A book folder name never holds
 /// an underscore, so no upload can land in the folder of a book.
 const UPLOADS_FOLDER: &str = "_uploads";
 
-/// A PDF that passed every check.
 pub(super) struct CheckedPdf {
     pub(super) chapter: ChapterJob,
     pub(super) book: String,
@@ -37,7 +35,6 @@ pub(super) struct Upload {
     pub(super) save_to: PathBuf,
 }
 
-/// How long the base64 text of `bytes` bytes is.
 pub(crate) fn base64_len(bytes: u64) -> u64 {
     bytes.div_ceil(3) * 4
 }
@@ -107,7 +104,6 @@ pub(super) fn check(
     })
 }
 
-/// The path, when it names an existing regular file that is small enough and starts like a PDF.
 fn path_of_a_pdf(path: &str, max_pdf_bytes: u64) -> Result<PathBuf, PdfIngestError> {
     let path = PathBuf::from(path);
     if !path.is_absolute() {
@@ -158,7 +154,6 @@ fn upload_path(
         .join(file_name))
 }
 
-/// The bytes of the base64 text, when they are small enough and start like a PDF.
 fn decoded_pdf(text: &str, max_pdf_bytes: u64) -> Result<Vec<u8>, PdfIngestError> {
     // The length is checked before the text is decoded, so a huge text costs no memory.
     if text.len() as u64 > base64_len(max_pdf_bytes) {

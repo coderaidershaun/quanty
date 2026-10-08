@@ -47,8 +47,7 @@ impl fmt::Debug for ApiKey {
     }
 }
 
-/// Where the services are and which collection to use. A setting that nobody set has its local
-/// default.
+/// A setting that nobody set has its local default.
 #[derive(Debug, Clone)]
 pub struct Config {
     /// The gRPC address of Qdrant.

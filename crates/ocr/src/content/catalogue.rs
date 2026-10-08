@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 
 use super::{CHAPTER_INDEX_FILE, ChapterIndex, ContentError};
 
-/// One chapter folder and what its `chapter.json` says.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChapterEntry {
     /// `<root>/<book folder>/<chapter folder>`. Absolute when the root was.
@@ -12,7 +11,6 @@ pub struct ChapterEntry {
     pub index: ChapterIndex,
 }
 
-/// Every chapter under a content root.
 #[derive(Debug, Default)]
 pub struct Catalogue {
     /// By book folder, then by chapter number.
@@ -22,8 +20,8 @@ pub struct Catalogue {
 }
 
 impl Catalogue {
-    /// Reads every chapter under the content root. A root that does not exist holds no chapter,
-    /// and a chapter that cannot be read does not hide the others.
+    /// A root that does not exist holds no chapter, and a chapter that cannot be read does not
+    /// hide the others.
     ///
     /// # Errors
     /// [`ContentError::Read`] when the root or a book folder is there and cannot be listed.

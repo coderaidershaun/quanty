@@ -21,8 +21,6 @@ pub(super) use word_match::{
 
 pub(super) const ALMOST_EMPTY_WORDS: usize = 20;
 
-/// Tidies the reply, then returns the first rule the tidied reply breaks.
-///
 /// The two steps are one call because the rules read a tidied reply: the table rule expects
 /// lines that are already trimmed.
 pub(super) fn clean_and_check(

@@ -1,6 +1,5 @@
 //! Takes one chapter PDF all the way into the stores in one run: convert its pages, then ingest
-//! the converted chapter. It needs no one in between, and a PDF that is already ingested is not
-//! touched.
+//! the converted chapter. A PDF that is already ingested is not touched.
 
 use std::fmt;
 
@@ -11,7 +10,6 @@ use rag_core::{DocId, Embedder, Llm, StoreError};
 use crate::ingest::{IngestError, IngestSummary, Models, ingest_chapter};
 use crate::stores::Stores;
 
-/// What `ingest_pdf` did.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PdfOutcome {
     /// Both stores already hold the whole document, so nothing was converted, embedded, asked or
@@ -21,7 +19,6 @@ pub enum PdfOutcome {
     Ingested(Box<PdfSummary>),
 }
 
-/// What a run that converted and ingested a chapter reports: the conversion, then the ingest.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PdfSummary {
     pub conversion: ConversionSummary,
@@ -52,7 +49,6 @@ pub struct ChapterPdf<'a, C> {
 }
 
 impl PdfOutcome {
-    /// The document the run was about, whether it was ingested now or before.
     pub fn doc_id(&self) -> DocId {
         match self {
             PdfOutcome::AlreadyIngested { doc_id, .. } => *doc_id,

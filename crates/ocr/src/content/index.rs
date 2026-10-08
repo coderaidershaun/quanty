@@ -10,8 +10,8 @@ use super::conversion::{CallRecord, Conversion};
 use super::piece::{PieceEntry, Relationship};
 use super::{CHAPTER_INDEX_FILE, ContentError, IMAGE_INDEX_FILE, PAGE_INDEX_FILE};
 
-/// What `chapter.json` holds. `finished` is the last thing written, so a half-converted chapter
-/// is never mistaken for a whole one.
+/// `finished` is the last thing written, so a half-converted chapter is never mistaken for a
+/// whole one.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ChapterIndex {
@@ -48,13 +48,12 @@ pub struct PageIndex {
     pub conversion: Option<Conversion>,
 }
 
-/// What `image.json` holds: which picture the folder was made from and what was read from it. It
-/// is the last file written, so a half-converted picture is never mistaken for a whole one.
+/// `image.json` is the last file written, so a half-converted picture is never mistaken for a
+/// whole one.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ImageIndex {
     pub format_version: u32,
-    /// The file name the picture had.
     pub source_file: String,
     pub source_sha256: String,
     /// The name of the copy of the picture, in the same folder.

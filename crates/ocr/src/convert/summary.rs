@@ -60,7 +60,6 @@ pub struct PieceCounts {
     pub footnote: u32,
 }
 
-/// A page whose printed number does not follow from the pages before it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OutOfSequence {
     pub position: u32,
@@ -73,7 +72,6 @@ pub struct PageToCheck {
     pub reasons: Vec<&'static str>,
 }
 
-/// The result of converting a chapter. `Display` prints it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConversionSummary {
     pub chapter_folder: PathBuf,

@@ -10,7 +10,6 @@ use super::ask::ItemAnswer;
 use super::resolve::{Resolved, Resolver, normalised};
 use super::{ConceptError, ConceptSummary};
 
-/// What resolving the concepts of one reply came to.
 enum ReplyConcepts {
     Resolved {
         names: HashMap<String, ConceptId>,
@@ -20,8 +19,6 @@ enum ReplyConcepts {
     Stopped(LlmError),
 }
 
-/// The relations of one reply that can be written, each once, and how many of its relations
-/// cannot.
 #[derive(Default)]
 struct ReplyRelations {
     kept: Vec<Relation>,
@@ -70,9 +67,7 @@ pub(super) async fn write<L: Llm, E: Embedder, G: GraphStore>(
     Ok(summary)
 }
 
-/// Links each concept of the reply to a stored concept, or makes it, in the order of the reply,
-/// and collects one mention for each. It stops at the first concept that the model cannot be
-/// asked about.
+/// It stops at the first concept that the model cannot be asked about.
 ///
 /// # Errors
 /// Every error that [`Resolver::resolve`] returns.
@@ -122,9 +117,6 @@ async fn resolve_concepts<L: Llm, E: Embedder, G: GraphStore>(
     Ok(ReplyConcepts::Resolved { names, mentions })
 }
 
-/// Turns the two names of each relation of the reply into concepts. A relation cannot be written
-/// when one of its names is no concept of the reply and no stored one, or when both names are one
-/// concept.
 async fn relations_of<G: GraphStore>(
     graph: &G,
     answer: &ItemAnswer,
@@ -152,7 +144,6 @@ async fn relations_of<G: GraphStore>(
     Ok(relations)
 }
 
-/// A concept of the same reply, or else a stored one.
 async fn concept_named<G: GraphStore>(
     graph: &G,
     names: &HashMap<String, ConceptId>,

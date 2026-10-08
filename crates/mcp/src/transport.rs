@@ -14,7 +14,6 @@ use tokio::task::JoinError;
 use crate::server::QuantyServer;
 use crate::services::Services;
 
-/// The path that the HTTP server answers on.
 const HTTP_PATH: &str = "/mcp";
 
 #[derive(thiserror::Error, Debug)]

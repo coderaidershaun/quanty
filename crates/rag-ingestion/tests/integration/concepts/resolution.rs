@@ -1,6 +1,5 @@
 //! Resolution over one chapter with a model and an embedder that follow a script: each rule links
-//! a name to a stored concept or makes a new one and logs why, and a second run asks nothing and
-//! writes nothing.
+//! or makes a concept and logs why, and a second run asks nothing and writes nothing.
 
 use std::collections::BTreeSet;
 
@@ -71,7 +70,6 @@ async fn each_rule_of_resolution_links_or_creates_and_logs_its_decision() {
         .unwrap();
     let stored = stored_concept_graph(&stores.graph).await;
 
-    // Each name is linked or made by the rule for its score, and a later name sees an earlier one.
     let names: Vec<&str> = stored
         .concepts
         .iter()
@@ -151,7 +149,6 @@ async fn each_rule_of_resolution_links_or_creates_and_logs_its_decision() {
         assert_eq!(question.schema, prompt_file("same-concept.schema.json"));
     }
 
-    // A concept is known by the names that were linked to it.
     let aliases = |normalised_name: &str| {
         stored
             .concepts
@@ -165,7 +162,6 @@ async fn each_rule_of_resolution_links_or_creates_and_logs_its_decision() {
     assert!(aliases("realised variance").is_empty());
     assert!(aliases("interest rate").is_empty());
 
-    // One point for each concept, under the id of its node, made from "name: definition".
     let points = concept_points_in(throwaway.config()).await;
     assert_eq!(points.len(), 3);
     let node_ids: BTreeSet<&str> = stored
@@ -210,7 +206,6 @@ async fn each_rule_of_resolution_links_or_creates_and_logs_its_decision() {
         "an empty title, no picture, and nothing for the names that matched exactly"
     );
 
-    // One line for each decision, in order.
     let log = decisions_in(throwaway.config());
     assert_eq!(log.len(), 8);
     let volatility = concept_ref(&stored, "volatility", "volatility");
@@ -264,7 +259,6 @@ async fn each_rule_of_resolution_links_or_creates_and_logs_its_decision() {
     let score = line["score"].as_f64().unwrap() as f32;
     assert!(score < ASK_SCORE, "{line}");
 
-    // Every mention in the graph has a line that explains it.
     for item in items {
         for mention in mentions_of(&stored, &item.id.to_string()) {
             let concept = id_of(&stored, &mention.concept);

@@ -20,8 +20,7 @@ const TRANSCRIBE_PROMPT: &str = include_str!("prompts/transcribe.md");
 
 const REPLY_TIMEOUT: Duration = Duration::from_secs(180);
 
-/// Asks Haiku to copy the text of a page, or to say the page needs the stronger model. One
-/// attempt, no retry.
+/// It makes one attempt and does not retry.
 pub(super) async fn copy_page(page_file: &Path) -> Result<Answer<CopiedPage>, ClaudeError> {
     claude::run(&ClaudeCall {
         model: COPY_MODEL,
@@ -37,7 +36,7 @@ pub(super) async fn copy_page(page_file: &Path) -> Result<Answer<CopiedPage>, Cl
     .await
 }
 
-/// Asks Sonnet to break the page in `page_file` into its pieces. One attempt, no retry.
+/// It makes one attempt and does not retry.
 ///
 /// `page_file` is a one-page PDF or an image of a page. `correction` says why the last reply was
 /// rejected, for a second try; it has no closing full stop.

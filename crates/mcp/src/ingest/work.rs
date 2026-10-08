@@ -27,10 +27,6 @@ pub(super) struct Work<S> {
 }
 
 impl<S: Services> Work<S> {
-    /// Runs the job, and writes the stage when the paid work begins and when the pages are done.
-    ///
-    /// # Errors
-    /// What went wrong, in the first step that failed.
     pub(super) async fn run(mut self) -> Result<PdfOutcome, PdfIngestError> {
         if let Some(upload) = self.pdf.upload.take() {
             // Writing megabytes to the disk can take a while, so it runs on a thread that may

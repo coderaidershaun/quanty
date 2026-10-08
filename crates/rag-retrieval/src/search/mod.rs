@@ -19,8 +19,7 @@ pub use trace::{SearchTrace, TracedSearch};
 
 // The four numbers below are starting values.
 
-/// How many results a question gives. It is also how many of the nearest items the search starts
-/// from.
+/// The search also starts from this many of the nearest items.
 pub const RESULTS_PER_QUERY: usize = 8;
 
 /// How many results one document gives at most, so that one chapter cannot fill every place.
@@ -52,7 +51,6 @@ pub enum SearchError {
     Graph(#[from] GraphError),
 }
 
-/// Finds the stored items for a question: the nearest ones, and those that the graph leads to.
 pub struct Retriever<E, G> {
     pub embedder: E,
     pub items: ItemStore,
@@ -159,7 +157,6 @@ impl<E: Embedder, G: GraphStore> Retriever<E, G> {
     }
 }
 
-/// A search that stopped before any step gave an item.
 fn nothing_found(documents_searched: Option<usize>) -> TracedSearch {
     TracedSearch {
         results: SearchResults { hits: Vec::new() },

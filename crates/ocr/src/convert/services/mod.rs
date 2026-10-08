@@ -1,6 +1,5 @@
 //! The four outside calls a page needs, and the one a picture that stands alone needs, each
-//! behind a trait so the rest of the run can be tested with stub answers. The live versions are
-//! the only place a failed call is tried again.
+//! behind a trait so the rest of the run can be tested with stub answers.
 
 mod categorise;
 mod claude;
@@ -30,7 +29,6 @@ const JEV_RETRY_DELAY: Duration = Duration::from_secs(2);
 // A short line that is not blank, because a blank one never reaches the API.
 const KEY_PROBE_TEXT: &str = "a + b = c";
 
-/// One page of the chapter, already cut out and read.
 #[derive(Debug, Clone)]
 pub struct PageSource {
     /// 1 for the first page of the chapter.

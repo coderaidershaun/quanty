@@ -1,6 +1,5 @@
-//! Asks questions of throwaway stores: one that holds the three committed chapters, and others
-//! that are filled by hand with items at known distances from the question, with an embedder that
-//! makes up its vectors, so nothing is billed.
+//! Asks questions of throwaway stores that hold the three committed chapters or items placed by
+//! hand, with an embedder that makes up its vectors, so nothing is billed.
 
 use std::path::Path;
 
@@ -187,7 +186,6 @@ async fn an_item_of_another_document_comes_back_through_a_shared_concept_and_the
         results.hits[3].reason,
         Reason::Concept("Itô's lemma".to_owned())
     );
-    // The book and the author match whatever their capitals.
     let of_document_a = DocumentLabels {
         book: Some("pricing options".to_owned()),
         author: Some("SHELDON NATENBERG".to_owned()),

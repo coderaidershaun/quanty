@@ -1,6 +1,5 @@
 //! Decides what a chapter, or a picture that stands alone, is stored as: which pieces become
-//! items, what each item keeps and what each one gives the embedder. It reads no file and calls
-//! nothing outside.
+//! items, what each one keeps and what it gives the embedder. It reads no file, calls no service.
 
 mod chunks;
 mod image;
@@ -11,7 +10,6 @@ use rag_core::{DocId, DocumentInput, DocumentLabels, ItemId, ItemKind, ItemPaylo
 
 pub use image::{LoneImage, image_items};
 
-/// Blocks of one item, such as a lead-in and a formula, are told apart by a blank line.
 const BLOCK_SEPARATOR: &str = "\n\n";
 
 #[derive(Debug, Clone, PartialEq)]

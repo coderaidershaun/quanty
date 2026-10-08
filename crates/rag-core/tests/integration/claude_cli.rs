@@ -1,6 +1,5 @@
-//! Runs `ClaudeCli` against a stand-in `claude` program that the test puts first on the `PATH`, so
-//! that the flags, the standard input, the environment and every way a run can end are seen
-//! without a model call.
+//! Runs `ClaudeCli` against a stand-in `claude` program first on the `PATH`, so that the flags, the
+//! input, the environment and every way a run can end are seen without a model call.
 
 use std::fs;
 use std::io;

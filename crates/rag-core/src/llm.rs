@@ -13,14 +13,11 @@ pub struct Question<'a> {
     pub input: &'a str,
 }
 
-/// Answers questions with JSON that fits the schema of the question.
 pub trait Llm {
     /// The name of the model that answers. A caller that keeps answers uses it to tell the
     /// answers of two models apart.
     fn model(&self) -> &str;
 
-    /// The answer to one question, as the model gave it.
-    ///
     /// # Errors
     /// - [`LlmError::ApiKeySet`], [`LlmError::Start`], [`LlmError::NotSignedIn`] and
     ///   [`LlmError::UsageLimit`] when no question can be answered until the person acts

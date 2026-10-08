@@ -68,7 +68,6 @@ pub struct FigurePicture {
     /// Built from the folder the caller passed, so it is absolute when that was. The file is not
     /// checked to exist.
     pub path: PathBuf,
-    /// Whether `path` is the figure cut out of its page, or the whole page because that failed.
     pub shows: ImageShows,
 }
 
@@ -114,8 +113,6 @@ impl Chapter {
     }
 }
 
-/// Reads the finished chapter in `chapter_folder`.
-///
 /// Only `chapter.json`, each `page.json` and the piece files are needed, so a chapter written by
 /// hand can be read too. A formula printed first on its page has its lead-in on the page before;
 /// that `introduces` relationship is worked out here, because saved relationships stay on one
@@ -222,8 +219,6 @@ fn read_piece_file(file: &Path) -> Result<String, ReadChapterError> {
     Ok(text.strip_suffix('\n').unwrap_or(&text).to_owned())
 }
 
-/// The headings `entry` sits under. A heading is placed under the headings above it of a lower
-/// rank number, and then becomes the innermost heading itself.
 fn place_in_sections(
     open_sections: &mut Vec<SectionHeading>,
     entry: &PieceEntry,
@@ -262,7 +257,6 @@ fn mark_mid_sentence_pieces(page_pieces: &mut [ChapterPiece], page: &PageIndex) 
     }
 }
 
-/// The saved relationships of every page, plus the `introduces` links that cross a page break.
 fn collect_relationships(
     pages: &[(PathBuf, PageIndex)],
 ) -> Result<Vec<PieceRelationship>, ReadChapterError> {

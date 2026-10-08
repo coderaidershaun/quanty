@@ -55,7 +55,6 @@ pub(super) enum CopyOutcome {
     Refused(RouteReason),
 }
 
-/// Keeps a Haiku copy only when nothing about it is in doubt.
 pub(super) fn judge_copy(
     copy: CopiedPage,
     text_layer: &str,

@@ -1,6 +1,5 @@
 //! What an item is, how it is told apart from every other item, and what is stored with it.
-//! Identifiers are computed from the source, never drawn at random, so ingesting the same
-//! chapter twice names the same points.
+//! Identifiers are computed from the source, so ingesting a chapter twice names the same points.
 
 use std::fmt;
 use std::path::PathBuf;
@@ -36,7 +35,6 @@ impl fmt::Display for DocId {
 impl FromStr for DocId {
     type Err = ParseDocIdError;
 
-    /// Reads what `Display` prints: the UUID of a document.
     fn from_str(text: &str) -> Result<DocId, ParseDocIdError> {
         Uuid::parse_str(text)
             .map(DocId)
@@ -47,8 +45,7 @@ impl FromStr for DocId {
     }
 }
 
-/// The text is not the UUID of a document. The message is written to be read on its own,
-/// because a command line prints only this line.
+/// The message is written to be read on its own, because a command line prints only this line.
 #[derive(thiserror::Error, Debug)]
 #[error(
     "{text:?} is not a document id; a document id is the UUID that an ingest prints as \"document id\""
@@ -127,7 +124,6 @@ impl ItemKind {
     }
 }
 
-/// The text that was given as a kind is not the name of any kind.
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error(
     "`{given}` is not a kind of item; the kinds are {kinds}",

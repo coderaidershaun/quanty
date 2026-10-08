@@ -19,7 +19,6 @@ pub const QUESTION: &str = "How is the price of an option found?";
 /// How far the score that Qdrant gives an item may be from the cosine the item was placed at.
 pub const SCORE_ERROR: f32 = 0.001;
 
-/// Labels that name nothing but these tags.
 pub fn tagged(tags: &[&str]) -> DocumentLabels {
     DocumentLabels {
         tags: tags.iter().map(|tag| tag.parse().unwrap()).collect(),
@@ -43,7 +42,6 @@ pub fn texts_of(results: &SearchResults) -> Vec<&str> {
         .collect()
 }
 
-/// An item to put in the stores, and how near to the question it is.
 pub struct Placed {
     document: DocId,
     kind: ItemKind,
@@ -102,7 +100,6 @@ struct FixtureDocument {
     items: Vec<ItemNode>,
 }
 
-/// Items, concepts and the graph between them, written to the stores by [`Fixture::store_in`].
 /// Each item and concept has its own axis of the vector, so its cosine to [`QUESTION`] is exactly
 /// the cosine it was given.
 pub struct Fixture {
@@ -242,7 +239,6 @@ impl Fixture {
         });
     }
 
-    /// Creates both collections and writes everything that was added.
     pub async fn store_in(&self, stores: &Stores<FalkorGraph>) {
         stores
             .items

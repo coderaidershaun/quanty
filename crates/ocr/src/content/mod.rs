@@ -1,7 +1,5 @@
 //! The saved shape of a converted chapter and of a picture that stands alone: folder and file
-//! names, and the `chapter.json`, `page.json` and `image.json` files that index them. It also
-//! lists the chapters under a content folder. The converter and the reader both build on it, and
-//! it uses neither.
+//! names, and the `chapter.json`, `page.json` and `image.json` files that index them.
 
 mod catalogue;
 mod conversion;
@@ -68,8 +66,6 @@ pub struct ChapterFileName {
     pub name: String,
 }
 
-/// Reads `chapter-<number>-<name>.pdf`: the number is all digits and the name has at least one
-/// word. The name is the words between the hyphens, each with a capital letter.
 pub fn parse_chapter_file_name(file_name: &str) -> Result<ChapterFileName, ContentError> {
     let bad_name = || ContentError::BadFileName {
         name: file_name.to_owned(),
@@ -105,8 +101,6 @@ fn capitalise(word: &str) -> String {
     }
 }
 
-/// The folder a book's chapters live in: the title in lower case, every run of characters that
-/// are not letters or digits turned into one `-`, and no `-` at either end.
 pub fn book_folder_name(book_title: &str) -> Result<String, ContentError> {
     let mut folder = String::new();
     for character in book_title.to_lowercase().chars() {
@@ -136,9 +130,8 @@ pub fn page_folder_name(page_position: u32) -> String {
     format!("page-num-{page_position}")
 }
 
-/// The folder of a picture that stands alone, as a path from the output root:
-/// `images/<the start of the picture's SHA-256>`. The same bytes always land in the same folder,
-/// whatever the file was called.
+/// The path starts at the output root. The same bytes always land in the same folder, whatever
+/// the file was called.
 pub fn image_folder(source_sha256: &str) -> PathBuf {
     let digits = source_sha256
         .get(..IMAGE_FOLDER_DIGITS)
@@ -164,17 +157,12 @@ pub fn is_partial_page_folder_name(folder_name: &str) -> bool {
         .is_some()
 }
 
-/// Says which PDF a chapter was made from, how many pages it has and whether it is finished.
 pub const CHAPTER_INDEX_FILE: &str = "chapter.json";
-/// Lists a page's pieces in reading order, with how the page was made.
 pub const PAGE_INDEX_FILE: &str = "page.json";
-/// The one page cut out of the chapter PDF.
 pub const PAGE_PDF_FILE: &str = "page.pdf";
 pub const PAGE_IMAGE_FILE: &str = "page.png";
 /// The page's text as Poppler read it, saved unchanged. It can hold misread words.
 pub const TEXT_LAYER_FILE: &str = "text-layer.txt";
-/// Says which picture a folder was made from and what was read from it. It is written last, so a
-/// folder that has it was converted whole.
 pub const IMAGE_INDEX_FILE: &str = "image.json";
 /// The explanation of a picture that stands alone, then the words printed on it.
 pub const IMAGE_EXPLANATION_FILE: &str = "figure.md";

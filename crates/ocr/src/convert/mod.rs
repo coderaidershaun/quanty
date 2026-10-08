@@ -1,6 +1,5 @@
 //! Converts a whole chapter PDF into its folder of pages: cut the pages out, convert them a few
-//! at a time, and write `chapter.json` last. A finished chapter is never converted again. A
-//! picture that stands alone is converted on its own, without a chapter.
+//! at a time, and write `chapter.json` last. A finished chapter is never converted again.
 
 mod chapter;
 mod checks;
@@ -95,7 +94,6 @@ pub enum ConvertError {
     },
 }
 
-/// One chapter PDF and where its pages are saved.
 #[derive(Debug, Clone)]
 pub struct ChapterJob {
     book_title: String,

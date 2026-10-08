@@ -13,7 +13,6 @@ const ANSWER_DELAY: Duration = Duration::from_millis(20);
 
 type Rule = dyn Fn(&AskedQuestion, usize) -> Result<Value, LlmError> + Send + Sync;
 
-/// What a question was made of, as owned text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AskedQuestion {
     pub system_prompt: String,
@@ -39,7 +38,6 @@ pub struct StandInLlm {
 }
 
 impl StandInLlm {
-    /// Every answer says that the item discusses no concept.
     pub fn finding_nothing() -> StandInLlm {
         StandInLlm::replying(|_, _| Ok(json!({ "concepts": [], "relations": [] })))
     }
@@ -66,7 +64,6 @@ impl StandInLlm {
         }
     }
 
-    /// The same stand-in under another model name.
     pub fn named(self, model: &str) -> StandInLlm {
         StandInLlm {
             model: model.to_owned(),

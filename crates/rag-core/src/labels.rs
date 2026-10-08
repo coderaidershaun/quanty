@@ -46,13 +46,12 @@ impl TryFrom<String> for Tag {
     }
 }
 
-/// The text that was given as a tag has nothing in it but space.
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("a tag cannot be empty")]
 pub struct EmptyTag;
 
-/// The book, the author and the tags of one document. A label that is not there is left out of
-/// what is stored, so a document stored before labels existed reads the same as a new one.
+/// A label that is not there is left out of what is stored, so a document stored before labels
+/// existed reads the same as a new one.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DocumentLabels {
     /// The title of the book as it was given when the chapter was converted.

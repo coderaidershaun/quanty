@@ -1,13 +1,5 @@
 //! Turns a book chapter PDF into saved pieces (headings, text, formulas, figures, tables and
 //! footnotes) that later steps can read back in reading order.
-//!
-//! [`convert_chapter`] converts the chapter a [`ChapterJob`] names and [`read_chapter`] reads it
-//! back as a [`Chapter`]. [`convert_image`] converts a picture that stands alone, such as a chart,
-//! into a [`ConvertedImage`]. [`Catalogue::read`] lists every converted chapter under a content
-//! folder. All of them need only the crate root. `convert::services` and `convert::reply` hold
-//! the paid calls, their errors and the reply types, for a caller that swaps the paid calls for
-//! stand-ins. The stand-ins and the helpers for the sample chapter are in `ocr::testing`, behind
-//! the cargo feature `testing`.
 
 pub mod content;
 pub mod convert;

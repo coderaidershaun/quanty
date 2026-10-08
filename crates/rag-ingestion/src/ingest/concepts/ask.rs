@@ -1,6 +1,5 @@
 //! The first half of extraction: asks about every item, a few at a time, and keeps each good
-//! answer. A failure of one item never stops the others. A failure that would be the same for
-//! every item stops the run. The second half asks its own questions through the same method.
+//! answer. One failed item never stops the others; a failure all items share stops the run.
 
 use std::error::Error;
 
@@ -32,7 +31,6 @@ pub(super) struct Answers {
     pub skipped: Vec<SkippedItem>,
 }
 
-/// What the model found in one item.
 pub(super) struct ItemAnswer {
     pub item: ItemId,
     /// How many items of the run come before this one, the skipped ones among them.
@@ -40,7 +38,6 @@ pub(super) struct ItemAnswer {
     pub extraction: Extraction,
 }
 
-/// How a question was answered, and how many times the model was asked for it.
 pub(super) struct Reading<T> {
     pub llm_calls: usize,
     pub outcome: Outcome<T>,
@@ -54,15 +51,14 @@ pub(super) enum Outcome<T> {
     Stopped(LlmError),
 }
 
-/// A question, and the name that its answer is kept under.
 pub(super) struct KeyedQuestion<'a> {
     pub key: String,
     pub question: Question<'a>,
 }
 
 impl<L: Llm> ConceptExtractor<L> {
-    /// Asks about every item and returns what was found. The answers come back in item order, so
-    /// a stop is seen only after every item before it has been answered and kept.
+    /// The answers come back in item order, so a stop is seen only after every item before it has
+    /// been answered and kept.
     ///
     /// An item that is alone in its document is asked about together with the nearest stored items
     /// of other documents, so that the model names its concepts as they are named elsewhere.
@@ -215,7 +211,6 @@ impl<L: Llm> ConceptExtractor<L> {
     }
 }
 
-/// The error and what caused it, in one line, so that a summary says all of why an item failed.
 fn chain_of(error: &dyn Error) -> String {
     let mut text = error.to_string();
     let mut source = error.source();

@@ -138,7 +138,6 @@ pub(crate) enum PdfIngestError {
     Stopped(#[source] JoinError),
 }
 
-/// A limit that is a whole number of MiB reads as that number, any other as bytes.
 fn size_text(bytes: u64) -> String {
     const MIB: u64 = 1024 * 1024;
     if bytes >= MIB && bytes.is_multiple_of(MIB) {

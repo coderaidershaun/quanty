@@ -4,8 +4,8 @@
 use super::latex;
 use crate::convert::reply::{CitedLabel, TranscribedPage, TranscribedPiece};
 
-/// Removes invisible characters. A soft hyphen marks a word broken at a line end, and copying it
-/// makes a word no search can find; the whitespace after it goes too so the halves rejoin.
+/// A soft hyphen marks a word broken at a line end, and copying it makes a word no search can
+/// find; the whitespace after it goes too so the halves rejoin.
 pub(super) fn remove_invisible(text: &str) -> String {
     let mut visible = String::with_capacity(text.len());
     let mut characters = text.chars().peekable();

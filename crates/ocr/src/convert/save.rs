@@ -150,7 +150,6 @@ pub(super) fn figure_file(explanation: &str, printed_text: &[String]) -> String 
     )
 }
 
-/// The citations the model gave, then one footnote citation for each marker in the text.
 fn all_cites(markdown: &str, model_cites: &[CitedLabel]) -> Vec<Cite> {
     let mut cites: Vec<Cite> = Vec::new();
     let from_model = model_cites.iter().map(|cite| Cite {
@@ -173,7 +172,6 @@ fn all_cites(markdown: &str, model_cites: &[CitedLabel]) -> Vec<Cite> {
     cites
 }
 
-/// The distinct markers written `[^1]`, in the order they first appear.
 fn footnote_markers(text: &str) -> Vec<String> {
     let mut markers: Vec<String> = Vec::new();
     let mut rest = text;

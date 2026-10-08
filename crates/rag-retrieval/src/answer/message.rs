@@ -5,7 +5,6 @@ use rag_core::{ItemKind, ItemPayload};
 
 use crate::search::{SearchResults, page_text};
 
-/// The question, then one block for each item, with a blank line between them.
 pub(super) fn input_for(question: &str, results: &SearchResults) -> String {
     let items = results
         .hits

@@ -45,8 +45,6 @@ fn payload(document: &str, title: &str, kind: ItemKind, page: &str, text: &str) 
     }
 }
 
-/// A chunk, a formula that the chunk cites, and a figure of another document that came in through
-/// the graph.
 fn found_items() -> SearchResults {
     let chunk = payload("notes", NOTES_TITLE, ItemKind::Chunk, "5", CHUNK_TEXT);
     let formula = ItemPayload {
@@ -147,7 +145,6 @@ async fn an_answer_cites_document_and_printed_page_and_keeps_the_latex_of_a_form
         "the formula is printed as the document has it, on lines of its own, under its source line:\n{printed}"
     );
 
-    // A reply that breaks a rule is an error that says which rule.
     let unknown = replying(json!([{ "text": "A claim.", "sources": [1, 99] }]));
     let error = answer(&unknown, QUESTION, &found_items())
         .await
@@ -264,7 +261,6 @@ async fn an_answer_gives_the_number_of_each_source_a_title_headings_and_follow_u
         "{printed}"
     );
 
-    // A reply that holds only claims is an answer with nothing else, and no claim means no title.
     let bare = replying(json!([{ "text": "A claim.", "sources": [1] }]));
     let written = answer(&bare, QUESTION, &results).await.unwrap();
     assert_eq!(written.title, None);

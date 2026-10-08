@@ -6,7 +6,6 @@ use serde_json::{Value, json};
 
 use crate::support::{ClosedPorts, call, connect, structured};
 
-/// The names of the arguments in the input schema of a tool, sorted.
 fn property_names(tool: &Tool) -> Vec<String> {
     assert_eq!(
         tool.input_schema.get("type"),
@@ -24,8 +23,7 @@ fn property_names(tool: &Tool) -> Vec<String> {
     names
 }
 
-/// The names of the arguments that the schema of a tool requires, sorted. A tool with no
-/// required argument has no `required` key at all.
+/// A tool with no required argument has no `required` key at all.
 fn required_names(tool: &Tool) -> Vec<String> {
     let mut names: Vec<String> = tool
         .input_schema

@@ -1,6 +1,5 @@
 //! The Qdrant collection that holds every item: one unnamed vector and the payload of an item
-//! for each point. Ingestion writes it and retrieval reads it, so both use this one definition
-//! of the collection.
+//! for each point. Ingestion writes it and retrieval reads it, so both use this one definition.
 
 use qdrant_client::Payload;
 use qdrant_client::qdrant::{
@@ -18,7 +17,6 @@ use crate::{
 /// A group of this many points with their vectors is about a megabyte, well inside a request.
 const UPSERT_GROUP_SIZE: usize = 256;
 
-/// An item ready to be stored.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ItemPoint {
     pub id: ItemId,
@@ -26,7 +24,6 @@ pub struct ItemPoint {
     pub payload: ItemPayload,
 }
 
-/// Reads and writes the one collection that the config names.
 pub struct ItemStore {
     collection: Collection,
 }
@@ -259,7 +256,6 @@ fn point_struct(point: &ItemPoint) -> Result<PointStruct, StoreError> {
     ))
 }
 
-/// A stored item that a search found.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ItemHit {
     pub id: ItemId,
@@ -291,13 +287,11 @@ const LABEL_FIELD: &str = "label";
 /// two items share.
 const LABELLED_LIMIT: u64 = 32;
 
-/// Which items a search looks at. The default is every item.
+/// The default is every item.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ItemFilter {
-    /// Only items of this kind.
     pub kind: Option<ItemKind>,
-    /// Only items of these documents. `None` is every document, and an empty list is no document,
-    /// so it finds nothing.
+    /// `None` is every document, and an empty list is no document, so it finds nothing.
     pub documents: Option<Vec<DocId>>,
 }
 
@@ -396,8 +390,6 @@ impl ItemStore {
         .await
     }
 
-    /// The one place that builds and sends a search: the items that meet every condition, nearest
-    /// to `vector` first, at most `limit`.
     async fn query(
         &self,
         action: &'static str,

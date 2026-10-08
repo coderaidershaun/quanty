@@ -1,6 +1,5 @@
-//! Whether the services ingestion needs are ready: Qdrant, FalkorDB and the sign-in of the
-//! `claude` command line tool. Every check is always run, so one report names everything that
-//! is wrong.
+//! Checks that Qdrant, FalkorDB and the sign-in of the `claude` program are ready. Every check
+//! is always run, so one report names everything that is wrong.
 
 use std::error::Error;
 use std::fmt;
@@ -26,8 +25,7 @@ enum HealthError {
     TimedOut { seconds: u64 },
 }
 
-/// The result of one check. `detail` says what was checked: the address of a store, or the
-/// sign-in state of claude.
+/// `detail` says what was checked: the address of a store, or the sign-in state of claude.
 #[derive(Debug)]
 struct Check {
     name: &'static str,
@@ -50,7 +48,6 @@ impl fmt::Display for Check {
     }
 }
 
-/// The three checks in a fixed order: Qdrant, FalkorDB, claude.
 #[derive(Debug)]
 pub struct HealthReport {
     checks: [Check; 3],
@@ -75,8 +72,7 @@ impl fmt::Display for HealthReport {
     }
 }
 
-/// Runs the three checks one after the other. It never fails: a check that fails is a line of
-/// the report.
+/// It never fails: a check that fails is a line of the report.
 pub async fn check(config: &Config) -> HealthReport {
     let qdrant = within_store_timeout(async {
         ItemStore::connect(config)?.ping().await?;
@@ -126,8 +122,6 @@ async fn within_store_timeout(
         }))
 }
 
-/// The error and its causes joined with ": ", with any line breaks turned into spaces so that a
-/// check stays on one line.
 fn one_line_chain(error: &dyn Error) -> String {
     let mut messages = vec![error.to_string()];
     let mut cause = error.source();

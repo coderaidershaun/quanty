@@ -6,8 +6,7 @@ use graph::testing::{StoredConceptGraph, StoredMention};
 use rag_core::Config;
 use serde_json::Value;
 
-/// Every line of the decision log the config names, as JSON. A log that was never written has no
-/// lines.
+/// A log that was never written has no lines.
 pub fn decisions_in(config: &Config) -> Vec<Value> {
     let text = match fs::read_to_string(&config.concept_decision_log) {
         Ok(text) => text,
@@ -23,7 +22,6 @@ pub fn decisions_in(config: &Config) -> Vec<Value> {
         .collect()
 }
 
-/// The mentions of one item.
 pub fn mentions_of<'a>(stored: &'a StoredConceptGraph, item: &str) -> Vec<&'a StoredMention> {
     stored
         .mentions

@@ -1,6 +1,5 @@
-//! Shared by the tests of this crate: where the committed chapters are, the items they make, an
-//! embedder that reads words, stores filled by hand, and the command that runs `rag-query`
-//! against throwaway stores.
+//! Shared by the tests of this crate: the committed chapters and their items, an embedder that
+//! reads words, and stores filled by hand.
 
 mod fixture;
 mod word_embedder;
@@ -14,10 +13,8 @@ use rag_ingestion::{Item, chapter_items};
 pub use fixture::{Fixture, Placed, QUESTION, SCORE_ERROR, found_among, tagged, texts_of};
 pub use word_embedder::WordEmbedder;
 
-/// The title that every item of the sample chapter of the book carries.
 pub const SAMPLE_CHAPTER_TITLE: &str = "Option Volatility and Pricing, chapter 1: Sample Pages";
 
-/// The folder of the workspace.
 pub fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
@@ -42,8 +39,8 @@ pub fn in_depth_chapter() -> PathBuf {
     content_folder().join("quanty-sample-notes/chapter-2")
 }
 
-/// Every item of the three committed chapters, in the order of the chapters. The folders are
-/// made absolute first, so a figure's picture path is absolute, as ingestion stores it.
+/// The folders are made absolute first, so a figure's picture path is absolute, as ingestion
+/// stores it.
 pub fn sample_items() -> Vec<Item> {
     [sample_chapter(), intuition_chapter(), in_depth_chapter()]
         .iter()
@@ -55,9 +52,7 @@ pub fn sample_items() -> Vec<Item> {
         .collect()
 }
 
-/// Puts every item of the three committed chapters into the item collection, with the vectors of
-/// `embedder`, and returns the items it stored. The concept collection is created too and left
-/// empty, because a search reads it.
+/// The concept collection is created and left empty, because a search reads it.
 pub async fn store_samples(
     embedder: &impl Embedder,
     store: &ItemStore,
@@ -93,7 +88,6 @@ pub async fn store_samples(
     items
 }
 
-/// The first item of that document, kind and page. The test fails when there is none.
 pub fn find_item<'a>(items: &'a [Item], title: &str, kind: ItemKind, page: u32) -> &'a Item {
     items
         .iter()

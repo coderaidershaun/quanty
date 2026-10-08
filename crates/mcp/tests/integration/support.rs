@@ -27,8 +27,6 @@ pub struct StandInServices {
 }
 
 impl StandInServices {
-    /// An embedder that makes up its vectors, a model that finds no concept, and the pages of the
-    /// sample chapter.
     pub fn new() -> StandInServices {
         StandInServices {
             embedder: Box::new(StandInEmbedder::default),
@@ -38,13 +36,11 @@ impl StandInServices {
         }
     }
 
-    /// The same services, whose pages are converted as `scenario` says.
     pub fn with_pages(mut self, scenario: Scenario) -> StandInServices {
         self.pages = StubServices::new(scenario);
         self
     }
 
-    /// The same services with this embedder, made again for every call.
     pub fn with_embedder(
         mut self,
         embedder: impl Fn() -> StandInEmbedder + Send + Sync + 'static,
@@ -66,7 +62,7 @@ impl StandInServices {
         )
     }
 
-    /// The same services with this model. A clone of it keeps what the server asks of it.
+    /// A clone of `llm` keeps what the server asks of it.
     pub fn with_llm(mut self, llm: StandInLlm) -> StandInServices {
         self.llm = llm;
         self
@@ -123,7 +119,6 @@ impl ClosedPorts {
         ClosedPorts { config, folder }
     }
 
-    /// The same settings with another content folder, such as the committed sample chapters.
     pub fn with_content_folder(mut self, content_folder: &Path) -> ClosedPorts {
         self.config.content_folder = content_folder.to_path_buf();
         self
@@ -137,7 +132,6 @@ impl ClosedPorts {
         QuantyServer::new(self.config.clone(), StandInServices::new())
     }
 
-    /// A server that takes a PDF of at most `max_pdf_bytes` bytes.
     pub fn server_with_limit(&self, max_pdf_bytes: u64) -> QuantyServer<StandInServices> {
         QuantyServer::with_max_pdf_bytes(self.config.clone(), StandInServices::new(), max_pdf_bytes)
     }
@@ -148,7 +142,6 @@ pub fn samples_folder() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples")
 }
 
-/// The committed converted chapters, as a content folder.
 pub fn sample_content_folder() -> PathBuf {
     samples_folder().join("content")
 }
@@ -158,14 +151,12 @@ pub fn sample_chapter_folder() -> PathBuf {
     sample_content_folder().join("option-volatility-and-pricing/chapter-1")
 }
 
-/// The document that the sample chapter is stored as.
 pub fn sample_document_id() -> DocId {
     let index = ocr::ChapterIndex::read(&sample_chapter_folder())
         .expect("the sample chapter should have a chapter.json");
     DocId::from_source_sha256(&index.source_sha256)
 }
 
-/// The client end of an in-process connection to `server`.
 pub type Client = RunningService<RoleClient, ()>;
 
 pub async fn connect<S: Services>(server: QuantyServer<S>) -> Client {
@@ -197,7 +188,6 @@ pub async fn call(client: &Client, tool: &'static str, arguments: Value) -> Call
         .unwrap_or_else(|error| panic!("the call of {tool} should get a result: {error}"))
 }
 
-/// The structured result of a call that did not fail.
 pub fn structured(result: &CallToolResult) -> &Value {
     assert_ne!(
         result.is_error,
@@ -299,7 +289,6 @@ impl Library {
             .placing(&self.figure_text, first_axis())
     }
 
-    /// A server over these stores that reads the committed chapters from the disk.
     pub fn server(&self) -> QuantyServer<StandInServices> {
         let config = Config {
             content_folder: sample_content_folder(),
@@ -333,7 +322,6 @@ fn written_answer() -> Value {
 /// How long a job may take to end in a test: seven pages of stand-in calls and an ingest.
 const JOB_WAIT: Duration = Duration::from_secs(180);
 
-/// Asks `ingest_status` until the job is not running any more, and gives its last report.
 pub async fn report_when_ended(client: &Client, job_id: &str) -> Value {
     let started = Instant::now();
     loop {

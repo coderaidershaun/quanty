@@ -89,7 +89,6 @@ pub(super) fn math_spans(text: &str) -> Result<Vec<&str>, &'static str> {
     }
 }
 
-/// What is unbalanced in `latex`: braces, `\begin` and `\end` by name, `\left` and `\right`.
 pub(super) fn unbalanced(latex: &str) -> Option<&'static str> {
     let units = units(latex);
     let mut depth = 0_i32;
@@ -157,7 +156,6 @@ const WRAPPING_ENVIRONMENTS: [&str; 8] = [
     "multline*",
 ];
 
-/// Why a formula's LaTeX would not typeset: it is wrapped, or carries its own label.
 pub(super) fn wrapped_or_labelled(latex: &str) -> Option<&'static str> {
     let latex = latex.trim_start();
     if latex.starts_with("\\(") {

@@ -4,8 +4,6 @@ use std::sync::{Arc, Mutex};
 
 use rag_core::{DocumentInput, EMBEDDING_DIMENSIONS, EmbedError, Embedder, Embedding};
 
-/// Makes a vector from the words of a text, so a question that repeats the words of an item
-/// lands near that item. It also keeps every question it is asked.
 // SMELL: this is a stand-in that knows nothing of meaning. Every word counts the same and many
 // words share one place in the vector, so only a question that is the whole stored text of an
 // item is sure to find it. It shows that search is wired up, not that it finds good answers.
@@ -34,7 +32,6 @@ impl Embedder for WordEmbedder {
     }
 }
 
-/// One count for each word, in the dimension that the word's hash picks, scaled to length 1.
 fn word_vector(text: &str) -> Embedding {
     let mut vector = vec![0.0_f32; EMBEDDING_DIMENSIONS];
     let lowercase = text.to_lowercase();

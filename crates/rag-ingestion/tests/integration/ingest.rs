@@ -1,6 +1,5 @@
-//! Runs a whole chapter through ingestion into a throwaway collection of the local Qdrant and a
-//! throwaway graph of the local FalkorDB, with an embedder that makes up its vectors and a
-//! language model that finds no concept, so nothing is billed.
+//! Runs a whole chapter through ingestion into a throwaway collection and graph, with an embedder
+//! that makes up its vectors and a model that finds no concept, so nothing is billed.
 
 use std::collections::BTreeSet;
 

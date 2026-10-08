@@ -1,6 +1,5 @@
-//! Turns what is stored, and what is asked, into vectors. Callers hand over plain text and a
-//! picture path; the wording the model expects stays inside the implementation, so no caller
-//! can get it wrong.
+//! Turns what is stored, and what is asked, into vectors. The wording the model expects stays
+//! inside the implementation, so no caller can get it wrong.
 
 mod gemini;
 mod request;
@@ -14,7 +13,6 @@ pub const EMBEDDING_DIMENSIONS: usize = 768;
 
 pub type Embedding = Vec<f32>;
 
-/// What is embedded for one stored item.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DocumentInput {
     /// Where the text sits: the book, the chapter and the section. Empty when it has no place.
@@ -24,8 +22,8 @@ pub struct DocumentInput {
     pub image: Option<PathBuf>,
 }
 
-/// Makes the vectors of stored items and of questions. The two are worded differently, so that a
-/// question lands near the documents that answer it.
+/// Stored items and questions are worded differently, so that a question lands near the documents
+/// that answer it.
 pub trait Embedder {
     /// One vector for each input, in the order given.
     ///
@@ -37,7 +35,6 @@ pub trait Embedder {
         inputs: &[DocumentInput],
     ) -> impl Future<Output = Result<Vec<Embedding>, EmbedError>> + Send;
 
-    /// One vector for a question, to be compared with the vectors of documents.
     fn embed_query(
         &self,
         query: &str,

@@ -75,7 +75,6 @@ impl ThrowawayStores {
         &self.config
     }
 
-    /// The three stores, opened with this config.
     pub async fn connect(&self) -> Stores<FalkorGraph> {
         Stores {
             items: ItemStore::connect(&self.config).expect("the item store should open"),
@@ -93,7 +92,6 @@ impl ThrowawayStores {
         self.models_with_embedder(StandInEmbedder::default(), llm)
     }
 
-    /// Like [`ThrowawayStores::models`], with an embedder that the test has set up.
     pub fn models_with_embedder<L: Llm>(
         &self,
         embedder: StandInEmbedder,

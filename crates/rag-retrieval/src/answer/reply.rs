@@ -1,6 +1,5 @@
 //! Reads and checks what the model replied, and prints the answer. The program, not the model,
-//! writes the document, the printed page and the LaTeX of each source. The title, the headings and
-//! the follow-up questions are read but not printed.
+//! writes the document, the printed page and the LaTeX of each source.
 
 use std::fmt;
 
@@ -34,7 +33,6 @@ struct ReplyClaim {
     sources: Vec<i64>,
 }
 
-/// An item that a claim rests on.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Source {
     /// The place of the item in the results that the answer was written from, counted from 1.
@@ -42,7 +40,6 @@ pub struct Source {
     pub payload: ItemPayload,
 }
 
-/// One statement of an answer, and the items that it rests on.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Claim {
     /// The name of the part of the answer that starts at this claim, such as "Key assumptions".
@@ -53,10 +50,7 @@ pub struct Claim {
     pub sources: Vec<Source>,
 }
 
-/// An answer written from the items that a search found. It prints each claim with its sources:
-/// the document, the printed page and the kind of each item, the unchanged LaTeX of a formula and
-/// the path of the picture of a figure. The title, the headings and the follow-up questions are
-/// not printed.
+/// The title, the headings and the follow-up questions are not printed.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Answer {
     /// A few words that name the answer. `None` when the model gave none, and always when there
@@ -69,9 +63,8 @@ pub struct Answer {
     pub follow_ups: Vec<String>,
 }
 
-/// The claims of the reply, each with the items that its source numbers name, and the title and
-/// the follow-up questions. A source that a claim names twice is kept once. A title, a heading or
-/// a follow-up question that is blank is left out, and never an error.
+/// A source that a claim names twice is kept once. A title, a heading or a follow-up question that
+/// is blank is left out, and never an error.
 ///
 /// # Errors
 /// - [`AnswerError::Unreadable`] when the reply is not a list of claims

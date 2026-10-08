@@ -1,6 +1,5 @@
 //! Converts a picture that stands alone, such as a chart on its own, into a saved folder: a copy
-//! of the picture, the explanation of what it shows, and an index. Nothing is cut out of it,
-//! because the picture already is the figure.
+//! of the picture, the explanation of what it shows, and an index.
 
 use std::path::{Path, PathBuf};
 
@@ -15,10 +14,8 @@ use crate::content::{
     image_copy_file_name, image_folder,
 };
 
-/// The kinds of picture that can be read, by the extension of the file name in lower case.
 const PICTURE_EXTENSIONS: [&str; 3] = ["png", "jpg", "jpeg"];
 
-/// A picture that stands alone, converted: where its files are and what was read from it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConvertedImage {
     pub index: ImageIndex,
@@ -128,7 +125,6 @@ pub async fn convert_image_with<S: ImageServices>(
     })
 }
 
-/// What the model said about the one figure of the picture.
 struct LoneFigure {
     label: Option<String>,
     caption: Option<String>,

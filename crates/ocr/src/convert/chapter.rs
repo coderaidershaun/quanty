@@ -71,7 +71,6 @@ async fn convert_pages<S: PageServices>(
     let failed = &failed;
     let results: Vec<(u32, Option<Result<CallTally, PageError>>)> = stream::iter(sources)
         .map(|source| async move {
-            // After the first failure no new page starts. Pages already running finish.
             if failed.load(Ordering::Relaxed) {
                 return (source.position, None);
             }

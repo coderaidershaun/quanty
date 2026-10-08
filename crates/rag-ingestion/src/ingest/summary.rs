@@ -7,7 +7,6 @@ use rag_core::{DocId, ItemKind};
 use super::concepts::ConceptSummary;
 use super::items::Item;
 
-/// How many items of each kind a chapter made.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ItemCounts {
     pub chunks: usize,

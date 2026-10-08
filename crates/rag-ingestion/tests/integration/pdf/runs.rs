@@ -1,6 +1,5 @@
-//! What a run of `ingest_pdf` does, with stand-ins for the paid calls of `ocr`, a throwaway
-//! collection of the local Qdrant and a throwaway graph of the local FalkorDB: one run stores the
-//! whole chapter, a second run does nothing, and a run that stopped is finished by the next one.
+//! What a run of `ingest_pdf` does, with stand-ins for the paid calls of `ocr` and throwaway
+//! stores: one run stores the whole chapter, a second does nothing, a stopped run is finished.
 
 use std::collections::BTreeSet;
 
@@ -146,8 +145,6 @@ async fn a_run_that_stops_in_conversion_or_in_ingestion_is_finished_by_the_same_
     let answering = StandInLlm::replying(|_, _| Ok(finding_volatility()));
     let models = throwaway.models(answering.clone());
 
-    // A page that fails stops the run and is named. Nothing is embedded or asked, and the graph
-    // does not hear of the document.
     let broken = StandInPdf::new(
         &throwaway,
         Scenario::AllTables {
@@ -177,9 +174,6 @@ async fn a_run_that_stops_in_conversion_or_in_ingestion_is_finished_by_the_same_
         "the items collection was made before the first page was converted"
     );
 
-    // The same command, with the page now working, goes on from the pages that were kept and
-    // stops in the ingest, because the model is at its usage limit. The items are stored, and the
-    // document is not marked as ingested.
     let working = StandInPdf::new(&throwaway, Scenario::AllTables { broken_page: None });
     let limited = throwaway.models(at_the_usage_limit());
     let error = working.ingest(&limited, &stores).await.unwrap_err();
@@ -200,8 +194,6 @@ async fn a_run_that_stops_in_conversion_or_in_ingestion_is_finished_by_the_same_
     assert_eq!(points_in(config).await.len() as u64, n);
     assert_eq!(stores.graph.ingested_items(document).await.unwrap(), None);
 
-    // The same command again, with a model that answers, finishes the ingest. Nothing is
-    // converted again.
     let calls_before = working.stubs.calls().len();
     let finished = working.ingest(&models, &stores).await.unwrap();
     let PdfOutcome::Ingested(summary) = &finished else {

@@ -1,6 +1,5 @@
 //! Reads the committed sample chapters and a folder with a broken chapter through `Catalogue`,
-//! because only the real file system shows that the walk finds every chapter in order and that one
-//! bad `chapter.json` does not hide the others.
+//! because only the real file system shows that a bad `chapter.json` does not hide the others.
 
 use std::path::Path;
 
@@ -43,7 +42,6 @@ fn the_catalogue_lists_every_chapter_under_a_root_and_names_what_it_cannot_read(
     let missing = Catalogue::read(&temporary.path().join("no-such-folder")).unwrap();
     assert!(missing.chapters.is_empty() && missing.unreadable.is_empty());
 
-    // One chapter that cannot be read, two that can, and a folder of pictures that stand alone.
     // By folder name chapter 10 comes before chapter 2. By number it comes after.
     let broken_folder = temporary.path().join("a-book/chapter-1");
     let chapter_2 = temporary.path().join("b-book/chapter-2");

@@ -1,6 +1,5 @@
-//! The `rag-ingest` command: checks that the services are ready, ingests one converted chapter
-//! folder or one picture that stands alone, converts and ingests one chapter PDF, changes the
-//! labels of one stored document, or deletes one document.
+//! The `rag-ingest` command: checks that the services are ready, ingests a converted chapter or a
+//! picture, converts and ingests a chapter PDF, relabels a stored document, or deletes one.
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;

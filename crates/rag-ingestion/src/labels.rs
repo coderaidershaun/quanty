@@ -8,12 +8,12 @@ use rag_core::{DocId, DocumentLabels, StoreError, Tag};
 
 use crate::stores::Stores;
 
-/// What to change in the labels of a document. The book is not here: it comes from the chapter.
+/// The book is not here: it comes from the chapter.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LabelChange {
     /// The new author, or `None` to leave the author as it is.
     pub author: Option<String>,
-    /// Tags to add. A tag that the document has is not added twice.
+    /// A tag that the document has is not added twice.
     pub add: Vec<Tag>,
     /// Tags to take away, after the tags to add were added. Taking away a tag that the document
     /// does not have changes nothing.
@@ -103,7 +103,6 @@ pub async fn relabel<G: GraphStore>(
     })
 }
 
-/// The node that the graph holds for the document, or `None`.
 pub(crate) async fn stored_node<G: GraphStore>(
     id: DocId,
     stores: &Stores<G>,

@@ -228,8 +228,7 @@ fn number_attribute(tag: &str, name: &str) -> Option<f64> {
     rest.split('"').next()?.parse().ok()
 }
 
-/// Turns the five escapes the tool writes back into their characters. `&amp;` goes last, so that
-/// `&amp;lt;` becomes `&lt;` and not `<`.
+/// `&amp;` goes last, so that `&amp;lt;` becomes `&lt;` and not `<`.
 fn unescape(text: &str) -> String {
     text.replace("&lt;", "<")
         .replace("&gt;", ">")

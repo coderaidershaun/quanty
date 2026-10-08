@@ -1,7 +1,5 @@
-//! Writes an answer to a question from the items that a search found. The model names the items
-//! that support each statement by number, and the program prints their documents, pages and
-//! formulas itself, so the model never retypes a title, a page or a formula. The same call also
-//! gives a title, headings and follow-up questions, which are kept but never printed.
+//! Writes an answer to a question from the items that a search found. The model only names the
+//! items behind each statement by number; the program prints their documents, pages and formulas.
 
 mod message;
 mod reply;
@@ -15,7 +13,6 @@ pub use reply::{Answer, Claim, Source};
 const SYSTEM_PROMPT: &str = include_str!("prompts/answer.md");
 const SCHEMA: &str = include_str!("prompts/answer.schema.json");
 
-/// The model that writes the answers.
 // Pinned: the prompt was written against this model, so a change of the default model must not
 // change the answers.
 pub const ANSWER_MODEL: &str = "claude-sonnet-5-5";
@@ -41,9 +38,8 @@ pub enum AnswerError {
     },
 }
 
-/// Asks the model for an answer to the question from the items of the results. It makes one call,
-/// and a reply that breaks a rule is an error and is not asked for again. An answer with no
-/// claims means the items do not answer the question.
+/// Makes one call: a reply that breaks a rule is an error and is not asked for again. An answer
+/// with no claims means the items do not answer the question.
 ///
 /// # Errors
 /// - [`AnswerError::Llm`] when the model cannot be asked

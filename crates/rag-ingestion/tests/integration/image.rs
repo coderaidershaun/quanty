@@ -1,6 +1,5 @@
-//! Runs a picture that stands alone through conversion and ingestion into a throwaway collection
-//! of the local Qdrant and a throwaway graph of the local FalkorDB, with stand-ins for the paid
-//! calls, so nothing is billed.
+//! Runs a picture that stands alone through conversion and ingestion into throwaway stores, with
+//! stand-ins for the paid calls, so nothing is billed.
 
 use std::path::Path;
 
@@ -133,7 +132,6 @@ async fn a_lone_picture_becomes_a_one_figure_document_and_a_second_ingest_calls_
     assert_eq!(stored.items[0].kind, "figure");
     assert_eq!(stored.items[0].page, 1);
 
-    // A second ingest of the same picture converts nothing and asks nothing.
     let after_first = (
         size(&stores.graph).await,
         stored_concept_graph(&stores.graph).await,

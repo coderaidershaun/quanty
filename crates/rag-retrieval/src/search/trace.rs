@@ -5,9 +5,8 @@ use rag_core::{ConceptHit, ItemHit};
 
 use super::results::SearchResults;
 
-/// What each step of one search produced. The steps are numbered as in
-/// [`Retriever::search_traced`](super::Retriever::search_traced). Step 6 is in the results: the
-/// hits after the first `kept`.
+/// The steps are numbered as in [`Retriever::search_traced`](super::Retriever::search_traced).
+/// Step 6 is in the results: the hits after the first `kept`.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SearchTrace {
     /// Before step 1: how many documents carry every wanted label. Only items of these documents
@@ -43,7 +42,6 @@ pub struct SearchTrace {
     pub kept: usize,
 }
 
-/// The results of a search, with what each step produced on the way to them.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TracedSearch {
     pub results: SearchResults,

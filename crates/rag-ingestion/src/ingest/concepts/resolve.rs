@@ -1,6 +1,5 @@
-//! Decides which stored concept an extracted concept belongs to, in four steps: the same name or
-//! alias, else the nearest stored concept by meaning, linked or kept apart by its score and, in
-//! between, by what the model says. A name that is linked is added to that concept as an alias.
+//! Decides which stored concept an extracted concept belongs to: one with the same name or alias,
+//! else the nearest one by meaning, judged by its score or, in between, by what the model says.
 
 use graph::{ConceptAlias, ConceptNode, GraphStore};
 use rag_core::{
@@ -50,7 +49,6 @@ pub(super) fn normalised(name: &str) -> String {
     normalised
 }
 
-/// What the score of the nearest stored concept says by itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Band {
     High,
@@ -70,14 +68,12 @@ impl Band {
     }
 }
 
-/// Whether the extracted concept is a stored one, and by which rule that was decided.
 enum Judgement {
     Same(Rule, ConceptNode),
     Different(Rule),
     Stopped(LlmError),
 }
 
-/// What resolving a concept reads and writes.
 pub(super) struct Resolver<'a, L, E, G> {
     pub extractor: &'a ConceptExtractor<L>,
     pub cache: &'a Cache,
@@ -181,8 +177,6 @@ impl<L: Llm, E: Embedder, G: GraphStore> Resolver<'_, L, E, G> {
         Ok(vector)
     }
 
-    /// Whether the nearest stored concept is the extracted one: by its score when that is clear,
-    /// and by the model when it is not.
     async fn judge(
         &self,
         concept: &ExtractedConcept,

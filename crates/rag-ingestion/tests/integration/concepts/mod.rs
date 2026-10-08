@@ -1,7 +1,5 @@
-//! Runs whole chapters through ingestion with a language model that answers by a rule, into a
-//! throwaway collection of the local Qdrant and a throwaway graph of the local FalkorDB, so
-//! nothing is billed. It shows what is asked, what is written, what is kept, and what happens when
-//! the model fails.
+//! Runs whole chapters through ingestion with a language model that answers by a rule, into
+//! throwaway stores, so nothing is billed. It shows what is asked, written and kept, and failures.
 
 mod extraction;
 mod failures;

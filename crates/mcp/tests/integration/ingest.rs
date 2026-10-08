@@ -1,6 +1,5 @@
-//! Checks `ingest_pdf` and `ingest_status`: a PDF sent by path and as base64 is ingested, a
-//! second one is refused while one runs, a job that fails says why and frees the place, an old
-//! job is forgotten, and a file that must not be taken is refused before anything is written.
+//! Checks `ingest_pdf` and `ingest_status`: a PDF is ingested, one job runs at a time, a failed
+//! job says why, an old job is forgotten, and a bad file is refused before anything is written.
 
 use std::path::PathBuf;
 
@@ -16,7 +15,6 @@ use crate::support::{
     structured,
 };
 
-/// The bytes of a file that starts like a PDF and is `length` bytes long.
 fn pdf_bytes(length: usize) -> Vec<u8> {
     let mut bytes = b"%PDF-".to_vec();
     bytes.resize(length, 0);

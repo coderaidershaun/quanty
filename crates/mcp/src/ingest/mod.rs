@@ -1,6 +1,5 @@
 //! The `ingest_pdf` and `ingest_status` tools. An ingest takes minutes and a client puts a time
-//! limit on a tool call, so `ingest_pdf` starts a job and `ingest_status` reads it. The call to
-//! `ingest_pdf` answers once the paid work has begun, or at once when it cannot begin.
+//! limit on a tool call, so `ingest_pdf` starts a job and `ingest_status` reads it.
 
 mod error;
 mod jobs;

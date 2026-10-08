@@ -64,7 +64,6 @@ pub(super) fn piece_draft(
     })
 }
 
-/// The label as printed, or `None` when there is none or it is blank.
 pub(super) fn printed_label(label: Option<&str>) -> Option<String> {
     let label = label?.trim();
     (!label.is_empty()).then(|| label.to_owned())
@@ -92,7 +91,6 @@ pub(super) fn join_blocks<'a>(parts: impl IntoIterator<Item = Option<&'a str>>) 
         .join(BLOCK_SEPARATOR)
 }
 
-/// The parts that exist, joined with a space: a name and a label, or a label and a caption.
 pub(super) fn label_line(first: Option<&str>, second: Option<&str>) -> Option<String> {
     let line = [first, second]
         .into_iter()

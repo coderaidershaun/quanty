@@ -89,8 +89,6 @@ pub enum StoreError {
     },
 }
 
-/// One collection of the Qdrant that the config names. Each store is built on one of these, so
-/// the client, the address and the name of the collection go together.
 pub(crate) struct Collection {
     pub(crate) client: Qdrant,
     pub(crate) url: String,
@@ -156,7 +154,7 @@ impl Collection {
     }
 }
 
-/// The id of a point as text. A point with no id gives an empty text, which is not a valid id.
+/// A point with no id gives an empty text, which is not a valid id.
 pub(crate) fn point_id_text(id: Option<PointId>) -> String {
     match id.and_then(|id| id.point_id_options) {
         Some(PointIdOptions::Uuid(text)) => text,

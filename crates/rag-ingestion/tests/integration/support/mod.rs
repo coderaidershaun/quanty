@@ -1,6 +1,5 @@
-//! Shared by the tests of this crate: where the samples are, the command that runs `rag-ingest`
-//! against throwaway stores, reads of what the stores hold, the stand-in for the picture call, and
-//! reads of the decision log.
+//! Shared by the tests of this crate: the samples, the command that runs `rag-ingest` against
+//! throwaway stores, reads of the stores and the decision log, and the picture stand-in.
 
 mod decisions;
 mod stand_in_image_services;
@@ -26,7 +25,6 @@ pub use rag_ingestion::testing::{
 };
 pub use stand_in_image_services::{CAPTION, LABEL, StandInImageServices};
 
-/// The title that the sample chapter is converted under.
 pub const SAMPLE_BOOK: &str = "Option Volatility and Pricing";
 
 /// What the stand-in `claude` prints when the binary runs: no item discusses a concept.
@@ -61,7 +59,6 @@ fn stand_in_claude_folder() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/stand-in-claude")
 }
 
-/// Runs the `rag-ingest` command against a set of throwaway stores.
 pub trait RunRagIngest {
     /// Runs the `rag-ingest` command against these stores and no others, with the stand-in
     /// `claude` that finds no concept.
@@ -128,7 +125,6 @@ async fn points_of(config: &Config, collection: &str) -> Vec<(String, Value)> {
         .collect()
 }
 
-/// What the graph should hold for these items, in their reading order.
 fn expected_stored_items(items: &[Item]) -> Vec<StoredItem> {
     items
         .iter()
@@ -152,9 +148,7 @@ pub fn size_of_one_document(item_count: usize) -> GraphSize {
     }
 }
 
-/// Checks that the graph holds the document of these items and each item with the values it was
-/// stored with, in reading order. It does not look at the rest of the graph. Returns what the
-/// graph holds for the document.
+/// It does not look at the rest of the graph. Returns what the graph holds for the document.
 pub async fn assert_document_stored(graph: &FalkorGraph, items: &[Item]) -> StoredDocument {
     let payload = &items
         .first()
@@ -168,9 +162,7 @@ pub async fn assert_document_stored(graph: &FalkorGraph, items: &[Item]) -> Stor
     stored
 }
 
-/// Checks that the graph holds these items and nothing else: their document, each item with the
-/// values it was stored with, in reading order, and no other node or edge. Returns what the
-/// graph holds for the document.
+/// Returns what the graph holds for the document.
 pub async fn assert_graph_holds_only(graph: &FalkorGraph, items: &[Item]) -> StoredDocument {
     let stored = assert_document_stored(graph, items).await;
     assert_eq!(size(graph).await, size_of_one_document(items.len()));

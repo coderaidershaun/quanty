@@ -1,7 +1,5 @@
 //! Asks the real `claude` program for one answer from the items of a committed chapter, made into
-//! results by hand, so no store and no embedder is needed. Only the real model shows that the
-//! schema is accepted and that the title, the headings, the follow-up questions and the symbols
-//! come back as the prompt asks.
+//! results by hand. Only the real model shows that the schema and the prompt work.
 
 use rag_core::{ClaudeCli, ItemHit, ItemKind};
 use rag_retrieval::{ANSWER_MODEL, Reason, SearchHit, SearchResults, answer};
@@ -29,7 +27,6 @@ fn require_no_api_key() {
     );
 }
 
-/// Every item of the hand-written chapter on the model in depth, in reading order, as results.
 fn in_depth_results() -> SearchResults {
     let hits = sample_items()
         .into_iter()

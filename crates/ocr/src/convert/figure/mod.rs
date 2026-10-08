@@ -76,8 +76,6 @@ pub(super) async fn cut_figures(page_folder: &Path, page: &TranscribedPage) -> C
     cut
 }
 
-/// The words of the strings the figure at `index` printed, and of the strings of the rest of the
-/// page.
 fn words_around(page: &TranscribedPage, index: usize) -> PrintedWords {
     let mut other: Vec<String> = [&page.printed_page_number, &page.running_header]
         .into_iter()

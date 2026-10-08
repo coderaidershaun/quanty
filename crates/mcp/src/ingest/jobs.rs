@@ -1,6 +1,5 @@
 //! The list of ingest jobs, and the report of each one. A job is one `watch` channel that carries
-//! its report: only the tasks of the job write it, and any number of callers read it. One job may
-//! run at a time.
+//! its report: only the tasks of the job write it, and any number of callers read it.
 
 use std::collections::VecDeque;
 use std::sync::{Mutex, PoisonError};

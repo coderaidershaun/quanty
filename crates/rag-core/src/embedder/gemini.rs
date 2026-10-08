@@ -19,7 +19,7 @@ const MAX_BATCH_SIZE: usize = 100;
 /// This count includes the first try.
 const MAX_TRIES: u32 = 5;
 
-/// Embeds with Gemini over HTTP. Its `Debug` output shows no key.
+/// Its `Debug` output shows no key.
 pub struct GeminiEmbedder {
     client: reqwest::Client,
     api_key: ApiKey,
@@ -74,8 +74,6 @@ impl GeminiEmbedder {
         reply.into_vector()
     }
 
-    /// Sends one request, and sends it again after a wait when the failure may pass: a lost
-    /// connection, a timeout, HTTP 429 or HTTP 5xx.
     async fn post<Body: Serialize, Reply: DeserializeOwned>(
         &self,
         method: &str,
@@ -130,8 +128,7 @@ impl GeminiEmbedder {
     }
 }
 
-/// A short description of a failure that is worth another try, or `None` for one that is not.
-/// It leaves out the reply body, so it is safe to log.
+/// The description leaves out the reply body, so it is safe to log.
 fn retry_reason(error: &EmbedError) -> Option<String> {
     match error {
         EmbedError::Transport(source) if !source.is_builder() => Some(source.to_string()),

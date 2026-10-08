@@ -1,7 +1,5 @@
-//! The chapter, the model and the embedder that the resolution tests follow: each item of the
-//! intuition chapter names the concepts of its place in a script, a model answers a question about
-//! two concepts as the test says, and an embedder puts the names at known distances from each
-//! other.
+//! The chapter, the model and the embedder that the resolution tests follow: each item names the
+//! concepts of its place in a script, and the embedder puts the names at known distances.
 
 use std::path::Path;
 
@@ -23,7 +21,7 @@ pub(super) const REALISED_VARIANCE: Named = ("realised variance", "the squared m
 pub(super) const INTEREST_RATE: Named = ("interest rate", "the price of borrowing money");
 
 /// The concepts that each item of the chapter names, in reading order and in the order of the
-/// reply. The last item finds nothing. One reply never holds the same normalised name twice.
+/// reply. One reply never holds the same normalised name twice.
 pub(super) const SCRIPT: [&[Named]; 8] = [
     &[VOLATILITY],
     &[WRITTEN_AGAIN],
@@ -42,8 +40,6 @@ pub(super) fn prompt_file(name: &str) -> String {
     std::fs::read_to_string(path).unwrap()
 }
 
-/// Answers each item with the concepts of its place in the script, and a question about two
-/// concepts with "same" for price variability and "different" for anything else.
 fn scripted_llm(items: &[Item]) -> StandInLlm {
     let positions = positions_of(items);
     let same_concept_prompt = prompt_file("same-concept.md");
@@ -59,12 +55,10 @@ fn scripted_llm(items: &[Item]) -> StandInLlm {
     })
 }
 
-/// Between `LINK_SCORE` and the best score.
 pub(super) fn high_score() -> f32 {
     (LINK_SCORE + 1.0) / 2.0
 }
 
-/// Between the two thresholds.
 pub(super) fn middle_score() -> f32 {
     (ASK_SCORE + LINK_SCORE) / 2.0
 }
@@ -98,7 +92,6 @@ pub(super) fn concept_inputs(embedder: &StandInEmbedder) -> Vec<DocumentInput> {
     inputs
 }
 
-/// Throwaway stores and the items of the intuition chapter, for models that follow the script.
 pub(super) struct Scripted {
     pub throwaway: ThrowawayStores,
     pub stores: Stores<graph::FalkorGraph>,

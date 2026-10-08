@@ -26,7 +26,8 @@ pub use ingest::{
     PageToCheck, Preflight,
 };
 pub use library::{
-    Book, Catalogue, ChapterLabel, Document, ItemCounts, LabelEdit, NewBook, is_same_title,
+    Book, BookLabels, Catalogue, ChapterLabel, Document, ItemCounts, LabelEdit, NewBook,
+    is_same_title,
 };
 pub use message::{Command, Effect, Event, Intent, Tab};
 pub use notice::{Notice, NoticeKind};

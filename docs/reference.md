@@ -133,7 +133,7 @@ The book is the title that the chapter was converted under, so it is set by the 
 
 The book is written by the ingest itself, and the author and the tags that were given are written after the ingest has finished. A run that stops in the ingest writes neither the author nor the tags, and the same command again finishes the ingest and writes them. `--author` replaces the author, and `--tag` adds a tag and never takes one away. An ingest never removes a label: ingesting a chapter again with no `--author` and no `--tag` keeps the author and the tags that the document has.
 
-`tag` changes the labels of a document that is stored, in both stores, with no embedding and no call of any model. `--author` sets the author, each `--add` adds a tag, and each `--remove` takes a tag away, after the tags to add were added. It prints the labels that the document has afterwards. The document id is the one that an ingest prints as `document id`, and an id under which the graph holds no document is refused and changes nothing. `pdf` on a document that is already ingested, given `--author` or `--tag`, converts, embeds and asks nothing, and writes those labels the same way.
+`tag` changes the labels of a document that is stored, in both stores, with no embedding and no call of any model. `--author` sets the author, each `--add` adds a tag, and each `--remove` takes a tag away, after the tags to add were added. It prints the labels that the document has afterwards. The document id is the one that an ingest prints as `document id`, and the one that **Copy id** on the Library tab of the desktop app copies. An id under which the graph holds no document is refused and changes nothing. `pdf` on a document that is already ingested, given `--author` or `--tag`, converts, embeds and asks nothing, and writes those labels the same way.
 
 A document that was stored before labels existed has no `book` until it is ingested again, which embeds it again and is billed by Gemini. Its author and tags need no embedding: set them with `tag`.
 
@@ -143,7 +143,7 @@ A document that was stored before labels existed has no `book` until it is inges
 cargo run --release -p rag-ingestion --bin rag-ingest -- delete-document <document id>
 ```
 
-Removes one document from both stores: its points from the Qdrant collection, and its `Document` node, its `Item` nodes and all their edges from the graph, the `MENTIONS` of its items among them. Other documents are left whole. Concepts, their `RELATES_TO` edges, their points in the concepts collection and their aliases stay, because they belong to no document. The document id is the one that an ingest prints as `document id`. The command prints how many points and nodes it removed, and refuses an id under which neither store holds anything, so an item id or a mistyped id removes nothing.
+Removes one document from both stores: its points from the Qdrant collection, and its `Document` node, its `Item` nodes and all their edges from the graph, the `MENTIONS` of its items among them. Other documents are left whole. Concepts, their `RELATES_TO` edges, their points in the concepts collection and their aliases stay, because they belong to no document. The document id is the one that an ingest prints as `document id`, and the one that **Copy id** on the Library tab of the desktop app copies. The command prints how many points and nodes it removed, and refuses an id under which neither store holds anything, so an item id or a mistyped id removes nothing.
 
 Run it again if it stopped half way: it removes what is left. It is also the way to clear a chapter before it is ingested again after the way it is cut into items has changed, because an ingest never removes the points and nodes of an earlier run.
 
@@ -184,7 +184,7 @@ The items of step 6 come after the others. They are not counted in the 8 or in t
 cargo run --release -p gui
 ```
 
-The program is `quanty`, built as `target/release/quanty`. It opens one window with two tabs, **Ask** and **Ingest**. Ask is one screen of six panels:
+The program is `quanty`, built as `target/release/quanty`. It opens one window with three tabs, **Ask**, **Library** and **Ingest**. Ask is one screen of six panels:
 
 | Panel | What it shows |
 | --- | --- |
@@ -197,7 +197,7 @@ The program is `quanty`, built as `target/release/quanty`. It opens one window w
 
 | Key | What it does |
 | --- | --- |
-| `⌘1`, `⌘3` | Go to Ask, go to Ingest |
+| `⌘1`, `⌘2`, `⌘3` | Go to Ask, Library, Ingest |
 | `/` or `⌘K` | Write a question (`Enter` asks it) |
 | `J`, `K` | Next and previous result |
 | `⌘.` or `Esc` | Stop the search or the answer |
@@ -215,11 +215,13 @@ A citation opens its page when the chapter's folder is found. The chapter is loo
 
 `--fixture <scene>` runs the whole window on built-in data from `samples/content`, with no store, no model and no cost. `--fixture list` prints the scenes: each is one state of the screen, such as `black-scholes` (a full answer), `stores-down` or `first-run`.
 
+The **Library** tab lists the stored books with their chapters: each chapter shows its number and name, its pages, its items, its author and its tags, and a book that was saved and has no chapter yet says so. A chapter whose ingest did not finish says that a search may miss parts of it. **Copy id** copies the document id. **Read** opens the chapter in the Source panel of Ask. **Edit labels** opens boxes for the author and the tags of one chapter, with commas between the tags, and **Save** writes them to both stores the way `rag-ingest tag` does, with no embedding and no model call, so it costs nothing. An author can be set or changed and cannot be removed. Labels cannot be changed while an ingest runs. A book shows the author and the tags of its chapters once it has one: the commonest author, and the tags that all its chapters have. Before that it shows what was saved with it.
+
 The **Ingest** tab adds one chapter to the library: choose a chapter PDF named `chapter-<number>-<name>.pdf`, choose the book or add a new one, check the chapter, then start. The check is free; a start is paid work, the same as `rag-ingest pdf`. Keep the app open while it runs. If it stops, start the same PDF again and it carries on.
 
 To keep a book in the Book list before it has a chapter, choose **Add a new book…**, type its title, and its author and tags if you want them (tags with commas between them), and press **Save book**: the book is then in the list each time the app starts, and choosing it fills in the author and the tags. A title that the library already has, whatever its capitals, is refused.
 
-Not built yet: the Library page, the notices tray, the help sheet and the health check. Labels are changed and documents are deleted with `rag-ingest`.
+Not built yet: the notices tray, the help sheet, the health check and the delete of a document. Delete one with `rag-ingest delete-document`.
 
 ## The MCP server
 

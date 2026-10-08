@@ -7,6 +7,8 @@ use std::path::PathBuf;
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use gui::app::layout::{DEFAULT_WINDOW, MIN_WINDOW};
+use gui::backend::fake::Fake;
+use gui::backend::{Handler, Reply};
 use gui::contract::{Book, Command, Intent, NewBook, Tab};
 use gui::state::IngestJob;
 use gui::testkit;
@@ -180,6 +182,37 @@ fn close_the_open_list(harness: &mut Window) {
     press(harness, egui::Modifiers::NONE, egui::Key::Escape);
 }
 
+const PLACEHOLDER_OF_THE_BOOK_LIST: &str = "Choose a book";
+
+fn cancel_clears_the_form_of_a_new_book_and_sends_nothing(harness: &mut Window, seen: &Seen) {
+    click(harness, Role::Tab, "Ingest");
+    open_the_form_of_a_new_book(harness);
+    assert!(has(harness, Role::Button, "Save book"));
+    assert!(has(harness, Role::Button, "Cancel"));
+    assert!(
+        !has(harness, Role::Button, "Choose from the library"),
+        "Cancel is the one way back"
+    );
+    type_into(harness, "Book title", "Natenberg on Options");
+    type_into(harness, "Author", "Sheldon Natenberg");
+    type_into(harness, "Tags", "Volatility, options");
+    testkit::save_png(harness, "app-ingest-new-book-cancel");
+
+    let sent = seen.all().len();
+    click(harness, Role::Button, "Cancel");
+
+    assert_eq!(seen.all().len(), sent, "Cancel sends no command");
+    assert_eq!(seen.count(is_save), 0);
+    assert!(!has(harness, Role::TextInput, "Book title"));
+    for name in ["Author", "Tags"] {
+        assert_eq!(field(harness, name).as_deref(), Some(""), "{name}");
+    }
+    let book = node(harness, Role::ComboBox, "Book").value();
+    assert_eq!(book.as_deref(), Some(PLACEHOLDER_OF_THE_BOOK_LIST));
+    assert!(!has(harness, Role::Button, "Save book"));
+    assert!(!is_enabled(harness, Role::Button, "Check the chapter"));
+}
+
 fn a_new_book_is_typed_and_saved_with_no_pdf(harness: &mut Window, seen: &Seen) {
     click(harness, Role::Tab, "Ingest");
     open_the_form_of_a_new_book(harness);
@@ -294,7 +327,7 @@ fn a_second_book_with_the_same_title_is_refused_by_name(harness: &mut Window, se
     });
     assert_eq!(books, 1, "the book was not saved a second time");
 
-    click(harness, Role::Button, "Choose from the library");
+    click(harness, Role::Button, "Cancel");
     open_the_form_of_a_new_book(harness);
     type_into(harness, "Book title", "option volatility and pricing");
     click(harness, Role::Button, "Save book");
@@ -311,12 +344,104 @@ fn a_second_book_with_the_same_title_is_refused_by_name(harness: &mut Window, se
     );
 }
 
+fn cancel_clears_a_check_that_was_made_for_the_new_book(harness: &mut Window, seen: &Seen) {
+    click(harness, Role::Tab, "Ingest");
+    click(harness, Role::Button, "Cancel");
+    open_the_form_of_a_new_book(harness);
+    type_into(harness, "Book title", "Dynamic Hedging");
+    harness
+        .state_mut()
+        .push(Intent::PdfPicked(PathBuf::from("chapter-2-hedging.pdf")));
+    testkit::settle(harness);
+    let checks = seen.count(is_preflight);
+    click(harness, Role::Button, "Check the chapter");
+    assert_eq!(seen.count(is_preflight), checks + 1);
+    assert!(
+        matches!(shared(harness).ingest, IngestJob::Checked { .. }),
+        "{:?}",
+        shared(harness).ingest
+    );
+    assert!(has(harness, Role::Button, "Start ingest"));
+
+    click(harness, Role::Button, "Cancel");
+
+    assert_eq!(
+        shared(harness).ingest,
+        IngestJob::Idle,
+        "the old check is gone"
+    );
+    assert!(!has(harness, Role::Button, "Start ingest"));
+    let book = node(harness, Role::ComboBox, "Book").value();
+    assert_eq!(book.as_deref(), Some(PLACEHOLDER_OF_THE_BOOK_LIST));
+    assert!(!is_enabled(harness, Role::Button, "Check the chapter"));
+
+    choose_in_the_book_list(harness, "Quanty Sample Notes");
+    assert!(is_enabled(harness, Role::Button, "Check the chapter"));
+    click(harness, Role::Button, "Check the chapter");
+    assert_eq!(seen.count(is_preflight), checks + 2);
+    assert!(matches!(shared(harness).ingest, IngestJob::Checked { .. }));
+}
+
+fn with_no_book_in_the_library_the_list_is_there_to_go_back_to() {
+    let (mut harness, _) = open("empty-library", DEFAULT_WINDOW);
+    click(&mut harness, Role::Tab, "Ingest");
+    assert!(
+        !has(&harness, Role::TextInput, "Book title"),
+        "the box for a title does not open by itself"
+    );
+    assert!(says(&harness, "No book is stored yet."));
+    let book = node(&harness, Role::ComboBox, "Book").value();
+    assert_eq!(book.as_deref(), Some(PLACEHOLDER_OF_THE_BOOK_LIST));
+
+    open_the_form_of_a_new_book(&mut harness);
+    assert!(has(&harness, Role::TextInput, "Book title"));
+    assert!(has(&harness, Role::Button, "Save book"));
+    assert!(has(&harness, Role::Button, "Cancel"));
+
+    click(&mut harness, Role::Button, "Cancel");
+    assert!(!has(&harness, Role::TextInput, "Book title"));
+    assert!(has(&harness, Role::ComboBox, "Book"));
+}
+
+/// Answers every command but the save of a book, so that save never ends.
+struct SaveNeverEnds(Fake);
+
+impl Handler for SaveNeverEnds {
+    async fn serve(&self, command: Command, reply: Reply) {
+        if !is_save(&command) {
+            self.0.serve(command, reply).await;
+        }
+    }
+}
+
+fn cancel_is_off_while_the_save_runs() {
+    let (mut harness, _) = recording::open_with("idle", DEFAULT_WINDOW, SaveNeverEnds);
+    testkit::settle(&mut harness);
+    click(&mut harness, Role::Tab, "Ingest");
+    open_the_form_of_a_new_book(&mut harness);
+    type_into(&mut harness, "Book title", "Dynamic Hedging");
+    assert!(is_enabled(&harness, Role::Button, "Cancel"));
+    // The save never ends, so the app is never idle again, and `click` and `settle` wait for an
+    // idle app.
+    node(&harness, Role::Button, "Save book").click();
+    harness.run_ok();
+    assert!(
+        !is_enabled(&harness, Role::Button, "Cancel"),
+        "a save that runs cannot be given up"
+    );
+    assert!(has(&harness, Role::TextInput, "Book title"));
+}
+
 #[test]
 fn a_book_is_saved_with_no_pdf_is_offered_after_and_is_refused_a_second_time() {
     let (mut harness, seen) = open("idle", DEFAULT_WINDOW);
+    cancel_clears_the_form_of_a_new_book_and_sends_nothing(&mut harness, &seen);
     a_new_book_is_typed_and_saved_with_no_pdf(&mut harness, &seen);
     the_saved_book_fills_author_and_tags_each_time_it_is_chosen(&mut harness);
     a_chapter_of_the_saved_book_is_labelled_with_what_was_saved(&mut harness, &seen);
     a_book_with_no_chapter_is_not_a_filter_and_not_in_the_source_pickers(&mut harness);
     a_second_book_with_the_same_title_is_refused_by_name(&mut harness, &seen);
+    cancel_clears_a_check_that_was_made_for_the_new_book(&mut harness, &seen);
+    with_no_book_in_the_library_the_list_is_there_to_go_back_to();
+    cancel_is_off_while_the_save_runs();
 }

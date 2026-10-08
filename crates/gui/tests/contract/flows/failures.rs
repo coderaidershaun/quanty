@@ -26,6 +26,10 @@ fn page_loads(seen: &Seen) -> usize {
     seen.count(|command| matches!(command, Command::LoadPage { .. }))
 }
 
+fn catalogue_loads(seen: &Seen) -> usize {
+    seen.count(|command| matches!(command, Command::LoadCatalogue { .. }))
+}
+
 fn says_hint_of<T>(harness: &Window, slot: &Loadable<T>) -> bool {
     let failure = slot.failure().expect("the slot has failed");
     says(harness, &failure.hint)
@@ -132,6 +136,27 @@ fn stores_that_are_down_leave_the_page_that_is_on_disk() {
     );
     click(&mut harness, Role::Tab, "Page");
     assert!(has(&harness, Role::Image, &picture), "the page stays shown");
+
+    click(&mut harness, Role::Tab, "Library");
+    let hint = shared(&harness)
+        .library
+        .catalogue
+        .failure()
+        .expect("the library did not load")
+        .hint
+        .clone();
+    assert!(
+        says_in(&harness, &hint, panels.page),
+        "the Library page says what to do: {hint}"
+    );
+    testkit::save_png(&mut harness, "app-library-stores-down");
+    let before = catalogue_loads(&seen);
+    try_again_in(&mut harness, panels.page);
+    assert_eq!(
+        catalogue_loads(&seen),
+        before + 1,
+        "Try again asks for the library again"
+    );
 }
 
 fn a_first_run_and_an_empty_library_are_not_failures() {
@@ -140,6 +165,13 @@ fn a_first_run_and_an_empty_library_are_not_failures() {
     assert_eq!(catalogue.map(|found| found.documents().count()), Some(0));
     assert!(says(&harness, "library is empty"));
     assert_no_failure(&harness);
+    let page = panels(DEFAULT_WINDOW).page;
+    click(&mut harness, Role::Tab, "Library");
+    assert!(says_in(&harness, "Your library is empty", page));
+    assert!(says_in(&harness, "Ingest tab", page));
+    assert_no_failure(&harness);
+    testkit::save_png(&mut harness, "app-library-empty");
+    click(&mut harness, Role::Tab, "Ask");
     type_and_ask(&mut harness, "What is delta?");
     let failure = shared(&harness)
         .ask

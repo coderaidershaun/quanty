@@ -1,7 +1,7 @@
 //! The one ingest the person can have at a time: checked, started, watched, stopped, finished.
 
 use super::Quit;
-use super::shared::{Shared, counts_text, push_cancel};
+use super::shared::{Shared, push_cancel};
 use crate::contract::{
     Command, Effect, Failure, IngestOutcome, IngestProgress, IngestRequest, NoticeKind, Preflight,
     RequestId,
@@ -187,10 +187,7 @@ impl Shared {
             Ok(IngestOutcome::Ingested(report)) => {
                 let mut detail = format!(
                     "{} pages with {}. {} concepts created, {} linked.",
-                    report.pages,
-                    counts_text(&report.items),
-                    report.concepts_created,
-                    report.concepts_linked
+                    report.pages, report.items, report.concepts_created, report.concepts_linked
                 );
                 if !report.pages_to_check.is_empty() {
                     detail.push_str(&format!(

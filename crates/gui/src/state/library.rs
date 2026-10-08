@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use super::shared::{Shared, counts_text, push_cancel};
+use super::shared::{Shared, push_cancel};
 use crate::contract::{
     Catalogue, Command, DocId, Effect, Failure, LabelEdit, Loadable, NewBook, NoticeKind, RequestId,
 };
@@ -172,7 +172,7 @@ impl Shared {
             .ready()
             .and_then(|catalogue| catalogue.document(doc));
         let title = document.map(|document| document.title.clone());
-        let removed = document.map(|document| counts_text(&document.items));
+        let removed = document.map(|document| document.items.to_string());
         match result {
             Ok(()) => {
                 self.library.failures.remove(&doc);

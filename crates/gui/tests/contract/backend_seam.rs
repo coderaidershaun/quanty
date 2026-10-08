@@ -289,8 +289,7 @@ fn command_shortcuts_reach_the_reducer() {
     assert_eq!(harness.state().shared().cues.focus_ask_bar, 1);
     press(&mut harness, command, egui::Key::K);
     assert_eq!(harness.state().shared().cues.focus_ask_bar, 2);
-    harness.state_mut().push(Intent::OpenTab(Tab::Library));
-    harness.run_ok();
+    press(&mut harness, command, egui::Key::Num2);
     assert_eq!(harness.state().shared().tab, Tab::Library);
     press(&mut harness, command, egui::Key::Num1);
     assert_eq!(harness.state().shared().tab, Tab::Ask);
@@ -302,14 +301,10 @@ fn command_shortcuts_reach_the_reducer() {
 
     // A row of a part that is not built does nothing and sends nothing.
     testkit::settle(&mut harness);
-    for key in [egui::Key::Num2, egui::Key::R, egui::Key::Slash] {
+    for key in [egui::Key::R, egui::Key::Slash] {
         press(&mut harness, command, key);
         let shared = harness.state().shared();
-        assert_eq!(
-            shared.tab,
-            Tab::Ask,
-            "{key:?} opened a tab that is not built"
-        );
+        assert_eq!(shared.tab, Tab::Ask, "{key:?} left the Ask tab");
         assert!(!shared.help_open, "{key:?} opened the help sheet");
         assert!(
             shared.health.pending.is_none(),

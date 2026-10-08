@@ -1,5 +1,5 @@
-//! The top bar: the logo and the strip of tabs. It also says which parts of the app are built,
-//! so a shortcut for a part that is not built stays unbound.
+//! The top bar: the logo and the strip of tabs. It also says which shortcuts lead to a part that
+//! is not built, so that they stay unbound.
 
 use eframe::egui;
 
@@ -10,17 +10,10 @@ use crate::panels::PanelCx;
 use crate::theme::{Icon, Tone};
 use crate::widgets::{self, TabStrip};
 
-/// The tabs that have a screen.
-pub(super) const BUILT_TABS: [contract::Tab; 2] = [contract::Tab::Ask, contract::Tab::Ingest];
-
-/// False for a shortcut that leads to a part that is not built: a tab that is not in
-/// `BUILT_TABS`, the help sheet and the health check.
+/// False for a shortcut that leads to a part that is not built: the help sheet and the health
+/// check.
 pub(super) fn is_bound(shortcut: &Shortcut) -> bool {
-    match shortcut.intent {
-        Intent::OpenTab(tab) => BUILT_TABS.contains(&tab),
-        Intent::ToggleHelp | Intent::RecheckHealth => false,
-        _ => true,
-    }
+    !matches!(shortcut.intent, Intent::ToggleHelp | Intent::RecheckHealth)
 }
 
 fn label(tab: contract::Tab) -> &'static str {
@@ -44,21 +37,19 @@ pub(super) fn draw(ui: &mut egui::Ui, bar: egui::Rect, cx: &mut PanelCx<'_>) {
     region(ui, "logo", places.logo, |ui| {
         widgets::logo(ui);
     });
-    if BUILT_TABS.len() > 1 {
-        region(ui, "tabs", places.tabs, |ui| tabs(ui, cx));
-    }
+    region(ui, "tabs", places.tabs, |ui| tabs(ui, cx));
 }
 
 fn tabs(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
-    let tabs: Vec<widgets::Tab<'_>> = BUILT_TABS
+    let tabs: Vec<widgets::Tab<'_>> = contract::Tab::ALL
         .iter()
         .map(|tab| widgets::Tab::new(label(*tab)).icon(icon(*tab)))
         .collect();
-    let active = BUILT_TABS
+    let active = contract::Tab::ALL
         .iter()
         .position(|tab| *tab == cx.shared.tab)
         .unwrap_or_default();
     if let Some(index) = TabStrip::new(&tabs, active).tone(Tone::Magenta).show(ui) {
-        cx.intents.push(Intent::OpenTab(BUILT_TABS[index]));
+        cx.intents.push(Intent::OpenTab(contract::Tab::ALL[index]));
     }
 }

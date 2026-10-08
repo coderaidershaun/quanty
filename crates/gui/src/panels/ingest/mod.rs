@@ -12,6 +12,7 @@ use eframe::egui;
 use self::books::{BookChoice, Offer};
 use crate::contract::{Catalogue, IngestRequest, Intent, NewBook, is_same_title};
 use crate::panels::PanelCx;
+use crate::panels::labels::{author_label, tag_labels};
 use crate::state::{IngestJob, Shared};
 use crate::widgets;
 
@@ -42,8 +43,8 @@ impl Local {
         Some(IngestRequest {
             pdf,
             book: book.to_owned(),
-            author: self.author_label(),
-            tags: self.tag_labels(),
+            author: author_label(&self.author),
+            tags: tag_labels(&self.tags),
         })
     }
 
@@ -55,23 +56,9 @@ impl Local {
         let title = text.trim();
         (!title.is_empty()).then(|| NewBook {
             title: title.to_owned(),
-            author: self.author_label(),
-            tags: self.tag_labels(),
+            author: author_label(&self.author),
+            tags: tag_labels(&self.tags),
         })
-    }
-
-    fn author_label(&self) -> Option<String> {
-        let author = self.author.trim();
-        (!author.is_empty()).then(|| author.to_owned())
-    }
-
-    fn tag_labels(&self) -> Vec<String> {
-        self.tags
-            .split(',')
-            .map(str::trim)
-            .filter(|tag| !tag.is_empty())
-            .map(str::to_owned)
-            .collect()
     }
 
     fn is_untouched(&self) -> bool {
@@ -100,6 +87,14 @@ impl Local {
     /// Nothing is carried over from the book that was chosen before.
     fn start_new_book(&mut self) {
         self.book = BookChoice::New(String::new());
+        self.author.clear();
+        self.tags.clear();
+    }
+
+    /// The chosen file stays: it was not typed for the new book, and a form with no file and no
+    /// book is filled again from the last check.
+    fn cancel_new_book(&mut self) {
+        self.book = BookChoice::Unchosen;
         self.author.clear();
         self.tags.clear();
     }

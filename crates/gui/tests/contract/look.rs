@@ -25,6 +25,7 @@ enum Start {
     AfterAClickOnTheFigureCitation,
     AfterAClickOnStartIngest,
     AfterANewBookIsTyped,
+    AfterAClickOnTheLibraryTab,
 }
 
 struct Row {
@@ -34,7 +35,7 @@ struct Row {
     start: Start,
 }
 
-const ROWS: [Row; 11] = [
+const ROWS: [Row; 12] = [
     Row {
         picture: "ask-idle",
         scene: "idle",
@@ -82,6 +83,12 @@ const ROWS: [Row; 11] = [
         scene: "first-run",
         window: DEFAULT_WINDOW,
         start: Start::AsItOpens,
+    },
+    Row {
+        picture: "library",
+        scene: "black-scholes",
+        window: DEFAULT_WINDOW,
+        start: Start::AfterAClickOnTheLibraryTab,
     },
     Row {
         picture: "ingest-ready",
@@ -178,6 +185,7 @@ impl Row {
                 testkit::settle(&mut harness);
             }
             Start::AfterANewBookIsTyped => type_a_new_book(&mut harness),
+            Start::AfterAClickOnTheLibraryTab => click(&mut harness, Role::Tab, "Library"),
         }
         // The pointer is painted in the picture until a frame has run without it.
         harness.remove_cursor();

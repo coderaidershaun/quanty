@@ -8,12 +8,12 @@ use eframe::egui::accesskit::{Action, Role};
 use egui_kittest::kittest::{By, NodeT as _, Queryable as _};
 use gui::app::layout::DEFAULT_WINDOW;
 use gui::backend::fake::{self, Fake};
-use gui::contract::{Chord, Command, Failure, Intent, KeyName, SHORTCUTS, Tab};
+use gui::contract::{Chord, Command, Failure, Intent, KeyName, SHORTCUTS};
 use gui::state::Quit;
 use gui::testkit;
 
 use super::recording::{self, Seen};
-use super::{Window, failures, press, shared};
+use super::{Window, failures, is_open_tab, press, shared};
 
 /// Names that no node of the app may have, because each is a part that is not built.
 const ABSENT_NAMES: [&str; 7] = [
@@ -139,13 +139,20 @@ fn click_if_still_there(harness: &mut Window, role: Role, name: &str, place: usi
 
 /// A tab is pressed only when nothing else on screen is left, so what a tab shows is pressed
 /// before the tab is left. The lists are left to `press_every_row_of_every_list`.
+///
+/// A button named `Read` is pressed after every other control that is not a tab. It opens the
+/// Ask tab, and the Library tab is never pressed a second time, so the rest of the Library page
+/// would never be pressed if `Read` came first. The rule goes by name: a button that is renamed
+/// makes this test weaker and nothing fails.
 fn press_every_control(harness: &mut Window, scene: &str) {
     let mut pressed: HashSet<(Role, String, usize)> = HashSet::new();
     loop {
         let next = pressable(harness)
             .into_iter()
             .filter(|control| control.0 != Role::ComboBox && !pressed.contains(control))
-            .min_by_key(|(role, ..)| *role == Role::Tab);
+            .min_by_key(|(role, name, _)| {
+                (*role == Role::Tab, *role == Role::Button && name == "Read")
+            });
         let Some((role, name, place)) = next else {
             return;
         };
@@ -248,20 +255,12 @@ fn assert_ingest_commands_follow_a_check(scene: &str, seen: &Seen) {
 fn assert_nothing_unbuilt_was_reached(harness: &Window, scene: &str, seen: &Seen) {
     for command in seen.all() {
         assert!(
-            !matches!(
-                command,
-                Command::SetLabels { .. } | Command::DeleteDocument { .. }
-            ),
+            !matches!(command, Command::DeleteDocument { .. }),
             "`{scene}` sent {command:?}, a command of a part that is not built"
         );
     }
     assert_ingest_commands_follow_a_check(scene, seen);
     let shared = shared(harness);
-    assert!(
-        matches!(shared.tab, Tab::Ask | Tab::Ingest),
-        "`{scene}` left the two screens that are built: {:?}",
-        shared.tab
-    );
     assert!(!shared.help_open, "`{scene}` opened the help sheet");
     assert_eq!(shared.quit, Quit::No);
     let not_built = Failure::not_built("anything").hint;
@@ -278,6 +277,20 @@ fn assert_nothing_unbuilt_was_reached(harness: &Window, scene: &str, seen: &Seen
             "`{scene}` shows a part that is not built"
         );
     }
+    assert_no_unbuilt_name_is_drawn(harness, scene);
+    for name in ["Ask", "Library", "Ingest"] {
+        assert!(
+            harness
+                .query_all_by_role_and_label(Role::Tab, name)
+                .next()
+                .is_some(),
+            "`{scene}` has no tab named `{name}`"
+        );
+    }
+}
+
+/// Checked on the screen that is open, so it is called again after each tab is opened.
+fn assert_no_unbuilt_name_is_drawn(harness: &Window, scene: &str) {
     assert!(
         harness
             .query_all_by_label_contains("not built")
@@ -285,26 +298,17 @@ fn assert_nothing_unbuilt_was_reached(harness: &Window, scene: &str, seen: &Seen
             .is_none(),
         "`{scene}` says that something is not built"
     );
+    assert!(
+        harness
+            .query_all_by_label_contains("Delete")
+            .next()
+            .is_none(),
+        "`{scene}` draws a Delete control"
+    );
     for name in ABSENT_NAMES {
         assert!(
             harness.query_all_by_label(name).next().is_none(),
             "`{scene}` has a node named `{name}`"
-        );
-    }
-    assert!(
-        harness
-            .query_all_by_role_and_label(Role::Tab, "Library")
-            .next()
-            .is_none(),
-        "`{scene}` has a tab named `Library`"
-    );
-    for name in ["Ask", "Ingest"] {
-        assert!(
-            harness
-                .query_all_by_role_and_label(Role::Tab, name)
-                .next()
-                .is_some(),
-            "`{scene}` has no tab named `{name}`"
         );
     }
 }
@@ -334,8 +338,13 @@ fn every_key_and_control_of(scene: &str) {
     );
 
     press_every_control(&mut harness, scene);
-    for tab in ["Ask", "Ingest"] {
+    for tab in ["Ask", "Library", "Ingest"] {
         click_if_still_there(&mut harness, Role::Tab, tab, 0);
+        assert!(
+            is_open_tab(&harness, tab),
+            "`{scene}` did not open the tab `{tab}`, so its names were not checked"
+        );
+        assert_no_unbuilt_name_is_drawn(&harness, scene);
         press_every_row_of_every_list(&mut harness);
     }
     assert_nothing_unbuilt_was_reached(&harness, scene, &seen);

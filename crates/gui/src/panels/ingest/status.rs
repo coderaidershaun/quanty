@@ -6,7 +6,7 @@ use eframe::egui;
 use super::Local;
 use crate::contract::{
     ChapterLabel, ChapterState, Failure, IngestOutcome, IngestProgress, IngestReport,
-    IngestRequest, IngestStage, Intent, ItemCounts, Preflight,
+    IngestRequest, IngestStage, Intent, Preflight,
 };
 use crate::panels::PanelCx;
 use crate::state::IngestJob;
@@ -176,10 +176,7 @@ fn finished(
 fn summary(report: &IngestReport) -> String {
     let mut text = format!(
         "{} pages, {}. {} concepts created, {} linked.",
-        report.pages,
-        counts(&report.items),
-        report.concepts_created,
-        report.concepts_linked
+        report.pages, report.items, report.concepts_created, report.concepts_linked
     );
     if let Some(cost) = report.cost_usd {
         text.push_str(&format!(" The conversion cost ${cost:.2}."));
@@ -195,21 +192,4 @@ fn summary(report: &IngestReport) -> String {
         items => text.push_str(&format!(" {items} items were skipped.")),
     }
     text
-}
-
-/// The four counts in the words the notice of the app uses for them.
-fn counts(items: &ItemCounts) -> String {
-    fn count(number: u64, noun: &str) -> String {
-        match number {
-            1 => format!("1 {noun}"),
-            _ => format!("{number} {noun}s"),
-        }
-    }
-    format!(
-        "{}, {}, {} and {}",
-        count(items.chunks, "passage"),
-        count(items.formulas, "formula"),
-        count(items.figures, "figure"),
-        count(items.tables, "table")
-    )
 }

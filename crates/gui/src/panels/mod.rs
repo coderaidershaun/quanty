@@ -6,6 +6,7 @@ pub mod ask_bar;
 pub mod concept_graph;
 pub mod follow_up;
 pub mod ingest;
+mod labels;
 pub mod library;
 pub mod notices;
 pub mod retrieval_path;

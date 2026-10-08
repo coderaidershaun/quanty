@@ -5,8 +5,7 @@ use std::path::PathBuf;
 
 use super::{AskSession, Health, IngestJob, Library, SourceNav};
 use crate::contract::{
-    Command, Effect, Event, Intent, ItemCounts, Notice, NoticeId, NoticeKind, RequestId,
-    StartupFacts, Tab,
+    Command, Effect, Event, Intent, Notice, NoticeId, NoticeKind, RequestId, StartupFacts, Tab,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -188,22 +187,6 @@ impl Shared {
             effects.push(Effect::CloseWindow);
         }
     }
-}
-
-pub(super) fn counts_text(items: &ItemCounts) -> String {
-    fn count(number: u64, noun: &str) -> String {
-        match number {
-            1 => format!("1 {noun}"),
-            _ => format!("{number} {noun}s"),
-        }
-    }
-    format!(
-        "{}, {}, {} and {}",
-        count(items.chunks, "passage"),
-        count(items.formulas, "formula"),
-        count(items.figures, "figure"),
-        count(items.tables, "table")
-    )
 }
 
 pub(super) fn push_cancel(effects: &mut Vec<Effect>, request: RequestId) {

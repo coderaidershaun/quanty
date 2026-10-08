@@ -67,14 +67,15 @@ The ingest is paid work: see [Costs](#costs). `--author` and `--tag` are optiona
 cargo run --release -p gui    # builds and opens target/release/quanty
 ```
 
-The window has two tabs:
+The window has three tabs:
 
 - **Ask**: the question with its mode and its book, author and tag filters, the answer with its citations, the page each citation stands on, the concept graph, the steps of the search, and questions to ask next. The mode **Answer** costs one Gemini embedding call and one Sonnet call on your `claude` subscription. **Results only** writes no answer and costs the embedding call alone.
+- **Library**: the stored books and their chapters, each with its pages, items, author and tags. **Copy id** copies the document id that `rag-ingest tag` and `rag-ingest delete-document` take, **Read** opens the chapter in Ask, and **Edit labels** corrects the author and the tags, as `rag-ingest tag` does, at no cost.
 - **Ingest**: adds a chapter. Choose the PDF, choose the book or add a new one, check it, then start. The check is free. A start is paid work, the same as `rag-ingest pdf` above. Keep the app open while it runs; if it stops, start the same PDF again and it carries on. To keep a book in the list before it has a chapter, choose **Add a new book…**, type its title, author and tags, and press **Save book**.
 
 | Key | What it does |
 | --- | --- |
-| `⌘1`, `⌘3` | Go to Ask, go to Ingest |
+| `⌘1`, `⌘2`, `⌘3` | Go to Ask, Library, Ingest |
 | `/` or `⌘K` | Write a question (`Enter` asks it) |
 | `J`, `K` | Next and previous result |
 | `⌘.` or `Esc` | Stop the search or the answer |
@@ -82,7 +83,7 @@ The window has two tabs:
 
 The six panels of Ask and every key are in [docs/reference.md](docs/reference.md#the-desktop-app). When a store, a key or `claude` is not ready, the part of the window that needed it says which one and what to do.
 
-Not built yet: the Library page, the notices tray, the help sheet and the health check. Until then, change a document's labels or delete it with `rag-ingest`.
+Not built yet: the notices tray, the help sheet, the health check and the delete of a document. Delete one with `rag-ingest delete-document`.
 
 ## MCP
 

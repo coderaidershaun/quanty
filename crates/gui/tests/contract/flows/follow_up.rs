@@ -8,30 +8,7 @@ use gui::app::layout::DEFAULT_WINDOW;
 use gui::contract::AnswerBlock;
 use gui::testkit;
 
-use super::{Window, click, has, is_open_tab, node, press, shared};
-
-fn copied(harness: &Window) -> Vec<String> {
-    harness
-        .output()
-        .platform_output
-        .commands
-        .iter()
-        .filter_map(|command| match command {
-            egui::OutputCommand::CopyText(text) => Some(text.clone()),
-            _ => None,
-        })
-        .collect()
-}
-
-/// Runs the frames of the events already queued, and returns what they copied. The copy is in
-/// the output of the last frame only, so no frame may run after the one that asks for it.
-fn copied_by(harness: &mut Window, act: impl FnOnce(&mut Window)) -> Vec<String> {
-    act(harness);
-    harness.step();
-    let texts = copied(harness);
-    testkit::settle(harness);
-    texts
-}
+use super::{Window, click, copied_by, has, is_open_tab, node, press, shared};
 
 fn question_box(harness: &Window) -> Option<String> {
     node(harness, Role::TextInput, "Question").value()

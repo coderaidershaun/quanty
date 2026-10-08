@@ -44,6 +44,15 @@ impl<H: Handler> Handler for Recording<H> {
 
 /// Nothing has run yet, so the start-up commands are not in the list until a frame runs.
 pub(super) fn open(scene: &str, size: [f32; 2]) -> (Window, Seen) {
+    open_with(scene, size, |fake| fake)
+}
+
+/// As `open`, with the fake wrapped by `wrap`. The list holds each command before `wrap` sees it.
+pub(super) fn open_with<H: Handler>(
+    scene: &str,
+    size: [f32; 2],
+    wrap: impl FnOnce(Fake) -> H,
+) -> (Window, Seen) {
     let home = testkit::samples_folder();
     let fake = Fake::scene(scene, &home)
         .unwrap_or_else(|error| panic!("the test cannot start the scene `{scene}`: {error}"))
@@ -57,7 +66,7 @@ pub(super) fn open(scene: &str, size: [f32; 2]) -> (Window, Seen) {
     };
     let seen = Seen::default();
     let recording = Recording {
-        inner: fake,
+        inner: wrap(fake),
         seen: seen.clone(),
     };
     (testkit::app_on(recording, facts, opening, size), seen)

@@ -1,10 +1,12 @@
 //! Checks the flows that cross two parts of the app, on the whole app: selection, follow-up,
-//! source pages, failures, ingest, and that no control leads to a part that is not built.
+//! source pages, failures, ingest, the library, and that no control leads to a part that is not
+//! built.
 
 mod dead_controls;
 mod failures;
 mod follow_up;
 mod ingest;
+mod library;
 mod recording;
 mod selection;
 mod source;
@@ -56,6 +58,29 @@ fn click(harness: &mut Window, role: Role, name: &str) {
 
 fn is_enabled(harness: &Window, role: Role, name: &str) -> bool {
     !node(harness, role, name).accesskit_node().is_disabled()
+}
+
+fn copied(harness: &Window) -> Vec<String> {
+    harness
+        .output()
+        .platform_output
+        .commands
+        .iter()
+        .filter_map(|command| match command {
+            egui::OutputCommand::CopyText(text) => Some(text.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Runs the frames of the events already queued, and returns what they copied. The copy is in
+/// the output of the last frame only, so no frame may run after the one that asks for it.
+fn copied_by(harness: &mut Window, act: impl FnOnce(&mut Window)) -> Vec<String> {
+    act(harness);
+    harness.step();
+    let texts = copied(harness);
+    testkit::settle(harness);
+    texts
 }
 
 fn is_open_tab(harness: &Window, name: &str) -> bool {

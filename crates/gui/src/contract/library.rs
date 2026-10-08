@@ -1,6 +1,10 @@
 //! The documents that are stored, grouped by book, the books a person saved before any chapter,
 //! and the change a person can make to a document's labels.
 
+use std::cmp::Reverse;
+use std::collections::HashMap;
+use std::fmt;
+
 use super::ids::DocId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -9,6 +13,25 @@ pub struct ItemCounts {
     pub formulas: u64,
     pub figures: u64,
     pub tables: u64,
+}
+
+impl fmt::Display for ItemCounts {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fn count(number: u64, noun: &str) -> String {
+            match number {
+                1 => format!("1 {noun}"),
+                _ => format!("{number} {noun}s"),
+            }
+        }
+        write!(
+            formatter,
+            "{}, {}, {} and {}",
+            count(self.chunks, "passage"),
+            count(self.formulas, "formula"),
+            count(self.figures, "figure"),
+            count(self.tables, "table")
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -39,12 +62,68 @@ pub struct Document {
 pub struct Book {
     /// `None`: the documents have no book.
     pub title: Option<String>,
-    /// What was saved with the book. A book that is only a label on documents has neither.
+    /// What was saved with the book. A book that is only a label on documents has neither. A list
+    /// asks `labels`, which reads this only while the book has no chapter.
     pub author: Option<String>,
     /// Each tag is lower case.
     pub tags: Vec<String>,
     /// Empty for a book that was saved and has no chapter yet.
     pub chapters: Vec<Document>,
+}
+
+/// The author and the tags that a list shows for a book.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BookLabels<'a> {
+    pub author: Option<&'a str>,
+    pub tags: Vec<&'a str>,
+}
+
+impl Book {
+    /// What was saved with the book while it has no chapter. After that, what its chapters carry:
+    /// their commonest author and the tags that all of them share. A person can correct a chapter
+    /// and cannot yet correct a saved book, so a corrected chapter must not be outvoted by it.
+    pub fn labels(&self) -> BookLabels<'_> {
+        if self.chapters.is_empty() {
+            return BookLabels {
+                author: self.author.as_deref(),
+                tags: self.tags.iter().map(String::as_str).collect(),
+            };
+        }
+        BookLabels {
+            author: common_author(&self.chapters),
+            tags: shared_tags(&self.chapters),
+        }
+    }
+}
+
+fn common_author(documents: &[Document]) -> Option<&str> {
+    let mut counts: HashMap<&str, usize> = HashMap::new();
+    for author in documents
+        .iter()
+        .filter_map(|document| document.author.as_deref())
+    {
+        *counts.entry(author).or_default() += 1;
+    }
+    counts
+        .into_iter()
+        .min_by_key(|&(author, count)| (Reverse(count), author))
+        .map(|(author, _)| author)
+}
+
+fn shared_tags(documents: &[Document]) -> Vec<&str> {
+    let Some((first, others)) = documents.split_first() else {
+        return Vec::new();
+    };
+    let mut tags: Vec<&str> = Vec::new();
+    for tag in first.tags.iter().map(String::as_str) {
+        let is_shared = others
+            .iter()
+            .all(|other| other.tags.iter().any(|t| t == tag));
+        if is_shared && !tags.contains(&tag) {
+            tags.push(tag);
+        }
+    }
+    tags
 }
 
 /// A book as a person saves it, before any chapter of it is added. The panel sends a title that is
@@ -137,6 +216,10 @@ pub struct LabelEdit {
 }
 
 impl LabelEdit {
+    pub fn is_empty(&self) -> bool {
+        self.author.is_none() && self.add.is_empty() && self.remove.is_empty()
+    }
+
     /// The edit that takes `document` to this author and exactly these tags.
     pub fn toward(document: &Document, author: Option<&str>, tags: &[String]) -> LabelEdit {
         let mut wanted: Vec<String> = Vec::new();

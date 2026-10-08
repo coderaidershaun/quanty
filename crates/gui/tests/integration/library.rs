@@ -1,17 +1,23 @@
 //! Checks that the live backend lists the stored documents, each with the chapter that is on
-//! disk for it, and that a book saved before any chapter is kept between two starts of the app.
+//! disk for it, that a book saved before any chapter is kept between two starts of the app, and
+//! that new labels of a document are written to both stores with no model asked.
 
 use std::collections::BTreeSet;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use graph::{BookNode, GraphStore};
 use gui::backend::live::{LiveContext, RealServices, Services, library};
 use gui::backend::{Handler, Reply};
 use gui::contract::{
-    Book, Catalogue, ChapterLabel, Command, Document, Event, Failure, FailureKind, ItemCounts,
-    NewBook, RequestId,
+    Book, Catalogue, ChapterLabel, Command, DocId, Document, Event, Failure, FailureKind,
+    ItemCounts, LabelEdit, NewBook, RequestId,
 };
+use rag_core::{DocumentLabels, ItemFilter, Tag};
+use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores, first_axis};
 use rag_ingestion::{IngestSummary, ingest_chapter};
+use uuid::Uuid;
 
 use crate::support::{self, IN_DEPTH, INTUITION, SAMPLE_PAGES, copy_folder, sample_chapter};
 
@@ -165,6 +171,92 @@ async fn the_catalogue_answers_once_when_the_stores_are_down() {
     result.expect_err("no store answers, so the catalogue cannot be read");
 }
 
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p gui --test integration -- --ignored library::"]
+async fn the_labels_a_person_saves_are_in_the_next_catalogue_and_on_every_point_and_no_model_is_made()
+ {
+    let stores = ThrowawayStores::new("library-relabel");
+    let connected = stores.connect().await;
+    let models = stores.models(StandInLlm::finding_nothing());
+    let intuition = sample_chapter(INTUITION);
+    let stored = ingest_chapter(&intuition, &models, &connected).await;
+    let stored = stored.expect("the chapter should be ingested");
+
+    let answering = StandInLlm::finding_nothing();
+    let embedders_made = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&embedders_made);
+    let cx = support::context_with(stores, &answering, move || {
+        counted.fetch_add(1, Ordering::SeqCst);
+        StandInEmbedder::default()
+    });
+
+    let document = only_document_of(&cx).await;
+    assert_eq!((document.author.as_deref(), document.tags.len()), (None, 0));
+
+    let first = LabelEdit::toward(
+        &document,
+        Some("Sheldon Natenberg"),
+        &["Options".to_owned(), "volatility".to_owned()],
+    );
+    assert_eq!(relabelled(&cx, &first).await, Ok(()));
+    let after_first = only_document_of(&cx).await;
+    assert_eq!(after_first.author.as_deref(), Some("Sheldon Natenberg"));
+    assert_eq!(after_first.tags, ["options", "volatility"]);
+    assert_every_point_carries(
+        &cx,
+        stored.doc_id,
+        "Sheldon Natenberg",
+        &["options", "volatility"],
+    )
+    .await;
+
+    // A change of the author, a tag added and a tag taken away, in one save.
+    let second = LabelEdit::toward(
+        &after_first,
+        Some("S. Natenberg"),
+        &["volatility".to_owned(), "greeks".to_owned()],
+    );
+    assert_eq!(relabelled(&cx, &second).await, Ok(()));
+    let after_second = only_document_of(&cx).await;
+    assert_eq!(after_second.author.as_deref(), Some("S. Natenberg"));
+    assert_eq!(after_second.tags, ["greeks", "volatility"]);
+    assert_every_point_carries(
+        &cx,
+        stored.doc_id,
+        "S. Natenberg",
+        &["greeks", "volatility"],
+    )
+    .await;
+
+    assert_eq!(
+        embedders_made.load(Ordering::SeqCst),
+        0,
+        "a change of labels makes no embedder"
+    );
+    assert_eq!(answering.calls(), 0, "a change of labels asks no model");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_save_of_labels_answers_once_when_the_stores_are_down() {
+    let cx = LiveContext::new(support::closed_ports_config(), RealServices);
+    let edit = LabelEdit {
+        doc: DocId(Uuid::from_u128(1)),
+        author: Some("Sheldon Natenberg".to_owned()),
+        ..LabelEdit::default()
+    };
+
+    let result = relabelled(&cx, &edit).await;
+
+    let failure = result.expect_err("no store answers, so no label can be written");
+    assert!(
+        matches!(
+            failure.kind,
+            FailureKind::FalkorDbDown | FailureKind::QdrantDown
+        ),
+        "{failure:?}"
+    );
+}
+
 /// The `Send` bound is a proof at compile time that the window can run the load on any thread of
 /// its runtime.
 async fn catalogue_of<S: Services>(cx: &LiveContext<S>) -> Result<Catalogue, Failure> {
@@ -205,6 +297,71 @@ async fn saved<S: Services>(cx: &LiveContext<S>, book: &NewBook) -> Result<(), F
         panic!("expected one answer to the save, for {REQUEST:?}: {sent:#?}");
     };
     result.clone()
+}
+
+/// Sends the save of one change of labels and returns its one answer.
+async fn relabelled<S: Services>(cx: &LiveContext<S>, edit: &LabelEdit) -> Result<(), Failure> {
+    let (reply, events, _stop) = Reply::collecting();
+    let command = Command::SetLabels {
+        request: REQUEST,
+        edit: edit.clone(),
+    };
+    cx.serve(command, reply).await;
+    let sent: Vec<Event> = events.try_iter().collect();
+    let [
+        Event::LabelsSaved {
+            request: REQUEST,
+            doc,
+            result,
+        },
+    ] = sent.as_slice()
+    else {
+        panic!("expected one answer to the save, for {REQUEST:?}: {sent:#?}");
+    };
+    assert_eq!(
+        *doc, edit.doc,
+        "the answer names the document that was saved"
+    );
+    result.clone()
+}
+
+async fn only_document_of<S: Services>(cx: &LiveContext<S>) -> Document {
+    let catalogue = catalogue_of(cx).await.expect("the catalogue is read");
+    let mut documents = catalogue.documents().cloned();
+    let document = documents.next().expect("the library holds a document");
+    assert_eq!(documents.next(), None, "the library holds one document");
+    document
+}
+
+/// Every point of the document, not only the nearest ones, has these labels and its book.
+async fn assert_every_point_carries<S: Services>(
+    cx: &LiveContext<S>,
+    document: rag_core::DocId,
+    author: &str,
+    tags: &[&str],
+) {
+    let stores = cx.stores().await.expect("the stores should open");
+    let filter = ItemFilter {
+        kind: None,
+        documents: Some(vec![document]),
+    };
+    let hits = stores.items.search(first_axis(), &filter, 1000).await;
+    let hits = hits.expect("the points of the document should be read");
+    let count = stores.items.count_document(document).await;
+    let count = count.expect("the points of the document should be counted");
+    assert!(count > 0, "the document has points");
+    assert_eq!(hits.len() as u64, count, "every point was read");
+    let wanted = DocumentLabels {
+        book: Some("Quanty Sample Notes".to_owned()),
+        author: Some(author.to_owned()),
+        tags: tags
+            .iter()
+            .map(|tag| tag.parse::<Tag>().expect("a tag is not blank"))
+            .collect(),
+    };
+    for hit in hits {
+        assert_eq!(hit.payload.document_labels, wanted, "point {}", hit.id);
+    }
 }
 
 type BookShown = (Option<String>, Option<String>, Vec<String>, usize);

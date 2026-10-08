@@ -1,5 +1,5 @@
-//! The fields of the form: the file, the book, the author and the tags, and the button that saves
-//! a new book without a file.
+//! The fields of the form: the file, the book, the author and the tags, and the buttons that save
+//! a new book without a file or give it up.
 
 use eframe::egui;
 
@@ -10,9 +10,6 @@ use crate::panels::PanelCx;
 use crate::state::BookSave;
 use crate::theme::{TextRole, color, space};
 use crate::widgets::{Button, ControlSize, Dropdown, Notice, TextInput};
-
-/// The button that goes back to the list of books is this wide.
-const BACK_WIDTH: f32 = 200.0;
 
 const ADD_A_NEW_BOOK: &str = "Add a new book…";
 
@@ -82,13 +79,11 @@ fn book_row(ui: &mut egui::Ui, local: &mut Local, cx: &PanelCx<'_>) -> bool {
     caption(ui, "Book");
     let catalogue = &cx.shared.library.catalogue;
     let offers = catalogue.ready().map(books::offers).unwrap_or_default();
-    let is_new = matches!(local.book, BookChoice::New(_));
     if offers.is_empty() {
-        ui.label(TextRole::Small.rich(why_no_list(catalogue)));
-        new_book(ui, local, false);
-        true
-    } else if is_new {
-        new_book(ui, local, true);
+        ui.label(TextRole::Small.rich(why_no_book_is_offered(catalogue)));
+    }
+    if let BookChoice::New(title) = &mut local.book {
+        new_book(ui, title);
         true
     } else {
         list(ui, local, &offers);
@@ -96,16 +91,14 @@ fn book_row(ui: &mut egui::Ui, local: &mut Local, cx: &PanelCx<'_>) -> bool {
     }
 }
 
-fn why_no_list(catalogue: &Loadable<Catalogue>) -> &str {
+fn why_no_book_is_offered(catalogue: &Loadable<Catalogue>) -> &str {
     match catalogue {
         Loadable::Idle | Loadable::Loading => "The library is still loading.",
         Loadable::Failed(failure) => &failure.hint,
         Loadable::Ready(catalogue) if catalogue.documents().next().is_none() => {
             "No book is stored yet."
         }
-        Loadable::Ready(_) => {
-            "No stored document names its book, so there is no list to choose from. Type the book's title."
-        }
+        Loadable::Ready(_) => "No stored document names its book. Add a new book.",
     }
 }
 
@@ -116,9 +109,14 @@ fn list(ui: &mut egui::Ui, local: &mut Local, offers: &[Offer<'_>]) {
         BookChoice::Existing(title) => offers.iter().position(|offer| offer.title == title),
         _ => None,
     };
+    // A library that failed to load again must not hide the book that was chosen.
+    let placeholder = match &local.book {
+        BookChoice::Existing(title) if chosen.is_none() => title,
+        _ => "Choose a book",
+    };
     let picked = Dropdown::new("ingest_book_list", "Book", &rows)
         .selected(chosen)
-        .placeholder("Choose a book")
+        .placeholder(placeholder)
         .size(ControlSize::Medium)
         .width(ui.available_width())
         .show(ui);
@@ -129,35 +127,13 @@ fn list(ui: &mut egui::Ui, local: &mut Local, offers: &[Offer<'_>]) {
     }
 }
 
-fn new_book(ui: &mut egui::Ui, local: &mut Local, has_list: bool) {
-    let mut text = match &local.book {
-        BookChoice::Unchosen => String::new(),
-        BookChoice::Existing(title) | BookChoice::New(title) => title.clone(),
-    };
-    ui.horizontal(|ui| {
-        let back = if has_list {
-            BACK_WIDTH + ui.spacing().item_spacing.x
-        } else {
-            0.0
-        };
-        let typed = TextInput::new("ingest_book", "Book title", &mut text)
-            .placeholder("The new book's title")
-            .width((ui.available_width() - back).max(0.0))
-            .show(ui);
-        if typed.response.changed() {
-            local.book = BookChoice::New(text);
-        }
-        if has_list
-            && ui
-                .add(Button::secondary("Choose from the library").min_width(BACK_WIDTH))
-                .clicked()
-        {
-            local.book = BookChoice::Unchosen;
-        }
-    });
+fn new_book(ui: &mut egui::Ui, title: &mut String) {
+    TextInput::new("ingest_book", "Book title", title)
+        .placeholder("The new book's title")
+        .show(ui);
 }
 
-fn save_row(ui: &mut egui::Ui, local: &Local, cx: &mut PanelCx<'_>) {
+fn save_row(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     let save = &cx.shared.library.book_save;
     let book = local.book_to_save();
     ui.add_space(space::MD);
@@ -167,6 +143,12 @@ fn save_row(ui: &mut egui::Ui, local: &Local, cx: &mut PanelCx<'_>) {
             && let Some(book) = book.clone()
         {
             cx.intents.push(Intent::SaveBook(book));
+        }
+        if ui
+            .add_enabled(!save.is_saving(), Button::secondary("Cancel"))
+            .clicked()
+        {
+            local.cancel_new_book();
         }
         ui.add(egui::Label::new(TextRole::Small.rich(SAVE_NOTE)).truncate());
     });

@@ -1,12 +1,12 @@
-//! Lists the stored documents, each joined with its chapter on disk and grouped into books, with
-//! the books a person saved before any chapter, and saves a new book. Changing the labels of a
-//! document and deleting one are not built yet.
+//! Lists the stored documents grouped into books, with the books saved before any chapter, saves a
+//! new book, and changes the labels of a document. Deleting a document is not built yet.
 
 use std::collections::HashMap;
 
 use graph::{BookNode, DocumentRecord, GraphStore};
 use ocr::ChapterEntry;
 use ocr::content::book_folder_name;
+use rag_ingestion::{LabelChange, relabel};
 
 use super::chapters::chapters_on_disk;
 use super::{LiveContext, Services};
@@ -39,17 +39,28 @@ async fn read_catalogue<S: Services>(cx: &LiveContext<S>) -> Result<Catalogue, F
     Ok(catalogue_from(records, found, saved))
 }
 
+/// Sends exactly one answer, also when the labels cannot be written.
 pub async fn set_labels<S: Services>(
-    _cx: &LiveContext<S>,
+    cx: &LiveContext<S>,
     request: RequestId,
     edit: &LabelEdit,
     reply: &Reply,
 ) {
+    let result = write_labels(cx, edit).await;
     reply.send(Event::LabelsSaved {
         request,
         doc: edit.doc,
-        result: Err(Failure::not_built("changing labels")),
+        result,
     });
+}
+
+/// It makes no embedder and asks no model: only the labels are written, in both stores.
+async fn write_labels<S: Services>(cx: &LiveContext<S>, edit: &LabelEdit) -> Result<(), Failure> {
+    let stores = cx.stores().await?;
+    relabel(edit.doc.into(), &LabelChange::from(edit), &stores)
+        .await
+        .map(|_| ())
+        .map_err(|error| cx.failure(error))
 }
 
 pub async fn delete<S: Services>(

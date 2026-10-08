@@ -1,21 +1,20 @@
 //! The panel that adds a PDF of a media to the library, or saves a media before its first PDF:
-//! the form, then what the one ingest of the app is doing.
+//! the media, then the PDF, then what the one ingest of the app is doing.
 
-mod form;
+mod document;
 mod media;
 mod status;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use eframe::egui;
 
-use self::media::{MediaChoice, NewMediaForm};
-use crate::contract::{
-    Catalogue, Category, DocumentName, IngestRequest, Intent, Media, is_same_title,
-};
+use self::document::DocumentFields;
+use self::media::{MediaChoice, MediaForm};
+use crate::contract::{Catalogue, Category, IngestRequest, Intent, Media, is_same_title};
 use crate::panels::PanelCx;
-use crate::panels::labels::{list_of, text_of};
-use crate::state::{IngestJob, Shared};
+use crate::state::{IngestJob, MediaEditing, Shared};
+use crate::theme::{TextRole, space};
 use crate::widgets;
 
 /// The column is never wider than this, however wide the window.
@@ -25,37 +24,54 @@ const COLUMN_WIDTH: f32 = 720.0;
 pub struct Local {
     pdf: Option<PathBuf>,
     media: MediaChoice,
-    /// The tags of this PDF only, as typed.
-    own_tags: String,
+    /// The PDF section as typed.
+    typed: DocumentFields,
+    /// The PDF section as it was when none of its boxes had the keyboard. A draft is made of this,
+    /// so a check never starts on a keystroke.
+    settled: DocumentFields,
+    /// A pick of a PDF and a choice of a media ask for a check even when the draft is the same.
+    wants_check: bool,
     seen_picks: u64,
     seen_saves: u64,
 }
 
-fn file_name_of(pdf: &Path) -> String {
-    pdf.file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default()
+/// What a draft lacks before it can be checked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Missing {
+    Media,
+    Pdf,
+    Chapter,
+    Title,
+}
+
+impl Missing {
+    fn hint(self) -> &'static str {
+        match self {
+            Missing::Media => "Choose a media for this PDF, or add a new one.",
+            Missing::Pdf => "Choose a PDF. It is checked as soon as it is chosen.",
+            Missing::Chapter => "Type the chapter number and the chapter name of this PDF.",
+            Missing::Title => "Type a title for this PDF.",
+        }
+    }
 }
 
 impl Local {
-    /// A PDF can be ingested only into a media of the library. A book chapter is named by its
-    /// file name, and there is no request while the file name is not one; a paper or another
-    /// media names its document after the media.
-    fn draft(&self) -> Option<IngestRequest> {
-        let pdf = self.pdf.clone()?;
-        let MediaChoice::Existing { title, category } = &self.media else {
-            return None;
-        };
-        let name = match category {
-            Category::Book => DocumentName::from_chapter_file_name(&file_name_of(&pdf))?,
-            Category::Paper | Category::Other => DocumentName::Title(title.clone()),
-        };
-        Some(IngestRequest {
+    fn draft(&self) -> Result<IngestRequest, Missing> {
+        self.draft_of(&self.settled)
+    }
+
+    /// A PDF can be ingested only into a media of the library. Its name and its own tags come from
+    /// `fields`, the settled or the typed fields of the PDF section.
+    fn draft_of(&self, fields: &DocumentFields) -> Result<IngestRequest, Missing> {
+        let (title, category) = self.media.chosen().ok_or(Missing::Media)?;
+        let pdf = self.pdf.clone().ok_or(Missing::Pdf)?;
+        let name = fields.name(category)?;
+        Ok(IngestRequest {
             pdf,
-            media: title.clone(),
-            category: *category,
+            media: title.to_owned(),
+            category,
             name,
-            tags: list_of(&self.own_tags),
+            tags: fields.tags(),
         })
     }
 
@@ -69,10 +85,10 @@ impl Local {
             catalogue.is_some_and(|catalogue| media::titled(catalogue, &request.media).is_none());
         self.pdf = Some(request.pdf.clone());
         self.media = if is_gone {
-            MediaChoice::New(NewMediaForm {
+            MediaChoice::New(MediaForm {
                 category: request.category,
                 title: request.media.clone(),
-                ..NewMediaForm::default()
+                ..MediaForm::default()
             })
         } else {
             MediaChoice::Existing {
@@ -80,7 +96,16 @@ impl Local {
                 category: request.category,
             }
         };
-        self.own_tags = text_of(&request.tags);
+        self.typed = DocumentFields::of(request);
+        self.settled = self.typed.clone();
+    }
+
+    /// A pick is not typing, so the chapter fields that it fills in are settled at once.
+    fn pick(&mut self, pdf: PathBuf) {
+        self.typed.take_chapter_of(&pdf);
+        self.settled.take_chapter_of(&pdf);
+        self.pdf = Some(pdf);
+        self.wants_check = true;
     }
 
     fn choose(&mut self, media: &Media) {
@@ -89,16 +114,29 @@ impl Local {
                 title: title.clone(),
                 category: media.category,
             };
+            self.prefill_the_title();
+            self.wants_check = true;
         }
     }
 
-    fn start_new_media(&mut self) {
-        self.media = MediaChoice::New(NewMediaForm::default());
+    /// A PDF of a paper or another media is named after its media until a person types a title.
+    fn prefill_the_title(&mut self) {
+        let Some((title, category)) = self.media.chosen() else {
+            return;
+        };
+        if category != Category::Book {
+            let title = title.to_owned();
+            self.typed.title.clone_from(&title);
+            self.settled.title = title;
+        }
     }
 
-    /// The chosen file and the tags for it stay: they were not typed for the new media.
-    fn cancel_new_media(&mut self) {
-        self.media = MediaChoice::Unchosen;
+    /// The media stays chosen, so the next PDF of it needs only its file and its name.
+    fn add_another_pdf(&mut self) {
+        self.pdf = None;
+        self.typed = DocumentFields::default();
+        self.settled = DocumentFields::default();
+        self.prefill_the_title();
     }
 
     /// Chooses the media that was just saved, once the catalogue that holds it has arrived. The
@@ -123,56 +161,99 @@ impl Local {
         }
     }
 
+    /// The form of an edit closes once its save went through, and stays open with what was typed
+    /// when the save was refused. It reads the state and not an event, so an answer that came
+    /// while another tab was open is found when the page is drawn again.
+    fn follow_the_edit(&mut self, media_edit: &MediaEditing) {
+        let MediaChoice::Editing {
+            title,
+            form,
+            is_sent,
+            ..
+        } = &mut self.media
+        else {
+            return;
+        };
+        if !*is_sent || media_edit.is_saving() {
+            return;
+        }
+        let is_refused =
+            matches!(media_edit, MediaEditing::Failed { edit, .. } if edit.title == *title);
+        if is_refused {
+            *is_sent = false;
+            return;
+        }
+        let saved = MediaChoice::Existing {
+            title: std::mem::take(title),
+            category: form.category,
+        };
+        self.media = saved;
+    }
+
     /// A chosen media takes its category from the library, where an edit may have changed it. A
     /// media that left the library, after a delete, stays as the title of a new media.
     fn follow_the_chosen_media(&mut self, catalogue: &Catalogue) {
-        let MediaChoice::Existing { title, category } = &mut self.media else {
+        let (MediaChoice::Existing { title, category }
+        | MediaChoice::Editing {
+            title, category, ..
+        }) = &mut self.media
+        else {
             return;
         };
-        match media::titled(catalogue, title) {
-            Some(stored) => *category = stored.category,
-            None => {
-                let form = NewMediaForm {
-                    category: *category,
-                    title: std::mem::take(title),
-                    ..NewMediaForm::default()
-                };
-                self.media = MediaChoice::New(form);
-            }
+        if let Some(stored) = media::titled(catalogue, title) {
+            *category = stored.category;
+            return;
         }
+        let form = MediaForm {
+            category: *category,
+            title: std::mem::take(title),
+            ..MediaForm::default()
+        };
+        self.media = MediaChoice::New(form);
     }
 
-    /// A check that was made for another request is cleared, because the form changed after it.
-    fn follow(&mut self, shared: &Shared, intents: &mut Vec<Intent>) -> Option<IngestRequest> {
+    fn follow(&mut self, shared: &Shared) {
         if shared.cues.pdf_picks != self.seen_picks {
             self.seen_picks = shared.cues.pdf_picks;
-            self.pdf.clone_from(&shared.cues.picked_pdf);
+            if let Some(pdf) = &shared.cues.picked_pdf {
+                self.pick(pdf.clone());
+            }
         }
-        let held = request_of(&shared.ingest);
         let catalogue = &shared.library.catalogue;
-        if let Some(request) = held
+        if let Some(request) = request_of(&shared.ingest)
             && self.is_untouched()
             && !catalogue.is_loading()
         {
             self.fill_from(request, catalogue.ready());
         }
         self.choose_saved_media(shared);
+        self.follow_the_edit(&shared.library.media_edit);
         if let Some(catalogue) = catalogue.ready() {
             self.follow_the_chosen_media(catalogue);
         }
-        let draft = self.draft();
-        let is_checked = matches!(
-            shared.ingest,
-            IngestJob::Checking { .. }
-                | IngestJob::Checked { .. }
-                | IngestJob::CheckFailed { .. }
-                | IngestJob::Finished { .. }
-        );
-        // An untouched form may still be waiting for the library, so it is not a change.
-        if is_checked && !self.is_untouched() && held != draft.as_ref() {
-            intents.push(Intent::ClearIngest);
+    }
+
+    /// The state takes the check at the end of this frame, so the next frame holds the draft and
+    /// asks for nothing. An untouched form may still be waiting for the library, so the request
+    /// it holds is not cleared.
+    fn ask_for_a_check(
+        &mut self,
+        draft: &Result<IngestRequest, Missing>,
+        job: &IngestJob,
+        intents: &mut Vec<Intent>,
+    ) {
+        let wants_check = std::mem::take(&mut self.wants_check);
+        if job.is_running() {
+            return;
         }
-        draft
+        let held = request_of(job);
+        match draft {
+            Ok(draft) if wants_check || held != Some(draft) => {
+                intents.push(Intent::CheckIngest(draft.clone()));
+            }
+            Err(_) if held.is_some() && !self.is_untouched() => intents.push(Intent::ClearIngest),
+            Ok(_) | Err(_) => {}
+        }
     }
 }
 
@@ -189,7 +270,7 @@ fn request_of(job: &IngestJob) -> Option<&IngestRequest> {
 }
 
 pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
-    let draft = local.follow(cx.shared, cx.intents);
+    local.follow(cx.shared);
     let page = ui.max_rect();
     let column = egui::Rect::from_min_size(
         egui::pos2(
@@ -211,8 +292,17 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
                 .auto_shrink([false, true])
                 .max_height(column.height() - margin.y)
                 .show(ui, |ui| {
-                    form::show(ui, local, cx);
-                    status::show(ui, local, cx, draft.as_ref());
+                    ui.label(TextRole::Heading.rich("Add media"));
+                    ui.add_space(space::MD);
+                    ui.add_enabled_ui(!cx.shared.ingest.is_running(), |ui| {
+                        media::show(ui, local, cx);
+                        ui.add_space(space::LG);
+                        document::show(ui, local, cx.intents);
+                    });
+                    ui.add_space(space::LG);
+                    let draft = local.draft();
+                    local.ask_for_a_check(&draft, &cx.shared.ingest, cx.intents);
+                    status::show(ui, local, cx, &draft);
                 });
         });
     });

@@ -18,8 +18,8 @@ pub use run::run;
 const PDF_START: &[u8] = b"%PDF-";
 
 /// These checks cost nothing, and a check and a start share them. Nothing is written and no
-/// store is asked. The name of the document comes with the request: the panel reads a book
-/// chapter's name from its file name.
+/// store is asked. The name of the document comes with the request as the person typed it, so
+/// the PDF may have any file name.
 fn chapter_job<S: Services>(
     cx: &LiveContext<S>,
     ingest: &IngestRequest,

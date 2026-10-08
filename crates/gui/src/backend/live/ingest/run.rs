@@ -1,10 +1,10 @@
 //! The paid work of one ingest, the same steps as `rag-ingest pdf`: set up the models and the
 //! stores, convert and ingest the document, and write its own tags.
 
-use ocr::ChapterJob;
+use ocr::{ChapterJob, PageProgress};
 use rag_core::MediaLabels;
 use rag_ingestion::{
-    ChapterPdf, PdfOutcome, PdfSummary, TagChange, ingest_pdf, relabel_document_tags,
+    ChapterPdf, IngestStep, PdfOutcome, PdfSummary, TagChange, ingest_pdf, relabel_document_tags,
 };
 
 use super::chapter_job;
@@ -44,16 +44,19 @@ async fn finish<S: Services>(
     // anything is paid for.
     let models = cx.models()?;
     let stores = cx.stores().await?;
+    let mut line = ProgressLine::default();
     let outcome = ingest_pdf(
         ChapterPdf {
             job: &job,
             new_media: &new_media,
-            convert: async |chapter: &ChapterJob| {
-                send_progress(reply, request, IngestStage::Converting, 0.0);
-                let summary = cx.convert_chapter(chapter).await?;
-                let cost = summary.calls.cost_usd;
-                send_progress(reply, request, IngestStage::WritingGraph, cost);
-                Ok(summary)
+            convert:
+                async |chapter: &ChapterJob, on_page: &mut (dyn FnMut(PageProgress) + Send + '_)| {
+                    cx.convert_chapter(chapter, on_page).await
+                },
+            on_step: |step| {
+                if let Some(progress) = line.after(step) {
+                    reply.send(Event::IngestProgress { request, progress });
+                }
             },
         },
         &models,
@@ -71,17 +74,60 @@ async fn finish<S: Services>(
     Ok(report(outcome))
 }
 
-fn send_progress(reply: &Reply, request: RequestId, stage: IngestStage, cost_usd: f64) {
-    reply.send(Event::IngestProgress {
-        request,
-        progress: IngestProgress {
+/// Turns the steps of one run into the progress the app shows, with the counts that run on from
+/// one step to the next.
+#[derive(Default)]
+struct ProgressLine {
+    pages_done: u32,
+    pages: u32,
+    cost_usd: f64,
+    pages_failed: u32,
+}
+
+impl ProgressLine {
+    /// `None` for a failed page: it is counted, and shows with the next step.
+    fn after(&mut self, step: IngestStep) -> Option<IngestProgress> {
+        let (stage, done, total) = match step {
+            IngestStep::Converting(PageProgress::Pages { total, done_before }) => {
+                self.pages = total;
+                self.pages_done = done_before;
+                (IngestStage::PreparingPages, None, Some(total))
+            }
+            IngestStep::Converting(PageProgress::PageDone { cost_usd, .. }) => {
+                self.pages_done += 1;
+                self.cost_usd += cost_usd;
+                (
+                    IngestStage::Converting,
+                    Some(self.pages_done),
+                    Some(self.pages),
+                )
+            }
+            IngestStep::Converting(PageProgress::PageFailed { .. }) => {
+                self.pages_failed += 1;
+                return None;
+            }
+            IngestStep::WritingGraph => (IngestStage::WritingGraph, None, None),
+            IngestStep::Embedding { items } => (IngestStage::Embedding, None, Some(items as u32)),
+            IngestStep::Storing => (IngestStage::Storing, None, None),
+            IngestStep::ReadingConcepts { done, total } => (
+                IngestStage::ReadingConcepts,
+                Some(done as u32),
+                Some(total as u32),
+            ),
+            IngestStep::LinkingConcepts { done, total } => (
+                IngestStage::LinkingConcepts,
+                Some(done as u32),
+                Some(total as u32),
+            ),
+        };
+        Some(IngestProgress {
             stage,
-            done: None,
-            total: None,
-            pages_failed: 0,
-            cost_usd,
-        },
-    });
+            done,
+            total,
+            pages_failed: self.pages_failed,
+            cost_usd: self.cost_usd,
+        })
+    }
 }
 
 /// A blank tag is dropped.

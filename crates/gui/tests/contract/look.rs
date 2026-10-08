@@ -1,6 +1,8 @@
 //! The look of the app at rest is kept as pictures on disk, and a change that moves a pixel by
 //! more than the tolerance fails here until a person looks at the new picture and approves it.
 
+use std::time::{Duration, Instant};
+
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::Queryable as _;
@@ -21,11 +23,15 @@ const FIGURE_CITATION: &str = "Citation 8";
 const START_INGEST: &str = "Start ingest";
 /// The pencil of the first media of the scene, whose form is on screen with no scroll.
 const FIRST_MEDIA_PENCIL: &str = "Edit Hawkes Processes in Finance";
+/// The ingest of its scene stops for ever at page 3, so its bar rests there.
+const BAR_AT_PAGE_3: &str = "Converting the pages — page 3 of 12";
+const LIMIT: Duration = Duration::from_secs(5);
 
 enum Start {
     AsItOpens,
     AfterAClickOnTheFigureCitation,
     AfterAClickOnStartIngest,
+    AfterAStartThatNeverEnds,
     AfterANewMediaIsTyped,
     AfterAClickOnTheLibraryTab,
     AfterAClickOnAMediaPencil,
@@ -38,7 +44,7 @@ struct Row {
     start: Start,
 }
 
-const ROWS: [Row; 14] = [
+const ROWS: [Row; 15] = [
     Row {
         picture: "ask-idle",
         scene: "idle",
@@ -112,6 +118,12 @@ const ROWS: [Row; 14] = [
         start: Start::AfterANewMediaIsTyped,
     },
     Row {
+        picture: "ingest-running",
+        scene: "ingest-running",
+        window: DEFAULT_WINDOW,
+        start: Start::AfterAStartThatNeverEnds,
+    },
+    Row {
         picture: "library-min",
         scene: "black-scholes",
         window: MIN_WINDOW,
@@ -170,6 +182,23 @@ fn type_into(harness: &mut Window, name: &str, text: &str) {
     harness.run_ok();
 }
 
+/// The ingest never ends, so the app is never idle again, and `settle` would wait for ever.
+fn start_an_ingest_that_never_ends(harness: &mut Window) {
+    harness
+        .get_by_role_and_label(Role::Button, START_INGEST)
+        .click();
+    let started = Instant::now();
+    while harness
+        .query_all_by_role_and_label(Role::ProgressIndicator, BAR_AT_PAGE_3)
+        .next()
+        .is_none()
+    {
+        assert!(started.elapsed() < LIMIT, "the bar never came to page 3");
+        harness.run_ok();
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}
+
 /// Escape at the end leaves no box with the keyboard: a box that has it draws a caret that
 /// blinks, and the picture must be the same on every run.
 fn type_a_new_media(harness: &mut Window) {
@@ -199,6 +228,7 @@ impl Row {
                     .click();
                 testkit::settle(&mut harness);
             }
+            Start::AfterAStartThatNeverEnds => start_an_ingest_that_never_ends(&mut harness),
             Start::AfterANewMediaIsTyped => type_a_new_media(&mut harness),
             Start::AfterAClickOnTheLibraryTab => click(&mut harness, Role::Tab, "Library"),
             Start::AfterAClickOnAMediaPencil => {

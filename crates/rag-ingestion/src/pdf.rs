@@ -6,10 +6,12 @@ use std::path::Path;
 
 use graph::{GraphError, GraphStore};
 use ocr::content::parse_chapter_file_name;
-use ocr::{ChapterJob, ContentError, ConversionSummary, ConvertError, DocumentName};
+use ocr::{ChapterJob, ContentError, ConversionSummary, ConvertError, DocumentName, PageProgress};
 use rag_core::{Category, DocId, Embedder, Llm, MediaLabels, StoreError};
 
-use crate::ingest::{ChapterFolder, IngestError, IngestSummary, Models, ingest_chapter};
+use crate::ingest::{
+    ChapterFolder, IngestError, IngestStep, IngestSummary, Models, ingest_chapter_reporting,
+};
 use crate::stores::Stores;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -44,12 +46,15 @@ pub enum PdfError {
 
 /// One chapter PDF and the way its pages get converted: the real services in the command,
 /// stand-ins in a test.
-pub struct ChapterPdf<'a, C> {
+pub struct ChapterPdf<'a, C, O> {
     pub job: &'a ChapterJob,
     /// The labels the media is made with when the graph does not have it yet.
     pub new_media: &'a MediaLabels,
-    /// Called at most once, and only when the document is not ingested yet.
+    /// Called at most once, and only when the document is not ingested yet. Its second argument
+    /// hears each page as it ends.
     pub convert: C,
+    /// Hears each step of the run as it happens. A PDF that is ingested already hears nothing.
+    pub on_step: O,
 }
 
 impl PdfOutcome {
@@ -84,7 +89,9 @@ impl fmt::Display for PdfOutcome {
 }
 
 /// Hashes the PDF, and unless both stores already hold the whole document, converts the chapter
-/// with `pdf.convert` and ingests the converted folder with [`ingest_chapter`].
+/// with `pdf.convert` and ingests the converted folder with [`crate::ingest_chapter`].
+///
+/// Each page and each later step is told to `pdf.on_step` as it happens.
 ///
 /// Both stores are checked before the first page is converted, so a store that is down fails the
 /// run before a page is paid for. A second call on the same PDF converts, embeds, asks and
@@ -98,15 +105,25 @@ impl fmt::Display for PdfOutcome {
 ///   run and its number is in the error
 /// - [`PdfError::Graph`] and [`PdfError::Store`] when a store cannot say what it holds
 /// - [`PdfError::Ingest`] when the ingest fails
-pub async fn ingest_pdf<C, E: Embedder, L: Llm, G: GraphStore>(
-    pdf: ChapterPdf<'_, C>,
+pub async fn ingest_pdf<C, O, E: Embedder, L: Llm, G: GraphStore>(
+    pdf: ChapterPdf<'_, C, O>,
     models: &Models<E, L>,
     stores: &Stores<G>,
 ) -> Result<PdfOutcome, PdfError>
 where
-    C: AsyncFnOnce(&ChapterJob) -> Result<ConversionSummary, ConvertError>,
+    C: AsyncFnOnce(
+        &ChapterJob,
+        &mut (dyn FnMut(PageProgress) + Send),
+    ) -> Result<ConversionSummary, ConvertError>,
+    O: FnMut(IngestStep) + Send,
 {
-    let document = DocId::from_source_sha256(&pdf.job.source_sha256()?);
+    let ChapterPdf {
+        job,
+        new_media,
+        convert,
+        mut on_step,
+    } = pdf;
+    let document = DocId::from_source_sha256(&job.source_sha256()?);
     // This comes first: it fails while Qdrant is down, before a page is paid for, and a
     // collection that was removed then counts as holding no point.
     stores.items.ensure_collection().await?;
@@ -119,12 +136,12 @@ where
             items,
         });
     }
-    let conversion = (pdf.convert)(pdf.job).await?;
+    let conversion = convert(job, &mut |page| on_step(IngestStep::Converting(page))).await?;
     let chapter = ChapterFolder {
-        folder: &pdf.job.chapter_folder(),
-        new_media: pdf.new_media,
+        folder: &job.chapter_folder(),
+        new_media,
     };
-    let ingest = ingest_chapter(chapter, models, stores).await?;
+    let ingest = ingest_chapter_reporting(chapter, models, stores, &mut on_step).await?;
     Ok(PdfOutcome::Ingested(Box::new(PdfSummary {
         conversion,
         ingest,
@@ -158,8 +175,12 @@ pub fn document_name(
 }
 
 /// The number of items the document was ingested whole with, when the graph says so and the
-/// collection holds exactly that many points of it, and `None` in every other case.
-async fn items_of_ingested_document<G: GraphStore>(
+/// collection holds exactly that many points of it, and `None` in every other case. It writes
+/// nothing, so a check before a start may call it.
+///
+/// # Errors
+/// [`PdfError::Graph`] and [`PdfError::Store`] when a store cannot say what it holds.
+pub async fn items_of_ingested_document<G: GraphStore>(
     document: DocId,
     stores: &Stores<G>,
 ) -> Result<Option<u64>, PdfError> {

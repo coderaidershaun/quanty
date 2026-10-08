@@ -6,10 +6,10 @@ use std::collections::BTreeSet;
 use graph::testing::stored_document;
 use graph::{GraphStore, MediaNode};
 use ocr::testing::{Scenario, sample_pdf};
-use ocr::{ChapterJob, ConvertError, MediaDocument, read_chapter};
+use ocr::{ChapterJob, ConvertError, MediaDocument, PageProgress, read_chapter};
 use rag_core::{Category, DocId, DocumentLabels, ItemKind, MediaLabels};
 use rag_ingestion::{
-    ConceptError, IngestError, PdfError, PdfOutcome, chapter_items, document_name,
+    ConceptError, IngestError, IngestStep, PdfError, PdfOutcome, chapter_items, document_name,
 };
 use serde_json::json;
 
@@ -17,6 +17,37 @@ use super::{
     StandInPdf, at_the_usage_limit, chain_of, finding_volatility, held_by, printed_page_of,
 };
 use crate::support::{StandInLlm, ThrowawayStores, assert_document_stored, points_in};
+
+/// The pages of the sample chapter end in any order, so their positions are sorted; every later
+/// step comes in one order, once for each item where it counts them.
+fn assert_steps_of_one_run(steps: &[IngestStep], items: usize) {
+    assert!(steps.len() > 8, "too few steps: {steps:?}");
+    let (converting, after) = steps.split_at(8);
+    assert_eq!(
+        converting[0],
+        IngestStep::Converting(PageProgress::Pages {
+            total: 7,
+            done_before: 0
+        })
+    );
+    let mut pages: Vec<u32> = converting[1..]
+        .iter()
+        .map(|step| match step {
+            IngestStep::Converting(PageProgress::PageDone { position, .. }) => *position,
+            other => panic!("expected a converted page, got {other:?}"),
+        })
+        .collect();
+    pages.sort_unstable();
+    assert_eq!(pages, (1..=7).collect::<Vec<u32>>());
+    let mut expected = vec![
+        IngestStep::WritingGraph,
+        IngestStep::Embedding { items },
+        IngestStep::Storing,
+    ];
+    expected.extend((1..=items).map(|done| IngestStep::ReadingConcepts { done, total: items }));
+    expected.extend((1..=items).map(|done| IngestStep::LinkingConcepts { done, total: items }));
+    assert_eq!(after, expected);
+}
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored pdf::"]
@@ -73,6 +104,7 @@ async fn a_chapter_pdf_is_converted_and_ingested_in_one_run_and_a_second_run_doe
         )),
         "{printed}"
     );
+    assert_steps_of_one_run(&pdf.steps(), n);
 
     let points = points_in(config).await;
     assert_eq!(points.len(), n);
@@ -137,6 +169,7 @@ async fn a_chapter_pdf_is_converted_and_ingested_in_one_run_and_a_second_run_doe
         calls_after, calls_before,
         "a second run converts, embeds and asks nothing"
     );
+    assert_steps_of_one_run(&pdf.steps(), n);
     assert_eq!(
         held_by(&throwaway, &stores, doc_id).await,
         held_before,

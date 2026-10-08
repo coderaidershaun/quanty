@@ -12,8 +12,7 @@ use std::time::Duration;
 use super::{Handler, Reply};
 use crate::contract::{
     AskDraft, AskMode, Catalogue, Command, DocId, Event, Failure, FailureKind, Filters,
-    IngestOutcome, IngestProgress, IngestRequest, IngestStage, Intent, RequestId, Service,
-    ServiceState, Tab,
+    IngestOutcome, IngestRequest, Intent, RequestId, Service, ServiceState, Tab,
 };
 
 use scenes::{Answer, Concepts, Graph, Ingest, Opening, Pages, Search};
@@ -29,7 +28,8 @@ const GRAPH_WAIT: Duration = Duration::from_millis(150);
 const ANSWER_WAIT: Duration = Duration::from_millis(1500);
 const PAGE_WAIT: Duration = Duration::from_millis(100);
 const PREFLIGHT_WAIT: Duration = Duration::from_millis(300);
-const INGEST_WAIT: Duration = Duration::from_millis(1500);
+/// Before each step of an ingest, so a person can watch the bar fill.
+const STEP_WAIT: Duration = Duration::from_millis(150);
 
 const MISSING_LABEL: &str = "no-such-tag";
 
@@ -313,23 +313,20 @@ impl Fake {
     }
 
     async fn ingest(&self, request: RequestId, ingest: &IngestRequest, reply: &Reply) {
-        for stage in [IngestStage::Converting, IngestStage::WritingGraph] {
-            self.wait(INGEST_WAIT).await;
-            reply.send(Event::IngestProgress {
-                request,
-                progress: IngestProgress {
-                    stage,
-                    done: None,
-                    total: None,
-                    pages_failed: 0,
-                    cost_usd: 0.0,
-                },
-            });
+        let script = self.scene.script.ingest;
+        let played = match script {
+            Ingest::Stalls => fixtures::ingest::steps_to_the_stall(),
+            Ingest::Done | Ingest::Fails(_) => fixtures::ingest::steps(),
+        };
+        for progress in played {
+            self.wait(STEP_WAIT).await;
+            reply.send(Event::IngestProgress { request, progress });
         }
-        self.wait(INGEST_WAIT).await;
-        let result = match self.scene.script.ingest {
+        self.wait(STEP_WAIT).await;
+        let result = match script {
             Ingest::Done => Ok(IngestOutcome::Ingested(fixtures::ingest::report(ingest))),
             Ingest::Fails(kind) => Err(self.failure(kind)),
+            Ingest::Stalls => std::future::pending().await,
         };
         reply.send(Event::IngestFinished { request, result });
     }

@@ -59,7 +59,7 @@ impl FailureKind {
                 "Install Poppler (brew install poppler) and start quanty again."
             }
             FailureKind::TimedOut => "It took too long. Try again.",
-            FailureKind::BadFile => "Choose a PDF named chapter-<number>-<name>.pdf.",
+            FailureKind::BadFile => "Choose a PDF that opens in a PDF reader.",
             FailureKind::PageFailed => {
                 "A page could not be converted. Start again: the pages already done are kept."
             }

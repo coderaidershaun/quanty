@@ -12,8 +12,8 @@ pub use content::{
     ImageIndex, ImageShows, MediaDocument, PageBox, PieceDetail, RelationshipKind, Symbol,
 };
 pub use convert::{
-    ChapterJob, ConversionSummary, ConvertError, ConvertedImage, PageError, PopplerError,
-    convert_chapter, convert_chapter_with_jev_key, convert_image,
+    ChapterJob, ConversionSummary, ConvertError, ConvertedImage, PageError, PageProgress,
+    PopplerError, convert_chapter, convert_chapter_with_jev_key, convert_image, pdf_page_count,
 };
 pub use reader::{
     Chapter, ChapterPiece, FigurePicture, PieceId, PieceRelationship, ReadChapterError,

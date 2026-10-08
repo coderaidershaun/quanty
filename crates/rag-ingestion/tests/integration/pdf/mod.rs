@@ -5,18 +5,19 @@
 mod runs;
 
 use std::collections::BTreeMap;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use graph::FalkorGraph;
 use graph::testing::{
     GraphSize, StoredConceptGraph, StoredDocument, size, stored_concept_graph, stored_document,
 };
-use ocr::ChapterJob;
-use ocr::convert::convert_chapter_with;
+use ocr::convert::convert_chapter_with_progress;
 use ocr::testing::{Scenario, StubServices, sample_job};
+use ocr::{ChapterJob, PageProgress};
 use rag_core::{DocId, Llm, LlmError, MediaLabels};
 use rag_ingestion::testing::StandInEmbedder;
-use rag_ingestion::{ChapterPdf, Models, PdfError, PdfOutcome, Stores, ingest_pdf};
+use rag_ingestion::{ChapterPdf, IngestStep, Models, PdfError, PdfOutcome, Stores, ingest_pdf};
 use serde_json::{Value, json};
 
 use crate::support::{StandInLlm, ThrowawayStores, concept_points_in, decisions_in, points_in};
@@ -27,6 +28,7 @@ struct StandInPdf {
     new_media: MediaLabels,
     stubs: StubServices,
     conversions_started: AtomicUsize,
+    steps: Mutex<Vec<IngestStep>>,
 }
 
 impl StandInPdf {
@@ -45,6 +47,7 @@ impl StandInPdf {
             new_media,
             stubs: StubServices::new(scenario),
             conversions_started: AtomicUsize::new(0),
+            steps: Mutex::new(Vec::new()),
         }
     }
 
@@ -56,16 +59,23 @@ impl StandInPdf {
         let pdf = ChapterPdf {
             job: &self.job,
             new_media: &self.new_media,
-            convert: async |job: &ChapterJob| {
-                self.conversions_started.fetch_add(1, Ordering::SeqCst);
-                convert_chapter_with(job, &self.stubs).await
-            },
+            convert:
+                async |job: &ChapterJob, on_page: &mut (dyn FnMut(PageProgress) + Send + '_)| {
+                    self.conversions_started.fetch_add(1, Ordering::SeqCst);
+                    convert_chapter_with_progress(job, &self.stubs, on_page).await
+                },
+            on_step: |step| self.steps.lock().unwrap().push(step),
         };
         ingest_pdf(pdf, models, stores).await
     }
 
     fn conversions_started(&self) -> usize {
         self.conversions_started.load(Ordering::SeqCst)
+    }
+
+    /// Every step that the runs of this pdf told, in the order they came.
+    fn steps(&self) -> Vec<IngestStep> {
+        self.steps.lock().unwrap().clone()
     }
 }
 

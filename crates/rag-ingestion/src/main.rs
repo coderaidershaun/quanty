@@ -2,218 +2,30 @@
 //! picture, converts and ingests a PDF, relabels a stored media or document, or deletes a
 //! document.
 
-use std::path::{Path, PathBuf};
+mod cli;
+
+use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
-use clap::builder::NonEmptyStringValueParser;
-use clap::{Args, CommandFactory, Parser, Subcommand};
+use clap::{CommandFactory, Parser};
 use graph::FalkorGraph;
-use ocr::{ChapterJob, MediaDocument};
+use ocr::{ChapterJob, MediaDocument, PageProgress};
 use rag_core::{
     ApiKey, Category, ClaudeCli, ConceptStore, Config, DocId, GeminiEmbedder, ItemStore,
-    MediaLabels, Tag, author_list,
+    MediaLabels, Tag,
 };
 use rag_ingestion::{
-    ChapterFolder, ChapterPdf, ConceptExtractor, EXTRACTION_MODEL, IngestSummary, LoneImage,
-    MediaChange, Models, Stores, TagChange, delete_document, document_name, health, ingest_chapter,
-    ingest_image, ingest_pdf, relabel_document_tags, relabel_media,
+    ChapterFolder, ChapterPdf, ConceptExtractor, EXTRACTION_MODEL, IngestStep, IngestSummary,
+    LoneImage, MediaChange, Models, Stores, TagChange, delete_document, document_name, health,
+    ingest_chapter, ingest_image, ingest_pdf, relabel_document_tags, relabel_media,
 };
 use tracing::Level;
 use tracing_subscriber::filter::Targets;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-#[derive(Parser)]
-#[command(name = "rag-ingest", args_conflicts_with_subcommands = true)]
-struct Cli {
-    #[command(subcommand)]
-    command: Option<Command>,
-
-    #[command(flatten)]
-    given: GivenPath,
-}
-
-// The structs below have no doc comment, because clap would print one as the first line of
-// `rag-ingest --help`.
-#[derive(Args)]
-struct GivenPath {
-    // This help text is an attribute and not a doc comment, because rustdoc takes `<media>` for
-    // an HTML tag that is never closed.
-    #[arg(
-        help = "A converted chapter folder, such as content/<media>/chapter-1, or a PNG or JPEG file that stands alone, such as a chart"
-    )]
-    path: Option<PathBuf>,
-
-    #[arg(
-        long,
-        help = "What you know about the picture. It is added to the explanation of the picture"
-    )]
-    note: Option<String>,
-
-    /// The category of the chapter's media: book (the default), paper or other. It is used only
-    /// when the library does not have this media yet. Not for a picture
-    #[arg(long)]
-    category: Option<Category>,
-
-    #[command(flatten)]
-    labels: NewMediaLabels,
-
-    #[command(flatten)]
-    document: DocumentTags,
-}
-
-#[derive(Args)]
-struct GivenPdf {
-    #[command(flatten)]
-    media: PdfMedia,
-
-    /// The title of this document, for a paper or another media. It defaults to the title of the
-    /// media
-    #[arg(long, conflicts_with = "book")]
-    title: Option<String>,
-
-    // This help text is an attribute and not a doc comment, because rustdoc takes `<number>` for
-    // an HTML tag that is never closed.
-    #[arg(help = "The PDF; a book chapter's PDF must be named chapter-<number>-<name>.pdf")]
-    pdf: PathBuf,
-
-    #[command(flatten)]
-    labels: NewMediaLabels,
-
-    #[command(flatten)]
-    document: DocumentTags,
-}
-
-#[derive(Args)]
-struct NewMediaLabels {
-    /// An author of the media. Repeat it for more. It is used only when the library does not
-    /// have this media yet: use `rag-ingest media` to change a stored media
-    #[arg(long = "author", value_name = "AUTHOR", value_parser = NonEmptyStringValueParser::new())]
-    authors: Vec<String>,
-
-    /// A tag of the media, such as options. Repeat it for more. It is used only when the library
-    /// does not have this media yet: use `rag-ingest media` to change a stored media
-    #[arg(long = "tag", value_name = "TAG")]
-    tags: Vec<Tag>,
-}
-
-impl NewMediaLabels {
-    fn is_empty(&self) -> bool {
-        self.authors.is_empty() && self.tags.is_empty()
-    }
-
-    fn of(&self, category: Category) -> MediaLabels {
-        MediaLabels {
-            category,
-            authors: author_list(&self.authors),
-            tags: self.tags.iter().cloned().collect(),
-        }
-    }
-}
-
-#[derive(Args)]
-struct DocumentTags {
-    /// A tag of this document only. Repeat it to add more. An ingest never removes a tag: use
-    /// `rag-ingest tag --remove` for that
-    #[arg(long = "doc-tag", value_name = "TAG")]
-    doc_tags: Vec<Tag>,
-}
-
-impl DocumentTags {
-    fn change(&self) -> TagChange {
-        TagChange {
-            add: self.doc_tags.clone(),
-            remove: Vec::new(),
-        }
-    }
-}
-
-#[derive(Args)]
-#[group(required = true, multiple = false)]
-struct PdfMedia {
-    // These help texts are attributes and not doc comments, because rustdoc takes `<number>` for
-    // an HTML tag that is never closed.
-    #[arg(
-        long,
-        value_name = "TITLE",
-        help = "The title of the book the PDF is a chapter of. The PDF must be named chapter-<number>-<name>.pdf"
-    )]
-    book: Option<String>,
-
-    /// The title of the paper. The PDF can have any name
-    #[arg(long, value_name = "TITLE")]
-    paper: Option<String>,
-
-    /// The title of a media that is neither a book nor a paper. The PDF can have any name
-    #[arg(long, value_name = "TITLE")]
-    other: Option<String>,
-}
-
-impl PdfMedia {
-    fn title_and_category(&self) -> Result<(&str, Category)> {
-        let given = [
-            (&self.book, Category::Book),
-            (&self.paper, Category::Paper),
-            (&self.other, Category::Other),
-        ];
-        given
-            .into_iter()
-            .find_map(|(title, category)| title.as_deref().map(|title| (title, category)))
-            .context("give one of --book, --paper and --other")
-    }
-}
-
-#[derive(Subcommand)]
-enum Command {
-    /// Check that Qdrant and FalkorDB answer and that the claude CLI is signed in
-    Health,
-
-    /// Convert one PDF of a book, a paper or another media and ingest it, in one run that needs
-    /// no one
-    Pdf(GivenPdf),
-
-    /// Change the own tags of a stored document, in both stores, with no embedding and no model
-    Tag {
-        /// The document id that an ingest prints, such as 5f3c2a1e-9b04-5d6e-8a17-2c4b7e90f1d3
-        document_id: DocId,
-
-        /// A tag to add. Repeat it to add more
-        #[arg(long, value_name = "TAG")]
-        add: Vec<Tag>,
-
-        /// A tag to take away. Repeat it to take away more
-        #[arg(long, value_name = "TAG")]
-        remove: Vec<Tag>,
-    },
-
-    /// Change the category, the authors or the tags of a stored media, and of every document of
-    /// it, in both stores, with no embedding and no model
-    Media {
-        /// The title of the media, whatever its capitals
-        title: String,
-
-        /// The new category: book, paper or other
-        #[arg(long)]
-        category: Option<Category>,
-
-        /// An author of the media. Repeat it for more. Given at all, the list replaces the
-        /// authors the media has
-        #[arg(long = "author", value_name = "AUTHOR", value_parser = NonEmptyStringValueParser::new())]
-        authors: Vec<String>,
-
-        /// A tag of the media. Repeat it for more. Given at all, the list replaces the tags the
-        /// media has
-        #[arg(long = "tag", value_name = "TAG")]
-        tags: Vec<Tag>,
-    },
-
-    /// Remove one document, with its items, from Qdrant and from the graph
-    DeleteDocument {
-        /// The document id that an ingest prints, such as 5f3c2a1e-9b04-5d6e-8a17-2c4b7e90f1d3
-        document_id: DocId,
-    },
-}
+use crate::cli::{Cli, Command, GivenPath, GivenPdf};
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -411,9 +223,11 @@ async fn convert_and_ingest(given: &GivenPdf) -> Result<()> {
         ChapterPdf {
             job: &job,
             new_media: &new_media,
-            convert: async |job: &ChapterJob| {
-                ocr::convert_chapter_with_jev_key(job, jev_api_key).await
-            },
+            convert:
+                async |job: &ChapterJob, on_page: &mut (dyn FnMut(PageProgress) + Send + '_)| {
+                    ocr::convert_chapter_with_jev_key(job, jev_api_key, on_page).await
+                },
+            on_step: print_step,
         },
         &models,
         &stores,
@@ -422,6 +236,39 @@ async fn convert_and_ingest(given: &GivenPdf) -> Result<()> {
     .with_context(|| format!("could not ingest {}", pdf.display()))?;
     println!("{outcome}");
     write_document_tags(outcome.doc_id(), &given.document.change(), &stores).await
+}
+
+/// The steps go to standard error, so standard output holds only the summary at the end.
+fn print_step(step: IngestStep) {
+    if let Some(line) = progress_line(&step) {
+        eprintln!("{line}");
+    }
+}
+
+/// One line for each page, and one for each later stage when it starts, never one for each item.
+fn progress_line(step: &IngestStep) -> Option<String> {
+    match *step {
+        IngestStep::Converting(PageProgress::Pages { total, done_before }) => Some(format!(
+            "converting {} of {total} pages ({done_before} already done)",
+            total - done_before
+        )),
+        IngestStep::Converting(PageProgress::PageDone { position, cost_usd }) => {
+            Some(format!("page {position} converted (${cost_usd:.2})"))
+        }
+        IngestStep::Converting(PageProgress::PageFailed { position }) => {
+            Some(format!("page {position} failed"))
+        }
+        IngestStep::WritingGraph => Some("writing the graph".to_owned()),
+        IngestStep::Embedding { items } => Some(format!("embedding {items} items")),
+        IngestStep::Storing => Some("storing the items".to_owned()),
+        IngestStep::ReadingConcepts { done: 1, total } => {
+            Some(format!("reading the concepts of {total} items"))
+        }
+        IngestStep::LinkingConcepts { done: 1, total } => {
+            Some(format!("linking the concepts of {total} items"))
+        }
+        IngestStep::ReadingConcepts { .. } | IngestStep::LinkingConcepts { .. } => None,
+    }
 }
 
 /// Own tags come after the ingest, so a run that stops in the ingest tags nothing, and the same
@@ -486,4 +333,40 @@ async fn delete(document_id: DocId) -> Result<()> {
         .with_context(|| format!("could not delete the document {document_id}"))?;
     println!("{summary}");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use ocr::PageProgress;
+    use rag_ingestion::IngestStep;
+
+    use super::progress_line;
+
+    #[test]
+    fn progress_lines_name_each_page_and_each_stage_once() {
+        let pages = IngestStep::Converting(PageProgress::Pages {
+            total: 12,
+            done_before: 4,
+        });
+        let page = IngestStep::Converting(PageProgress::PageDone {
+            position: 5,
+            cost_usd: 0.137,
+        });
+        let first_read = IngestStep::ReadingConcepts { done: 1, total: 44 };
+        let second_read = IngestStep::ReadingConcepts { done: 2, total: 44 };
+
+        assert_eq!(
+            progress_line(&pages).as_deref(),
+            Some("converting 8 of 12 pages (4 already done)")
+        );
+        assert_eq!(
+            progress_line(&page).as_deref(),
+            Some("page 5 converted ($0.14)")
+        );
+        assert_eq!(
+            progress_line(&first_read).as_deref(),
+            Some("reading the concepts of 44 items")
+        );
+        assert_eq!(progress_line(&second_read), None);
+    }
 }

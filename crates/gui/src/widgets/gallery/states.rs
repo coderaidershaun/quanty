@@ -1,6 +1,9 @@
 //! The widgets of the gallery, each in every state it can be in. A demo widget that is there to
 //! be used writes its name to `last_activated`, and the gallery prints it as "Last used".
 
+// SMELL: this file is close to the limit of 500 lines. The next widget that the gallery shows
+// needs a file of its own beside this one.
+
 use eframe::egui::{self, Response};
 
 use super::{State, column, section};
@@ -8,8 +11,8 @@ use crate::theme::{Icon, Kind, TextRole, Tone, size, space};
 use crate::widgets::look::Look;
 use crate::widgets::{
     Badge, Button, Card, Chip, Choice, CitationChip, Confirm, ControlSize, Dropdown, Notice,
-    Placeholder, Slider, StepMarker, StepState, Stepper, Tab, TabStrip, TextInput, dot, logo,
-    panel_frame, progress_bar, section_header, separator, spinner,
+    Placeholder, Slider, StepMarker, StepState, Stepper, Tab, TabStrip, TextInput, dot,
+    indeterminate_bar, logo, panel_frame, progress_bar, section_header, separator, spinner,
 };
 
 const MODES: [&str; 3] = ["Answer", "Search only", "Formulas"];
@@ -437,6 +440,7 @@ fn progress(ui: &mut egui::Ui) {
     column(ui, 360.0, 0.0, |ui| {
         progress_bar(ui, "Reading the page", 0.4);
         progress_bar(ui, "Ingest finished", 1.0);
+        indeterminate_bar(ui, "Checking the PDF");
     });
 }
 

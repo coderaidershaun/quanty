@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use graph::FalkorGraph;
-use ocr::ChapterJob;
+use ocr::{ChapterJob, PageProgress};
 use rag_core::{ConceptStore, Config, ItemStore};
 use rag_ingestion::{
     ChapterPdf, ConceptExtractor, EXTRACTION_MODEL, Models, PdfOutcome, Stores, ingest_pdf,
@@ -57,12 +57,15 @@ impl<S: Services> Work<S> {
             ChapterPdf {
                 job: &pdf.chapter,
                 new_media: &pdf.new_media,
-                convert: async |chapter: &ChapterJob| {
-                    report.send_modify(|report| report.stage = Some(Stage::Converting));
-                    let summary = services.convert(chapter, config).await?;
-                    report.send_modify(|report| report.stage = Some(Stage::Ingesting));
-                    Ok(summary)
-                },
+                convert:
+                    async |chapter: &ChapterJob,
+                           _pages: &mut (dyn FnMut(PageProgress) + Send + '_)| {
+                        report.send_modify(|report| report.stage = Some(Stage::Converting));
+                        let summary = services.convert(chapter, config).await?;
+                        report.send_modify(|report| report.stage = Some(Stage::Ingesting));
+                        Ok(summary)
+                    },
+                on_step: |_| {},
             },
             &models,
             &stores,

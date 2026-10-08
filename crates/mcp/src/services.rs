@@ -54,6 +54,6 @@ impl Services for PaidServices {
         // The key goes to the converter as a value, because the settings never enter the process
         // environment.
         let jev_api_key = config.jev_api_key.as_ref().map(ApiKey::expose);
-        ocr::convert_chapter_with_jev_key(job, jev_api_key).await
+        ocr::convert_chapter_with_jev_key(job, jev_api_key, |_| {}).await
     }
 }

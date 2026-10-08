@@ -19,6 +19,8 @@ const FOLDER: &str = "tests/snapshots";
 /// The chip of the figure's result. Its click is what a person does to open the source.
 const FIGURE_CITATION: &str = "Citation 8";
 const START_INGEST: &str = "Start ingest";
+/// The pencil of the first media of the scene, whose form is on screen with no scroll.
+const FIRST_MEDIA_PENCIL: &str = "Edit Hawkes Processes in Finance";
 
 enum Start {
     AsItOpens,
@@ -26,6 +28,7 @@ enum Start {
     AfterAClickOnStartIngest,
     AfterANewMediaIsTyped,
     AfterAClickOnTheLibraryTab,
+    AfterAClickOnAMediaPencil,
 }
 
 struct Row {
@@ -35,7 +38,7 @@ struct Row {
     start: Start,
 }
 
-const ROWS: [Row; 12] = [
+const ROWS: [Row; 14] = [
     Row {
         picture: "ask-idle",
         scene: "idle",
@@ -107,6 +110,18 @@ const ROWS: [Row; 12] = [
         scene: "idle",
         window: DEFAULT_WINDOW,
         start: Start::AfterANewMediaIsTyped,
+    },
+    Row {
+        picture: "library-min",
+        scene: "black-scholes",
+        window: MIN_WINDOW,
+        start: Start::AfterAClickOnTheLibraryTab,
+    },
+    Row {
+        picture: "library-edit-media",
+        scene: "black-scholes",
+        window: DEFAULT_WINDOW,
+        start: Start::AfterAClickOnAMediaPencil,
     },
 ];
 
@@ -186,6 +201,10 @@ impl Row {
             }
             Start::AfterANewMediaIsTyped => type_a_new_media(&mut harness),
             Start::AfterAClickOnTheLibraryTab => click(&mut harness, Role::Tab, "Library"),
+            Start::AfterAClickOnAMediaPencil => {
+                click(&mut harness, Role::Tab, "Library");
+                click(&mut harness, Role::Button, FIRST_MEDIA_PENCIL);
+            }
         }
         // The pointer is painted in the picture until a frame has run without it.
         harness.remove_cursor();

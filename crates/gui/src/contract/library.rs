@@ -147,6 +147,19 @@ pub struct Document {
     pub folder: Option<std::path::PathBuf>,
 }
 
+impl Document {
+    /// The name the document is shown by: its chapter, or its title when it has no chapter.
+    pub fn name(&self) -> DocumentName {
+        match &self.chapter {
+            Some(chapter) => DocumentName::Chapter {
+                number: chapter.number,
+                name: chapter.name.clone(),
+            },
+            None => DocumentName::Title(self.title.clone()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct Media {
     /// `None`: the documents that belong to no media, such as pictures that stand alone.

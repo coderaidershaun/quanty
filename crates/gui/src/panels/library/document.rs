@@ -2,8 +2,7 @@
 
 use eframe::egui;
 
-use super::Local;
-use super::edit::{self, Draft};
+use super::{Form, Local, can_edit, tags_form};
 use crate::contract::{Document, Intent};
 use crate::panels::PanelCx;
 use crate::panels::labels::TAGS;
@@ -23,12 +22,9 @@ pub(super) fn show(
     local: &mut Local,
     cx: &mut PanelCx<'_>,
 ) {
-    let is_edited = local
-        .editing
-        .as_ref()
-        .is_some_and(|draft| draft.doc == document.id);
+    let is_edited = matches!(&local.form, Some(Form::Tags(draft)) if draft.doc == document.id);
     Card::new().show(ui, |ui| {
-        ui.label(TextRole::BodyStrong.rich(heading(document)));
+        ui.label(TextRole::BodyStrong.rich(document.name().label()));
         ui.label(TextRole::Small.rich(facts(document)));
         if document.ingested_items.is_none() {
             ui.label(
@@ -38,10 +34,10 @@ pub(super) fn show(
             );
         }
         ui.add_space(space::XS);
-        match &mut local.editing {
-            Some(draft) if draft.doc == document.id => {
-                if edit::form(ui, document, draft, cx.shared, cx.intents) {
-                    local.editing = None;
+        match &mut local.form {
+            Some(Form::Tags(draft)) if draft.doc == document.id => {
+                if tags_form::form(ui, document, draft, cx.shared, cx.intents) {
+                    local.form = None;
                 }
             }
             _ => labels(ui, document),
@@ -49,13 +45,6 @@ pub(super) fn show(
         ui.add_space(space::SM);
         buttons(ui, document, is_edited, local, cx);
     });
-}
-
-fn heading(document: &Document) -> String {
-    match &document.chapter {
-        Some(chapter) => format!("Chapter {} · {}", chapter.number, chapter.name),
-        None => document.title.clone(),
-    }
 }
 
 fn facts(document: &Document) -> String {
@@ -110,9 +99,8 @@ fn buttons(
             let edit_tags = Button::secondary(EDIT_TAGS)
                 .icon(Icon::EDIT)
                 .size(ControlSize::Small);
-            let can_edit = edit::can_start(cx.shared);
-            if ui.add_enabled(can_edit, edit_tags).clicked() {
-                local.editing = Some(Draft::of(document));
+            if ui.add_enabled(can_edit(cx.shared), edit_tags).clicked() {
+                local.form = Some(Form::Tags(tags_form::Draft::of(document)));
             }
         }
     });

@@ -2,6 +2,7 @@
 
 use eframe::egui;
 
+use super::{CANCEL, SAVE, SaveStep, reveal};
 use crate::contract::{DocId, Document, DocumentTagsEdit, Intent};
 use crate::panels::labels::{TAGS, caption, list_of, text_of};
 use crate::state::{Library, Shared};
@@ -9,21 +10,13 @@ use crate::theme::space;
 use crate::widgets::{Button, Notice, TextInput};
 
 const TAGS_HINT: &str = "With commas between them";
-const SAVE: &str = "Save";
-const CANCEL: &str = "Cancel";
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SaveStep {
-    Typing,
-    Sent,
-    Refused,
-}
 
 #[derive(Debug)]
 pub(super) struct Draft {
     pub(super) doc: DocId,
     tags: String,
     step: SaveStep,
+    should_reveal: bool,
 }
 
 impl Draft {
@@ -32,38 +25,29 @@ impl Draft {
             doc: document.id,
             tags: text_of(&document.tags),
             step: SaveStep::Typing,
+            should_reveal: true,
         }
     }
 }
 
-/// A save that is on its way must not lose its form, and a draft must not be made from labels that
-/// a catalogue on its way is about to replace.
-pub(super) fn can_start(shared: &Shared) -> bool {
-    !shared.ingest.is_running()
-        && shared.library.busy.is_empty()
-        && shared.library.pending.is_none()
-}
-
-/// Closes the form when its document is gone or its save went through, and shows the refusal when
-/// the save failed. It reads `busy` and `failures` and not an event, so an answer that came while
-/// another tab was open is found when the page is drawn again.
-pub(super) fn follow(editing: &mut Option<Draft>, library: &Library) {
-    let Some(draft) = editing else {
-        return;
-    };
+/// Whether the form stays open. It closes when its document is gone or its save went through, and
+/// a refused save keeps it open to show the refusal.
+pub(super) fn follow(draft: &mut Draft, library: &Library) -> bool {
     let is_listed = library
         .catalogue
         .ready()
         .is_some_and(|catalogue| catalogue.document(draft.doc).is_some());
     if !is_listed {
-        *editing = None;
-    } else if draft.step == SaveStep::Sent && !library.busy.contains_key(&draft.doc) {
-        if library.failures.contains_key(&draft.doc) {
-            draft.step = SaveStep::Refused;
-        } else {
-            *editing = None;
-        }
+        return false;
     }
+    if draft.step == SaveStep::Sent && !library.busy.contains_key(&draft.doc) {
+        if !library.failures.contains_key(&draft.doc) {
+            return false;
+        }
+        draft.step = SaveStep::Refused;
+        draft.should_reveal = true;
+    }
+    true
 }
 
 /// Returns true when the person gave the form up, so the caller closes it.
@@ -74,6 +58,7 @@ pub(super) fn form(
     shared: &Shared,
     intents: &mut Vec<Intent>,
 ) -> bool {
+    let top = ui.cursor().top();
     let is_sent = draft.step == SaveStep::Sent;
     ui.add_enabled_ui(!is_sent, |ui| {
         caption(ui, TAGS);
@@ -101,5 +86,6 @@ pub(super) fn form(
         ui.add_space(space::SM);
         Notice::error(&failure.hint).show(ui);
     }
+    reveal(ui, top, &mut draft.should_reveal);
     is_cancelled
 }

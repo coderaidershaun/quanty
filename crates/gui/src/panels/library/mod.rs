@@ -1,14 +1,16 @@
 //! The Library page: the stored media with their documents, and what a person can do with each
-//! document.
+//! media and each document.
 
 mod document;
-mod edit;
 mod media;
+mod media_form;
+mod tags_form;
 
 use eframe::egui;
 
 use crate::contract::{Catalogue, Intent, Loadable};
 use crate::panels::PanelCx;
+use crate::state::{Library, Shared};
 use crate::theme::{Icon, TextRole, space};
 use crate::widgets::{self, Placeholder};
 
@@ -21,16 +23,75 @@ const FAILED: &str = "The library did not load";
 const TRY_AGAIN: &str = "Try again";
 const EMPTY: &str = "Your library is empty";
 const EMPTY_HINT: &str = "Add media on the Ingest tab.";
-const INGEST_RUNNING: &str = "An ingest is running. Tags can be changed when it is done.";
+const INGEST_RUNNING: &str = "An ingest is running. Media and tags can be edited when it is done.";
+const SAVE: &str = "Save";
+const CANCEL: &str = "Cancel";
 
 /// One form is open at a time, so opening a second one drops what was typed in the first.
 #[derive(Debug, Default)]
 pub struct Local {
-    editing: Option<edit::Draft>,
+    form: Option<Form>,
+}
+
+#[derive(Debug)]
+enum Form {
+    Tags(tags_form::Draft),
+    Media(media_form::Draft),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SaveStep {
+    Typing,
+    Sent,
+    Refused,
+}
+
+/// A form or its refusal near the bottom of the list would open out of sight, so it is scrolled
+/// into view: once, so that the person can still scroll away, and only as far as needed, so that
+/// a form already on screen does not move. Call it last, because the form ends where the drawing
+/// ends.
+fn reveal(ui: &egui::Ui, form_top: f32, should_reveal: &mut bool) {
+    if !std::mem::take(should_reveal) {
+        return;
+    }
+    let drawn = ui.min_rect();
+    let form = egui::Rect::from_x_y_ranges(drawn.x_range(), form_top..=drawn.bottom());
+    ui.scroll_to_rect(form, None);
+}
+
+/// A save on its way must not lose its form, and a draft must not be made from labels that a
+/// catalogue on its way is about to replace.
+fn can_edit(shared: &Shared) -> bool {
+    can_send_media_edit(shared)
+        && shared.library.busy.is_empty()
+        && shared.library.pending.is_none()
+}
+
+/// The app ignores an edit of a media while an ingest runs or a media is being saved or edited. A
+/// form that sent such an edit would close as if it was saved, so its Save is off then.
+// SMELL: the state ignores the edit by these same rules, written again there. A change to one must
+// be made in both, or a save is dropped with no word to the person.
+fn can_send_media_edit(shared: &Shared) -> bool {
+    !shared.ingest.is_running()
+        && !shared.library.media_save.is_saving()
+        && !shared.library.media_edit.is_saving()
+}
+
+/// Each form reads the state and not an event, so an answer that came while another tab was open
+/// is found when the page is drawn again.
+fn follow(form: &mut Option<Form>, library: &Library) {
+    let stays_open = match form {
+        None => return,
+        Some(Form::Tags(draft)) => tags_form::follow(draft, library),
+        Some(Form::Media(draft)) => media_form::follow(draft, library),
+    };
+    if !stays_open {
+        *form = None;
+    }
 }
 
 pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
-    edit::follow(&mut local.editing, &cx.shared.library);
+    follow(&mut local.form, &cx.shared.library);
     let page = ui.max_rect();
     let width = page.width().min(COLUMN_WIDTH);
     let column = egui::Rect::from_min_size(

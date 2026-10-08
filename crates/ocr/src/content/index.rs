@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use super::conversion::{CallRecord, Conversion};
 use super::piece::{PieceEntry, Relationship};
-use super::{CHAPTER_INDEX_FILE, ContentError, IMAGE_INDEX_FILE, PAGE_INDEX_FILE};
+use super::{CHAPTER_INDEX_FILE, ContentError, DocumentName, IMAGE_INDEX_FILE, PAGE_INDEX_FILE};
 
 /// `finished` is the last thing written, so a half-converted chapter is never mistaken for a
 /// whole one.
@@ -16,9 +16,8 @@ use super::{CHAPTER_INDEX_FILE, ContentError, IMAGE_INDEX_FILE, PAGE_INDEX_FILE}
 #[serde(rename_all = "kebab-case")]
 pub struct ChapterIndex {
     pub format_version: u32,
-    pub book_title: String,
-    pub chapter_number: u32,
-    pub chapter_name: String,
+    pub media_title: String,
+    pub name: DocumentName,
     pub source_file: String,
     pub source_sha256: String,
     pub page_count: u32,

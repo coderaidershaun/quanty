@@ -7,7 +7,7 @@ use super::failure::Failure;
 use super::health::{Service, ServiceState};
 use super::ids::{ConceptId, DocId, NoticeId, RequestId};
 use super::ingest::{IngestOutcome, IngestProgress, IngestRequest, Preflight};
-use super::library::{Catalogue, LabelEdit, NewBook};
+use super::library::{Catalogue, DocumentTagsEdit, MediaEdit, NewMedia};
 use super::source::{PageConcept, PageView};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -42,9 +42,10 @@ pub enum Intent {
     TurnPage(i32),
     ReloadSource,
     RefreshCatalogue,
-    SetLabels(LabelEdit),
+    SetDocumentTags(DocumentTagsEdit),
     DeleteDocument(DocId),
-    SaveBook(NewBook),
+    SaveMedia(NewMedia),
+    EditMedia(MediaEdit),
     /// The Ingest panel asks for the file dialog. It never opens one itself.
     PickPdf,
     /// The shell's answer to `PickPdf`.
@@ -76,17 +77,21 @@ pub enum Command {
     LoadCatalogue {
         request: RequestId,
     },
-    SetLabels {
+    SetDocumentTags {
         request: RequestId,
-        edit: LabelEdit,
+        edit: DocumentTagsEdit,
     },
     DeleteDocument {
         request: RequestId,
         doc: DocId,
     },
-    SaveBook {
+    SaveMedia {
         request: RequestId,
-        book: NewBook,
+        media: NewMedia,
+    },
+    EditMedia {
+        request: RequestId,
+        edit: MediaEdit,
     },
     Preflight {
         request: RequestId,
@@ -109,9 +114,10 @@ impl Command {
             Command::Ask { request, .. }
             | Command::LoadPage { request, .. }
             | Command::LoadCatalogue { request }
-            | Command::SetLabels { request, .. }
+            | Command::SetDocumentTags { request, .. }
             | Command::DeleteDocument { request, .. }
-            | Command::SaveBook { request, .. }
+            | Command::SaveMedia { request, .. }
+            | Command::EditMedia { request, .. }
             | Command::Preflight { request, .. }
             | Command::Ingest { request, .. }
             | Command::CheckHealth { request } => *request,
@@ -153,7 +159,7 @@ impl Command {
                 request: *request,
                 result: Err(failure.clone()),
             }],
-            Command::SetLabels { request, edit } => vec![Event::LabelsSaved {
+            Command::SetDocumentTags { request, edit } => vec![Event::DocumentTagsSaved {
                 request: *request,
                 doc: edit.doc,
                 result: Err(failure.clone()),
@@ -163,7 +169,11 @@ impl Command {
                 doc: *doc,
                 result: Err(failure.clone()),
             }],
-            Command::SaveBook { request, .. } => vec![Event::BookSaved {
+            Command::SaveMedia { request, .. } => vec![Event::MediaSaved {
+                request: *request,
+                result: Err(failure.clone()),
+            }],
+            Command::EditMedia { request, .. } => vec![Event::MediaEdited {
                 request: *request,
                 result: Err(failure.clone()),
             }],
@@ -214,7 +224,7 @@ pub enum Event {
         request: RequestId,
         result: Result<Catalogue, Failure>,
     },
-    LabelsSaved {
+    DocumentTagsSaved {
         request: RequestId,
         doc: DocId,
         result: Result<(), Failure>,
@@ -224,7 +234,11 @@ pub enum Event {
         doc: DocId,
         result: Result<(), Failure>,
     },
-    BookSaved {
+    MediaSaved {
+        request: RequestId,
+        result: Result<(), Failure>,
+    },
+    MediaEdited {
         request: RequestId,
         result: Result<(), Failure>,
     },

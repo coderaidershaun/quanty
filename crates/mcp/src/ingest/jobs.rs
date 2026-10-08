@@ -17,10 +17,10 @@ use super::PdfIngestError;
 pub(crate) enum JobState {
     /// The ingest is going on. Ask again in 20 to 30 seconds.
     Running,
-    /// The chapter was converted and ingested.
+    /// The PDF was converted and ingested.
     Done,
     /// Both stores already held this PDF, so nothing was converted or embedded and it cost
-    /// nothing. An `author` and `tags` that were sent are still written.
+    /// nothing. The `document_tags` that were sent are still written.
     AlreadyIngested,
     /// The ingest stopped. `error` says why. Send the same PDF again to go on.
     Failed,
@@ -44,8 +44,8 @@ pub(crate) struct IngestReport {
     /// Only while `running`. Left out while the stores are being checked, before any paid work.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) stage: Option<Stage>,
-    /// The title of the book.
-    book: String,
+    /// The title of the media.
+    media: String,
     /// The name of the PDF file.
     file: String,
     /// Give it to `read_page`. When `done` or `already_ingested`.
@@ -63,12 +63,12 @@ pub(crate) struct IngestReport {
 }
 
 impl IngestReport {
-    fn running(job: Uuid, book: &str, file: &str) -> IngestReport {
+    fn running(job: Uuid, media: &str, file: &str) -> IngestReport {
         IngestReport {
             job_id: job.to_string(),
             state: JobState::Running,
             stage: None,
-            book: book.to_owned(),
+            media: media.to_owned(),
             file: file.to_owned(),
             document_id: None,
             items: None,
@@ -124,7 +124,7 @@ impl Jobs {
     /// check and the new job are in one lock with no `.await` between them, so two calls at the
     /// same moment cannot both start. It holds in one server only: a second server, or
     /// `rag-ingest pdf`, is not stopped from taking the same chapter at the same time.
-    pub(super) fn start(&self, book: &str, file: &str) -> Result<Started, PdfIngestError> {
+    pub(super) fn start(&self, media: &str, file: &str) -> Result<Started, PdfIngestError> {
         let mut list = self.list.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some((running, _)) = list.iter().find(|(_, watcher)| is_running(watcher)) {
             return Err(PdfIngestError::Busy {
@@ -136,7 +136,7 @@ impl Jobs {
             list.pop_front();
         }
         let id = Uuid::new_v4();
-        let (report, watcher) = watch::channel(IngestReport::running(id, book, file));
+        let (report, watcher) = watch::channel(IngestReport::running(id, media, file));
         list.push_back((id, watcher.clone()));
         Ok(Started { report, watcher })
     }

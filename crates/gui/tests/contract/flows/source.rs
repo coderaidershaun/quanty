@@ -40,8 +40,8 @@ fn book_of(harness: &Window, doc: DocId) -> String {
         .catalogue
         .ready()
         .expect("the library loaded");
-    let book = catalogue.book_of(doc).expect("the document is in a book");
-    book.title.clone().expect("the book has a title")
+    let book = catalogue.media_of(doc).expect("the document is in a media");
+    book.title.clone().expect("the media has a title")
 }
 
 /// Queues a click and runs no frame, so that a test can look at every frame that follows.

@@ -4,7 +4,7 @@
 use serde_json::{Value, json};
 
 use crate::support::{
-    Library, QUESTION, call, connect, sample_chapter_folder, sample_document_id, structured,
+    AUTHOR, Library, QUESTION, call, connect, sample_chapter_folder, sample_document_id, structured,
 };
 
 const SAMPLE_TITLE: &str = "Option Volatility and Pricing, chapter 1: Sample Pages";
@@ -24,7 +24,11 @@ async fn search_gives_the_placed_item_first_and_explain_says_how_it_was_found() 
     assert_eq!(first["number"], 1);
     assert_eq!(first["document_id"], sample_document_id().to_string());
     assert_eq!(first["document"], SAMPLE_TITLE);
-    assert_eq!(first["book"], "Option Volatility and Pricing");
+    assert_eq!(first["media"], "Option Volatility and Pricing");
+    assert_eq!(first["category"], "book");
+    assert_eq!(first["authors"], json!([AUTHOR]));
+    assert_eq!(first["media_tags"], json!(["options"]));
+    assert_eq!(first["tags"], json!([]));
     assert_eq!(first["page"], 5);
     assert_eq!(first["printed_page"], "233");
     assert_eq!(first["kind"], "figure");
@@ -48,7 +52,9 @@ async fn search_gives_the_placed_item_first_and_explain_says_how_it_was_found() 
         json!({
             "question": QUESTION,
             "limit": 2,
-            "book": "option volatility and pricing",
+            "media": "option volatility and pricing",
+            "author": "sheldon natenberg",
+            "category": "book",
             "explain": true,
         }),
     )
@@ -60,8 +66,8 @@ async fn search_gives_the_placed_item_first_and_explain_says_how_it_was_found() 
     assert!(
         results
             .iter()
-            .all(|result| result["book"] == "Option Volatility and Pricing"),
-        "only items of that book"
+            .all(|result| result["media"] == "Option Volatility and Pricing"),
+        "only items of that media"
     );
     let trace = &found["trace"];
     assert_eq!(trace["documents_searched"], 1);
@@ -73,6 +79,16 @@ async fn search_gives_the_placed_item_first_and_explain_says_how_it_was_found() 
         "the search kept more than the limit cut: {trace}"
     );
     assert!(trace["question_concepts"].is_array());
+
+    let result = call(
+        &client,
+        "search",
+        json!({ "question": QUESTION, "category": "paper" }),
+    )
+    .await;
+
+    let found = structured(&result);
+    assert_eq!(found["results"], json!([]), "the library holds no paper");
 }
 
 #[tokio::test(flavor = "multi_thread")]

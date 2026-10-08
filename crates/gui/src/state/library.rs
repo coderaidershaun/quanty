@@ -1,11 +1,12 @@
-//! The catalogue of stored documents, and the rules for refreshing it, relabelling a document,
-//! deleting one and saving a new book.
+//! The catalogue of stored documents, and the rules for refreshing it, changing a document's own
+//! tags, deleting a document, and saving or editing a media.
 
 use std::collections::BTreeMap;
 
 use super::shared::{Shared, push_cancel};
 use crate::contract::{
-    Catalogue, Command, DocId, Effect, Failure, LabelEdit, Loadable, NewBook, NoticeKind, RequestId,
+    Catalogue, Command, DocId, DocumentTagsEdit, Effect, Failure, Loadable, MediaEdit, NewMedia,
+    NoticeKind, RequestId,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -14,24 +15,45 @@ pub enum Busy {
     Deleting(RequestId),
 }
 
-/// The save of a new book that the Ingest tab asked for.
+/// The save of a new media that the Ingest tab asked for.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
-pub enum BookSave {
+pub enum MediaSave {
     #[default]
     Idle,
     Saving {
-        book: NewBook,
+        media: NewMedia,
         id: RequestId,
     },
     Failed {
-        book: NewBook,
+        media: NewMedia,
         failure: Failure,
     },
 }
 
-impl BookSave {
+impl MediaSave {
     pub fn is_saving(&self) -> bool {
-        matches!(self, BookSave::Saving { .. })
+        matches!(self, MediaSave::Saving { .. })
+    }
+}
+
+/// A change to the labels of a stored media.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+pub enum MediaEditing {
+    #[default]
+    Idle,
+    Saving {
+        edit: MediaEdit,
+        id: RequestId,
+    },
+    Failed {
+        edit: MediaEdit,
+        failure: Failure,
+    },
+}
+
+impl MediaEditing {
+    pub fn is_saving(&self) -> bool {
+        matches!(self, MediaEditing::Saving { .. })
     }
 }
 
@@ -46,7 +68,8 @@ pub struct Library {
     pub busy: BTreeMap<DocId, Busy>,
     /// The last failed save or delete of each document.
     pub failures: BTreeMap<DocId, Failure>,
-    pub book_save: BookSave,
+    pub media_save: MediaSave,
+    pub media_edit: MediaEditing,
 }
 
 impl Shared {
@@ -62,14 +85,14 @@ impl Shared {
         effects.push(Effect::Send(Command::LoadCatalogue { request }));
     }
 
-    pub(super) fn set_labels(&mut self, edit: LabelEdit, effects: &mut Vec<Effect>) {
+    pub(super) fn set_document_tags(&mut self, edit: DocumentTagsEdit, effects: &mut Vec<Effect>) {
         if self.ingest.is_running() {
             return;
         }
         let request = self.issue_request();
         self.library.failures.remove(&edit.doc);
         self.library.busy.insert(edit.doc, Busy::Saving(request));
-        effects.push(Effect::Send(Command::SetLabels { request, edit }));
+        effects.push(Effect::Send(Command::SetDocumentTags { request, edit }));
     }
 
     pub(super) fn delete_document(&mut self, doc: DocId, effects: &mut Vec<Effect>) {
@@ -81,16 +104,34 @@ impl Shared {
         effects.push(Effect::Send(Command::DeleteDocument { request, doc }));
     }
 
-    pub(super) fn save_book(&mut self, book: NewBook, effects: &mut Vec<Effect>) {
-        if self.library.book_save.is_saving() {
+    /// A save is ignored while a save or an edit of a media is in flight, so the two never race.
+    pub(super) fn save_media(&mut self, media: NewMedia, effects: &mut Vec<Effect>) {
+        if self.library.media_save.is_saving() || self.library.media_edit.is_saving() {
             return;
         }
         let request = self.issue_request();
-        self.library.book_save = BookSave::Saving {
-            book: book.clone(),
+        self.library.media_save = MediaSave::Saving {
+            media: media.clone(),
             id: request,
         };
-        effects.push(Effect::Send(Command::SaveBook { request, book }));
+        effects.push(Effect::Send(Command::SaveMedia { request, media }));
+    }
+
+    /// An edit rewrites every document of the media, so it is ignored while an ingest runs and
+    /// while a save or an edit of a media is in flight.
+    pub(super) fn edit_media(&mut self, edit: MediaEdit, effects: &mut Vec<Effect>) {
+        if self.ingest.is_running()
+            || self.library.media_save.is_saving()
+            || self.library.media_edit.is_saving()
+        {
+            return;
+        }
+        let request = self.issue_request();
+        self.library.media_edit = MediaEditing::Saving {
+            edit: edit.clone(),
+            id: request,
+        };
+        effects.push(Effect::Send(Command::EditMedia { request, edit }));
     }
 
     pub(super) fn catalogue_arrived(
@@ -109,7 +150,7 @@ impl Shared {
         self.library.pending = None;
     }
 
-    pub(super) fn labels_saved(
+    pub(super) fn document_tags_saved(
         &mut self,
         request: RequestId,
         doc: DocId,
@@ -129,13 +170,13 @@ impl Shared {
         }
     }
 
-    pub(super) fn book_saved(
+    pub(super) fn media_saved(
         &mut self,
         request: RequestId,
         result: Result<(), Failure>,
         effects: &mut Vec<Effect>,
     ) {
-        let BookSave::Saving { book, id } = self.library.book_save.clone() else {
+        let MediaSave::Saving { media, id } = self.library.media_save.clone() else {
             return;
         };
         if id != request {
@@ -143,14 +184,38 @@ impl Shared {
         }
         match result {
             Ok(()) => {
-                self.library.book_save = BookSave::Idle;
-                self.cues.saved_book = Some(book.title);
-                self.cues.book_saves += 1;
+                self.library.media_save = MediaSave::Idle;
+                self.cues.saved_media = Some(media.title);
+                self.cues.media_saves += 1;
                 self.refresh_catalogue(effects);
             }
             Err(failure) => {
                 self.mark_down(&failure);
-                self.library.book_save = BookSave::Failed { book, failure };
+                self.library.media_save = MediaSave::Failed { media, failure };
+            }
+        }
+    }
+
+    pub(super) fn media_edited(
+        &mut self,
+        request: RequestId,
+        result: Result<(), Failure>,
+        effects: &mut Vec<Effect>,
+    ) {
+        let MediaEditing::Saving { edit, id } = self.library.media_edit.clone() else {
+            return;
+        };
+        if id != request {
+            return;
+        }
+        match result {
+            Ok(()) => {
+                self.library.media_edit = MediaEditing::Idle;
+                self.refresh_catalogue(effects);
+            }
+            Err(failure) => {
+                self.mark_down(&failure);
+                self.library.media_edit = MediaEditing::Failed { edit, failure };
             }
         }
     }
@@ -204,6 +269,7 @@ impl Shared {
         self.library.pending.is_some()
             || self.library.catalogue.is_loading()
             || !self.library.busy.is_empty()
-            || self.library.book_save.is_saving()
+            || self.library.media_save.is_saving()
+            || self.library.media_edit.is_saving()
     }
 }

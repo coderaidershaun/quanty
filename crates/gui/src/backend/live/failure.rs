@@ -74,8 +74,13 @@ fn bad_file(file: &Path) -> Verdict {
         || file.display().to_string(),
         |name| name.to_string_lossy().into_owned(),
     );
+    let hint = format!("Choose a PDF that opens in a PDF reader. {name} is not one.");
+    Verdict::saying(Kind::BadFile, hint)
+}
+
+fn bad_file_name(name: &str) -> Verdict {
     let hint = format!(
-        "Choose a PDF named chapter-<number>-<name>.pdf that opens in a PDF reader. {name} is not one."
+        "A book chapter's PDF must be named chapter-<number>-<name>.pdf, for example chapter-3-greeks.pdf. Rename {name}."
     );
     Verdict::saying(Kind::BadFile, hint)
 }
@@ -182,11 +187,17 @@ fn poppler(error: &PopplerError) -> Verdict {
 
 fn content(error: &ContentError) -> Verdict {
     match error {
-        ContentError::BadFileName { name } => bad_file(Path::new(name)),
-        // The file is fine here: it is the book title that cannot name a folder.
-        ContentError::EmptyBookFolderName { title } => {
+        ContentError::BadFileName { name } => bad_file_name(name),
+        // The file is fine here: it is a title that cannot name a folder.
+        ContentError::EmptyMediaFolderName { title } => {
             let hint = format!(
-                "The book title {title:?} has no letter or digit to name its folder with. Change the book title."
+                "The media title {title:?} has no letter or digit to name its folder with. Change the media title."
+            );
+            Verdict::saying(Kind::BadFile, hint)
+        }
+        ContentError::EmptyDocumentFolderName { title } => {
+            let hint = format!(
+                "The document title {title:?} has no letter or digit to name its folder with. Change the title."
             );
             Verdict::saying(Kind::BadFile, hint)
         }
@@ -212,7 +223,7 @@ fn convert(error: &ConvertError) -> Verdict {
         ConvertError::DifferentSource { folder, .. } => {
             let folder = folder.display();
             let hint = format!(
-                "Another PDF is already converted as this book and chapter in {folder}. Change the book title, or remove that chapter's folder."
+                "Another PDF is already converted as this document of this media in {folder}. Choose another media, or remove that folder."
             );
             Verdict::saying(Kind::ChapterTaken, hint)
         }
@@ -283,6 +294,12 @@ fn relabel(error: &RelabelError) -> Verdict {
         RelabelError::Graph(error) => graph(error),
         RelabelError::Store(error) => store(error),
         RelabelError::UnknownDocument { id } => unknown_document(id),
+        RelabelError::UnknownMedia { title } => {
+            let hint = format!(
+                "The library has no media titled {title:?}. Refresh the Library and choose a media that it lists."
+            );
+            Verdict::saying(Kind::SourceMissing, hint)
+        }
         #[allow(unreachable_patterns, reason = "every variant has a row today")]
         _ => Verdict::internal(),
     }

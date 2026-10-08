@@ -1,9 +1,9 @@
-//! The Library page: the stored books with their chapters, and what a person can do with each
-//! chapter.
+//! The Library page: the stored media with their documents, and what a person can do with each
+//! document.
 
-mod book;
-mod chapter;
+mod document;
 mod edit;
+mod media;
 
 use eframe::egui;
 
@@ -20,8 +20,8 @@ const LOADING: &str = "Reading the library";
 const FAILED: &str = "The library did not load";
 const TRY_AGAIN: &str = "Try again";
 const EMPTY: &str = "Your library is empty";
-const EMPTY_HINT: &str = "Add a chapter on the Ingest tab.";
-const INGEST_RUNNING: &str = "An ingest is running. Labels can be changed when it is done.";
+const EMPTY_HINT: &str = "Add media on the Ingest tab.";
+const INGEST_RUNNING: &str = "An ingest is running. Tags can be changed when it is done.";
 
 /// One form is open at a time, so opening a second one drops what was typed in the first.
 #[derive(Debug, Default)]
@@ -48,7 +48,7 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
         .library
         .catalogue
         .ready()
-        .filter(|catalogue| !catalogue.books.is_empty());
+        .filter(|catalogue| !catalogue.media.is_empty());
     ui.scope_builder(builder, |ui| {
         frame.show(ui, |ui| {
             ui.set_width(column.width() - margin.x);
@@ -64,7 +64,7 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
             }
             ui.add_space(space::MD);
             match listed {
-                Some(catalogue) => books(ui, catalogue, local, cx),
+                Some(catalogue) => media_list(ui, catalogue, local, cx),
                 None => nothing_listed(ui, &shared.library.catalogue, cx.intents),
             }
         });
@@ -93,13 +93,13 @@ fn nothing_listed(ui: &mut egui::Ui, catalogue: &Loadable<Catalogue>, intents: &
     }
 }
 
-fn books(ui: &mut egui::Ui, catalogue: &Catalogue, local: &mut Local, cx: &mut PanelCx<'_>) {
+fn media_list(ui: &mut egui::Ui, catalogue: &Catalogue, local: &mut Local, cx: &mut PanelCx<'_>) {
     egui::ScrollArea::vertical()
         .auto_shrink([false, true])
         .max_height(ui.available_height())
         .show(ui, |ui| {
-            for book in &catalogue.books {
-                book::show(ui, book, local, cx);
+            for media in &catalogue.media {
+                media::show(ui, media, local, cx);
                 ui.add_space(space::LG);
             }
         });

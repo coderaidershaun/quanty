@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use crate::ChapterJob;
-use crate::content::{PageBox, PageCategories, Symbol};
+use crate::content::{MediaDocument, PageBox, PageCategories, Symbol, parse_chapter_file_name};
 use crate::convert::reply::{
     CitedKind, CitedLabel, CopiedPage, CopiedPiece, Discussion, TranscribedPage, TranscribedPiece,
 };
@@ -27,7 +27,11 @@ pub fn sample_pdf() -> PathBuf {
 }
 
 pub fn sample_job(output_root: &Path) -> ChapterJob {
-    ChapterJob::new("Option Volatility and Pricing", &sample_pdf(), output_root).unwrap()
+    let document = MediaDocument {
+        media_title: "Option Volatility and Pricing".to_owned(),
+        name: parse_chapter_file_name("chapter-1-sample-pages.pdf").unwrap(),
+    };
+    ChapterJob::new(document, &sample_pdf(), output_root).unwrap()
 }
 
 pub fn page_folder(chapter: &Path, position: u32) -> PathBuf {

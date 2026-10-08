@@ -2,6 +2,7 @@
 //! them, and the answer written from them.
 
 use super::ids::{DocId, ItemId};
+use super::library::Category;
 use super::source::ImageRef;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -11,12 +12,15 @@ pub enum AskMode {
     ResultsOnly,
 }
 
-/// A book or an author matches whatever its capitals; every tag must be on the document.
+/// A media or an author matches whatever its capitals, and an author matches any author of a
+/// document. Every tag must be a media tag or an own tag of the document, and a category must be
+/// the document's.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct Filters {
-    pub book: Option<String>,
+    pub media: Option<String>,
     pub author: Option<String>,
     pub tags: Vec<String>,
+    pub category: Option<Category>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -52,7 +56,8 @@ pub struct ResultItem {
     pub reason: Reason,
     pub doc: DocId,
     pub doc_title: String,
-    pub book: Option<String>,
+    /// The title of the document's media.
+    pub media: Option<String>,
     /// Its position in the chapter, counting from 1.
     pub page: u32,
     pub printed_page: Option<String>,

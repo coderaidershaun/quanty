@@ -1,4 +1,4 @@
-//! The chapters saved under one content root: `<root>/<book folder>/<chapter folder>`.
+//! The documents saved under one content root: `<root>/<media folder>/<document folder>`.
 
 use std::path::{Path, PathBuf};
 
@@ -6,14 +6,14 @@ use super::{CHAPTER_INDEX_FILE, ChapterIndex, ContentError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChapterEntry {
-    /// `<root>/<book folder>/<chapter folder>`. Absolute when the root was.
+    /// `<root>/<media folder>/<document folder>`. Absolute when the root was.
     pub folder: PathBuf,
     pub index: ChapterIndex,
 }
 
 #[derive(Debug, Default)]
 pub struct Catalogue {
-    /// By book folder, then by chapter number.
+    /// By media folder, then chapters by number, then titled documents by title.
     pub chapters: Vec<ChapterEntry>,
     /// One error for each `chapter.json` that is there and cannot be read.
     pub unreadable: Vec<ContentError>,
@@ -24,11 +24,11 @@ impl Catalogue {
     /// hide the others.
     ///
     /// # Errors
-    /// [`ContentError::Read`] when the root or a book folder is there and cannot be listed.
+    /// [`ContentError::Read`] when the root or a media folder is there and cannot be listed.
     pub fn read(content_root: &Path) -> Result<Catalogue, ContentError> {
         let mut catalogue = Catalogue::default();
-        for book_folder in folders_in(content_root)? {
-            for chapter_folder in folders_in(&book_folder)? {
+        for media_folder in folders_in(content_root)? {
+            for chapter_folder in folders_in(&media_folder)? {
                 // A folder of pictures that stand alone holds no `chapter.json`.
                 if !chapter_folder.join(CHAPTER_INDEX_FILE).is_file() {
                     continue;
@@ -43,8 +43,7 @@ impl Catalogue {
             }
         }
         catalogue.chapters.sort_by(|a, b| {
-            (a.folder.parent(), a.index.chapter_number)
-                .cmp(&(b.folder.parent(), b.index.chapter_number))
+            (a.folder.parent(), &a.index.name).cmp(&(b.folder.parent(), &b.index.name))
         });
         Ok(catalogue)
     }

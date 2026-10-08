@@ -11,7 +11,7 @@ use gui::contract::{
     Command, DocId, Event, Failure, FailureKind, PageConcept, PageView, RequestId,
 };
 use ocr::content::{FORMAT_VERSION, PageIndex, PieceEntry, page_folder_name};
-use ocr::{ChapterIndex, FigureImage, ImageShows, PieceDetail};
+use ocr::{ChapterIndex, DocumentName, FigureImage, ImageShows, PieceDetail};
 use rag_core::{ConceptId, DocumentLabels, ItemId, ItemKind};
 use uuid::Uuid;
 
@@ -98,7 +98,11 @@ async fn the_fake_backend_shows_every_sample_page_as_the_live_reader_does() {
     let cx = closed(Path::new(NO_CONTENT_FOLDER));
 
     let mut compared = 0;
-    for document in catalogue.documents() {
+    // The paper of the samples has no folder, so neither reader has a page of it.
+    let with_folders = catalogue
+        .documents()
+        .filter(|document| document.folder.is_some());
+    for document in with_folders {
         let pages = document.pages.expect("a sample has a page count");
         for page in 1..=pages {
             let (doc, folder) = (document.id, document.folder.clone());
@@ -202,9 +206,11 @@ fn page_target(doc: DocId, page: u32, folder: Option<&Path>) -> PageTarget {
 fn saved_chapter(folder: &Path) {
     let index = ChapterIndex {
         format_version: FORMAT_VERSION,
-        book_title: "A Saved Book".to_owned(),
-        chapter_number: 1,
-        chapter_name: "One Figure".to_owned(),
+        media_title: "A Saved Book".to_owned(),
+        name: DocumentName::Chapter {
+            number: 1,
+            name: "One Figure".to_owned(),
+        },
         source_file: "chapter-1-one-figure.pdf".to_owned(),
         source_sha256: "a-made-up-hash".to_owned(),
         page_count: 1,

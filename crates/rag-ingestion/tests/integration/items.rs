@@ -21,9 +21,8 @@ fn a_chunk_keeps_the_figure_table_and_equation_that_its_footnote_cites() {
         &folder.path().join("chapter.json"),
         &json!({
             "format-version": 1,
-            "book-title": "Notes on Footnotes",
-            "chapter-number": 1,
-            "chapter-name": "What a Footnote Cites",
+            "media-title": "Notes on Footnotes",
+            "name": { "chapter": { "number": 1, "name": "What a Footnote Cites" } },
             "source-file": "chapter-1-what-a-footnote-cites.pdf",
             "source-sha256": "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0",
             "page-count": 1,

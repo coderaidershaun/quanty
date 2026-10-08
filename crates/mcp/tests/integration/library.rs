@@ -23,7 +23,11 @@ async fn read_page_gives_the_pieces_of_a_page_in_reading_order() {
 
     let page = structured(&result);
     assert_eq!(page["document_id"], document_id.as_str());
-    assert_eq!(page["book"], "Option Volatility and Pricing");
+    assert_eq!(page["media"], "Option Volatility and Pricing");
+    assert!(
+        page.get("document_title").is_none(),
+        "a chapter has no title of its own"
+    );
     assert_eq!(page["chapter_number"], 1);
     assert_eq!(page["chapter_name"], "Sample Pages");
     assert_eq!(page["page"], 4);
@@ -115,16 +119,20 @@ async fn list_documents_shows_each_stored_document_with_its_labels_and_chapter()
         json!({
             "document_id": sample_document_id().to_string(),
             "title": "Option Volatility and Pricing, chapter 1: Sample Pages",
-            "book": "Option Volatility and Pricing",
-            "author": AUTHOR,
-            "tags": ["options"],
+            "media": "Option Volatility and Pricing",
+            "category": "book",
+            "authors": [AUTHOR],
+            "media_tags": ["options"],
+            "tags": [],
             "chapter_number": 1,
             "chapter_name": "Sample Pages",
             "pages": 7,
         })
     );
-    assert_eq!(documents[1]["book"], "Quanty Sample Notes");
-    assert!(documents[1].get("author").is_none());
+    assert_eq!(documents[1]["media"], "Quanty Sample Notes");
+    assert_eq!(documents[1]["category"], "book");
+    assert_eq!(documents[1]["authors"], json!([]));
+    assert_eq!(documents[1]["media_tags"], json!([]));
     assert_eq!(documents[1]["tags"], json!([]));
     assert_eq!(documents[1]["chapter_number"], 1);
     assert_eq!(documents[1]["pages"], 3);

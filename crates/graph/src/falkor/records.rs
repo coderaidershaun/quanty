@@ -12,9 +12,10 @@ use crate::contents::{DocumentRecord, ItemsByKind};
 use crate::store::GraphError;
 
 const RECORD_ROW: &str = "\
-a document with its mark, its folder and its items by kind (an id, a title, a book or null, \
-an author or null, a list of tags or null, a count of items or null, a folder or null and a list \
-of pairs of a kind of item and a count that is not negative)";
+a document with its mark, its folder and its items by kind (an id, a title, a media or null, a \
+category or null, a list of authors or null, a list of media tags or null, a list of tags or null, \
+a count of items or null, a folder or null and a list of pairs of a kind of item and a count that \
+is not negative)";
 
 // A document with no items has one pair, with no kind and a count of zero.
 fn document_records_statement() -> String {
@@ -54,9 +55,20 @@ fn count_of(items: &mut ItemsByKind, kind: ItemKind) -> &mut u64 {
 }
 
 fn record_from_row(row: Vec<FalkorValue>) -> Result<DocumentRecord, String> {
-    let row = <[FalkorValue; 8]>::try_from(row).map_err(|row| format!("{row:?}"))?;
-    let [id, title, book, author, tags, mark, folder, items_by_kind] = row;
-    let node = document_from_row(vec![id, title, book, author, tags])?;
+    let row = <[FalkorValue; 10]>::try_from(row).map_err(|row| format!("{row:?}"))?;
+    let [
+        id,
+        title,
+        media,
+        category,
+        authors,
+        media_tags,
+        tags,
+        mark,
+        folder,
+        items_by_kind,
+    ] = row;
+    let node = document_from_row(vec![id, title, media, category, authors, media_tags, tags])?;
     let ingested_items = match mark {
         FalkorValue::None => None,
         FalkorValue::I64(count) => Some(u64::try_from(count).map_err(|_| count.to_string())?),

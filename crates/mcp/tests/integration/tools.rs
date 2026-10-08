@@ -63,14 +63,24 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
     let expected: [(&str, &[&str], &[&str]); 7] = [
         (
             "answer",
-            &["author", "book", "kind", "question", "tags"],
+            &["author", "category", "kind", "media", "question", "tags"],
             &["question"],
         ),
         ("health", &[], &[]),
         (
             "ingest_pdf",
-            &["author", "book", "file_name", "path", "pdf_base64", "tags"],
-            &["book"],
+            &[
+                "authors",
+                "category",
+                "document_tags",
+                "document_title",
+                "file_name",
+                "media",
+                "path",
+                "pdf_base64",
+                "tags",
+            ],
+            &["media"],
         ),
         ("ingest_status", &["job_id"], &["job_id"]),
         ("list_documents", &[], &[]),
@@ -82,7 +92,7 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         (
             "search",
             &[
-                "author", "book", "explain", "kind", "limit", "question", "tags",
+                "author", "category", "explain", "kind", "limit", "media", "question", "tags",
             ],
             &["question"],
         ),

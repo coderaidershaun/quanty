@@ -8,10 +8,11 @@ mod summary;
 
 use std::path::{Path, PathBuf};
 
-use graph::{DocumentNode, GraphError, GraphStore, ItemNode};
+use graph::{DocumentNode, GraphError, GraphStore, ItemNode, MediaNode};
 use ocr::ReadChapterError;
 use rag_core::{
-    DocumentInput, DocumentLabels, EmbedError, Embedder, ItemPoint, Llm, LlmError, StoreError,
+    DocumentInput, DocumentLabels, EmbedError, Embedder, ItemPoint, Llm, LlmError, MediaLabels,
+    StoreError,
 };
 
 pub use concepts::{
@@ -25,6 +26,7 @@ use concepts::EmbeddedItems;
 use items::{document_id, document_title};
 
 use crate::labels::stored_node;
+use crate::media::stored_or_added;
 use crate::stores::Stores;
 
 #[derive(thiserror::Error, Debug)]
@@ -66,9 +68,20 @@ pub struct Models<E, L> {
     pub concepts: ConceptExtractor<L>,
 }
 
+/// A converted chapter folder, and the labels its media is made with when the graph does not
+/// have that media yet.
+#[derive(Debug, Clone, Copy)]
+pub struct ChapterFolder<'a> {
+    pub folder: &'a Path,
+    pub new_media: &'a MediaLabels,
+}
+
 struct Document {
     node: DocumentNode,
     items: Vec<Item>,
+    /// The media of a chapter, with the labels a new media is made with. A picture that stands
+    /// alone has none.
+    media: Option<MediaNode>,
 }
 
 /// The language model is asked first whether it can answer, which costs nothing, so a `claude`
@@ -84,9 +97,11 @@ struct Document {
 /// limit or is not signed in, keeps the answers it has so far, and running the same command again
 /// goes on from them.
 ///
-/// The document node and every point carry the labels of the document: the book of the chapter,
-/// and the author and the tags that the stored node already has, so an ingest never removes one.
-/// The labels are not embedded.
+/// The document node and every point carry the labels of the chapter's media: the stored media
+/// of that title, whatever its capitals, or else a new one that is made from `new_media` and
+/// added to the graph. An ingest never changes a stored media. The own tags of the document are
+/// the ones the stored node already has, so an ingest never removes one. The labels are not
+/// embedded.
 ///
 /// The document node carries a mark that it is ingested whole, with the number of its items. It
 /// is taken away when the run starts and set as the very last step, and only when no item was
@@ -105,28 +120,29 @@ struct Document {
 ///   its cache folder, its decision log or a store. An item whose questions fail is not an error:
 ///   the summary names it.
 pub async fn ingest_chapter<E: Embedder, L: Llm, G: GraphStore>(
-    chapter_folder: &Path,
+    chapter: ChapterFolder<'_>,
     models: &Models<E, L>,
     stores: &Stores<G>,
 ) -> Result<IngestSummary, IngestError> {
     // SMELL: the stored picture paths are absolute, so they stop working when the chapter
     // folder is moved, until the chapter is ingested again.
     let folder =
-        std::fs::canonicalize(chapter_folder).map_err(|source| IngestError::ChapterFolder {
-            path: chapter_folder.to_path_buf(),
+        std::fs::canonicalize(chapter.folder).map_err(|source| IngestError::ChapterFolder {
+            path: chapter.folder.to_path_buf(),
             source,
         })?;
-    let chapter = ocr::read_chapter(&folder)?;
+    let converted = ocr::read_chapter(&folder)?;
     let document = Document {
         node: DocumentNode {
-            id: document_id(&chapter.index),
-            title: document_title(&chapter.index),
-            labels: DocumentLabels {
-                book: Some(chapter.index.book_title.clone()),
-                ..DocumentLabels::default()
-            },
+            id: document_id(&converted.index),
+            title: document_title(&converted.index),
+            labels: DocumentLabels::default(),
         },
-        items: chapter_items(&chapter),
+        items: chapter_items(&converted),
+        media: Some(MediaNode {
+            title: converted.index.media_title.trim().to_owned(),
+            labels: chapter.new_media.clone(),
+        }),
     };
     ingest_items(document, models, stores).await
 }
@@ -154,6 +170,7 @@ pub async fn ingest_image<E: Embedder, L: Llm, G: GraphStore>(
             labels: DocumentLabels::default(),
         },
         items,
+        media: None,
     };
     ingest_items(document, models, stores).await
 }
@@ -171,11 +188,14 @@ async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
     let Document {
         mut node,
         mut items,
+        media,
     } = document;
-    // An ingest never removes a label that was set after an earlier one: the author and the tags
-    // are the ones the stored document has, and only the book is the one of this run.
+    if let Some(media) = media {
+        let media = stored_or_added(media, stores).await?;
+        node.labels.take_media(&media.title, &media.labels);
+    }
+    // An ingest never removes an own tag that was set after an earlier one.
     if let Some(stored) = stored_node(node.id, stores).await? {
-        node.labels.author = stored.labels.author;
         node.labels.tags = stored.labels.tags;
     }
     for item in &mut items {

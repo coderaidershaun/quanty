@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use ocr::{Catalogue, ChapterIndex, ContentError};
+use ocr::{Catalogue, ChapterIndex, ContentError, DocumentName};
 
 fn sample_content() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/content")
@@ -54,9 +54,12 @@ fn the_catalogue_lists_every_chapter_under_a_root_and_names_what_it_cannot_read(
     std::fs::write(&broken_file, "not json").unwrap();
     std::fs::write(pictures_folder.join("image.json"), "{}").unwrap();
     let sample = &catalogue.chapters[0].index;
-    for (folder, chapter_number) in [(&chapter_2, 2), (&chapter_10, 10)] {
+    for (folder, number) in [(&chapter_2, 2), (&chapter_10, 10)] {
         let index = ChapterIndex {
-            chapter_number,
+            name: DocumentName::Chapter {
+                number,
+                name: "Sample Pages".to_owned(),
+            },
             ..sample.clone()
         };
         index.write(folder).unwrap();

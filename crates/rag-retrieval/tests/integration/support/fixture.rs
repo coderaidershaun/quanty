@@ -1,6 +1,7 @@
 //! Fills throwaway stores by hand with items and concepts at distances from one question that the
 //! test chooses, so that the score of every item is known before the search runs.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use graph::{
@@ -8,6 +9,7 @@ use graph::{
 };
 use rag_core::{
     ConceptId, ConceptPoint, DocId, DocumentLabels, ItemId, ItemKind, ItemPayload, ItemPoint,
+    LabelFilter, Tag,
 };
 use rag_ingestion::Stores;
 use rag_ingestion::testing::{StandInEmbedder, first_axis, vector_at};
@@ -19,17 +21,30 @@ pub const QUESTION: &str = "How is the price of an option found?";
 /// How far the score that Qdrant gives an item may be from the cosine the item was placed at.
 pub const SCORE_ERROR: f32 = 0.001;
 
+/// The labels of a document of no media that has these own tags.
 pub fn tagged(tags: &[&str]) -> DocumentLabels {
     DocumentLabels {
-        tags: tags.iter().map(|tag| tag.parse().unwrap()).collect(),
+        tags: tag_set(tags),
         ..DocumentLabels::default()
     }
+}
+
+/// A filter that wants every one of these tags.
+pub fn wanting(tags: &[&str]) -> LabelFilter {
+    LabelFilter {
+        tags: tag_set(tags),
+        ..LabelFilter::default()
+    }
+}
+
+fn tag_set(tags: &[&str]) -> BTreeSet<Tag> {
+    tags.iter().map(|tag| tag.parse().unwrap()).collect()
 }
 
 pub async fn found_among(
     retriever: &Retriever<StandInEmbedder, FalkorGraph>,
     kind: Option<ItemKind>,
-    wanted: &DocumentLabels,
+    wanted: &LabelFilter,
 ) -> SearchResults {
     retriever.search(QUESTION, kind, wanted).await.unwrap()
 }

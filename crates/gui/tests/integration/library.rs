@@ -1,26 +1,44 @@
-//! Checks that the live backend lists stored documents with their chapters on disk, keeps a book
-//! saved before any chapter between starts, and writes new labels to both stores with no model asked.
+//! Checks that the live backend lists stored documents with their chapters on disk, keeps a media
+//! saved before any document between starts, and writes new labels to both stores with no model
+//! asked.
 
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use graph::{BookNode, GraphStore};
+use graph::{GraphStore, MediaNode};
 use gui::backend::live::{LiveContext, RealServices, Services};
 use gui::backend::{Handler, Reply};
 use gui::contract::{
-    Book, Catalogue, ChapterLabel, Command, DocId, Document, Event, Failure, FailureKind,
-    ItemCounts, LabelEdit, NewBook, RequestId,
+    Catalogue, Category, ChapterLabel, Command, DocId, Document, DocumentTagsEdit, Event, Failure,
+    FailureKind, ItemCounts, Media, MediaEdit, NewMedia, RequestId,
 };
-use rag_core::{DocumentLabels, ItemFilter, Tag};
+use rag_core::{DocumentLabels, ItemFilter, MediaLabels, Tag};
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores, first_axis};
-use rag_ingestion::{IngestSummary, ingest_chapter};
+use rag_ingestion::{ChapterFolder, IngestSummary, ingest_chapter};
 use uuid::Uuid;
 
 use crate::support::{self, IN_DEPTH, INTUITION, SAMPLE_PAGES, copy_folder, sample_chapter};
 
 const REQUEST: RequestId = RequestId(7);
+
+/// The converted chapter in `folder`, whose media is made with no labels when it is new.
+fn chapter_at(folder: &Path) -> ChapterFolder<'_> {
+    static NO_LABELS: MediaLabels = MediaLabels {
+        category: rag_core::Category::Book,
+        authors: Vec::new(),
+        tags: BTreeSet::new(),
+    };
+    ChapterFolder {
+        folder,
+        new_media: &NO_LABELS,
+    }
+}
+
+fn owned(texts: &[&str]) -> Vec<String> {
+    texts.iter().map(|text| (*text).to_owned()).collect()
+}
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p gui --test integration -- --ignored library::"]
@@ -31,13 +49,13 @@ async fn the_catalogue_joins_stored_documents_with_their_chapter_folders() {
     let content = cx.config().content_folder.clone();
     // The first chapter is ingested where it is committed, and the graph keeps that folder.
     let intuition = sample_chapter(INTUITION);
-    let first = ingest_chapter(&intuition, &models, &stores).await;
+    let first = ingest_chapter(chapter_at(&intuition), &models, &stores).await;
     let first = first.expect("the first chapter should be ingested");
     // The second chapter is ingested from a copy under the content folder, and the graph keeps a
     // folder that is not there, so the chapter must be found again by its id.
     let copy = content.join(IN_DEPTH);
     copy_folder(&sample_chapter(IN_DEPTH), &copy);
-    let second = ingest_chapter(&copy, &models, &stores).await;
+    let second = ingest_chapter(chapter_at(&copy), &models, &stores).await;
     let second = second.expect("the second chapter should be ingested");
     let graph = &stores.graph;
     graph
@@ -52,11 +70,12 @@ async fn the_catalogue_joins_stored_documents_with_their_chapter_folders() {
     let result = catalogue_of(&cx).await;
 
     let expected = Catalogue {
-        books: vec![Book {
+        media: vec![Media {
             title: Some("Quanty Sample Notes".to_owned()),
-            author: None,
+            category: Category::Book,
+            authors: Vec::new(),
             tags: Vec::new(),
-            chapters: vec![
+            documents: vec![
                 shown(&first, 1, "Options Pricing Intuition", &intuition),
                 shown(&second, 2, "Black Scholes In Depth", &copy),
             ],
@@ -74,91 +93,113 @@ async fn a_saved_book_is_listed_after_a_second_start_shows_its_chapter_and_is_no
     let stores = first.stores().await.expect("the stores should open");
     let models = first.models().expect("the models should be made");
     let sample_pages = sample_chapter(SAMPLE_PAGES);
-    let stored = ingest_chapter(&sample_pages, &models, &stores).await;
+    let stored = ingest_chapter(chapter_at(&sample_pages), &models, &stores).await;
     stored.expect("the first chapter should be ingested");
 
-    let natenberg = NewBook {
+    let notes = NewMedia {
         title: "Quanty Sample Notes".to_owned(),
-        author: Some("Sheldon Natenberg".to_owned()),
-        tags: vec![
-            "Volatility".to_owned(),
-            "options".to_owned(),
-            " ".to_owned(),
-        ],
+        category: Category::Paper,
+        authors: owned(&[" Sheldon Natenberg ", "Euan Sinclair", " "]),
+        tags: owned(&["Volatility", "options", " "]),
     };
-    assert_eq!(saved(&first, &natenberg).await, Ok(()));
-    // The commonest save: no author and no tags are sent to the store as a null and an empty list.
-    let hedging = NewBook {
+    assert_eq!(saved(&first, &notes).await, Ok(()));
+    // The commonest save: no authors and no tags are sent to the store as empty lists.
+    let hedging = NewMedia {
         title: "Dynamic Hedging".to_owned(),
-        ..NewBook::default()
+        ..NewMedia::default()
     };
     assert_eq!(saved(&first, &hedging).await, Ok(()));
 
     let second = support::started_again(&first);
     let before = catalogue_of(&second).await.expect("the catalogue is read");
-    let hedging_book = ("Dynamic Hedging", None, &[][..], 0);
-    let pricing_book = ("Option Volatility and Pricing", None, &[][..], 1);
-    let notes_book = (
+    let authors = ["Sheldon Natenberg", "Euan Sinclair"];
+    let hedging_media = ("Dynamic Hedging", Category::Book, &[][..], &[][..], 0);
+    let pricing_media = (
+        "Option Volatility and Pricing",
+        Category::Book,
+        &[][..],
+        &[][..],
+        1,
+    );
+    let notes_media = (
         "Quanty Sample Notes",
-        Some("Sheldon Natenberg"),
+        Category::Paper,
+        &authors[..],
         &["options", "volatility"][..],
         0,
     );
     assert_eq!(
-        books_shown(&before),
-        books_shown_as(&[hedging_book, pricing_book, notes_book])
+        media_shown(&before),
+        media_shown_as(&[hedging_media, pricing_media, notes_media])
     );
 
     let intuition = sample_chapter(INTUITION);
-    let stored = ingest_chapter(&intuition, &models, &stores).await;
-    stored.expect("the chapter of the saved book should be ingested");
-    let notes_with_chapter = ("Quanty Sample Notes", notes_book.1, notes_book.2, 1);
+    let stored = ingest_chapter(chapter_at(&intuition), &models, &stores).await;
+    let stored = stored.expect("the chapter of the saved media should be ingested");
+    let notes_with_document = (
+        notes_media.0,
+        notes_media.1,
+        notes_media.2,
+        notes_media.3,
+        1,
+    );
     let after = catalogue_of(&second).await.expect("the catalogue is read");
     assert_eq!(
-        books_shown(&after),
-        books_shown_as(&[hedging_book, pricing_book, notes_with_chapter])
+        media_shown(&after),
+        media_shown_as(&[hedging_media, pricing_media, notes_with_document])
+    );
+    let document = after
+        .document(stored.doc_id.into())
+        .expect("the chapter is listed");
+    assert_eq!(
+        (&document.authors, &document.media_tags),
+        (&owned(&authors), &owned(&["options", "volatility"])),
+        "the chapter carries the labels of the saved media"
     );
 
-    let shouted = NewBook {
+    let shouted = NewMedia {
         title: " quanty SAMPLE notes ".to_owned(),
-        ..NewBook::default()
+        ..NewMedia::default()
     };
-    let label_only = NewBook {
+    let other_capitals = NewMedia {
         title: "option volatility and pricing".to_owned(),
-        ..NewBook::default()
+        ..NewMedia::default()
     };
-    let no_folder_name = NewBook {
+    let no_folder_name = NewMedia {
         title: "!!!".to_owned(),
-        ..NewBook::default()
+        ..NewMedia::default()
     };
     let refused = saved(&first, &shouted).await;
-    let refused = refused.expect_err("a stored book is there already");
-    assert_eq!(refused.kind, FailureKind::BookExists);
+    let refused = refused.expect_err("a stored media is there already");
+    assert_eq!(refused.kind, FailureKind::MediaExists);
     assert!(
         refused
             .hint
             .starts_with("Quanty Sample Notes is in the library"),
         "{refused:?}"
     );
-    let refused = saved(&first, &label_only).await;
-    let refused = refused.expect_err("a label on stored documents is there already");
-    assert_eq!(refused.kind, FailureKind::BookExists);
+    let refused = saved(&first, &other_capitals).await;
+    let refused = refused.expect_err("the media of a stored chapter is there already");
+    assert_eq!(refused.kind, FailureKind::MediaExists);
     let refused = saved(&first, &no_folder_name).await;
-    let refused = refused.expect_err("no chapter folder can be named after this title");
+    let refused = refused.expect_err("no folder can be named after this title");
     assert_eq!(refused.kind, FailureKind::BadFile);
 
-    let overwrite = BookNode {
+    let overwrite = MediaNode {
         title: "Quanty Sample Notes".to_owned(),
-        author: Some("Someone Else".to_owned()),
-        tags: BTreeSet::new(),
+        labels: MediaLabels {
+            category: rag_core::Category::Other,
+            authors: vec!["Someone Else".to_owned()],
+            tags: BTreeSet::new(),
+        },
     };
     stores
         .graph
-        .add_book(&overwrite)
+        .add_media(&overwrite)
         .await
         .expect("the graph accepts the same title again");
     let unchanged = catalogue_of(&second).await.expect("the catalogue is read");
-    assert_eq!(unchanged, after, "a stored book is never written over");
+    assert_eq!(unchanged, after, "a stored media is never written over");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -178,7 +219,7 @@ async fn the_labels_a_person_saves_are_in_the_next_catalogue_and_on_every_point_
     let connected = stores.connect().await;
     let models = stores.models(StandInLlm::finding_nothing());
     let intuition = sample_chapter(INTUITION);
-    let stored = ingest_chapter(&intuition, &models, &connected).await;
+    let stored = ingest_chapter(chapter_at(&intuition), &models, &connected).await;
     let stored = stored.expect("the chapter should be ingested");
 
     let answering = StandInLlm::finding_nothing();
@@ -190,41 +231,46 @@ async fn the_labels_a_person_saves_are_in_the_next_catalogue_and_on_every_point_
     });
 
     let document = only_document_of(&cx).await;
-    assert_eq!((document.author.as_deref(), document.tags.len()), (None, 0));
-
-    let first = LabelEdit::toward(
-        &document,
-        Some("Sheldon Natenberg"),
-        &["Options".to_owned(), "volatility".to_owned()],
+    assert_eq!(
+        (
+            document.authors.len(),
+            document.media_tags.len(),
+            document.tags.len()
+        ),
+        (0, 0, 0)
     );
-    assert_eq!(relabelled(&cx, &first).await, Ok(()));
-    let after_first = only_document_of(&cx).await;
-    assert_eq!(after_first.author.as_deref(), Some("Sheldon Natenberg"));
-    assert_eq!(after_first.tags, ["options", "volatility"]);
-    assert_every_point_carries(
-        &cx,
-        stored.doc_id,
-        "Sheldon Natenberg",
-        &["options", "volatility"],
-    )
-    .await;
 
-    let second = LabelEdit::toward(
-        &after_first,
-        Some("S. Natenberg"),
-        &["volatility".to_owned(), "greeks".to_owned()],
+    let edit = MediaEdit {
+        title: "quanty sample notes".to_owned(),
+        category: Category::Paper,
+        authors: owned(&["Sheldon Natenberg", "Euan Sinclair"]),
+        tags: owned(&["Options"]),
+    };
+    assert_eq!(media_edited(&cx, &edit).await, Ok(()));
+    let after_edit = only_document_of(&cx).await;
+    assert_eq!(after_edit.authors, ["Sheldon Natenberg", "Euan Sinclair"]);
+    assert_eq!(after_edit.media_tags, ["options"]);
+    assert_eq!(after_edit.tags, Vec::<String>::new());
+    let mut wanted = DocumentLabels {
+        media: Some("Quanty Sample Notes".to_owned()),
+        category: Some(rag_core::Category::Paper),
+        authors: owned(&["Sheldon Natenberg", "Euan Sinclair"]),
+        media_tags: tag_set(&["options"]),
+        tags: BTreeSet::new(),
+    };
+    assert_every_point_carries(&cx, stored.doc_id, &wanted).await;
+
+    let own = DocumentTagsEdit::toward(&after_edit, &owned(&["volatility", "Greeks", " "]));
+    assert_eq!(document_tags_saved(&cx, &own).await, Ok(()));
+    let after_tags = only_document_of(&cx).await;
+    assert_eq!(after_tags.tags, ["greeks", "volatility"]);
+    assert_eq!(
+        (&after_tags.authors, &after_tags.media_tags),
+        (&after_edit.authors, &after_edit.media_tags),
+        "own tags leave the labels of the media alone"
     );
-    assert_eq!(relabelled(&cx, &second).await, Ok(()));
-    let after_second = only_document_of(&cx).await;
-    assert_eq!(after_second.author.as_deref(), Some("S. Natenberg"));
-    assert_eq!(after_second.tags, ["greeks", "volatility"]);
-    assert_every_point_carries(
-        &cx,
-        stored.doc_id,
-        "S. Natenberg",
-        &["greeks", "volatility"],
-    )
-    .await;
+    wanted.tags = tag_set(&["greeks", "volatility"]);
+    assert_every_point_carries(&cx, stored.doc_id, &wanted).await;
 
     assert_eq!(
         embedders_made.load(Ordering::SeqCst),
@@ -237,22 +283,36 @@ async fn the_labels_a_person_saves_are_in_the_next_catalogue_and_on_every_point_
 #[tokio::test(flavor = "multi_thread")]
 async fn a_save_of_labels_answers_once_when_the_stores_are_down() {
     let cx = LiveContext::new(support::closed_ports_config(), RealServices);
-    let edit = LabelEdit {
+    let own = DocumentTagsEdit {
         doc: DocId(Uuid::from_u128(1)),
-        author: Some("Sheldon Natenberg".to_owned()),
-        ..LabelEdit::default()
+        add: owned(&["options"]),
+        ..DocumentTagsEdit::default()
+    };
+    let media = NewMedia {
+        title: "Dynamic Hedging".to_owned(),
+        ..NewMedia::default()
+    };
+    let edit = MediaEdit {
+        title: "Dynamic Hedging".to_owned(),
+        ..MediaEdit::default()
     };
 
-    let result = relabelled(&cx, &edit).await;
+    let results = [
+        document_tags_saved(&cx, &own).await,
+        saved(&cx, &media).await,
+        media_edited(&cx, &edit).await,
+    ];
 
-    let failure = result.expect_err("no store answers, so no label can be written");
-    assert!(
-        matches!(
-            failure.kind,
-            FailureKind::FalkorDbDown | FailureKind::QdrantDown
-        ),
-        "{failure:?}"
-    );
+    for result in results {
+        let failure = result.expect_err("no store answers, so no label can be written");
+        assert!(
+            matches!(
+                failure.kind,
+                FailureKind::FalkorDbDown | FailureKind::QdrantDown
+            ),
+            "{failure:?}"
+        );
+    }
 }
 
 async fn one_answer<S: Services>(cx: &LiveContext<S>, command: Command) -> Event {
@@ -274,13 +334,13 @@ async fn catalogue_of<S: Services>(cx: &LiveContext<S>) -> Result<Catalogue, Fai
     }
 }
 
-async fn saved<S: Services>(cx: &LiveContext<S>, book: &NewBook) -> Result<(), Failure> {
-    let command = Command::SaveBook {
+async fn saved<S: Services>(cx: &LiveContext<S>, media: &NewMedia) -> Result<(), Failure> {
+    let command = Command::SaveMedia {
         request: REQUEST,
-        book: book.clone(),
+        media: media.clone(),
     };
     match one_answer(cx, command).await {
-        Event::BookSaved {
+        Event::MediaSaved {
             request: REQUEST,
             result,
         } => result,
@@ -288,13 +348,30 @@ async fn saved<S: Services>(cx: &LiveContext<S>, book: &NewBook) -> Result<(), F
     }
 }
 
-async fn relabelled<S: Services>(cx: &LiveContext<S>, edit: &LabelEdit) -> Result<(), Failure> {
-    let command = Command::SetLabels {
+async fn media_edited<S: Services>(cx: &LiveContext<S>, edit: &MediaEdit) -> Result<(), Failure> {
+    let command = Command::EditMedia {
         request: REQUEST,
         edit: edit.clone(),
     };
     match one_answer(cx, command).await {
-        Event::LabelsSaved {
+        Event::MediaEdited {
+            request: REQUEST,
+            result,
+        } => result,
+        other => panic!("expected an answer to the edit, for {REQUEST:?}: {other:#?}"),
+    }
+}
+
+async fn document_tags_saved<S: Services>(
+    cx: &LiveContext<S>,
+    edit: &DocumentTagsEdit,
+) -> Result<(), Failure> {
+    let command = Command::SetDocumentTags {
+        request: REQUEST,
+        edit: edit.clone(),
+    };
+    match one_answer(cx, command).await {
+        Event::DocumentTagsSaved {
             request: REQUEST,
             doc,
             result,
@@ -317,12 +394,18 @@ async fn only_document_of<S: Services>(cx: &LiveContext<S>) -> Document {
     document
 }
 
-/// Every point of the document, not only the nearest ones, has these labels and its book.
+fn tag_set(texts: &[&str]) -> BTreeSet<Tag> {
+    texts
+        .iter()
+        .map(|tag| tag.parse::<Tag>().expect("a tag is not blank"))
+        .collect()
+}
+
+/// Every point of the document, not only the nearest ones, has these labels.
 async fn assert_every_point_carries<S: Services>(
     cx: &LiveContext<S>,
     document: rag_core::DocId,
-    author: &str,
-    tags: &[&str],
+    wanted: &DocumentLabels,
 ) {
     let stores = cx.stores().await.expect("the stores should open");
     let filter = ItemFilter {
@@ -335,46 +418,43 @@ async fn assert_every_point_carries<S: Services>(
     let count = count.expect("the points of the document should be counted");
     assert!(count > 0, "the document has points");
     assert_eq!(hits.len() as u64, count, "every point was read");
-    let wanted = DocumentLabels {
-        book: Some("Quanty Sample Notes".to_owned()),
-        author: Some(author.to_owned()),
-        tags: tags
-            .iter()
-            .map(|tag| tag.parse::<Tag>().expect("a tag is not blank"))
-            .collect(),
-    };
     for hit in hits {
-        assert_eq!(hit.payload.document_labels, wanted, "point {}", hit.id);
+        assert_eq!(&hit.payload.document_labels, wanted, "point {}", hit.id);
     }
 }
 
-type BookShown = (Option<String>, Option<String>, Vec<String>, usize);
+type MediaShown = (Option<String>, Category, Vec<String>, Vec<String>, usize);
 
-/// What a test compares of each book: title, saved author, saved tags and number of chapters.
-fn books_shown(catalogue: &Catalogue) -> Vec<BookShown> {
+/// A media as a test writes it: title, category, authors, tags and number of documents.
+type MediaWritten<'a> = (&'a str, Category, &'a [&'a str], &'a [&'a str], usize);
+
+/// What a test compares of each media: title, category, authors, tags and number of documents.
+fn media_shown(catalogue: &Catalogue) -> Vec<MediaShown> {
     catalogue
-        .books
+        .media
         .iter()
-        .map(|book| {
+        .map(|media| {
             (
-                book.title.clone(),
-                book.author.clone(),
-                book.tags.clone(),
-                book.chapters.len(),
+                media.title.clone(),
+                media.category,
+                media.authors.clone(),
+                media.tags.clone(),
+                media.documents.len(),
             )
         })
         .collect()
 }
 
-fn books_shown_as(books: &[(&str, Option<&str>, &[&str], usize)]) -> Vec<BookShown> {
-    books
+fn media_shown_as(media: &[MediaWritten<'_>]) -> Vec<MediaShown> {
+    media
         .iter()
-        .map(|(title, author, tags, chapters)| {
+        .map(|(title, category, authors, media_tags, documents)| {
             (
                 Some((*title).to_owned()),
-                author.map(str::to_owned),
-                tags.iter().map(|tag| (*tag).to_owned()).collect(),
-                *chapters,
+                *category,
+                owned(authors),
+                owned(media_tags),
+                *documents,
             )
         })
         .collect()
@@ -390,7 +470,8 @@ fn shown(summary: &IngestSummary, number: u32, name: &str, folder: &Path) -> Doc
             number,
             name: name.to_owned(),
         }),
-        author: None,
+        authors: Vec::new(),
+        media_tags: Vec::new(),
         tags: Vec::new(),
         pages: Some(3),
         items: ItemCounts {

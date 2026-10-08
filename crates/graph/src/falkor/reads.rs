@@ -1,18 +1,19 @@
-//! The statements that read documents, saved books, concepts, the items that mention them, and
+//! The statements that read documents, media, concepts, the items that mention them, and
 //! whether a document is ingested whole, with the code that runs each one and the row it expects.
 
 use std::collections::BTreeSet;
 
 use falkordb::FalkorValue;
-use rag_core::{ConceptId, DocId, DocumentLabels, ItemId, Tag};
+use rag_core::{Category, ConceptId, DocId, DocumentLabels, ItemId, MediaLabels, Tag};
 
 use super::{FalkorGraph, id_value};
-use crate::contents::{BookNode, ConceptNode, DocumentNode, ItemMentions};
+use crate::contents::{ConceptNode, DocumentNode, ItemMentions, MediaNode};
 use crate::store::GraphError;
 
-const DOCUMENT_ROW: &str =
-    "a document (an id, a title, a book or null, an author or null and a list of tags or null)";
-const BOOK_ROW: &str = "a book (a title, an author or null and a list of tags or null)";
+const DOCUMENT_ROW: &str = "a document (an id, a title, a media or null, a category or null, a \
+list of authors or null, a list of media tags or null and a list of tags or null)";
+const MEDIA_ROW: &str =
+    "a media (a title, a category, a list of authors or null and a list of tags or null)";
 const CONCEPT_ROW: &str = "a concept (an id, a name, a normalised name and a definition)";
 const ITEM_ROW: &str =
     "an item with the concepts it mentions (an item id and a list of concept ids)";
@@ -20,7 +21,8 @@ const INGESTED_ITEMS_ROW: &str = "a count of items or null (one whole number tha
 
 /// What a statement returns for a document `d`, in the order that `document_from_row` reads it.
 /// Every statement that reads a document takes its columns from here.
-pub(super) const DOCUMENT_COLUMNS: &str = "d.id, d.title, d.book, d.author, d.tags";
+pub(super) const DOCUMENT_COLUMNS: &str =
+    "d.id, d.title, d.media, d.category, d.authors, d.media_tags, d.tags";
 
 // SMELL: there is no index on the normalised name either, and an index could not cover the list
 // of aliases, so each lookup reads every concept node.
@@ -47,10 +49,10 @@ ORDER BY d.id"
     )
 }
 
-const BOOKS: &str = "\
-MATCH (b:Book)
-RETURN b.title, b.author, b.tags
-ORDER BY b.title";
+const MEDIA: &str = "\
+MATCH (m:Media)
+RETURN m.title, m.category, m.authors, m.tags
+ORDER BY m.title";
 
 const INGESTED_ITEMS: &str = "\
 MATCH (d:Document {id: $id})
@@ -126,15 +128,15 @@ pub(super) async fn documents(graph: &FalkorGraph) -> Result<Vec<DocumentNode>, 
         .map_err(|found| unreadable_reply(graph, action, DOCUMENT_ROW, found))
 }
 
-pub(super) async fn books(graph: &FalkorGraph) -> Result<Vec<BookNode>, GraphError> {
-    let action = "read the saved books";
-    let reply = graph.run(action, BOOKS, Vec::new()).await?;
+pub(super) async fn media(graph: &FalkorGraph) -> Result<Vec<MediaNode>, GraphError> {
+    let action = "read the media";
+    let reply = graph.run(action, MEDIA, Vec::new()).await?;
     reply
         .data
         .into_values_lossy()
-        .map(book_from_row)
+        .map(media_from_row)
         .collect::<Result<_, _>>()
-        .map_err(|found| unreadable_reply(graph, action, BOOK_ROW, found))
+        .map_err(|found| unreadable_reply(graph, action, MEDIA_ROW, found))
 }
 
 pub(super) async fn ingested_items(
@@ -273,39 +275,58 @@ pub(super) fn id_list(ids: &[impl ToString + Copy]) -> FalkorValue {
 }
 
 pub(super) fn document_from_row(row: Vec<FalkorValue>) -> Result<DocumentNode, String> {
-    let row = <[FalkorValue; 5]>::try_from(row).map_err(|row| format!("{row:?}"))?;
+    let row = <[FalkorValue; 7]>::try_from(row).map_err(|row| format!("{row:?}"))?;
     let [
         FalkorValue::String(id),
         FalkorValue::String(title),
-        book,
-        author,
+        media,
+        category,
+        authors,
+        media_tags,
         tags,
     ] = row
     else {
         return Err(format!("{row:?}"));
     };
-    let tags = tag_set(tags)?;
+    let category = text_or_null(category)?
+        .map(|text| category_from(&text))
+        .transpose()?;
     Ok(DocumentNode {
         id: id.parse().map_err(|_| format!("{id:?}"))?,
         title,
         labels: DocumentLabels {
-            book: text_or_null(book)?,
-            author: text_or_null(author)?,
-            tags,
+            media: text_or_null(media)?,
+            category,
+            authors: text_list(authors)?,
+            media_tags: tag_set(media_tags)?,
+            tags: tag_set(tags)?,
         },
     })
 }
 
-fn book_from_row(row: Vec<FalkorValue>) -> Result<BookNode, String> {
-    let row = <[FalkorValue; 3]>::try_from(row).map_err(|row| format!("{row:?}"))?;
-    let [FalkorValue::String(title), author, tags] = row else {
+fn media_from_row(row: Vec<FalkorValue>) -> Result<MediaNode, String> {
+    let row = <[FalkorValue; 4]>::try_from(row).map_err(|row| format!("{row:?}"))?;
+    let [
+        FalkorValue::String(title),
+        FalkorValue::String(category),
+        authors,
+        tags,
+    ] = row
+    else {
         return Err(format!("{row:?}"));
     };
-    Ok(BookNode {
+    Ok(MediaNode {
         title,
-        author: text_or_null(author)?,
-        tags: tag_set(tags)?,
+        labels: MediaLabels {
+            category: category_from(&category)?,
+            authors: text_list(authors)?,
+            tags: tag_set(tags)?,
+        },
     })
+}
+
+fn category_from(text: &str) -> Result<Category, String> {
+    text.parse().map_err(|_| format!("{text:?}"))
 }
 
 fn text_or_null(value: FalkorValue) -> Result<Option<String>, String> {
@@ -314,6 +335,21 @@ fn text_or_null(value: FalkorValue) -> Result<Option<String>, String> {
         FalkorValue::String(text) => Ok(Some(text)),
         other => Err(format!("{other:?}")),
     }
+}
+
+fn text_list(value: FalkorValue) -> Result<Vec<String>, String> {
+    let texts = match value {
+        FalkorValue::None => return Ok(Vec::new()),
+        FalkorValue::Array(texts) => texts,
+        other => return Err(format!("{other:?}")),
+    };
+    texts
+        .into_iter()
+        .map(|text| match text {
+            FalkorValue::String(text) => Ok(text),
+            other => Err(format!("{other:?}")),
+        })
+        .collect()
 }
 
 fn tag_set(value: FalkorValue) -> Result<BTreeSet<Tag>, String> {

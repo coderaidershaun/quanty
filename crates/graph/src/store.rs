@@ -6,7 +6,7 @@ use falkordb::FalkorDBError;
 use rag_core::{ConceptId, DocId, ItemId};
 
 use crate::contents::{
-    BookNode, ConceptAlias, ConceptNode, DocumentNode, DocumentRecord, ItemMentions, ItemNode,
+    ConceptAlias, ConceptNode, DocumentNode, DocumentRecord, ItemMentions, ItemNode, MediaNode,
     Mention, Relation,
 };
 
@@ -77,8 +77,7 @@ pub trait GraphStore {
         document: &DocumentNode,
     ) -> impl Future<Output = Result<(), GraphError>> + Send;
 
-    /// Every document with its title and its labels, ordered by id. A document that was written
-    /// before labels existed comes back with no labels.
+    /// Every document with its title and its labels, ordered by id.
     ///
     /// # Errors
     /// - [`GraphError::Query`] when the store refuses or cannot be reached
@@ -100,21 +99,32 @@ pub trait GraphStore {
         &self,
     ) -> impl Future<Output = Result<Vec<DocumentRecord>, GraphError>> + Send;
 
-    /// Creates the book node. A book with exactly this title that is in the graph stays as it
-    /// is, with the author and the tags it has, so repeating it changes nothing. Titles are
-    /// compared as they are given: the caller decides whether two spellings name one book.
+    /// Creates the media node. A media with exactly this title that is in the graph stays as it
+    /// is, with the labels it has, so an ingest never changes a stored media and repeating it
+    /// changes nothing. Titles are compared as they are given: the caller decides whether two
+    /// spellings name one media.
     ///
     /// # Errors
     /// [`GraphError::Query`] when the store refuses or cannot be reached.
-    fn add_book(&self, book: &BookNode) -> impl Future<Output = Result<(), GraphError>> + Send;
+    fn add_media(&self, media: &MediaNode) -> impl Future<Output = Result<(), GraphError>> + Send;
 
-    /// Every saved book, ordered by title. A book that is only a label on documents is not one.
+    /// Creates the media node, or writes its category, its authors and its tags over the ones it
+    /// has. Titles are compared as they are given.
+    ///
+    /// # Errors
+    /// [`GraphError::Query`] when the store refuses or cannot be reached.
+    fn update_media(
+        &self,
+        media: &MediaNode,
+    ) -> impl Future<Output = Result<(), GraphError>> + Send;
+
+    /// Every media, ordered by title. A media title that is only a label on documents is not one.
     ///
     /// # Errors
     /// - [`GraphError::Query`] when the store refuses or cannot be reached
     /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
-    ///   book
-    fn books(&self) -> impl Future<Output = Result<Vec<BookNode>, GraphError>> + Send;
+    ///   media
+    fn media(&self) -> impl Future<Output = Result<Vec<MediaNode>, GraphError>> + Send;
 
     /// Writes the items of a document: a node for each item, an edge `HAS_ITEM` from the
     /// document to each item, and an edge `NEXT` from each item to the one after it. Creates the

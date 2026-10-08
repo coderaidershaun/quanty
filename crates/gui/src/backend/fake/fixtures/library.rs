@@ -1,5 +1,5 @@
 //! The catalogue and the pages that are read from the committed sample chapters, built as the
-//! live backend builds them.
+//! live backend builds them, and one paper that has no folder.
 
 use std::path::{Path, PathBuf};
 
@@ -7,24 +7,62 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::contract::{
-    Book, Catalogue, ChapterLabel, DocId, Document, ImageRef, ItemCounts, PageBox, PagePiece,
-    PageView, PieceKind,
+    Catalogue, Category, DocId, Document, DocumentName, ImageRef, ItemCounts, Media, PageBox,
+    PagePiece, PageView, PieceKind,
 };
 
-/// The three sample chapters: the number of the document, its book folder and its chapter folder.
+/// The three sample chapters: the number of the document, its media folder and its chapter
+/// folder.
 const CHAPTERS: [(u128, &str, &str); 3] = [
     (1, "quanty-sample-notes", "chapter-1"),
     (2, "quanty-sample-notes", "chapter-2"),
     (3, "option-volatility-and-pricing", "chapter-1"),
 ];
 
-/// The author and the tags each sample document carries, in the order of `CHAPTERS`. The length
-/// is that of `CHAPTERS`, so a chapter with no row here does not compile.
-const LABELS: [(Option<&str>, &[&str]); CHAPTERS.len()] = [
-    (Some("Quanty Team"), &["notes", "options"]),
-    (Some("Quanty Team"), &["notes", "black-scholes"]),
-    (None, &["book", "volatility"]),
+/// The own tags each sample document carries, in the order of `CHAPTERS`. The length is that of
+/// `CHAPTERS`, so a chapter with no row here does not compile.
+const OWN_TAGS: [&[&str]; CHAPTERS.len()] = [
+    &["notes", "options"],
+    &["notes", "black-scholes"],
+    &["book", "volatility"],
 ];
+
+/// The authors of the media of the sample chapters. Both are books with no media tags.
+const SAMPLE_AUTHORS: [(&str, &[&str]); 2] = [
+    ("Option Volatility and Pricing", &[]),
+    ("Quanty Sample Notes", &["Quanty Team"]),
+];
+
+/// The paper of the sample library, kept in code because it has no folder, so the source view
+/// cannot open it.
+fn paper() -> Media {
+    let authors = vec!["A. Author".to_owned(), "B. Author".to_owned()];
+    let tags = vec!["hawkes".to_owned()];
+    let document = Document {
+        id: DocId(Uuid::from_u128(4)),
+        title: "Hawkes Processes in Finance".to_owned(),
+        chapter: None,
+        authors: authors.clone(),
+        media_tags: tags.clone(),
+        tags: vec!["point-processes".to_owned()],
+        pages: Some(18),
+        items: ItemCounts {
+            chunks: 24,
+            formulas: 6,
+            figures: 2,
+            tables: 1,
+        },
+        ingested_items: Some(33),
+        folder: None,
+    };
+    Media {
+        title: Some(document.title.clone()),
+        category: Category::Paper,
+        authors,
+        tags,
+        documents: vec![document],
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub(in crate::backend::fake) enum SampleError {
@@ -52,10 +90,28 @@ pub(in crate::backend::fake) enum SampleError {
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct ChapterFile {
-    book_title: String,
-    chapter_number: u32,
-    chapter_name: String,
+    media_title: String,
+    name: NameFile,
     page_count: u32,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
+enum NameFile {
+    Chapter { number: u32, name: String },
+    Title(String),
+}
+
+impl ChapterFile {
+    fn name(&self) -> DocumentName {
+        match &self.name {
+            NameFile::Chapter { number, name } => DocumentName::Chapter {
+                number: *number,
+                name: name.clone(),
+            },
+            NameFile::Title(title) => DocumentName::Title(title.clone()),
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -168,19 +224,27 @@ fn chapter_folder(samples: &Path, doc: DocId) -> Result<PathBuf, SampleError> {
     CHAPTERS
         .iter()
         .find(|(number, ..)| doc.0 == Uuid::from_u128(*number))
-        .map(|(_, book, chapter)| samples.join(book).join(chapter))
+        .map(|(_, media, chapter)| samples.join(media).join(chapter))
         .ok_or(SampleError::UnknownDocument { doc: doc.0 })
 }
 
-pub(super) fn title_of(book: &str, number: u32, name: &str) -> String {
-    format!("{book}, chapter {number}: {name}")
+pub(super) fn title_of(media: &str, number: u32, name: &str) -> String {
+    format!("{media}, chapter {number}: {name}")
+}
+
+/// The title the ingest gives a document of that media.
+pub(super) fn document_title(media: &str, name: &DocumentName) -> String {
+    match name {
+        DocumentName::Chapter { number, name } => title_of(media, *number, name),
+        DocumentName::Title(title) => title.clone(),
+    }
 }
 
 /// # Errors
 /// When a `chapter.json` or a `page.json` cannot be read.
 pub(in crate::backend::fake) fn catalogue(samples: &Path) -> Result<Catalogue, SampleError> {
-    let mut documents: Vec<(String, u32, Document)> = Vec::new();
-    for ((number, ..), (author, tags)) in CHAPTERS.iter().zip(LABELS) {
+    let mut documents: Vec<(String, Document)> = Vec::new();
+    for ((number, ..), tags) in CHAPTERS.iter().zip(OWN_TAGS) {
         let doc = DocId(Uuid::from_u128(*number));
         let folder = chapter_folder(samples, doc)?;
         let chapter: ChapterFile = read_json(&folder.join("chapter.json"))?;
@@ -198,21 +262,20 @@ pub(in crate::backend::fake) fn catalogue(samples: &Path) -> Result<Catalogue, S
             }
         }
         let total = items.chunks + items.formulas + items.figures + items.tables;
+        let authors = SAMPLE_AUTHORS
+            .iter()
+            .find(|(title, _)| *title == chapter.media_title)
+            .map(|(_, authors)| authors.iter().map(|author| (*author).to_owned()).collect())
+            .unwrap_or_default();
+        let name = chapter.name();
         documents.push((
-            chapter.book_title.clone(),
-            chapter.chapter_number,
+            chapter.media_title.clone(),
             Document {
                 id: doc,
-                title: title_of(
-                    &chapter.book_title,
-                    chapter.chapter_number,
-                    &chapter.chapter_name,
-                ),
-                chapter: Some(ChapterLabel {
-                    number: chapter.chapter_number,
-                    name: chapter.chapter_name,
-                }),
-                author: author.map(str::to_owned),
+                title: document_title(&chapter.media_title, &name),
+                chapter: name.chapter_label(),
+                authors,
+                media_tags: Vec::new(),
                 tags: tags.iter().map(|tag| (*tag).to_owned()).collect(),
                 pages: Some(chapter.page_count),
                 items,
@@ -221,22 +284,28 @@ pub(in crate::backend::fake) fn catalogue(samples: &Path) -> Result<Catalogue, S
             },
         ));
     }
-    documents.sort_by_key(|(book, number, _)| (book.to_lowercase(), *number));
-    let mut books: Vec<Book> = Vec::new();
-    for (title, _, document) in documents {
-        match books.last_mut() {
-            Some(book) if book.title.as_deref() == Some(title.as_str()) => {
-                book.chapters.push(document);
+    documents.sort_by_key(|(media, document)| {
+        let number = document.chapter.as_ref().map(|chapter| chapter.number);
+        (media.to_lowercase(), number)
+    });
+    let mut media: Vec<Media> = vec![paper()];
+    for (title, document) in documents {
+        match media.last_mut() {
+            Some(group) if group.title.as_deref() == Some(title.as_str()) => {
+                group.documents.push(document);
             }
-            _ => books.push(Book {
+            _ => media.push(Media {
                 title: Some(title),
-                author: None,
+                category: Category::Book,
+                authors: document.authors.clone(),
                 tags: Vec::new(),
-                chapters: vec![document],
+                documents: vec![document],
             }),
         }
     }
-    Ok(Catalogue { books })
+    let mut catalogue = Catalogue { media };
+    catalogue.sort_media();
+    Ok(catalogue)
 }
 
 fn read_page_file(folder: &Path, position: u32) -> Result<PageFile, SampleError> {
@@ -352,14 +421,13 @@ pub(in crate::backend::fake) fn page(
         .into_iter()
         .map(|entry| piece_of(&folder, page, entry))
         .collect::<Result<Vec<_>, _>>()?;
+    let name = chapter.name();
     Ok(PageView {
         doc,
         page,
-        book: Some(chapter.book_title),
-        chapter: Some(ChapterLabel {
-            number: chapter.chapter_number,
-            name: chapter.chapter_name,
-        }),
+        chapter: name.chapter_label(),
+        media: Some(chapter.media_title),
+        document_title: name.title().map(str::to_owned),
         page_count: chapter.page_count,
         printed_page,
         image: page_picture(&folder, page),

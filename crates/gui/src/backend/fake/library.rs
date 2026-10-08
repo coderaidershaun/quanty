@@ -5,7 +5,10 @@ use std::sync::MutexGuard;
 use super::scenes::Library;
 use super::{CATALOGUE_WAIT, Fake};
 use crate::backend::Reply;
-use crate::contract::{Book, Catalogue, Event, Failure, LabelEdit, NewBook, RequestId};
+use crate::contract::{
+    Catalogue, DocumentTagsEdit, Event, Failure, Media, MediaEdit, NewMedia, RequestId,
+    is_same_title,
+};
 
 pub(super) fn starting_catalogue(library: Library, samples: Catalogue) -> Catalogue {
     match library {
@@ -38,62 +41,92 @@ impl Fake {
         reply.send(Event::Catalogue { request, result });
     }
 
-    pub(super) async fn save_book(&self, request: RequestId, book: &NewBook, reply: &Reply) {
-        let result = self.after_wait(|| self.add_book(book)).await;
-        reply.send(Event::BookSaved { request, result });
+    pub(super) async fn save_media(&self, request: RequestId, media: &NewMedia, reply: &Reply) {
+        let result = self.after_wait(|| self.add_media(media)).await;
+        reply.send(Event::MediaSaved { request, result });
     }
 
-    /// Adds the book the way the live backend stores it: the title and the author trimmed, a blank
-    /// author none, and the tags in lower case, each once, in order.
-    // SMELL: how a saved book is stored is written here and again in the live backend, which
+    /// Adds the media the way the live backend stores it: the title and the authors trimmed, a
+    /// blank author dropped, and the tags in lower case, each once, in order.
+    // SMELL: how a saved media is stored is written here and again in the live backend, which
     // does it with the types of the stores. A change to one must be made in both.
-    fn add_book(&self, book: &NewBook) -> Result<(), Failure> {
+    fn add_media(&self, media: &NewMedia) -> Result<(), Failure> {
         let mut catalogue = self.catalogue();
-        if let Some(stored) = catalogue.stored_title(&book.title) {
-            return Err(Failure::book_exists(stored));
+        if let Some(stored) = catalogue.stored_title(&media.title) {
+            return Err(Failure::media_exists(stored));
         }
-        let tags = to_stored(&book.tags);
-        catalogue.books.push(Book {
-            title: Some(book.title.trim().to_owned()),
-            author: book
-                .author
-                .as_deref()
-                .map(str::trim)
-                .filter(|author| !author.is_empty())
-                .map(str::to_owned),
-            tags,
-            chapters: Vec::new(),
+        catalogue.media.push(Media {
+            title: Some(media.title.trim().to_owned()),
+            category: media.category,
+            authors: to_authors(&media.authors),
+            tags: to_stored(&media.tags),
+            documents: Vec::new(),
         });
-        catalogue.sort_books();
+        catalogue.sort_media();
         Ok(())
     }
 
-    pub(super) async fn set_labels(&self, request: RequestId, edit: &LabelEdit, reply: &Reply) {
-        let result = self.after_wait(|| self.relabel(edit)).await;
-        reply.send(Event::LabelsSaved {
+    pub(super) async fn edit_media(&self, request: RequestId, edit: &MediaEdit, reply: &Reply) {
+        let result = self.after_wait(|| self.relabel_media(edit)).await;
+        reply.send(Event::MediaEdited { request, result });
+    }
+
+    /// The media takes the new category, authors and tags, and every document of it a copy of the
+    /// authors and the tags.
+    // SMELL: how a media is relabelled is written here and again in the ingestion crate, which the
+    // fake may not name. A change to one must be made in both.
+    fn relabel_media(&self, edit: &MediaEdit) -> Result<(), Failure> {
+        let mut catalogue = self.catalogue();
+        let media = catalogue
+            .media
+            .iter_mut()
+            .find(|media| {
+                media
+                    .title
+                    .as_deref()
+                    .is_some_and(|title| is_same_title(title, &edit.title))
+            })
+            .ok_or_else(|| {
+                Failure::internal(format!("the library has no media titled {}", edit.title))
+            })?;
+        media.category = edit.category;
+        media.authors = to_authors(&edit.authors);
+        media.tags = to_stored(&edit.tags);
+        for document in &mut media.documents {
+            document.authors = media.authors.clone();
+            document.media_tags = media.tags.clone();
+        }
+        Ok(())
+    }
+
+    pub(super) async fn set_document_tags(
+        &self,
+        request: RequestId,
+        edit: &DocumentTagsEdit,
+        reply: &Reply,
+    ) {
+        let result = self.after_wait(|| self.retag(edit)).await;
+        reply.send(Event::DocumentTagsSaved {
             request,
             doc: edit.doc,
             result,
         });
     }
 
-    /// A new author replaces the old one, the tags to add are added, and then the tags to remove
-    /// are taken away. The tags end in lower case, each once, in order.
-    // SMELL: how a change of labels is applied is written here and again in the ingestion crate,
-    // which the fake may not name. A change to one must be made in both.
-    fn relabel(&self, edit: &LabelEdit) -> Result<(), Failure> {
+    /// The tags to add are added, and then the tags to remove are taken away. The tags end in
+    /// lower case, each once, in order.
+    // SMELL: how a change of own tags is applied is written here and again in the ingestion
+    // crate, which the fake may not name. A change to one must be made in both.
+    fn retag(&self, edit: &DocumentTagsEdit) -> Result<(), Failure> {
         let mut catalogue = self.catalogue();
         let document = catalogue
-            .books
+            .media
             .iter_mut()
-            .flat_map(|book| book.chapters.iter_mut())
+            .flat_map(|media| media.documents.iter_mut())
             .find(|document| document.id == edit.doc)
             .ok_or_else(|| {
                 Failure::internal(format!("the library has no document {}", edit.doc.0))
             })?;
-        if let Some(author) = &edit.author {
-            document.author = Some(author.clone());
-        }
         let removed = to_stored(&edit.remove);
         let mut tags = document.tags.clone();
         tags.extend(to_stored(&edit.add));
@@ -101,6 +134,17 @@ impl Fake {
         document.tags = to_stored(&tags);
         Ok(())
     }
+}
+
+/// The authors as the stores keep them: trimmed, none blank, each once, in the order given.
+fn to_authors(authors: &[String]) -> Vec<String> {
+    let mut stored: Vec<String> = Vec::new();
+    for author in authors.iter().map(|author| author.trim()) {
+        if !author.is_empty() && !stored.iter().any(|kept| kept == author) {
+            stored.push(author.to_owned());
+        }
+    }
+    stored
 }
 
 /// The tags as the stores keep them: lower case, none blank, each once, in order.

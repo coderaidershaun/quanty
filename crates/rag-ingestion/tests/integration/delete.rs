@@ -86,18 +86,27 @@ async fn delete_document_removes_one_document_from_both_stores_and_leaves_the_ot
             "relations": [{ "from": own, "type": "USED_FOR", "to": "Black–Scholes model" }],
         }))
     }));
-    // What the graph holds when only the document of B, its items, and the concepts with their
-    // relations are left: the concepts and the two relations are the three nodes and two edges.
+    // What the graph holds when only the document of B, its items, its media, and the concepts
+    // with their relations are left: the concepts and the two relations are three nodes and two
+    // edges, and the media of both chapters is one more node.
     let size_with_b_and_concepts = GraphSize {
-        nodes: b + 1 + 3,
+        nodes: b + 1 + 3 + 1,
         edges: b + (b - 1) + 2 * b + 2,
     };
-    let first = ingest_chapter(&support::intuition_chapter(), &models, &stores)
-        .await
-        .unwrap();
-    let second = ingest_chapter(&support::in_depth_chapter(), &models, &stores)
-        .await
-        .unwrap();
+    let first = ingest_chapter(
+        support::chapter_at(&support::intuition_chapter()),
+        &models,
+        &stores,
+    )
+    .await
+    .unwrap();
+    let second = ingest_chapter(
+        support::chapter_at(&support::in_depth_chapter()),
+        &models,
+        &stores,
+    )
+    .await
+    .unwrap();
     assert_ne!(first.doc_id, second.doc_id);
     assert_eq!(second.points_in_collection, a + b);
     let before = stored_concept_graph(&stores.graph).await;
@@ -162,8 +171,8 @@ async fn delete_document_removes_one_document_from_both_stores_and_leaves_the_ot
     );
     assert_eq!(
         size(&stores.graph).await,
-        GraphSize { nodes: 3, edges: 2 },
-        "only the concepts and their relations are left"
+        GraphSize { nodes: 4, edges: 2 },
+        "the concepts, their relations and the media are left"
     );
     let left = stored_concept_graph(&stores.graph).await;
     assert_eq!(left.concepts, before.concepts);

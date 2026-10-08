@@ -25,9 +25,9 @@ pub struct Cues {
     pub picked_pdf: Option<PathBuf>,
     /// The source view shows its target again.
     pub source_shows: u64,
-    /// The Ingest panel chooses the book `saved_book` once the catalogue that holds it arrives.
-    pub book_saves: u64,
-    pub saved_book: Option<String>,
+    /// The Ingest panel chooses the media `saved_media` once the catalogue that holds it arrives.
+    pub media_saves: u64,
+    pub saved_media: Option<String>,
 }
 
 /// `Default` is for tests; the app makes it with `new`.
@@ -79,9 +79,10 @@ impl Shared {
             Intent::TurnPage(delta) => self.turn_page(delta, effects),
             Intent::ReloadSource => self.reload_source(effects),
             Intent::RefreshCatalogue => self.refresh_catalogue(effects),
-            Intent::SetLabels(edit) => self.set_labels(edit, effects),
+            Intent::SetDocumentTags(edit) => self.set_document_tags(edit, effects),
             Intent::DeleteDocument(doc) => self.delete_document(doc, effects),
-            Intent::SaveBook(book) => self.save_book(book, effects),
+            Intent::SaveMedia(media) => self.save_media(media, effects),
+            Intent::EditMedia(edit) => self.edit_media(edit, effects),
             Intent::PickPdf => effects.push(Effect::PickFile),
             Intent::PdfPicked(path) => {
                 self.cues.picked_pdf = Some(path);
@@ -113,17 +114,18 @@ impl Shared {
             Event::Page { request, result } => self.page_arrived(request, result),
             Event::PageConcepts { request, result } => self.page_concepts_arrived(request, result),
             Event::Catalogue { request, result } => self.catalogue_arrived(request, result),
-            Event::LabelsSaved {
+            Event::DocumentTagsSaved {
                 request,
                 doc,
                 result,
-            } => self.labels_saved(request, doc, result, effects),
+            } => self.document_tags_saved(request, doc, result, effects),
             Event::Deleted {
                 request,
                 doc,
                 result,
             } => self.deleted(request, doc, result, effects),
-            Event::BookSaved { request, result } => self.book_saved(request, result, effects),
+            Event::MediaSaved { request, result } => self.media_saved(request, result, effects),
+            Event::MediaEdited { request, result } => self.media_edited(request, result, effects),
             Event::Preflight { request, result } => self.preflight_arrived(request, result),
             Event::IngestProgress { request, progress } => self.progress_arrived(request, progress),
             Event::IngestFinished { request, result } => {

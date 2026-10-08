@@ -1,13 +1,18 @@
-//! The ids, the item kind and the three label shapes, to and from the types of the backend. Every
-//! part of the live backend converts through these and writes none of its own.
+//! The ids, the item kind, the category, the document name and the label shapes, to and from the
+//! types of the backend. Every part of the live backend converts through these and writes none of
+//! its own.
 
 use std::collections::BTreeSet;
 
-use rag_core::{DocumentLabels, Tag};
-use rag_ingestion::LabelChange;
+use graph::MediaNode;
+use rag_core::{LabelFilter, MediaLabels, Tag, author_list};
+use rag_ingestion::{MediaChange, TagChange};
 use uuid::Uuid;
 
-use crate::contract::{ConceptId, DocId, Filters, ItemId, ItemKind, LabelEdit, NewBook};
+use crate::contract::{
+    Category, ConceptId, DocId, DocumentName, DocumentTagsEdit, Filters, ItemId, ItemKind,
+    MediaEdit, NewMedia,
+};
 
 fn uuid_of(text: &str) -> Uuid {
     Uuid::parse_str(text).expect("a backend id prints as a UUID")
@@ -77,43 +82,94 @@ impl From<ItemKind> for rag_core::ItemKind {
     }
 }
 
+impl From<rag_core::Category> for Category {
+    fn from(category: rag_core::Category) -> Category {
+        match category {
+            rag_core::Category::Book => Category::Book,
+            rag_core::Category::Paper => Category::Paper,
+            rag_core::Category::Other => Category::Other,
+        }
+    }
+}
+
+impl From<Category> for rag_core::Category {
+    fn from(category: Category) -> rag_core::Category {
+        match category {
+            Category::Book => rag_core::Category::Book,
+            Category::Paper => rag_core::Category::Paper,
+            Category::Other => rag_core::Category::Other,
+        }
+    }
+}
+
+impl From<ocr::DocumentName> for DocumentName {
+    fn from(name: ocr::DocumentName) -> DocumentName {
+        match name {
+            ocr::DocumentName::Chapter { number, name } => DocumentName::Chapter { number, name },
+            ocr::DocumentName::Title(title) => DocumentName::Title(title),
+        }
+    }
+}
+
+impl From<&DocumentName> for ocr::DocumentName {
+    fn from(name: &DocumentName) -> ocr::DocumentName {
+        match name {
+            DocumentName::Chapter { number, name } => ocr::DocumentName::Chapter {
+                number: *number,
+                name: name.clone(),
+            },
+            DocumentName::Title(title) => ocr::DocumentName::Title(title.clone()),
+        }
+    }
+}
+
 /// The tags that are not blank, in the form the backend stores them.
 fn tags(texts: &[String]) -> impl Iterator<Item = Tag> {
     texts.iter().filter_map(|text| text.parse().ok())
 }
 
-impl From<&Filters> for DocumentLabels {
-    fn from(filters: &Filters) -> DocumentLabels {
-        DocumentLabels {
-            book: filters.book.clone(),
+impl From<&Filters> for LabelFilter {
+    fn from(filters: &Filters) -> LabelFilter {
+        LabelFilter {
+            media: filters.media.clone(),
             author: filters.author.clone(),
+            category: filters.category.map(Into::into),
             tags: tags(&filters.tags).collect::<BTreeSet<_>>(),
         }
     }
 }
 
-impl From<&LabelEdit> for LabelChange {
-    fn from(edit: &LabelEdit) -> LabelChange {
-        LabelChange {
-            author: edit.author.clone(),
+/// A blank tag is dropped.
+impl From<&DocumentTagsEdit> for TagChange {
+    fn from(edit: &DocumentTagsEdit) -> TagChange {
+        TagChange {
             add: tags(&edit.add).collect(),
             remove: tags(&edit.remove).collect(),
         }
     }
 }
 
-/// A blank author is none, and a blank tag is dropped.
-impl From<&NewBook> for graph::BookNode {
-    fn from(book: &NewBook) -> graph::BookNode {
-        graph::BookNode {
-            title: book.title.trim().to_owned(),
-            author: book
-                .author
-                .as_deref()
-                .map(str::trim)
-                .filter(|author| !author.is_empty())
-                .map(str::to_owned),
-            tags: tags(&book.tags).collect(),
+/// The title is trimmed, and a blank author or tag is dropped.
+impl From<&NewMedia> for MediaNode {
+    fn from(media: &NewMedia) -> MediaNode {
+        MediaNode {
+            title: media.title.trim().to_owned(),
+            labels: MediaLabels {
+                category: media.category.into(),
+                authors: author_list(&media.authors),
+                tags: tags(&media.tags).collect(),
+            },
+        }
+    }
+}
+
+/// An edit gives the whole new state, so every label is replaced.
+impl From<&MediaEdit> for MediaChange {
+    fn from(edit: &MediaEdit) -> MediaChange {
+        MediaChange {
+            category: Some(edit.category.into()),
+            authors: Some(edit.authors.clone()),
+            tags: Some(tags(&edit.tags).collect()),
         }
     }
 }

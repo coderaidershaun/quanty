@@ -73,7 +73,7 @@ fn item(samples: &Path, number: usize, hit: &Hit) -> Result<ResultItem, SampleEr
             piece: hit.piece,
         })?;
     let chapter = page.chapter.clone().unwrap_or_default();
-    let book = page.book.clone().unwrap_or_default();
+    let media = page.media.clone().unwrap_or_default();
     let is_chunk = hit.kind == ItemKind::Chunk;
     Ok(ResultItem {
         number,
@@ -82,8 +82,8 @@ fn item(samples: &Path, number: usize, hit: &Hit) -> Result<ResultItem, SampleEr
         score: 0.93 - 0.04 * number as f32,
         reason: reason_of(number),
         doc,
-        doc_title: title_of(&book, chapter.number, &chapter.name),
-        book: page.book.clone(),
+        doc_title: title_of(&media, chapter.number, &chapter.name),
+        media: page.media.clone(),
         page: hit.page,
         printed_page: page.printed_page.clone(),
         label: piece.label.clone().filter(|_| !is_chunk),

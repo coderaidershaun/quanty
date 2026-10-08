@@ -50,8 +50,8 @@ enum Pace {
     Instant,
 }
 
-/// The catalogue is behind a lock because a saved book changes it, and a command is served by
-/// `&self`.
+/// The catalogue is behind a lock because a saved or edited media and a change of tags change it,
+/// and a command is served by `&self`.
 #[derive(Debug)]
 pub struct Fake {
     scene: &'static Scene,
@@ -159,7 +159,10 @@ impl Fake {
         }
     }
 
-    /// How many documents of the library carry the labels, or `None` when no label was asked.
+    /// How many documents of the library carry the labels, or `None` when no label was asked. A
+    /// document of no media has no category, so it fits no category that is asked for.
+    // SMELL: which labels fit a filter is written here and again in the core crate, which the
+    // fake may not name. A change to one must be made in both.
     fn documents_with(&self, filters: &Filters) -> Option<usize> {
         let tags: Vec<String> = filters
             .tags
@@ -167,23 +170,41 @@ impl Fake {
             .map(|tag| tag.trim().to_lowercase())
             .filter(|tag| !tag.is_empty())
             .collect();
-        if filters.book.is_none() && filters.author.is_none() && tags.is_empty() {
+        if filters.media.is_none()
+            && filters.author.is_none()
+            && filters.category.is_none()
+            && tags.is_empty()
+        {
             return None;
         }
-        let same = |wanted: &Option<String>, found: Option<&str>| {
-            wanted.as_ref().is_none_or(|wanted| {
-                found.is_some_and(|found| found.to_lowercase() == wanted.to_lowercase())
-            })
-        };
+        let same = |found: &str, wanted: &str| found.to_lowercase() == wanted.to_lowercase();
         let count = self
             .catalogue()
-            .books
+            .media
             .iter()
-            .flat_map(|book| book.chapters.iter().map(move |document| (book, document)))
-            .filter(|(book, document)| {
-                same(&filters.book, book.title.as_deref())
-                    && same(&filters.author, document.author.as_deref())
-                    && tags.iter().all(|tag| document.tags.contains(tag))
+            .flat_map(|media| {
+                media
+                    .documents
+                    .iter()
+                    .map(move |document| (media, document))
+            })
+            .filter(|(media, document)| {
+                let media_fits = filters.media.as_deref().is_none_or(|wanted| {
+                    media
+                        .title
+                        .as_deref()
+                        .is_some_and(|title| same(title, wanted))
+                });
+                let author_fits = filters.author.as_deref().is_none_or(|wanted| {
+                    document.authors.iter().any(|author| same(author, wanted))
+                });
+                let category_fits = filters
+                    .category
+                    .is_none_or(|wanted| media.title.is_some() && media.category == wanted);
+                let tags_fit = tags
+                    .iter()
+                    .all(|tag| document.media_tags.contains(tag) || document.tags.contains(tag));
+                media_fits && author_fits && category_fits && tags_fit
             })
             .count();
         Some(count)
@@ -287,7 +308,7 @@ impl Fake {
         self.wait(PREFLIGHT_WAIT).await;
         reply.send(Event::Preflight {
             request,
-            result: fixtures::ingest::preflight(ingest),
+            result: Ok(fixtures::ingest::preflight(ingest)),
         });
     }
 
@@ -358,8 +379,13 @@ impl Handler for Fake {
                 request, doc, page, ..
             } => self.load_page(request, doc, page, &reply).await,
             Command::LoadCatalogue { request } => self.load_catalogue(request, &reply).await,
-            Command::SetLabels { request, edit } => self.set_labels(request, &edit, &reply).await,
-            Command::SaveBook { request, book } => self.save_book(request, &book, &reply).await,
+            Command::SetDocumentTags { request, edit } => {
+                self.set_document_tags(request, &edit, &reply).await;
+            }
+            Command::SaveMedia { request, media } => {
+                self.save_media(request, &media, &reply).await;
+            }
+            Command::EditMedia { request, edit } => self.edit_media(request, &edit, &reply).await,
             Command::CheckHealth { request } => self.check_health(request, &reply),
             Command::Preflight { request, ingest } => {
                 self.preflight(request, &ingest, &reply).await;

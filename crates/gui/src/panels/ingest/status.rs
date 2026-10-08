@@ -5,7 +5,7 @@ use eframe::egui;
 
 use super::Local;
 use crate::contract::{
-    ChapterLabel, ChapterState, Failure, IngestOutcome, IngestProgress, IngestReport,
+    ChapterState, DocumentName, Failure, IngestOutcome, IngestProgress, IngestReport,
     IngestRequest, IngestStage, Intent, Preflight,
 };
 use crate::panels::PanelCx;
@@ -36,9 +36,7 @@ pub(super) fn show(
             }
         }
         IngestJob::Checked { preflight, .. } => {
-            if !preflight.chapter.name.is_empty() {
-                chapter_title(ui, &preflight.chapter);
-            }
+            chapter_title(ui, &preflight.name);
             for blocker in &preflight.blockers {
                 Notice::error(&blocker.hint).show(ui);
                 detail(ui, blocker);
@@ -76,12 +74,12 @@ fn detail(ui: &mut egui::Ui, failure: &Failure) {
     ui.label(TextRole::Small.rich(&failure.detail));
 }
 
-fn chapter_title(ui: &mut egui::Ui, chapter: &ChapterLabel) {
-    ui.label(TextRole::BodyStrong.rich(format!("Chapter {} · {}", chapter.number, chapter.name)));
+fn chapter_title(ui: &mut egui::Ui, name: &DocumentName) {
+    ui.label(TextRole::BodyStrong.rich(name.label()));
 }
 
 fn chapter_lines(ui: &mut egui::Ui, preflight: &Preflight) {
-    chapter_title(ui, &preflight.chapter);
+    chapter_title(ui, &preflight.name);
     let pages = preflight.pages;
     let line = match preflight.state {
         None => return,

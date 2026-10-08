@@ -1,4 +1,4 @@
-//! The free check of a chapter before a start: what is already converted or ingested, and
+//! The free check of a document before a start: what is already converted or ingested, and
 //! what would stop a start that can be known without paying.
 
 use graph::GraphStore;
@@ -25,7 +25,8 @@ async fn check<S: Services>(
     cx: &LiveContext<S>,
     ingest: &IngestRequest,
 ) -> Result<Preflight, Failure> {
-    let (chapter, job) = chapter_job(cx, ingest)?;
+    let job = chapter_job(cx, ingest)?;
+    let name = ingest.name.clone();
     let source_sha256 = job.source_sha256().map_err(|error| cx.failure(error))?;
     let document = rag_core::DocId::from_source_sha256(&source_sha256);
     let stores = cx.stores().await?;
@@ -44,7 +45,7 @@ async fn check<S: Services>(
             .map_err(|error| cx.failure(error))?;
         if stored == items {
             return Ok(Preflight {
-                chapter,
+                name,
                 pages: None,
                 state: Some(ChapterState::Ingested { items }),
                 blockers: Vec::new(),
@@ -57,7 +58,7 @@ async fn check<S: Services>(
         Ok(saved) => saved,
         Err(ContentError::Read { source, .. }) if source.kind() == std::io::ErrorKind::NotFound => {
             return Ok(Preflight {
-                chapter,
+                name,
                 pages: None,
                 state: Some(ChapterState::New),
                 blockers: Vec::new(),
@@ -72,7 +73,7 @@ async fn check<S: Services>(
             given_file: file_name_of(&ingest.pdf),
         };
         return Ok(Preflight {
-            chapter,
+            name,
             pages: None,
             state: None,
             blockers: vec![cx.failure(taken)],
@@ -90,7 +91,7 @@ async fn check<S: Services>(
         ChapterState::PartlyConverted { pages_done }
     };
     Ok(Preflight {
-        chapter,
+        name,
         pages: Some(saved.page_count),
         state: Some(state),
         blockers: Vec::new(),

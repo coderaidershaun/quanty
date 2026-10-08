@@ -1,7 +1,6 @@
-//! Runs a chapter pdf from the file to the stores, through `ingest_pdf` and through the built
-//! `rag-ingest pdf` command. Nothing is billed: `ingest_pdf` converts with stand-ins for the paid
-//! calls, the built command is stopped before its first paid call, the stores are throwaway ones
-//! or ports where nothing listens, and the content folder is a temporary one.
+//! Runs a pdf from the file to the stores through `ingest_pdf`. Nothing is billed: it converts
+//! with stand-ins for the paid calls, the stores are throwaway ones, and the content folder is a
+//! temporary one.
 
 mod runs;
 
@@ -15,7 +14,7 @@ use graph::testing::{
 use ocr::ChapterJob;
 use ocr::convert::convert_chapter_with;
 use ocr::testing::{Scenario, StubServices, sample_job};
-use rag_core::{DocId, Llm, LlmError};
+use rag_core::{DocId, Llm, LlmError, MediaLabels};
 use rag_ingestion::testing::StandInEmbedder;
 use rag_ingestion::{ChapterPdf, Models, PdfError, PdfOutcome, Stores, ingest_pdf};
 use serde_json::{Value, json};
@@ -25,14 +24,25 @@ use crate::support::{StandInLlm, ThrowawayStores, concept_points_in, decisions_i
 /// The sample chapter pdf, which stand-ins for the paid calls of `ocr` convert.
 struct StandInPdf {
     job: ChapterJob,
+    new_media: MediaLabels,
     stubs: StubServices,
     conversions_started: AtomicUsize,
 }
 
 impl StandInPdf {
+    /// The sample book chapter, whose media is made with no labels.
     fn new(throwaway: &ThrowawayStores, scenario: Scenario) -> StandInPdf {
+        StandInPdf::of(
+            sample_job(&throwaway.config().content_folder),
+            MediaLabels::default(),
+            scenario,
+        )
+    }
+
+    fn of(job: ChapterJob, new_media: MediaLabels, scenario: Scenario) -> StandInPdf {
         StandInPdf {
-            job: sample_job(&throwaway.config().content_folder),
+            job,
+            new_media,
             stubs: StubServices::new(scenario),
             conversions_started: AtomicUsize::new(0),
         }
@@ -45,6 +55,7 @@ impl StandInPdf {
     ) -> Result<PdfOutcome, PdfError> {
         let pdf = ChapterPdf {
             job: &self.job,
+            new_media: &self.new_media,
             convert: async |job: &ChapterJob| {
                 self.conversions_started.fetch_add(1, Ordering::SeqCst);
                 convert_chapter_with(job, &self.stubs).await

@@ -34,37 +34,38 @@ impl Lists {
         *self = Lists {
             key: Some(key),
             page_book: shown.map(book_text),
-            page_chapter: shown
-                .and_then(|page| page.chapter.as_ref())
-                .map(chapter_text),
+            page_chapter: shown.and_then(document_text),
             ..Lists::default()
         };
         let Some(catalogue) = shared.library.catalogue.ready() else {
             return;
         };
         let with_chapters = catalogue
-            .books
+            .media
             .iter()
-            .filter_map(|book| book.chapters.first().map(|first| (book, first.id)));
-        for (book, first) in with_chapters {
-            let is_open = book.chapters.iter().any(|chapter| Some(chapter.id) == open);
+            .filter_map(|media| media.documents.first().map(|first| (media, first.id)));
+        for (media, first) in with_chapters {
+            let is_open = media
+                .documents
+                .iter()
+                .any(|document| Some(document.id) == open);
             if is_open {
                 self.open_book = Some(self.books.len());
-                for chapter in &book.chapters {
-                    if Some(chapter.id) == open {
+                for document in &media.documents {
+                    if Some(document.id) == open {
                         self.open_chapter = Some(self.chapters.len());
                     }
                     self.chapters.push(
-                        chapter
+                        document
                             .chapter
                             .as_ref()
-                            .map_or_else(|| chapter.title.clone(), chapter_text),
+                            .map_or_else(|| document.title.clone(), chapter_text),
                     );
-                    self.chapter_docs.push(chapter.id);
+                    self.chapter_docs.push(document.id);
                 }
             }
             self.books
-                .push(book.title.clone().unwrap_or_else(|| "No book".to_owned()));
+                .push(media.title.clone().unwrap_or_else(|| "No book".to_owned()));
             self.first_chapters.push(first);
         }
     }
@@ -111,7 +112,12 @@ impl Lists {
 }
 
 fn book_text(page: &PageView) -> String {
-    page.book.clone().unwrap_or_else(|| "No book".to_owned())
+    page.media.clone().unwrap_or_else(|| "No book".to_owned())
+}
+
+fn document_text(page: &PageView) -> Option<String> {
+    let chapter = page.chapter.as_ref().map(chapter_text);
+    chapter.or_else(|| page.document_title.clone())
 }
 
 fn chapter_text(chapter: &ChapterLabel) -> String {

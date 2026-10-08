@@ -9,9 +9,9 @@ use gui::backend::live::{LiveContext, RealServices, Services};
 use gui::contract::{DocId, Failure};
 use ocr::testing::{Scenario, StubServices};
 use ocr::{ChapterIndex, ChapterJob, ConversionSummary, ConvertError};
-use rag_core::{ApiKey, Config, ItemKind};
+use rag_core::{ApiKey, Config, ItemKind, MediaLabels};
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores, first_axis, vector_at};
-use rag_ingestion::{Item, chapter_items, ingest_chapter};
+use rag_ingestion::{ChapterFolder, Item, chapter_items, ingest_chapter};
 use serde_json::json;
 
 pub const QUESTION: &str = "How is a call option priced?";
@@ -282,7 +282,11 @@ pub async fn fill(name: &str, answering: &StandInLlm, folders: Folders) -> World
     let models = stores.models_with_embedder(picks.embedder(), StandInLlm::finding_nothing());
     let mut stored_document = None;
     for chapter in [SAMPLE_PAGES, INTUITION, IN_DEPTH] {
-        let summary = ingest_chapter(&sample_chapter(chapter), &models, &connected)
+        let folder = ChapterFolder {
+            folder: &sample_chapter(chapter),
+            new_media: &MediaLabels::default(),
+        };
+        let summary = ingest_chapter(folder, &models, &connected)
             .await
             .expect("a sample chapter should be ingested");
         if chapter == folders.stored {

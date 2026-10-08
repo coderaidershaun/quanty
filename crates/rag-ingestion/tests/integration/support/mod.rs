@@ -4,19 +4,19 @@
 mod decisions;
 mod stand_in_image_services;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use graph::testing::{GraphSize, StoredDocument, StoredItem, size, stored_document};
-use graph::{FalkorGraph, GraphStore};
+use graph::{FalkorGraph, GraphStore, MediaNode};
 use qdrant_client::qdrant::ScrollPointsBuilder;
 use qdrant_client::qdrant::point_id::PointIdOptions;
 use qdrant_client::{Payload, Qdrant};
-use rag_core::{Config, Tag};
-use rag_ingestion::Item;
+use rag_core::{Category, Config, MediaLabels, Tag};
+use rag_ingestion::{ChapterFolder, Item};
 use serde_json::{Value, json};
 
 pub use decisions::{decision_for_mention, decisions_in, mentions_of};
@@ -48,6 +48,20 @@ pub fn intuition_chapter() -> PathBuf {
 /// Written by hand: the derivation and the formulas of the Black–Scholes model.
 pub fn in_depth_chapter() -> PathBuf {
     content_folder().join("quanty-sample-notes/chapter-2")
+}
+
+/// The converted chapter in `folder`. Its media, when the graph does not have it yet, is made
+/// with no labels.
+pub fn chapter_at(folder: &Path) -> ChapterFolder<'_> {
+    static NO_LABELS: MediaLabels = MediaLabels {
+        category: Category::Book,
+        authors: Vec::new(),
+        tags: BTreeSet::new(),
+    };
+    ChapterFolder {
+        folder,
+        new_media: &NO_LABELS,
+    }
 }
 
 /// A chart of a volatility surface, cut from a page of a book on option trading.
@@ -137,13 +151,13 @@ fn expected_stored_items(items: &[Item]) -> Vec<StoredItem> {
         .collect()
 }
 
-/// The size of a graph that holds one document and these many items: the document and its
-/// items are the nodes, and the edges are one `HAS_ITEM` for each item and one `NEXT` between
-/// each two items that follow each other.
+/// The size of a graph that holds one document of one media and these many items: the media, the
+/// document and its items are the nodes, and the edges are one `HAS_ITEM` for each item and one
+/// `NEXT` between each two items that follow each other. The media has no edge.
 pub fn size_of_one_document(item_count: usize) -> GraphSize {
     let items = item_count as u64;
     GraphSize {
-        nodes: items + 1,
+        nodes: items + 2,
         edges: items + items.saturating_sub(1),
     }
 }
@@ -169,28 +183,49 @@ pub async fn assert_graph_holds_only(graph: &FalkorGraph, items: &[Item]) -> Sto
     stored
 }
 
-/// Checks that every point of the collection carries the book of the sample chapter, this author
-/// and these tags, and that so does the one document node of the graph. Returns the points.
+/// Checks that the graph holds the media of the sample chapter with these labels, and that every
+/// point of the collection and the one document node of the graph carry a copy of them and these
+/// own tags. A label that is empty is left out of a point. Returns the points.
 pub async fn assert_labelled(
     config: &Config,
     graph: &FalkorGraph,
-    author: &str,
+    media: &MediaLabels,
     tags: &[&str],
 ) -> BTreeMap<String, Value> {
+    let media_tags: Vec<&str> = media.tags.iter().map(Tag::as_str).collect();
     let points = points_in(config).await;
     for (id, payload) in &points {
-        assert_eq!(payload["book"], SAMPLE_BOOK, "{id}");
-        assert_eq!(payload["author"], author, "{id}");
-        assert_eq!(payload["tags"], json!(tags), "{id}");
+        assert_eq!(payload["media"], SAMPLE_BOOK, "{id}");
+        assert_eq!(payload["category"], media.category.as_str(), "{id}");
+        assert_eq!(payload["authors"], json!(media.authors), "{id}");
+        assert_eq!(
+            payload.get("media_tags"),
+            list_or_nothing(&media_tags).as_ref(),
+            "{id}"
+        );
+        assert_eq!(payload.get("tags"), list_or_nothing(tags).as_ref(), "{id}");
     }
+    assert_eq!(
+        graph.media().await.unwrap(),
+        vec![MediaNode {
+            title: SAMPLE_BOOK.to_owned(),
+            labels: media.clone(),
+        }]
+    );
     let nodes = graph.documents().await.unwrap();
     assert_eq!(nodes.len(), 1);
     let labels = &nodes[0].labels;
-    assert_eq!(labels.book.as_deref(), Some(SAMPLE_BOOK));
-    assert_eq!(labels.author.as_deref(), Some(author));
+    assert_eq!(labels.media.as_deref(), Some(SAMPLE_BOOK));
+    assert_eq!(labels.category, Some(media.category));
+    assert_eq!(labels.authors, media.authors);
+    assert_eq!(labels.media_tags, media.tags);
     assert_eq!(
         labels.tags.iter().map(Tag::as_str).collect::<Vec<_>>(),
         tags
     );
     points.into_iter().collect()
+}
+
+fn list_or_nothing(texts: &[&str]) -> Option<Value> {
+    (!texts.is_empty()).then(|| json!(texts))
 }

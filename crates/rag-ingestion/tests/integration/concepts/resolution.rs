@@ -65,9 +65,13 @@ async fn each_rule_of_resolution_links_or_creates_and_logs_its_decision() {
     let (models, model) = run.models();
     let (throwaway, stores, items) = (&run.throwaway, &run.stores, &run.items);
 
-    let summary = ingest_chapter(&support::intuition_chapter(), &models, stores)
-        .await
-        .unwrap();
+    let summary = ingest_chapter(
+        support::chapter_at(&support::intuition_chapter()),
+        &models,
+        stores,
+    )
+    .await
+    .unwrap();
     let stored = stored_concept_graph(&stores.graph).await;
 
     let names: Vec<&str> = stored
@@ -294,7 +298,7 @@ async fn a_second_ingest_asks_nothing_and_adds_no_node_edge_point_or_alias() {
     let (models, model) = run.models();
     let chapter = support::intuition_chapter();
 
-    ingest_chapter(&chapter, &models, &run.stores)
+    ingest_chapter(support::chapter_at(&chapter), &models, &run.stores)
         .await
         .unwrap();
     let calls_after_first = model.calls();
@@ -302,7 +306,7 @@ async fn a_second_ingest_asks_nothing_and_adds_no_node_edge_point_or_alias() {
     let concept_inputs_after_first = concept_inputs(&models.embedder).len();
     let lines_after_first = decisions_in(run.throwaway.config()).len();
 
-    let second = ingest_chapter(&chapter, &models, &run.stores)
+    let second = ingest_chapter(support::chapter_at(&chapter), &models, &run.stores)
         .await
         .unwrap();
 

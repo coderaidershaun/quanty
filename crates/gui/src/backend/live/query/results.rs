@@ -106,7 +106,7 @@ pub(super) fn result_items(hits: &[SearchHit], facts: Vec<Option<PieceFacts>>) -
                 reason: reason(&hit.reason),
                 doc: payload.doc_id.into(),
                 doc_title: payload.doc_title.clone(),
-                book: payload.document_labels.book.clone(),
+                media: payload.document_labels.media.clone(),
                 page: payload.page,
                 printed_page: payload.printed_page.clone(),
                 label: payload.label.clone(),

@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use graph::GraphError;
 use ocr::{ContentError, ConvertError};
-use rag_core::{EmbedError, EmptyTag, StoreError};
+use rag_core::{EmbedError, EmptyTag, StoreError, UnknownCategory};
 use rag_ingestion::{PdfError, RelabelError};
 use tokio::task::JoinError;
 
@@ -31,11 +31,21 @@ pub(crate) enum PdfIngestError {
     )]
     MissingFileName,
 
-    #[error("`book` is blank; give the title of the book the chapter is from")]
-    BlankBook,
+    #[error("`media` is blank; give the title of the media the PDF belongs to, such as a book")]
+    BlankMedia,
 
-    #[error("a tag in `tags` is blank; give each tag as a word, or leave `tags` out")]
+    #[error("`category` is not valid")]
+    Category(#[source] UnknownCategory),
+
+    #[error(
+        "a tag in `tags` or `document_tags` is blank; give each tag as a word, or leave the list out"
+    )]
     Tag(#[source] EmptyTag),
+
+    #[error(
+        "`document_title` is for a paper or other media, and a book's chapter is named by its file name; leave `document_title` out, or give a `category` of paper or other"
+    )]
+    TitleForABook,
 
     #[error("`path` must be an absolute path, and {} is not", path.display())]
     NotAbsolute { path: PathBuf },
@@ -78,14 +88,19 @@ pub(crate) enum PdfIngestError {
     Base64(#[source] base64::DecodeError),
 
     #[error(
-        "`book` cannot name a folder; give the title of the book, with at least one letter or digit"
+        "`media` cannot name a folder; give the title of the media, with at least one letter or digit"
     )]
-    Book(#[source] ContentError),
+    Media(#[source] ContentError),
 
     #[error(
-        "the file name is not that of a chapter; copy or rename the file to chapter-<number>-<name>.pdf, such as chapter-1-financial-contracts.pdf, or give such a `file_name` with `pdf_base64`"
+        "the file name is not that of a book chapter; copy or rename the file to chapter-<number>-<name>.pdf, such as chapter-1-financial-contracts.pdf, or give such a `file_name` with `pdf_base64`, or give a `category` of paper or other, whose PDF can have any name"
     )]
-    Chapter(#[source] ConvertError),
+    ChapterFileName(#[source] ContentError),
+
+    #[error(
+        "`document_title` cannot name a folder; give a title with at least one letter or digit"
+    )]
+    DocumentTitle(#[source] ConvertError),
 
     #[error(
         "an ingest is running (job {job_id}); ask `ingest_status` with that job_id, and send this PDF when that job has ended"
@@ -131,7 +146,7 @@ pub(crate) enum PdfIngestError {
     #[error("could not ingest the PDF")]
     Pdf(#[source] Box<PdfError>),
 
-    #[error("could not write the author and the tags")]
+    #[error("could not write the tags of the document")]
     Labels(#[from] RelabelError),
 
     #[error("the ingest stopped without an answer")]

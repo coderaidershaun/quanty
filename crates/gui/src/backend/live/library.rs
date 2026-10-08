@@ -1,19 +1,20 @@
-//! Lists the stored documents grouped into books, with the books saved before any chapter, saves a
-//! new book, and changes the labels of a document. Deleting a document is not built yet.
+//! Lists the stored documents grouped into media, with the media saved before any document,
+//! saves a new media, changes the labels of a media and the own tags of a document. Deleting a
+//! document is not built yet.
 
 use std::collections::HashMap;
 
-use graph::{BookNode, DocumentRecord, GraphStore};
+use graph::{DocumentRecord, GraphStore, MediaNode};
 use ocr::ChapterEntry;
-use ocr::content::book_folder_name;
-use rag_ingestion::{LabelChange, relabel};
+use ocr::content::media_folder_name;
+use rag_ingestion::{MediaChange, TagChange, relabel_document_tags, relabel_media};
 
 use super::chapters::chapters_on_disk;
 use super::{LiveContext, Services};
 use crate::backend::Reply;
 use crate::contract::{
-    Book, Catalogue, ChapterLabel, DocId, Document, Event, Failure, ItemCounts, LabelEdit, NewBook,
-    RequestId, is_same_title,
+    Catalogue, DocId, Document, DocumentName, DocumentTagsEdit, Event, Failure, ItemCounts, Media,
+    MediaEdit, NewMedia, RequestId, is_same_title,
 };
 
 /// Sends exactly one catalogue, also when it cannot be read, so the window never waits for one.
@@ -33,7 +34,7 @@ async fn read_catalogue<S: Services>(cx: &LiveContext<S>) -> Result<Catalogue, F
         .document_records()
         .await
         .map_err(|error| cx.failure(error))?;
-    let saved = graph.books().await.map_err(|error| cx.failure(error))?;
+    let saved = graph.media().await.map_err(|error| cx.failure(error))?;
     let found = chapters_on_disk(
         records
             .iter()
@@ -43,25 +44,28 @@ async fn read_catalogue<S: Services>(cx: &LiveContext<S>) -> Result<Catalogue, F
     Ok(catalogue_from(records, found, saved))
 }
 
-/// Sends exactly one answer, also when the labels cannot be written.
-pub(super) async fn set_labels<S: Services>(
+/// Sends exactly one answer, also when the tags cannot be written.
+pub(super) async fn set_document_tags<S: Services>(
     cx: &LiveContext<S>,
     request: RequestId,
-    edit: &LabelEdit,
+    edit: &DocumentTagsEdit,
     reply: &Reply,
 ) {
-    let result = write_labels(cx, edit).await;
-    reply.send(Event::LabelsSaved {
+    let result = write_document_tags(cx, edit).await;
+    reply.send(Event::DocumentTagsSaved {
         request,
         doc: edit.doc,
         result,
     });
 }
 
-/// It makes no embedder and asks no model: only the labels are written, in both stores.
-async fn write_labels<S: Services>(cx: &LiveContext<S>, edit: &LabelEdit) -> Result<(), Failure> {
+/// It makes no embedder and asks no model: only the tags are written, in both stores.
+async fn write_document_tags<S: Services>(
+    cx: &LiveContext<S>,
+    edit: &DocumentTagsEdit,
+) -> Result<(), Failure> {
     let stores = cx.stores().await?;
-    relabel(edit.doc.into(), &LabelChange::from(edit), &stores)
+    relabel_document_tags(edit.doc.into(), &TagChange::from(edit), &stores)
         .await
         .map(|_| ())
         .map_err(|error| cx.failure(error))
@@ -80,112 +84,130 @@ pub(super) async fn delete<S: Services>(
     });
 }
 
-/// Sends exactly one answer, also when the book is refused or cannot be stored.
-pub(super) async fn save_book<S: Services>(
+/// Sends exactly one answer, also when the media is refused or cannot be stored.
+pub(super) async fn save_media<S: Services>(
     cx: &LiveContext<S>,
     request: RequestId,
-    book: &NewBook,
+    media: &NewMedia,
     reply: &Reply,
 ) {
-    let result = store_book(cx, book).await;
-    reply.send(Event::BookSaved { request, result });
+    let result = store_media(cx, media).await;
+    reply.send(Event::MediaSaved { request, result });
 }
 
-/// The title must be one that a chapter folder can be named after, and the library must not have
-/// it yet, whether as a saved book or as a label on stored documents.
-// SMELL: the check and the write are two steps, so another program that saves a book between
-// them can store a second book whose title differs only in capitals. The store itself treats
-// only the exact same title as the same book.
-async fn store_book<S: Services>(cx: &LiveContext<S>, book: &NewBook) -> Result<(), Failure> {
-    book_folder_name(&book.title).map_err(|error| cx.failure(error))?;
-    if let Some(stored) = read_catalogue(cx).await?.stored_title(&book.title) {
-        return Err(Failure::book_exists(stored));
+/// The title must be one that a folder can be named after, and the library must not have it yet,
+/// whether as a saved media or as a label on stored documents.
+// SMELL: the check and the write are two steps, so another program that saves a media between
+// them can store a second media whose title differs only in capitals. The store itself treats
+// only the exact same title as the same media.
+async fn store_media<S: Services>(cx: &LiveContext<S>, media: &NewMedia) -> Result<(), Failure> {
+    media_folder_name(&media.title).map_err(|error| cx.failure(error))?;
+    if let Some(stored) = read_catalogue(cx).await?.stored_title(&media.title) {
+        return Err(Failure::media_exists(stored));
     }
     let graph = cx.graph().await?;
     graph
-        .add_book(&BookNode::from(book))
+        .add_media(&MediaNode::from(media))
         .await
         .map_err(|error| cx.failure(error))
 }
 
-/// A book is the one the document was stored with, not the one its chapter on disk names, because
-/// an ask that is filtered by a book matches the stored book.
+/// Sends exactly one answer, also when the media is unknown or a store fails.
+pub(super) async fn edit_media<S: Services>(
+    cx: &LiveContext<S>,
+    request: RequestId,
+    edit: &MediaEdit,
+    reply: &Reply,
+) {
+    let result = write_media(cx, edit).await;
+    reply.send(Event::MediaEdited { request, result });
+}
+
+/// It makes no embedder and asks no model: the media and every document of it are relabelled, in
+/// both stores.
+async fn write_media<S: Services>(cx: &LiveContext<S>, edit: &MediaEdit) -> Result<(), Failure> {
+    let stores = cx.stores().await?;
+    relabel_media(&edit.title, &MediaChange::from(edit), &stores)
+        .await
+        .map(|_| ())
+        .map_err(|error| cx.failure(error))
+}
+
+/// A document as the catalogue lists it, with the media it was stored with: an ask that is
+/// filtered by a media matches the stored one, not the one its folder on disk names.
+struct Listed {
+    media: Option<String>,
+    category: Option<rag_core::Category>,
+    document: Document,
+}
+
+/// Each stored media holds the documents whose media has its title, whatever the capitals, and a
+/// media saved before its first document holds none. Documents whose media has no node are grouped
+/// by title and take the labels of the media from their first document, since every document
+/// carries a copy. Documents of no media are one group with no title.
 fn catalogue_from(
     records: Vec<DocumentRecord>,
     mut found: HashMap<rag_core::DocId, ChapterEntry>,
-    saved: Vec<BookNode>,
+    saved: Vec<MediaNode>,
 ) -> Catalogue {
-    let mut documents: Vec<(Option<String>, Document)> = records
+    let mut left: Vec<Listed> = records
         .into_iter()
         .map(|record| {
             let chapter = found.remove(&record.node.id);
             document_of(record, chapter)
         })
         .collect();
-    documents.sort_by_cached_key(|(book, document)| {
-        let number = document.chapter.as_ref().map(|chapter| chapter.number);
-        (
-            book.is_none(),
-            book.as_deref().map(str::to_lowercase),
-            book.clone(),
-            number.is_none(),
-            number,
-            document.title.clone(),
-            document.id,
-        )
-    });
-
-    let mut books: Vec<Book> = Vec::new();
-    for (title, document) in documents {
-        match books.last_mut() {
-            Some(book) if book.title == title => book.chapters.push(document),
-            _ => books.push(Book {
-                title,
-                author: None,
-                tags: Vec::new(),
-                chapters: vec![document],
+    let mut media: Vec<Media> = Vec::new();
+    for node in saved {
+        let (of_node, others): (Vec<Listed>, Vec<Listed>) = left.into_iter().partition(|listed| {
+            listed
+                .media
+                .as_deref()
+                .is_some_and(|title| is_same_title(title, &node.title))
+        });
+        left = others;
+        media.push(Media {
+            title: Some(node.title),
+            category: node.labels.category.into(),
+            authors: node.labels.authors,
+            tags: node.labels.tags.iter().map(ToString::to_string).collect(),
+            documents: of_node.into_iter().map(|listed| listed.document).collect(),
+        });
+    }
+    for listed in left {
+        match media.iter_mut().find(|group| group.title == listed.media) {
+            Some(group) => group.documents.push(listed.document),
+            None => media.push(Media {
+                title: listed.media,
+                category: listed.category.map(Into::into).unwrap_or_default(),
+                authors: listed.document.authors.clone(),
+                tags: listed.document.media_tags.clone(),
+                documents: vec![listed.document],
             }),
         }
     }
-    for saved in saved {
-        join_saved_book(&mut books, saved);
+    for group in &mut media {
+        group.documents.sort_by_cached_key(reading_order);
     }
-    let mut catalogue = Catalogue { books };
-    catalogue.sort_books();
+    let mut catalogue = Catalogue { media };
+    catalogue.sort_media();
     catalogue
 }
 
-fn join_saved_book(books: &mut Vec<Book>, saved: BookNode) {
-    let author = saved.author;
-    let tags: Vec<String> = saved.tags.iter().map(ToString::to_string).collect();
-    let mut has_documents = false;
-    for book in books.iter_mut() {
-        if book
-            .title
-            .as_deref()
-            .is_some_and(|title| is_same_title(title, &saved.title))
-        {
-            book.author = author.clone();
-            book.tags = tags.clone();
-            has_documents = true;
-        }
-    }
-    if !has_documents {
-        books.push(Book {
-            title: Some(saved.title),
-            author,
-            tags,
-            chapters: Vec::new(),
-        });
-    }
+/// Chapters come first, by number, then the other documents by title.
+fn reading_order(document: &Document) -> (bool, Option<u32>, String, DocId) {
+    let number = document.chapter.as_ref().map(|chapter| chapter.number);
+    (
+        number.is_none(),
+        number,
+        document.title.clone(),
+        document.id,
+    )
 }
 
-/// The stored book of a document, and the document as the catalogue lists it. What the chapter
-/// on disk gives is left empty when there is no chapter, never made up.
-fn document_of(
-    record: DocumentRecord,
-    chapter: Option<ChapterEntry>,
-) -> (Option<String>, Document) {
+/// What the document on disk gives is left empty when it is not there, never made up. A
+/// document with a title of its own has no chapter.
+fn document_of(record: DocumentRecord, entry: Option<ChapterEntry>) -> Listed {
     let DocumentRecord {
         node,
         ingested_items,
@@ -193,22 +215,19 @@ fn document_of(
         ..
     } = record;
     let labels = node.labels;
-    let (label, pages, folder) = match chapter {
-        Some(ChapterEntry { folder, index }) => (
-            Some(ChapterLabel {
-                number: index.chapter_number,
-                name: index.chapter_name,
-            }),
-            Some(index.page_count),
-            Some(folder),
-        ),
+    let (chapter, pages, folder) = match entry {
+        Some(ChapterEntry { folder, index }) => {
+            let chapter = DocumentName::from(index.name).chapter_label();
+            (chapter, Some(index.page_count), Some(folder))
+        }
         None => (None, None, None),
     };
     let document = Document {
         id: node.id.into(),
         title: node.title,
-        chapter: label,
-        author: labels.author,
+        chapter,
+        authors: labels.authors,
+        media_tags: labels.media_tags.iter().map(ToString::to_string).collect(),
         tags: labels.tags.iter().map(ToString::to_string).collect(),
         pages,
         items: ItemCounts {
@@ -220,5 +239,9 @@ fn document_of(
         ingested_items,
         folder,
     };
-    (labels.book, document)
+    Listed {
+        media: labels.media,
+        category: labels.category,
+        document,
+    }
 }

@@ -8,9 +8,11 @@ use std::path::Path;
 use graph::testing::ThrowawayGraph;
 use graph::{
     ConceptNode, DocumentNode, DocumentRecord, FalkorGraph, GraphStore, ItemNode, ItemsByKind,
-    Mention, Relation, RelationKind,
+    MediaNode, Mention, Relation, RelationKind,
 };
-use rag_core::{ConceptId, Config, DocId, DocumentLabels, ItemId, ItemKind, Tag};
+use rag_core::{
+    Category, ConceptId, Config, DocId, DocumentLabels, ItemId, ItemKind, MediaLabels, Tag,
+};
 
 const THROWAWAY_PREFIX: &str = "test-graph-";
 
@@ -87,9 +89,12 @@ async fn document_records_come_back_with_their_labels_mark_folder_and_items_by_k
         id: id_a,
         title: "Document A".to_owned(),
         labels: DocumentLabels {
-            book: Some("Options and Volatility".to_owned()),
-            author: Some("An Author".to_owned()),
-            tags: BTreeSet::from([tag("options"), tag("volatility")]),
+            media: Some("Options and Volatility".to_owned()),
+            category: Some(Category::Paper),
+            // Not in the order of the alphabet, so a read that sorts the authors shows.
+            authors: vec!["B Author".to_owned(), "A Author".to_owned()],
+            media_tags: BTreeSet::from([tag("options")]),
+            tags: BTreeSet::from([tag("volatility")]),
         },
     };
     let node_b = DocumentNode {
@@ -238,4 +243,40 @@ async fn the_edges_among_what_was_asked_and_the_concepts_of_a_page_come_back_and
     assert_eq!(graph.relations_among(&[]).await.unwrap(), vec![]);
     assert_eq!(graph.mentions_between(&[], &[c1.id]).await.unwrap(), vec![]);
     assert_eq!(graph.mentions_between(&[i2.id], &[]).await.unwrap(), vec![]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local FalkorDB from docker compose and bills nothing; run with: cargo test -p graph --test integration -- --ignored reads::"]
+async fn media_come_back_by_title_and_only_an_update_changes_a_stored_one() {
+    let (_throwaway, graph) = throwaway("media").await;
+    let paper = MediaNode {
+        title: "Hawkes Processes".to_owned(),
+        labels: MediaLabels {
+            category: Category::Paper,
+            // Not in the order of the alphabet, so a read that sorts the authors shows.
+            authors: vec!["B Author".to_owned(), "A Author".to_owned()],
+            tags: BTreeSet::from([tag("hawkes")]),
+        },
+    };
+    let book = MediaNode {
+        title: "A Book".to_owned(),
+        labels: MediaLabels::default(),
+    };
+    graph.add_media(&paper).await.unwrap();
+    graph.add_media(&book).await.unwrap();
+
+    // A second add of a stored title keeps the labels it has.
+    let other_labels = MediaNode {
+        title: paper.title.clone(),
+        labels: MediaLabels {
+            category: Category::Other,
+            authors: vec!["Someone Else".to_owned()],
+            tags: BTreeSet::new(),
+        },
+    };
+    graph.add_media(&other_labels).await.unwrap();
+    assert_eq!(graph.media().await.unwrap(), vec![book.clone(), paper]);
+
+    graph.update_media(&other_labels).await.unwrap();
+    assert_eq!(graph.media().await.unwrap(), vec![book, other_labels]);
 }

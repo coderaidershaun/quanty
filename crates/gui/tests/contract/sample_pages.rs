@@ -49,7 +49,7 @@ fn assert_page_loads(fake: &Fake, doc_number: u128, page: u32, pages: u32) -> Ev
         (view.doc, view.page, view.page_count),
         (doc(doc_number), page, pages)
     );
-    assert!(view.book.is_some() && view.chapter.is_some() && !view.pieces.is_empty());
+    assert!(view.media.is_some() && view.chapter.is_some() && !view.pieces.is_empty());
     for piece in &view.pieces {
         assert!(
             !piece.text.ends_with('\n'),

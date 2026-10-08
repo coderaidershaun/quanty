@@ -9,7 +9,7 @@ mod trace;
 
 use graph::{GraphError, GraphStore};
 use rag_core::{
-    ConceptStore, DocId, DocumentLabels, EmbedError, Embedder, ItemFilter, ItemKind, ItemStore,
+    ConceptStore, DocId, EmbedError, Embedder, ItemFilter, ItemKind, ItemStore, LabelFilter,
     StoreError,
 };
 
@@ -67,7 +67,7 @@ impl<E: Embedder, G: GraphStore> Retriever<E, G> {
         &self,
         question: &str,
         kind: Option<ItemKind>,
-        wanted: &DocumentLabels,
+        wanted: &LabelFilter,
     ) -> Result<SearchResults, SearchError> {
         Ok(self.search_traced(question, kind, wanted).await?.results)
     }
@@ -88,10 +88,10 @@ impl<E: Embedder, G: GraphStore> Retriever<E, G> {
     /// results are the seeds. With a `kind` only items of that kind are looked at, and step 6 is
     /// left out.
     ///
-    /// With `wanted` labels only items of the documents that carry all of them are looked at, in
-    /// every step. A cited item is of the document of the result that cites it, so it is of a
-    /// document that carries them too. When no document carries them there are no results, and
-    /// the question is not embedded.
+    /// With a `wanted` filter only items of the documents whose labels fit every part of it are
+    /// looked at, in every step. A cited item is of the document of the result that cites it, so
+    /// that document fits the filter too. When no document fits it there are no results, and the
+    /// question is not embedded.
     ///
     /// # Errors
     /// - [`SearchError::Embed`] when the question cannot be embedded
@@ -101,7 +101,7 @@ impl<E: Embedder, G: GraphStore> Retriever<E, G> {
         &self,
         question: &str,
         kind: Option<ItemKind>,
-        wanted: &DocumentLabels,
+        wanted: &LabelFilter,
     ) -> Result<TracedSearch, SearchError> {
         let documents = if wanted.is_empty() {
             None

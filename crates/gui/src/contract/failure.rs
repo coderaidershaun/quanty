@@ -26,7 +26,7 @@ pub enum FailureKind {
     BadFile,
     PageFailed,
     ChapterTaken,
-    BookExists,
+    MediaExists,
     SourceMissing,
     Internal,
 }
@@ -64,10 +64,10 @@ impl FailureKind {
                 "A page could not be converted. Start again: the pages already done are kept."
             }
             FailureKind::ChapterTaken => {
-                "Another PDF is already converted as this book and chapter. Change the book title, or remove that chapter's folder."
+                "Another PDF is already converted as this document of this media. Choose another media, or remove that document's folder."
             }
-            FailureKind::BookExists => {
-                "This book is in the library already. Choose it from the Book list."
+            FailureKind::MediaExists => {
+                "This media is in the library already. Choose it from the Media list."
             }
             FailureKind::SourceMissing => {
                 "The chapter's files are not where they were. Ingest the chapter again."
@@ -104,15 +104,15 @@ impl Failure {
             .with_hint("This part of quanty is not built yet.")
     }
 
-    /// The refusal of a book whose title the library has. `title` is the title as the library
-    /// has it, so the person sees which row of the Book list to choose.
-    pub fn book_exists(title: &str) -> Failure {
+    /// The refusal of a media whose title the library has. `title` is the title as the library
+    /// has it, so the person sees which row of the Media list to choose.
+    pub fn media_exists(title: &str) -> Failure {
         Failure::new(
-            FailureKind::BookExists,
-            format!("the library already has a book titled {title}"),
+            FailureKind::MediaExists,
+            format!("the library already has a media titled {title}"),
         )
         .with_hint(format!(
-            "{title} is in the library already. Choose it from the Book list."
+            "{title} is in the library already. Choose it from the Media list."
         ))
     }
 }

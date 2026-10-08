@@ -14,6 +14,6 @@ mod source;
 pub use ask::AskSession;
 pub use health::{Health, HealthLevel};
 pub use ingest::IngestJob;
-pub use library::{BookSave, Busy, Library};
+pub use library::{Busy, Library, MediaEditing, MediaSave};
 pub use shared::{Cues, Quit, Shared};
 pub use source::{SourceNav, SourceTarget};

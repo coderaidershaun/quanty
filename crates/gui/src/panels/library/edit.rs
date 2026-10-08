@@ -1,16 +1,13 @@
-//! The form that corrects the author and the tags of one chapter, and how its save went.
+//! The form that corrects the own tags of one document, and how its save went.
 
 use eframe::egui;
 
-use crate::contract::{DocId, Document, Intent, LabelEdit};
-use crate::panels::labels::{
-    AUTHOR, TAGS, author_label, author_text, caption, tag_labels, tags_text,
-};
+use crate::contract::{DocId, Document, DocumentTagsEdit, Intent};
+use crate::panels::labels::{TAGS, caption, list_of, text_of};
 use crate::state::{Library, Shared};
-use crate::theme::{TextRole, color, space};
+use crate::theme::space;
 use crate::widgets::{Button, Notice, TextInput};
 
-pub(super) const NO_AUTHOR: &str = "No author";
 const TAGS_HINT: &str = "With commas between them";
 const SAVE: &str = "Save";
 const CANCEL: &str = "Cancel";
@@ -25,7 +22,6 @@ enum SaveStep {
 #[derive(Debug)]
 pub(super) struct Draft {
     pub(super) doc: DocId,
-    author: String,
     tags: String,
     step: SaveStep,
 }
@@ -34,8 +30,7 @@ impl Draft {
     pub(super) fn of(document: &Document) -> Draft {
         Draft {
             doc: document.id,
-            author: author_text(document.author.as_deref()),
-            tags: tags_text(&document.tags),
+            tags: text_of(&document.tags),
             step: SaveStep::Typing,
         }
     }
@@ -49,7 +44,7 @@ pub(super) fn can_start(shared: &Shared) -> bool {
         && shared.library.pending.is_none()
 }
 
-/// Closes the form when its chapter is gone or its save went through, and shows the refusal when
+/// Closes the form when its document is gone or its save went through, and shows the refusal when
 /// the save failed. It reads `busy` and `failures` and not an event, so an answer that came while
 /// another tab was open is found when the page is drawn again.
 pub(super) fn follow(editing: &mut Option<Draft>, library: &Library) {
@@ -81,26 +76,13 @@ pub(super) fn form(
 ) -> bool {
     let is_sent = draft.step == SaveStep::Sent;
     ui.add_enabled_ui(!is_sent, |ui| {
-        caption(ui, AUTHOR);
-        TextInput::new(AUTHOR, &mut draft.author)
-            .id_salt("library_author")
-            .placeholder(NO_AUTHOR)
-            .show(ui);
         caption(ui, TAGS);
         TextInput::new(TAGS, &mut draft.tags)
             .id_salt("library_tags")
             .placeholder(TAGS_HINT)
             .show(ui);
     });
-    let author = author_label(&draft.author);
-    let edit = LabelEdit::toward(document, author.as_deref(), &tag_labels(&draft.tags));
-    if let (Some(kept), None) = (&document.author, &author) {
-        ui.label(
-            TextRole::Small
-                .rich(format!("An author cannot be removed yet, so {kept} stays."))
-                .color(color::TEXT_MUTED),
-        );
-    }
+    let edit = DocumentTagsEdit::toward(document, &list_of(&draft.tags));
     ui.add_space(space::SM);
     let mut is_cancelled = false;
     ui.horizontal(|ui| {
@@ -108,7 +90,7 @@ pub(super) fn form(
         let save = Button::primary(SAVE).loading(is_sent);
         if ui.add_enabled(can_save, save).clicked() {
             draft.step = SaveStep::Sent;
-            intents.push(Intent::SetLabels(edit));
+            intents.push(Intent::SetDocumentTags(edit));
         }
         let cancel = Button::secondary(CANCEL);
         is_cancelled = ui.add_enabled(!is_sent, cancel).clicked();

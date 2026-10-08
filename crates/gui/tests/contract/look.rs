@@ -24,7 +24,7 @@ enum Start {
     AsItOpens,
     AfterAClickOnTheFigureCitation,
     AfterAClickOnStartIngest,
-    AfterANewBookIsTyped,
+    AfterANewMediaIsTyped,
     AfterAClickOnTheLibraryTab,
 }
 
@@ -106,7 +106,7 @@ const ROWS: [Row; 12] = [
         picture: "ingest-new-book",
         scene: "idle",
         window: DEFAULT_WINDOW,
-        start: Start::AfterANewBookIsTyped,
+        start: Start::AfterANewMediaIsTyped,
     },
 ];
 
@@ -157,12 +157,12 @@ fn type_into(harness: &mut Window, name: &str, text: &str) {
 
 /// Escape at the end leaves no box with the keyboard: a box that has it draws a caret that
 /// blinks, and the picture must be the same on every run.
-fn type_a_new_book(harness: &mut Window) {
+fn type_a_new_media(harness: &mut Window) {
     click(harness, Role::Tab, "Ingest");
-    click(harness, Role::ComboBox, "Book");
-    click(harness, Role::Button, "Add a new book…");
-    type_into(harness, "Book title", "Natenberg on Options");
-    type_into(harness, "Author", "Sheldon Natenberg");
+    click(harness, Role::ComboBox, "Media");
+    click(harness, Role::Button, "Add new media…");
+    type_into(harness, "Media title", "Natenberg on Options");
+    type_into(harness, "Authors", "Sheldon Natenberg");
     type_into(harness, "Tags", "Volatility, options");
     harness.key_press(egui::Key::Escape);
     testkit::settle(harness);
@@ -184,7 +184,7 @@ impl Row {
                     .click();
                 testkit::settle(&mut harness);
             }
-            Start::AfterANewBookIsTyped => type_a_new_book(&mut harness),
+            Start::AfterANewMediaIsTyped => type_a_new_media(&mut harness),
             Start::AfterAClickOnTheLibraryTab => click(&mut harness, Role::Tab, "Library"),
         }
         // The pointer is painted in the picture until a frame has run without it.

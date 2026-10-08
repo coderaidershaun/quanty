@@ -1,21 +1,19 @@
 //! What the graph holds: the nodes and the edges that a program writes to it and reads from it.
 
-use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use rag_core::{ConceptId, DocId, DocumentLabels, ItemId, ItemKind, Tag};
+use rag_core::{ConceptId, DocId, DocumentLabels, ItemId, ItemKind, MediaLabels};
 
 #[cfg(doc)]
 use crate::store::GraphStore;
 
-/// A book that a person saved, with the author and the tags they gave it. It has no edge: a
-/// document names its book in its own labels.
+/// A media a person saved, or that an ingest created. It has no edge: a document names its media
+/// in its own labels.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct BookNode {
+pub struct MediaNode {
     pub title: String,
-    pub author: Option<String>,
-    pub tags: BTreeSet<Tag>,
+    pub labels: MediaLabels,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

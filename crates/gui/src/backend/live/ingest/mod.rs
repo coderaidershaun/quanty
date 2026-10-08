@@ -1,4 +1,4 @@
-//! Checks a chapter before it is ingested, and ingests it.
+//! Checks a document of a media before it is ingested, and ingests it.
 
 mod preflight;
 mod run;
@@ -7,11 +7,10 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-use ocr::ChapterJob;
-use ocr::content::parse_chapter_file_name;
+use ocr::{ChapterJob, MediaDocument};
 
 use crate::backend::live::{LiveContext, Services};
-use crate::contract::{ChapterLabel, Failure, FailureKind, IngestRequest};
+use crate::contract::{Failure, FailureKind, IngestRequest};
 
 pub use preflight::preflight;
 pub use run::run;
@@ -19,21 +18,20 @@ pub use run::run;
 const PDF_START: &[u8] = b"%PDF-";
 
 /// These checks cost nothing, and a check and a start share them. Nothing is written and no
-/// store is asked.
+/// store is asked. The name of the document comes with the request: the panel reads a book
+/// chapter's name from its file name.
 fn chapter_job<S: Services>(
     cx: &LiveContext<S>,
     ingest: &IngestRequest,
-) -> Result<(ChapterLabel, ChapterJob), Failure> {
-    let chapter =
-        parse_chapter_file_name(&file_name_of(&ingest.pdf)).map_err(|error| cx.failure(error))?;
-    let label = ChapterLabel {
-        number: chapter.number,
-        name: chapter.name,
+) -> Result<ChapterJob, Failure> {
+    let document = MediaDocument {
+        media_title: ingest.media.clone(),
+        name: (&ingest.name).into(),
     };
-    let job = ChapterJob::new(&ingest.book, &ingest.pdf, &cx.config().content_folder)
+    let job = ChapterJob::new(document, &ingest.pdf, &cx.config().content_folder)
         .map_err(|error| cx.failure(error))?;
     check_is_a_pdf(&ingest.pdf)?;
-    Ok((label, job))
+    Ok(job)
 }
 
 fn file_name_of(pdf: &Path) -> String {

@@ -4,13 +4,14 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
-use ocr::{ChapterJob, convert_chapter};
+use ocr::content::parse_chapter_file_name;
+use ocr::{ChapterJob, MediaDocument, convert_chapter};
 
 const USAGE: &str =
     "usage: ocr --book \"<Book Title>\" [--out <folder>] chapter-<number>-<name>.pdf
 
 Breaks every page of a chapter PDF into its pieces and saves them under
-<folder>/<book-title>/chapter-<number>/. The folder defaults to `content`.
+<folder>/<media-title>/chapter-<number>/. The folder defaults to `content`.
 A chapter that is already converted is not converted again.";
 
 struct Arguments {
@@ -56,12 +57,17 @@ async fn run(arguments: Arguments) -> Result<()> {
         Err(error) if error.not_found() => {}
         Err(error) => return Err(error).context("could not read the .env file"),
     }
-    let job = ChapterJob::new(
-        &arguments.book_title,
-        &arguments.chapter_pdf,
-        &arguments.output_root,
-    )
-    .context("could not start the conversion")?;
+    let file_name = arguments
+        .chapter_pdf
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let document = MediaDocument {
+        media_title: arguments.book_title,
+        name: parse_chapter_file_name(&file_name).context("could not start the conversion")?,
+    };
+    let job = ChapterJob::new(document, &arguments.chapter_pdf, &arguments.output_root)
+        .context("could not start the conversion")?;
     println!("converting into {}", job.chapter_folder().display());
     let summary = convert_chapter(&job)
         .await

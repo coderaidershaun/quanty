@@ -10,8 +10,8 @@ use gui::app::layout::DEFAULT_WINDOW;
 use gui::backend::fake::{self, Fake};
 use gui::backend::{Backend, Handler, Reply};
 use gui::contract::{
-    AskDraft, Command, Event, Failure, FailureKind, Intent, Loadable, RequestId, SearchReply,
-    StartupFacts, Tab,
+    AskDraft, Command, DocumentName, Event, Failure, FailureKind, Intent, Loadable, RequestId,
+    SearchReply, StartupFacts, Tab,
 };
 use gui::state::{HealthLevel, IngestJob, Shared};
 use gui::testkit::{self, sample};
@@ -64,7 +64,7 @@ fn assert_scene(name: &str, shared: &Shared) {
     // With no seed the search stops at its first step, so no later step has a value.
     let stopped_at_the_first_step = trace.is_some_and(|trace| *trace == Default::default());
     let ok = match name {
-        "idle" | "gallery" => documents == Some(3) && ask.search == Loadable::Idle,
+        "idle" | "gallery" => documents == Some(4) && ask.search == Loadable::Idle,
         "first-run" | "empty-library" => documents == Some(0) && ask.search == Loadable::Idle,
         "black-scholes" => results == Some(9) && nodes > Some(0) && blocks > Some(0),
         "no-answer" => results == Some(9) && blocks == Some(0),
@@ -98,7 +98,8 @@ fn assert_scene(name: &str, shared: &Shared) {
             let is_checked = matches!(
                 &shared.ingest,
                 IngestJob::Checked { preflight, .. }
-                    if preflight.chapter.number == 3 && preflight.blockers.is_empty()
+                    if matches!(preflight.name, DocumentName::Chapter { number: 3, .. })
+                        && preflight.blockers.is_empty()
             );
             shared.tab == Tab::Ingest && is_checked
         }

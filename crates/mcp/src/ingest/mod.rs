@@ -22,21 +22,33 @@ use work::Work;
 /// What an agent gives `ingest_pdf`. Give exactly one of `path` and `pdf_base64`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct IngestPdfArgs {
-    /// The title of the book the chapter is from, such as "Option Volatility and Pricing".
-    book: String,
-    /// The absolute path of the chapter PDF on the machine the server runs on. The file must be
+    /// The title of the media the PDF belongs to, such as "Option Volatility and Pricing".
+    // An agent that still sends the older name `book` is understood. The schema shows `media`
+    // only.
+    #[serde(alias = "book")]
+    media: String,
+    /// `book` (the default), `paper` or `other`. A book's PDF must be named
+    /// `chapter-<number>-<name>.pdf`; a paper or other PDF can have any name.
+    category: Option<String>,
+    /// The authors of the media. Used only when the library does not have this media yet.
+    authors: Option<Vec<String>>,
+    /// Tags of the media, such as "options". Used only when the library does not have this media
+    /// yet.
+    tags: Option<Vec<String>>,
+    /// Tags of this PDF only.
+    document_tags: Option<Vec<String>>,
+    /// The title of this document, for a paper or other media. It defaults to the title of the
+    /// media. Not for a book, whose chapter is named by its file name.
+    document_title: Option<String>,
+    /// The absolute path of the PDF on the machine the server runs on. A book's file must be
     /// named `chapter-<number>-<name>.pdf`.
     path: Option<String>,
-    /// The bytes of the chapter PDF as standard base64, for a client that cannot reach the disk of
-    /// the server. It goes with `file_name`.
+    /// The bytes of the PDF as standard base64, for a client that cannot reach the disk of the
+    /// server. It goes with `file_name`.
     pdf_base64: Option<String>,
-    /// The name to save the bytes of `pdf_base64` under: `chapter-<number>-<name>.pdf`, with no
-    /// folder in it. Not for `path`.
+    /// The name to save the bytes of `pdf_base64` under, with no folder in it; for a book it must
+    /// be `chapter-<number>-<name>.pdf`. Not for `path`.
     file_name: Option<String>,
-    /// The author of the book. It replaces the author that the document has.
-    author: Option<String>,
-    /// Tags to add to the document, such as "options".
-    tags: Option<Vec<String>>,
 }
 
 /// What an agent gives `ingest_status`.
@@ -87,7 +99,7 @@ impl<S: Services> Ingest<S> {
         let checked = tokio::task::spawn_blocking(move || pdf::check(args, &config, max_pdf_bytes))
             .await
             .map_err(PdfIngestError::Stopped)??;
-        let started = self.jobs.start(&checked.book, &checked.file_name)?;
+        let started = self.jobs.start(&checked.media, &checked.file_name)?;
         self.spawn(checked, started.report, error_text);
         let mut watcher = started.watcher;
         let report = watcher

@@ -10,7 +10,7 @@ use ocr::read_chapter;
 use rag_core::{ConceptStore, DocumentInput, Embedder, ItemKind, ItemPoint, ItemStore};
 use rag_ingestion::{Item, chapter_items};
 
-pub use fixture::{Fixture, Placed, QUESTION, SCORE_ERROR, found_among, tagged, texts_of};
+pub use fixture::{Fixture, Placed, QUESTION, SCORE_ERROR, found_among, tagged, texts_of, wanting};
 pub use word_embedder::WordEmbedder;
 
 pub const SAMPLE_CHAPTER_TITLE: &str = "Option Volatility and Pricing, chapter 1: Sample Pages";

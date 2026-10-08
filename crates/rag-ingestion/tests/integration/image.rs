@@ -114,8 +114,8 @@ async fn a_lone_picture_becomes_a_one_figure_document_and_a_second_ingest_calls_
     assert_eq!(payload["page"], 1);
     assert_eq!(payload["label"], LABEL);
     assert!(
-        payload.get("book").is_none(),
-        "a lone picture is from no book: {payload}"
+        payload.get("media").is_none(),
+        "a lone picture belongs to no media: {payload}"
     );
     assert_eq!(
         payload["image_path"],

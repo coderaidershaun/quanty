@@ -128,20 +128,26 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
     // The gate holds the conversion, so the first answer is `running` however fast the
     // stand-ins are.
     let (services, open_the_gate) = StandInServices::new().with_gate();
-    let (_stores, server) = empty_library("mcp-ingest-path", services);
+    let (stores, server) = empty_library("mcp-ingest-path", services);
     let client = connect(server).await;
+    // A paper's PDF can have any name.
+    let plain = stores.temporary_folder().join("hawkes-notes.pdf");
+    std::fs::copy(sample_pdf(), &plain).unwrap();
     let sent = json!({
-        "book": "Option Volatility and Pricing",
-        "path": sample_pdf(),
-        "author": "Sheldon Natenberg",
-        "tags": ["Options", "volatility"],
+        "media": "Hawkes Processes in Finance",
+        "category": "paper",
+        "path": plain,
+        "authors": ["A. Author", " B. Author ", ""],
+        "tags": ["Hawkes"],
+        "document_tags": ["Options", "volatility"],
     });
 
     let first = call(&client, "ingest_pdf", sent.clone()).await;
 
     let started = structured(&first);
     assert_eq!(started["state"], "running");
-    assert_eq!(started["file"], "chapter-1-sample-pages.pdf");
+    assert_eq!(started["media"], "Hawkes Processes in Finance");
+    assert_eq!(started["file"], "hawkes-notes.pdf");
     let job_id = started["job_id"].as_str().unwrap();
     open_the_gate.send(()).unwrap();
     let ended = report_when_ended(&client, job_id).await;
@@ -152,11 +158,19 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
     let summary = ended["summary"].as_str().unwrap();
     assert!(summary.contains("pages: 7"), "{summary}");
     let documents = call(&client, "list_documents", json!({})).await;
-    let document = &structured(&documents)["documents"][0];
-    assert_eq!(document["document_id"], sample_document_id().to_string());
-    assert_eq!(document["author"], "Sheldon Natenberg");
-    assert_eq!(document["tags"], json!(["options", "volatility"]));
-    assert_eq!(document["pages"], 7);
+    assert_eq!(
+        structured(&documents)["documents"],
+        json!([{
+            "document_id": sample_document_id().to_string(),
+            "title": "Hawkes Processes in Finance",
+            "media": "Hawkes Processes in Finance",
+            "category": "paper",
+            "authors": ["A. Author", "B. Author"],
+            "media_tags": ["hawkes"],
+            "tags": ["options", "volatility"],
+            "pages": 7,
+        }])
+    );
 
     let second = call(&client, "ingest_pdf", sent).await;
 

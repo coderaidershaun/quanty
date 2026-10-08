@@ -1,16 +1,32 @@
 //! Runs a whole chapter through ingestion into a throwaway collection and graph, with an embedder
 //! that makes up its vectors and a model that finds no concept, so nothing is billed.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
+use graph::{GraphStore, MediaNode};
 use ocr::{PieceDetail, read_chapter};
-use rag_ingestion::{Item, LabelChange, chapter_items, ingest_chapter, relabel};
+use rag_core::{Category, DocumentLabels, MediaLabels, Tag};
+use rag_ingestion::{
+    ChapterFolder, Item, MediaChange, MediaRelabelled, RelabelError, TagChange, chapter_items,
+    ingest_chapter, relabel_document_tags, relabel_media,
+};
 use serde_json::{Value, json};
 
 use crate::support::{
-    self, SAMPLE_BOOK, StandInLlm, ThrowawayStores, assert_graph_holds_only, assert_labelled,
-    points_in,
+    self, StandInLlm, ThrowawayStores, assert_graph_holds_only, assert_labelled, points_in,
 };
+
+fn tags(texts: &[&str]) -> Vec<Tag> {
+    texts.iter().map(|text| text.parse().unwrap()).collect()
+}
+
+fn natenberg() -> MediaLabels {
+    MediaLabels {
+        category: Category::Book,
+        authors: vec!["Sheldon Natenberg".to_owned()],
+        tags: tags(&["options"]).into_iter().collect(),
+    }
+}
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored ingest::"]
@@ -21,8 +37,14 @@ async fn ingest_fills_a_throwaway_collection_and_a_second_run_adds_nothing() {
     let models = throwaway.models(StandInLlm::finding_nothing());
     let chapter = read_chapter(&support::sample_chapter()).unwrap();
     let items = chapter_items(&chapter);
+    let media = natenberg();
+    let sample_chapter = support::sample_chapter();
+    let chapter_folder = ChapterFolder {
+        folder: &sample_chapter,
+        new_media: &media,
+    };
 
-    let summary = ingest_chapter(&support::sample_chapter(), &models, &stores)
+    let summary = ingest_chapter(chapter_folder, &models, &stores)
         .await
         .unwrap();
     assert_eq!(summary.points_in_collection, items.len() as u64);
@@ -90,13 +112,7 @@ async fn ingest_fills_a_throwaway_collection_and_a_second_run_adds_nothing() {
     );
 
     assert_label_and_cites_are_stored_only_where_the_item_has_them(&points, &items);
-    for (_, payload) in &points {
-        assert_eq!(payload["book"], SAMPLE_BOOK);
-        assert!(
-            payload.get("author").is_none() && payload.get("tags").is_none(),
-            "no author and no tag was given: {payload}"
-        );
-    }
+    assert_labelled(config, &stores.graph, &media, &[]).await;
 
     let received = models.embedder.received();
     assert_eq!(received.len(), items.len(), "one input for each item");
@@ -124,28 +140,31 @@ async fn ingest_fills_a_throwaway_collection_and_a_second_run_adds_nothing() {
         );
     }
 
-    let labels = LabelChange {
-        author: Some("Sheldon Natenberg".to_owned()),
-        add: ["  Options ", "options", "Volatility"]
-            .map(|tag| tag.parse().unwrap())
-            .into(),
+    let own_tags = TagChange {
+        add: tags(&["  Options ", "options", "Volatility"]),
         remove: Vec::new(),
     };
-    relabel(summary.doc_id, &labels, &stores).await.unwrap();
-    let labelled = assert_labelled(
-        config,
-        &stores.graph,
-        "Sheldon Natenberg",
-        &["options", "volatility"],
-    )
-    .await;
+    relabel_document_tags(summary.doc_id, &own_tags, &stores)
+        .await
+        .unwrap();
+    let labelled = assert_labelled(config, &stores.graph, &media, &["options", "volatility"]).await;
     let labelled_ids: BTreeSet<String> = labelled.keys().cloned().collect();
     assert_eq!(
         labelled_ids, item_ids,
         "the points are the ones of the items"
     );
 
-    let again = ingest_chapter(&support::sample_chapter(), &models, &stores)
+    // Other labels for a new media are not used, because the graph holds this media already.
+    let other_media = MediaLabels {
+        category: Category::Paper,
+        authors: vec!["Someone Else".to_owned()],
+        tags: BTreeSet::new(),
+    };
+    let chapter_folder = ChapterFolder {
+        folder: &sample_chapter,
+        new_media: &other_media,
+    };
+    let again = ingest_chapter(chapter_folder, &models, &stores)
         .await
         .unwrap();
     assert_eq!(again.points_in_collection, summary.points_in_collection);
@@ -158,15 +177,9 @@ async fn ingest_fills_a_throwaway_collection_and_a_second_run_adds_nothing() {
         "a second run adds no node and no edge"
     );
     assert_eq!(
-        assert_labelled(
-            config,
-            &stores.graph,
-            "Sheldon Natenberg",
-            &["options", "volatility"]
-        )
-        .await,
+        assert_labelled(config, &stores.graph, &media, &["options", "volatility"]).await,
         labelled,
-        "a second run keeps the labels that were set in between"
+        "a second run keeps the stored media and the own tags that were set in between"
     );
     let received = models.embedder.received();
     assert_eq!(received.len(), 2 * items.len(), "labelling embeds nothing");
@@ -176,37 +189,152 @@ async fn ingest_fills_a_throwaway_collection_and_a_second_run_adds_nothing() {
         "labels do not change what is embedded"
     );
 
-    relabel(summary.doc_id, &labels, &stores).await.unwrap();
+    relabel_document_tags(summary.doc_id, &own_tags, &stores)
+        .await
+        .unwrap();
     assert_eq!(
-        assert_labelled(
-            config,
-            &stores.graph,
-            "Sheldon Natenberg",
-            &["options", "volatility"]
-        )
-        .await,
+        assert_labelled(config, &stores.graph, &media, &["options", "volatility"]).await,
         labelled,
-        "the same labels again change nothing"
+        "the same tags again change nothing"
     );
 
-    let other = LabelChange {
-        author: Some("Another Author".to_owned()),
-        add: vec!["Greeks".parse().unwrap()],
-        remove: Vec::new(),
+    let other_tags = TagChange {
+        add: tags(&["Greeks"]),
+        remove: tags(&["volatility"]),
     };
-    relabel(summary.doc_id, &other, &stores).await.unwrap();
-    let changed = assert_labelled(
-        config,
-        &stores.graph,
-        "Another Author",
-        &["greeks", "options", "volatility"],
-    )
-    .await;
+    relabel_document_tags(summary.doc_id, &other_tags, &stores)
+        .await
+        .unwrap();
+    let changed = assert_labelled(config, &stores.graph, &media, &["greeks", "options"]).await;
     assert_eq!(changed.keys().cloned().collect::<BTreeSet<_>>(), stored_ids);
     assert_eq!(
         assert_graph_holds_only(&stores.graph, &items).await,
         stored_document,
-        "other labels add no node and no edge"
+        "other tags add no node and no edge"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored ingest::"]
+async fn relabelling_a_media_rewrites_its_node_every_document_of_it_and_their_points() {
+    let throwaway = ThrowawayStores::new("relabel-media");
+    let config = throwaway.config();
+    let stores = throwaway.connect().await;
+    let models = throwaway.models(StandInLlm::finding_nothing());
+    let notes = MediaLabels {
+        category: Category::Book,
+        authors: vec!["Quanty Team".to_owned()],
+        tags: BTreeSet::new(),
+    };
+    let book = natenberg();
+    let mut notes_ids = BTreeSet::new();
+    for (folder, media) in [
+        (support::intuition_chapter(), &notes),
+        (support::in_depth_chapter(), &notes),
+        (support::sample_chapter(), &book),
+    ] {
+        let chapter_folder = ChapterFolder {
+            folder: &folder,
+            new_media: media,
+        };
+        let summary = ingest_chapter(chapter_folder, &models, &stores)
+            .await
+            .unwrap();
+        if media == &notes {
+            notes_ids.insert(summary.doc_id);
+        }
+    }
+    let first_note = *notes_ids.first().unwrap();
+    let own_tags = TagChange {
+        add: tags(&["intuition"]),
+        remove: Vec::new(),
+    };
+    relabel_document_tags(first_note, &own_tags, &stores)
+        .await
+        .unwrap();
+    let documents_before = stores.graph.documents().await.unwrap();
+    let points_before: BTreeMap<String, Value> = points_in(config).await.into_iter().collect();
+
+    let change = MediaChange {
+        category: Some(Category::Paper),
+        authors: Some(vec!["X".to_owned(), "Y".to_owned()]),
+        tags: Some(tags(&["z"]).into_iter().collect()),
+    };
+    // Other capitals and spaces name the same media.
+    let relabelled = relabel_media(" quanty sample NOTES ", &change, &stores)
+        .await
+        .unwrap();
+
+    let new_labels = MediaLabels {
+        category: Category::Paper,
+        authors: vec!["X".to_owned(), "Y".to_owned()],
+        tags: tags(&["z"]).into_iter().collect(),
+    };
+    assert_eq!(
+        relabelled,
+        MediaRelabelled {
+            title: "Quanty Sample Notes".to_owned(),
+            labels: new_labels.clone(),
+            documents: 2,
+        }
+    );
+    assert_eq!(
+        stores.graph.media().await.unwrap(),
+        vec![
+            MediaNode {
+                title: "Option Volatility and Pricing".to_owned(),
+                labels: book,
+            },
+            MediaNode {
+                title: "Quanty Sample Notes".to_owned(),
+                labels: new_labels.clone(),
+            },
+        ]
+    );
+    let documents_after = stores.graph.documents().await.unwrap();
+    assert_eq!(documents_after.len(), 3);
+    for (before, after) in documents_before.iter().zip(&documents_after) {
+        if notes_ids.contains(&before.id) {
+            let mut expected = before.clone();
+            expected
+                .labels
+                .take_media("Quanty Sample Notes", &new_labels);
+            assert_eq!(after, &expected, "the own tags of a document stay");
+        } else {
+            assert_eq!(after, before, "a document of another media is not touched");
+        }
+    }
+    let labels_of: BTreeMap<String, &DocumentLabels> = documents_after
+        .iter()
+        .map(|node| (node.id.to_string(), &node.labels))
+        .collect();
+    let points_after: BTreeMap<String, Value> = points_in(config).await.into_iter().collect();
+    assert_eq!(
+        points_after.keys().collect::<Vec<_>>(),
+        points_before.keys().collect::<Vec<_>>()
+    );
+    for (id, after) in &points_after {
+        let doc_id = after["doc_id"].as_str().unwrap();
+        if notes_ids.iter().any(|note| note.to_string() == doc_id) {
+            let stored: DocumentLabels = serde_json::from_value(after.clone()).unwrap();
+            assert_eq!(
+                &stored, labels_of[doc_id],
+                "the point {id} carries its document's labels"
+            );
+        } else {
+            assert_eq!(
+                after, &points_before[id],
+                "a point of another media is not touched"
+            );
+        }
+    }
+
+    let unknown = relabel_media("A Media Nobody Saved", &change, &stores)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(&unknown, RelabelError::UnknownMedia { title } if title == "A Media Nobody Saved"),
+        "{unknown:?}"
     );
 }
 

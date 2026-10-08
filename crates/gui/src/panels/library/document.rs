@@ -1,12 +1,12 @@
-//! One chapter of a book: what is known about it, and the buttons that act on it.
+//! One document of a media: what is known about it, and the buttons that act on it.
 
 use eframe::egui;
 
 use super::Local;
-use super::edit::{self, Draft, NO_AUTHOR};
+use super::edit::{self, Draft};
 use crate::contract::{Document, Intent};
 use crate::panels::PanelCx;
-use crate::panels::labels::{AUTHOR, TAGS};
+use crate::panels::labels::TAGS;
 use crate::theme::{Icon, TextRole, Tone, color, space};
 use crate::widgets::{Badge, Button, Card, ControlSize};
 
@@ -14,8 +14,8 @@ const NOT_WHOLE: &str = "The ingest of this document did not finish, so a search
 const NO_TAGS: &str = "No tags";
 const COPY_ID: &str = "Copy id";
 const READ: &str = "Read";
-const EDIT_LABELS: &str = "Edit labels";
-const READ_DISABLED: &str = "The chapter's folder was not found, so its pages cannot be shown.";
+const EDIT_TAGS: &str = "Edit tags";
+const READ_DISABLED: &str = "The document's folder was not found, so its pages cannot be shown.";
 
 pub(super) fn show(
     ui: &mut egui::Ui,
@@ -66,14 +66,9 @@ fn facts(document: &Document) -> String {
     }
 }
 
+/// The document's own tags. The labels of its media are shown on the media.
 fn labels(ui: &mut egui::Ui, document: &Document) {
     ui.horizontal_wrapped(|ui| {
-        ui.label(TextRole::Label.rich(AUTHOR).color(color::TEXT_MUTED));
-        match &document.author {
-            Some(author) => ui.label(TextRole::Body.rich(author)),
-            None => ui.label(TextRole::Body.rich(NO_AUTHOR).color(color::TEXT_MUTED)),
-        };
-        ui.add_space(space::LG);
         ui.label(TextRole::Label.rich(TAGS).color(color::TEXT_MUTED));
         if document.tags.is_empty() {
             ui.label(TextRole::Body.rich(NO_TAGS).color(color::TEXT_MUTED));
@@ -112,11 +107,11 @@ fn buttons(
             });
         }
         if !is_edited {
-            let edit_labels = Button::secondary(EDIT_LABELS)
+            let edit_tags = Button::secondary(EDIT_TAGS)
                 .icon(Icon::EDIT)
                 .size(ControlSize::Small);
             let can_edit = edit::can_start(cx.shared);
-            if ui.add_enabled(can_edit, edit_labels).clicked() {
+            if ui.add_enabled(can_edit, edit_tags).clicked() {
                 local.editing = Some(Draft::of(document));
             }
         }

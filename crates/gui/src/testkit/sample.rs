@@ -39,7 +39,7 @@ fn result(number: usize, kind: ItemKind, doc: u128, title: &str, text: &str) -> 
         reason: Reason::Nearest,
         doc: DocId(id(doc)),
         doc_title: title.to_owned(),
-        book: None,
+        media: None,
         page: 3,
         printed_page: Some("7".to_owned()),
         label: None,
@@ -61,7 +61,7 @@ pub fn search_reply() -> SearchReply {
         r"\frac{\partial V}{\partial t} + \tfrac{1}{2}\sigma^2 S^2 \frac{\partial^2 V}{\partial S^2} + rS\frac{\partial V}{\partial S} - rV = 0",
     );
     formula.label = Some("(2.3)".to_owned());
-    formula.book = Some(NOTES_TITLE.to_owned());
+    formula.media = Some(NOTES_TITLE.to_owned());
     formula.name = Some("Black–Scholes partial differential equation".to_owned());
     let mut assumptions = result(
         2,
@@ -71,7 +71,7 @@ pub fn search_reply() -> SearchReply {
         "The model assumes that the stock price follows a geometric Brownian motion with constant volatility.",
     );
     assumptions.reason = Reason::Concept("Black–Scholes model".to_owned());
-    assumptions.book = Some(NOTES_TITLE.to_owned());
+    assumptions.media = Some(NOTES_TITLE.to_owned());
     assumptions.page = 1;
     // A passage can hold several pieces of a page, so it names none.
     assumptions.piece = None;
@@ -83,7 +83,7 @@ pub fn search_reply() -> SearchReply {
         "Three spreads show about the same theoretical profit at an underlying price of 48.40.",
     );
     figure.label = Some("Figure 13-4".to_owned());
-    figure.book = Some(VOLATILITY_TITLE.to_owned());
+    figure.media = Some(VOLATILITY_TITLE.to_owned());
     figure.page = 5;
     figure.printed_page = Some("233".to_owned());
     figure.image = Some(image(&format!(

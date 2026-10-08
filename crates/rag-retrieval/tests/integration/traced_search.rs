@@ -4,11 +4,13 @@
 use std::path::Path;
 
 use graph::{ConceptNode, RelationKind};
-use rag_core::{ConceptId, DocumentLabels, ItemHit};
+use rag_core::{ConceptId, ItemHit, LabelFilter};
 use rag_ingestion::testing::ThrowawayStores;
 use rag_retrieval::{RESULTS_PER_QUERY, Reason, Retriever, SearchTrace};
 
-use crate::support::{Fixture, Placed, QUESTION, SCORE_ERROR, found_among, tagged, texts_of};
+use crate::support::{
+    Fixture, Placed, QUESTION, SCORE_ERROR, found_among, tagged, texts_of, wanting,
+};
 
 fn assert_send<T: Send>(value: T) -> T {
     value
@@ -64,7 +66,7 @@ async fn a_traced_search_gives_the_results_of_a_search_and_what_each_step_produc
         concepts.iter().map(|concept| concept.id).collect()
     };
 
-    let no_labels = DocumentLabels::default();
+    let no_labels = LabelFilter::default();
     let traced = assert_send(retriever.search_traced(QUESTION, None, &no_labels))
         .await
         .unwrap();
@@ -112,7 +114,7 @@ async fn a_traced_search_gives_the_results_of_a_search_and_what_each_step_produc
 
     // Only document A is tagged `options`. The graph still adds b1, c1 and d1, and they are left
     // out where the candidates are ranked.
-    let options = tagged(&["options"]);
+    let options = wanting(&["options"]);
     let traced = retriever
         .search_traced(QUESTION, None, &options)
         .await
@@ -129,7 +131,7 @@ async fn a_traced_search_gives_the_results_of_a_search_and_what_each_step_produc
     assert_eq!(traced.trace.kept, 3);
 
     let traced = retriever
-        .search_traced(QUESTION, None, &tagged(&["rates"]))
+        .search_traced(QUESTION, None, &wanting(&["rates"]))
         .await
         .unwrap();
     assert!(traced.results.hits.is_empty());

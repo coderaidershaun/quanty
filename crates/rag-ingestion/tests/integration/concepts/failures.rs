@@ -49,7 +49,7 @@ async fn a_usage_limit_stops_the_run_and_the_next_run_continues_from_the_cache()
     let models = throwaway.models(model.clone());
     let chapter = support::intuition_chapter();
 
-    let error = ingest_chapter(&chapter, &models, &stores)
+    let error = ingest_chapter(support::chapter_at(&chapter), &models, &stores)
         .await
         .unwrap_err();
 
@@ -70,7 +70,9 @@ async fn a_usage_limit_stops_the_run_and_the_next_run_continues_from_the_cache()
     assert_eq!(points_in(throwaway.config()).await.len(), m);
     assert_graph_holds_only(&stores.graph, &items).await;
 
-    let second = ingest_chapter(&chapter, &models, &stores).await.unwrap();
+    let second = ingest_chapter(support::chapter_at(&chapter), &models, &stores)
+        .await
+        .unwrap();
     assert_eq!(model.calls(), m + 1);
     assert_eq!(second.concepts.llm_calls, 1);
     assert_eq!(second.concepts.cache_hits, m - 1);
@@ -91,7 +93,7 @@ async fn a_usage_limit_stops_the_run_and_the_next_run_continues_from_the_cache()
         concepts: models.concepts.with_prompt_version("another version"),
         ..models
     };
-    let error = ingest_chapter(&chapter, &models, &stores)
+    let error = ingest_chapter(support::chapter_at(&chapter), &models, &stores)
         .await
         .unwrap_err();
     assert!(
@@ -140,9 +142,13 @@ async fn a_stop_while_the_concepts_are_linked_counts_the_item_that_was_skipped_b
         );
     let models = throwaway.models_with_embedder(embedder, model);
 
-    let error = ingest_chapter(&support::intuition_chapter(), &models, &stores)
-        .await
-        .unwrap_err();
+    let error = ingest_chapter(
+        support::chapter_at(&support::intuition_chapter()),
+        &models,
+        &stores,
+    )
+    .await
+    .unwrap_err();
 
     match &error {
         IngestError::Concepts(ConceptError::Stopped {
@@ -168,9 +174,13 @@ async fn a_model_that_is_signed_out_stops_the_ingest_before_anything_is_embedded
     let model = StandInLlm::signed_out();
     let models = throwaway.models(model.clone());
 
-    let error = ingest_chapter(&support::intuition_chapter(), &models, &stores)
-        .await
-        .unwrap_err();
+    let error = ingest_chapter(
+        support::chapter_at(&support::intuition_chapter()),
+        &models,
+        &stores,
+    )
+    .await
+    .unwrap_err();
 
     assert!(
         matches!(

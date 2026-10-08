@@ -9,6 +9,8 @@ mod piece;
 
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
+
 pub use catalogue::{Catalogue, ChapterEntry};
 pub use conversion::{
     CallRecord, CallStep, Checks, Conversion, MathCheck, PageCategories, Route, RouteReason,
@@ -31,12 +33,15 @@ const IMAGE_FOLDER_DIGITS: usize = 16;
 #[derive(thiserror::Error, Debug)]
 pub enum ContentError {
     #[error(
-        "chapter file name must look like {CHAPTER_FILE_PATTERN} (for example chapter-1-financial-contracts.pdf), but it is {name:?}"
+        "a book chapter's file name must look like {CHAPTER_FILE_PATTERN} (for example chapter-1-financial-contracts.pdf), but it is {name:?}"
     )]
     BadFileName { name: String },
 
-    #[error("book title {title:?} has no letters or digits to name its folder after")]
-    EmptyBookFolderName { title: String },
+    #[error("media title {title:?} has no letters or digits to name its folder after")]
+    EmptyMediaFolderName { title: String },
+
+    #[error("document title {title:?} has no letters or digits to name its folder after")]
+    EmptyDocumentFolderName { title: String },
 
     #[error("could not read {}", path.display())]
     Read {
@@ -60,13 +65,45 @@ pub enum ContentError {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChapterFileName {
-    pub number: u32,
-    pub name: String,
+/// How a document of a media is named: a chapter of a book, or a document with a title of its
+/// own. The order puts chapters first, by number, and then titled documents by title.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DocumentName {
+    Chapter { number: u32, name: String },
+    Title(String),
 }
 
-pub fn parse_chapter_file_name(file_name: &str) -> Result<ChapterFileName, ContentError> {
+impl DocumentName {
+    /// `chapter-<number>` for a chapter, and the title in lower case with dashes for a titled
+    /// document.
+    ///
+    /// # Errors
+    /// [`ContentError::EmptyDocumentFolderName`] for a title with no letters or digits.
+    pub fn folder_name(&self) -> Result<String, ContentError> {
+        match self {
+            DocumentName::Chapter { number, .. } => Ok(format!("chapter-{number}")),
+            DocumentName::Title(title) => {
+                slug(title).ok_or_else(|| ContentError::EmptyDocumentFolderName {
+                    title: title.clone(),
+                })
+            }
+        }
+    }
+}
+
+/// A document together with the title of the media it belongs to: what names its folder.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MediaDocument {
+    pub media_title: String,
+    pub name: DocumentName,
+}
+
+/// Reads the number and the name of a book chapter from `chapter-<number>-<name>.pdf`.
+///
+/// # Errors
+/// [`ContentError::BadFileName`] for a name of any other shape.
+pub fn parse_chapter_file_name(file_name: &str) -> Result<DocumentName, ContentError> {
     let bad_name = || ContentError::BadFileName {
         name: file_name.to_owned(),
     };
@@ -87,7 +124,7 @@ pub fn parse_chapter_file_name(file_name: &str) -> Result<ChapterFileName, Conte
     if words.is_empty() {
         return Err(bad_name());
     }
-    Ok(ChapterFileName {
+    Ok(DocumentName::Chapter {
         number,
         name: words.join(" "),
     })
@@ -101,9 +138,19 @@ fn capitalise(word: &str) -> String {
     }
 }
 
-pub fn book_folder_name(book_title: &str) -> Result<String, ContentError> {
+/// # Errors
+/// [`ContentError::EmptyMediaFolderName`] for a title with no letters or digits.
+pub fn media_folder_name(media_title: &str) -> Result<String, ContentError> {
+    slug(media_title).ok_or_else(|| ContentError::EmptyMediaFolderName {
+        title: media_title.to_owned(),
+    })
+}
+
+/// The text in lower case, with one dash for each run of characters that are not letters or
+/// digits. `None` when no letter or digit is left.
+fn slug(text: &str) -> Option<String> {
     let mut folder = String::new();
-    for character in book_title.to_lowercase().chars() {
+    for character in text.to_lowercase().chars() {
         if character.is_alphanumeric() {
             folder.push(character);
         } else if !folder.is_empty() && !folder.ends_with('-') {
@@ -113,16 +160,7 @@ pub fn book_folder_name(book_title: &str) -> Result<String, ContentError> {
     if folder.ends_with('-') {
         folder.pop();
     }
-    if folder.is_empty() {
-        return Err(ContentError::EmptyBookFolderName {
-            title: book_title.to_owned(),
-        });
-    }
-    Ok(folder)
-}
-
-pub fn chapter_folder_name(chapter_number: u32) -> String {
-    format!("chapter-{chapter_number}")
+    (!folder.is_empty()).then_some(folder)
 }
 
 /// Page positions start at 1.

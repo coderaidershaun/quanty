@@ -2,12 +2,14 @@
 //! the converted chapter. A PDF that is already ingested is not touched.
 
 use std::fmt;
+use std::path::Path;
 
 use graph::{GraphError, GraphStore};
-use ocr::{ChapterJob, ConversionSummary, ConvertError};
-use rag_core::{DocId, Embedder, Llm, StoreError};
+use ocr::content::parse_chapter_file_name;
+use ocr::{ChapterJob, ContentError, ConversionSummary, ConvertError, DocumentName};
+use rag_core::{Category, DocId, Embedder, Llm, MediaLabels, StoreError};
 
-use crate::ingest::{IngestError, IngestSummary, Models, ingest_chapter};
+use crate::ingest::{ChapterFolder, IngestError, IngestSummary, Models, ingest_chapter};
 use crate::stores::Stores;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -44,6 +46,8 @@ pub enum PdfError {
 /// stand-ins in a test.
 pub struct ChapterPdf<'a, C> {
     pub job: &'a ChapterJob,
+    /// The labels the media is made with when the graph does not have it yet.
+    pub new_media: &'a MediaLabels,
     /// Called at most once, and only when the document is not ingested yet.
     pub convert: C,
 }
@@ -116,11 +120,41 @@ where
         });
     }
     let conversion = (pdf.convert)(pdf.job).await?;
-    let ingest = ingest_chapter(&pdf.job.chapter_folder(), models, stores).await?;
+    let chapter = ChapterFolder {
+        folder: &pdf.job.chapter_folder(),
+        new_media: pdf.new_media,
+    };
+    let ingest = ingest_chapter(chapter, models, stores).await?;
     Ok(PdfOutcome::Ingested(Box::new(PdfSummary {
         conversion,
         ingest,
     })))
+}
+
+/// How a PDF of a media of that category is named. A book's PDF must be named
+/// `chapter-<number>-<name>.pdf`, and `title` is not used. A paper or another media takes `title`:
+/// the caller gives the document's own title when there is one, and else the media's title.
+///
+/// # Errors
+/// [`ContentError::BadFileName`] when the PDF of a book is named in another way.
+// SMELL: the caller gives the category, and it can differ from the category of a media that the
+// library already has. The document is then named by one category and labelled with the other,
+// and nothing checks that the two agree.
+pub fn document_name(
+    category: Category,
+    title: &str,
+    pdf: &Path,
+) -> Result<DocumentName, ContentError> {
+    match category {
+        Category::Book => {
+            let file_name = pdf
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            parse_chapter_file_name(&file_name)
+        }
+        Category::Paper | Category::Other => Ok(DocumentName::Title(title.trim().to_owned())),
+    }
 }
 
 /// The number of items the document was ingested whole with, when the graph says so and the

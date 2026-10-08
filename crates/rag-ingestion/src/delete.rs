@@ -51,6 +51,9 @@ impl fmt::Display for DeleteSummary {
 /// running it again removes the rest. A store that holds nothing of the document does not stop
 /// the job, so that a second run can remove what the first one did not reach.
 ///
+/// The media of the document is never removed, also when this was its last document: a media
+/// with no document is kept, like one that was saved before its first document.
+///
 /// # Errors
 /// - [`DeleteError::Store`] and [`DeleteError::Graph`] when a store fails. The first failure
 ///   stops the job, so when Qdrant fails the graph is not asked.

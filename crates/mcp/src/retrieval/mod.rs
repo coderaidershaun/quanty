@@ -8,8 +8,8 @@ use std::collections::BTreeSet;
 
 use graph::{FalkorGraph, GraphError};
 use rag_core::{
-    ConceptStore, Config, DocumentLabels, EmbedError, EmptyTag, ItemKind, ItemStore, Llm,
-    StoreError, Tag, UnknownItemKind,
+    Category, ConceptStore, Config, EmbedError, EmptyTag, ItemKind, ItemStore, LabelFilter, Llm,
+    StoreError, Tag, UnknownCategory, UnknownItemKind,
 };
 use rag_retrieval::{ANSWER_MODEL, AnswerError, Retriever, SearchError};
 use schemars::JsonSchema;
@@ -26,11 +26,18 @@ pub(crate) struct QuestionArgs {
     question: String,
     /// Look only at items of this kind: `chunk` (running text), `formula`, `figure` or `table`.
     kind: Option<String>,
-    /// Look only at documents of this book, whatever its capitals.
-    book: Option<String>,
-    /// Look only at documents by this author, whatever its capitals.
+    /// Look only at documents of this media, such as a book, whatever its capitals.
+    // An agent that still sends the older name `book` keeps its filter. The schema shows `media`
+    // only.
+    #[serde(alias = "book")]
+    media: Option<String>,
+    /// Look only at documents by this author, whatever its capitals. It matches any author of a
+    /// document.
     author: Option<String>,
-    /// Look only at documents that have every one of these tags.
+    /// Look only at documents of this category: `book`, `paper` or `other`.
+    category: Option<String>,
+    /// Look only at documents that have every one of these tags, each as a tag of the media or as
+    /// a tag of the document itself.
     tags: Option<Vec<String>>,
 }
 
@@ -52,6 +59,9 @@ pub(crate) enum RetrievalError {
 
     #[error("`kind` is not valid")]
     Kind(#[source] UnknownItemKind),
+
+    #[error("`category` is not valid")]
+    Category(#[source] UnknownCategory),
 
     #[error("a tag in `tags` is blank; give each tag as a word, or leave `tags` out")]
     Tag(#[source] EmptyTag),
@@ -84,7 +94,7 @@ pub(crate) enum RetrievalError {
 struct Asked {
     question: String,
     kind: Option<ItemKind>,
-    wanted: DocumentLabels,
+    wanted: LabelFilter,
 }
 
 impl QuestionArgs {
@@ -94,6 +104,10 @@ impl QuestionArgs {
             .map(|kind| kind.parse::<ItemKind>())
             .transpose()
             .map_err(RetrievalError::Kind)?;
+        let category = non_blank(self.category)
+            .map(|category| category.parse::<Category>())
+            .transpose()
+            .map_err(RetrievalError::Category)?;
         let tags = self
             .tags
             .unwrap_or_default()
@@ -104,9 +118,10 @@ impl QuestionArgs {
         Ok(Asked {
             question,
             kind,
-            wanted: DocumentLabels {
-                book: non_blank(self.book),
+            wanted: LabelFilter {
+                media: non_blank(self.media),
                 author: non_blank(self.author),
+                category,
                 tags,
             },
         })
@@ -122,7 +137,7 @@ fn non_blank(text: Option<String>) -> Option<String> {
 /// Finds the items for the question.
 ///
 /// # Errors
-/// - a bad argument: a blank question, an unknown kind, a blank tag or a `limit` of 0
+/// - a bad argument: a blank question, an unknown kind or category, a blank tag or a `limit` of 0
 /// - a store or the embedder that is not ready, or a search that fails
 pub(crate) async fn search<S: Services>(
     config: &Config,
@@ -152,7 +167,7 @@ pub(crate) async fn search<S: Services>(
 /// model that is not ready stops the call before the search is billed.
 ///
 /// # Errors
-/// - a bad argument: a blank question, an unknown kind or a blank tag
+/// - a bad argument: a blank question, an unknown kind or category, or a blank tag
 /// - a store or a service that is not ready, a search that fails, or a reply that breaks a rule
 pub(crate) async fn answer<S: Services>(
     config: &Config,

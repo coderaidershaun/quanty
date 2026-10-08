@@ -232,7 +232,7 @@ impl<S: Services> QuantyServer<S> {
         ))
     }
 
-    /// Lists every stored document with its book, author, tags and chapter. Give the
+    /// Lists every stored document with its media, category, authors, tags and chapter. Give the
     /// `document_id` of one to `read_page`.
     #[tool(annotations(read_only_hint = true))]
     async fn list_documents(&self) -> Result<Json<Documents>, ToolError> {
@@ -259,12 +259,13 @@ impl<S: Services> QuantyServer<S> {
         })
     }
 
-    /// Converts one chapter PDF and stores it so that it can be searched. It is PAID and slow:
-    /// each page is read by `claude` and Jev, the items are embedded by Gemini and the concepts
-    /// are found by `claude`, which takes minutes for a chapter. The call answers when that work
-    /// has started, with a `job_id` for `ingest_status`. A PDF that is already ingested costs
-    /// nothing. The file must be named `chapter-<number>-<name>.pdf`. One ingest runs at a time
-    /// in this server, and the same chapter must not be sent through a second server, or beside
+    /// Converts one PDF of a book, a paper or another media and stores it so that it can be
+    /// searched. It is PAID and slow: each page is read by `claude` and Jev, the items are
+    /// embedded by Gemini and the concepts are found by `claude`, which takes minutes for a
+    /// chapter. The call answers when that work has started, with a `job_id` for
+    /// `ingest_status`. A PDF that is already ingested costs nothing. A book's PDF must be named
+    /// `chapter-<number>-<name>.pdf`; a paper or other PDF can have any name. One ingest runs at
+    /// a time in this server, and the same PDF must not be sent through a second server, or beside
     /// `rag-ingest pdf`, at the same time. Sending the same PDF again goes on from where a stopped
     /// run ended.
     #[tool(annotations(
@@ -293,6 +294,6 @@ impl<S: Services> QuantyServer<S> {
 #[tool_handler(
     router = self.tool_router,
     name = "quanty",
-    instructions = "Search and read a library of book chapters. Start with `search` for a question, then `read_page` to read around a result. `answer` writes a whole answer but spends Claude subscription usage. `ingest_pdf` adds a chapter PDF, and `ingest_status` follows it."
+    instructions = "Search and read a library of books, papers and other media. Start with `search` for a question, then `read_page` to read around a result. `answer` writes a whole answer but spends Claude subscription usage. `ingest_pdf` adds a PDF, and `ingest_status` follows it."
 )]
 impl<S: Services> ServerHandler for QuantyServer<S> {}

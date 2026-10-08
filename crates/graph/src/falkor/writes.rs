@@ -1,4 +1,4 @@
-//! The statements that write documents, saved books, items, concepts, mentions and relations,
+//! The statements that write documents, media, items, concepts, mentions and relations,
 //! with the code that runs each one and the rows it takes.
 
 use std::collections::{BTreeSet, HashMap};
@@ -9,7 +9,7 @@ use rag_core::{DocId, Tag};
 
 use super::{FalkorGraph, id_value};
 use crate::contents::{
-    BookNode, ConceptAlias, ConceptNode, DocumentNode, ItemNode, Mention, Relation,
+    ConceptAlias, ConceptNode, DocumentNode, ItemNode, MediaNode, Mention, Relation,
 };
 use crate::store::GraphError;
 
@@ -21,13 +21,18 @@ const ROWS_PER_STATEMENT: usize = 200;
 // taken away.
 const UPSERT_DOCUMENT: &str = "\
 MERGE (d:Document {id: $id})
-SET d.title = $title, d.book = $book, d.author = $author, d.tags = $tags";
+SET d.title = $title, d.media = $media, d.category = $category, d.authors = $authors,
+    d.media_tags = $media_tags, d.tags = $tags";
 
-// Only a new book gets its author and its tags, so a second save of a title never writes over the
-// book that is stored.
-const ADD_BOOK: &str = "\
-MERGE (b:Book {title: $title})
-ON CREATE SET b.author = $author, b.tags = $tags";
+// Only a new media gets its labels, so a second add of a title never writes over the media that is
+// stored.
+const ADD_MEDIA: &str = "\
+MERGE (m:Media {title: $title})
+ON CREATE SET m.category = $category, m.authors = $authors, m.tags = $tags";
+
+const UPDATE_MEDIA: &str = "\
+MERGE (m:Media {title: $title})
+SET m.category = $category, m.authors = $authors, m.tags = $tags";
 
 const SET_INGESTED_ITEMS: &str = "MATCH (d:Document {id: $id}) SET d.ingested_items = $items";
 
@@ -93,8 +98,13 @@ pub(super) async fn upsert_document(
     let parameters = vec![
         ("id", id_value(document.id)),
         ("title", FalkorValue::String(document.title.clone())),
-        ("book", text_or_null(labels.book.as_deref())),
-        ("author", text_or_null(labels.author.as_deref())),
+        ("media", text_or_null(labels.media.as_deref())),
+        (
+            "category",
+            text_or_null(labels.category.map(|category| category.as_str())),
+        ),
+        ("authors", text_list(&labels.authors)),
+        ("media_tags", tag_list(&labels.media_tags)),
         ("tags", tag_list(&labels.tags)),
     ];
     graph
@@ -103,14 +113,34 @@ pub(super) async fn upsert_document(
     Ok(())
 }
 
-pub(super) async fn add_book(graph: &FalkorGraph, book: &BookNode) -> Result<(), GraphError> {
-    let parameters = vec![
-        ("title", FalkorValue::String(book.title.clone())),
-        ("author", text_or_null(book.author.as_deref())),
-        ("tags", tag_list(&book.tags)),
-    ];
-    graph.run("write the book", ADD_BOOK, parameters).await?;
+pub(super) async fn add_media(graph: &FalkorGraph, media: &MediaNode) -> Result<(), GraphError> {
+    graph
+        .run("write the media", ADD_MEDIA, media_parameters(media))
+        .await?;
     Ok(())
+}
+
+pub(super) async fn update_media(graph: &FalkorGraph, media: &MediaNode) -> Result<(), GraphError> {
+    graph
+        .run(
+            "write the labels of the media",
+            UPDATE_MEDIA,
+            media_parameters(media),
+        )
+        .await?;
+    Ok(())
+}
+
+fn media_parameters(media: &MediaNode) -> Vec<(&'static str, FalkorValue)> {
+    vec![
+        ("title", FalkorValue::String(media.title.clone())),
+        (
+            "category",
+            FalkorValue::String(media.labels.category.as_str().to_owned()),
+        ),
+        ("authors", text_list(&media.labels.authors)),
+        ("tags", tag_list(&media.labels.tags)),
+    ]
 }
 
 pub(super) async fn set_ingested_items(
@@ -276,6 +306,10 @@ fn text_or_null(text: Option<&str>) -> FalkorValue {
         Some(text) => FalkorValue::String(text.to_owned()),
         None => FalkorValue::None,
     }
+}
+
+fn text_list(texts: &[String]) -> FalkorValue {
+    FalkorValue::Array(texts.iter().cloned().map(FalkorValue::String).collect())
 }
 
 fn tag_list(tags: &BTreeSet<Tag>) -> FalkorValue {

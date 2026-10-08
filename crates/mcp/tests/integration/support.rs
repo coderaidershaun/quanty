@@ -1,6 +1,7 @@
 //! What the tests share: stand-in services, settings whose stores cannot be reached, and an
 //! in-process MCP client.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -8,9 +9,9 @@ use mcp::{QuantyServer, Services};
 use ocr::convert::convert_chapter_with;
 use ocr::testing::{Scenario, StubServices};
 use ocr::{ChapterJob, ConversionSummary, ConvertError};
-use rag_core::{ApiKey, Config, DocId, EmbedError, ItemKind};
+use rag_core::{ApiKey, Config, DocId, EmbedError, ItemKind, MediaLabels};
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores, first_axis};
-use rag_ingestion::{LabelChange, chapter_items, ingest_chapter, relabel};
+use rag_ingestion::{ChapterFolder, MediaChange, chapter_items, ingest_chapter, relabel_media};
 use rmcp::model::{CallToolRequestParams, CallToolResult};
 use rmcp::service::RunningService;
 use rmcp::{RoleClient, ServiceExt};
@@ -226,8 +227,8 @@ fn text_of(result: &CallToolResult) -> String {
 pub const QUESTION: &str = "What do the three spreads of Figure 13-4 have in common?";
 
 /// The throwaway stores that hold the three committed chapters, ingested with stand-ins that
-/// place the figure of page 5 of the sample chapter at the question. The labels of the sample
-/// chapter are an author and a tag.
+/// place the figure of page 5 of the sample chapter at the question. The media of the sample
+/// chapter has an author and a tag.
 pub struct Library {
     pub stores: ThrowawayStores,
     /// What the server asks of the model. The ingest asked it too.
@@ -268,18 +269,22 @@ impl Library {
             sample_content_folder().join("quanty-sample-notes/chapter-1"),
             sample_content_folder().join("quanty-sample-notes/chapter-2"),
         ] {
-            ingest_chapter(&chapter, &models, &connected)
+            let folder = ChapterFolder {
+                folder: &chapter,
+                new_media: &MediaLabels::default(),
+            };
+            ingest_chapter(folder, &models, &connected)
                 .await
                 .expect("a sample chapter should be ingested");
         }
-        let labels = LabelChange {
-            author: Some(AUTHOR.to_owned()),
-            add: vec!["options".parse().expect("a tag")],
-            remove: Vec::new(),
+        let labels = MediaChange {
+            authors: Some(vec![AUTHOR.to_owned()]),
+            tags: Some(BTreeSet::from(["options".parse().expect("a tag")])),
+            ..MediaChange::default()
         };
-        relabel(sample_document_id(), &labels, &connected)
+        relabel_media("Option Volatility and Pricing", &labels, &connected)
             .await
-            .expect("the sample chapter should be labelled");
+            .expect("the media of the sample chapter should be labelled");
         library
     }
 

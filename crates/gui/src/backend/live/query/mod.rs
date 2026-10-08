@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use graph::GraphStore;
-use rag_core::{DocId, DocumentLabels};
+use rag_core::{DocId, LabelFilter};
 use rag_retrieval::{SearchError, SearchResults, TracedSearch};
 
 use self::results::PieceFacts;
@@ -27,7 +27,7 @@ pub async fn ask<S: Services>(
     ask: &AskDraft,
     reply: &Reply,
 ) {
-    let wanted = DocumentLabels::from(&ask.filters);
+    let wanted = LabelFilter::from(&ask.filters);
     let retriever = match cx.retriever().await {
         Ok(retriever) => retriever,
         Err(failure) => {

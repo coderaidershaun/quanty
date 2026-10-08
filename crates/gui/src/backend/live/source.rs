@@ -11,7 +11,7 @@ use super::chapters::chapters_on_disk;
 use super::{LiveContext, Services};
 use crate::backend::Reply;
 use crate::contract::{
-    ChapterLabel, DocId, Event, Failure, FailureKind, ImageRef, PageBox, PageConcept, PagePiece,
+    DocId, DocumentName, Event, Failure, FailureKind, ImageRef, PageBox, PageConcept, PagePiece,
     PageView, PieceKind, RequestId,
 };
 
@@ -140,14 +140,13 @@ fn page_from_disk(target: &PageTarget, content_folder: &Path) -> Result<PageView
     }
     let printed_page =
         PageIndex::read(&folder.join(page_folder_name(target.page)))?.printed_page_number;
+    let name = DocumentName::from(index.name);
     Ok(PageView {
         doc: target.doc,
         page: target.page,
-        book: Some(index.book_title),
-        chapter: Some(ChapterLabel {
-            number: index.chapter_number,
-            name: index.chapter_name,
-        }),
+        media: Some(index.media_title),
+        chapter: name.chapter_label(),
+        document_title: name.title().map(str::to_owned),
         page_count: index.page_count,
         printed_page,
         image: picture(&folder, target.page),

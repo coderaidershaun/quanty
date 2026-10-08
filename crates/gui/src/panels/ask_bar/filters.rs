@@ -41,9 +41,9 @@ impl Choices {
             .chain(
                 catalogue
                     .into_iter()
-                    .flat_map(|catalogue| &catalogue.books)
-                    .filter(|book| !book.chapters.is_empty())
-                    .filter_map(|book| book.title.as_deref()),
+                    .flat_map(|catalogue| &catalogue.media)
+                    .filter(|media| !media.documents.is_empty())
+                    .filter_map(|media| media.title.as_deref()),
             )
             .map(str::to_owned)
             .collect();
@@ -71,7 +71,9 @@ impl Choices {
         // Row 0 of a list is the "All" row, which is no value.
         let is_offered =
             |options: &[String], value: &str| options.iter().skip(1).any(|option| option == value);
-        filters.book.take_if(|book| !is_offered(&self.books, book));
+        filters
+            .media
+            .take_if(|media| !is_offered(&self.books, media));
         filters
             .author
             .take_if(|author| !is_offered(&self.authors, author));
@@ -86,7 +88,7 @@ impl Choices {
                 options: &self.books,
                 width: rects.books.width(),
             };
-            pick_one(ui, &pick, &mut filters.book);
+            pick_one(ui, &pick, &mut filters.media);
         });
         slot(ui, "authors", rects.authors, |ui| {
             let pick = Pick {

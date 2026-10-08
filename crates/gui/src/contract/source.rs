@@ -48,8 +48,14 @@ pub struct PagePiece {
 pub struct PageView {
     pub doc: DocId,
     pub page: u32,
-    pub book: Option<String>,
+    /// The title of the document's media.
+    pub media: Option<String>,
+    /// `None` for a document with a title of its own.
     pub chapter: Option<ChapterLabel>,
+    /// The title of a document with a title of its own, such as a paper, so the page can name its
+    /// document while the library is not read. `None` for a chapter, which its label names, and
+    /// for a picture that stands alone.
+    pub document_title: Option<String>,
     pub page_count: u32,
     pub printed_page: Option<String>,
     /// `None`: the chapter has no page pictures, as a hand-written chapter has none.

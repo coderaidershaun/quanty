@@ -1,8 +1,11 @@
 //! The paid work of one ingest, the same steps as `rag-ingest pdf`: set up the models and the
-//! stores, convert and ingest the chapter, and write the labels.
+//! stores, convert and ingest the document, and write its own tags.
 
 use ocr::ChapterJob;
-use rag_ingestion::{ChapterPdf, LabelChange, PdfOutcome, PdfSummary, ingest_pdf, relabel};
+use rag_core::MediaLabels;
+use rag_ingestion::{
+    ChapterPdf, PdfOutcome, PdfSummary, TagChange, ingest_pdf, relabel_document_tags,
+};
 
 use super::chapter_job;
 use crate::backend::Reply;
@@ -30,8 +33,13 @@ async fn finish<S: Services>(
     ingest: &IngestRequest,
     reply: &Reply,
 ) -> Result<IngestOutcome, Failure> {
-    let (_, job) = chapter_job(cx, ingest)?;
-    let labels = label_change(ingest);
+    let job = chapter_job(cx, ingest)?;
+    let own_tags = tag_change(ingest);
+    // The media is saved before its first document, so these are used only when it is missing.
+    let new_media = MediaLabels {
+        category: ingest.category.into(),
+        ..MediaLabels::default()
+    };
     // The models come before the first page, so a missing key for the embedder fails before
     // anything is paid for.
     let models = cx.models()?;
@@ -39,6 +47,7 @@ async fn finish<S: Services>(
     let outcome = ingest_pdf(
         ChapterPdf {
             job: &job,
+            new_media: &new_media,
             convert: async |chapter: &ChapterJob| {
                 send_progress(reply, request, IngestStage::Converting, 0.0);
                 let summary = cx.convert_chapter(chapter).await?;
@@ -52,10 +61,10 @@ async fn finish<S: Services>(
     )
     .await
     .map_err(|error| cx.failure(error))?;
-    // The labels come after the ingest, whatever it found, so the same PDF started again
+    // The own tags come after the ingest, whatever it found, so the same PDF started again
     // finishes a run that stopped before them.
-    if !labels.is_empty() {
-        relabel(outcome.doc_id(), &labels, &stores)
+    if !own_tags.is_empty() {
+        relabel_document_tags(outcome.doc_id(), &own_tags, &stores)
             .await
             .map_err(|error| cx.failure(error))?;
     }
@@ -75,15 +84,9 @@ fn send_progress(reply: &Reply, request: RequestId, stage: IngestStage, cost_usd
     });
 }
 
-/// A blank author is none, and a blank tag is dropped.
-fn label_change(ingest: &IngestRequest) -> LabelChange {
-    LabelChange {
-        author: ingest
-            .author
-            .as_deref()
-            .map(str::trim)
-            .filter(|author| !author.is_empty())
-            .map(str::to_owned),
+/// A blank tag is dropped.
+fn tag_change(ingest: &IngestRequest) -> TagChange {
+    TagChange {
         add: ingest
             .tags
             .iter()

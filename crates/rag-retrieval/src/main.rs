@@ -7,7 +7,8 @@ use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser};
 use graph::FalkorGraph;
 use rag_core::{
-    ClaudeCli, ConceptStore, Config, DocumentLabels, GeminiEmbedder, ItemKind, ItemStore, Llm, Tag,
+    Category, ClaudeCli, ConceptStore, Config, GeminiEmbedder, ItemKind, ItemStore, LabelFilter,
+    Llm, Tag,
 };
 use rag_retrieval::{ANSWER_MODEL, Retriever, SearchResults, answer};
 use tracing_subscriber::filter::{LevelFilter, Targets};
@@ -24,16 +25,22 @@ struct Cli {
     #[arg(long)]
     kind: Option<ItemKind>,
 
-    /// Look only at items of documents from this book, whatever its capitals
+    /// Look only at items of documents of this media, such as a book, whatever its capitals
     #[arg(long)]
-    book: Option<String>,
+    media: Option<String>,
 
-    /// Look only at items of documents by this author, whatever its capitals
+    /// Look only at items of documents by this author, whatever its capitals. It matches any
+    /// author of a document
     #[arg(long)]
     author: Option<String>,
 
-    /// Look only at items of documents that have this tag. Repeat it to ask for more tags: a
-    /// document must match every one of the book, the author and the tags that are given
+    /// Look only at items of documents of this category: book, paper or other
+    #[arg(long)]
+    category: Option<Category>,
+
+    /// Look only at items of documents that have this tag, as a media tag or as a document's own
+    /// tag. Repeat it to ask for more tags: a document must match every one of the media, the
+    /// author, the category and the tags that are given
     #[arg(long = "tag", value_name = "TAG")]
     tags: Vec<Tag>,
 
@@ -64,9 +71,10 @@ async fn main() -> ExitCode {
 }
 
 async fn run(cli: Cli) -> Result<ExitCode> {
-    let wanted = DocumentLabels {
-        book: cli.book,
+    let wanted = LabelFilter {
+        media: cli.media,
         author: cli.author,
+        category: cli.category,
         tags: cli.tags.into_iter().collect(),
     };
     match cli.question {
@@ -103,7 +111,7 @@ async fn retriever() -> Result<Retriever<GeminiEmbedder, FalkorGraph>> {
 async fn search(
     question: &str,
     kind: Option<ItemKind>,
-    wanted: &DocumentLabels,
+    wanted: &LabelFilter,
 ) -> Result<SearchResults> {
     retriever()
         .await
@@ -113,7 +121,7 @@ async fn search(
         .context("could not search for the question")
 }
 
-async fn ask(question: &str, kind: Option<ItemKind>, wanted: &DocumentLabels) -> Result<()> {
+async fn ask(question: &str, kind: Option<ItemKind>, wanted: &LabelFilter) -> Result<()> {
     println!("{}", search(question, kind, wanted).await?);
     Ok(())
 }
@@ -123,7 +131,7 @@ async fn ask(question: &str, kind: Option<ItemKind>, wanted: &DocumentLabels) ->
 async fn answer_question(
     question: &str,
     kind: Option<ItemKind>,
-    wanted: &DocumentLabels,
+    wanted: &LabelFilter,
 ) -> Result<()> {
     let claude = ClaudeCli::new(ANSWER_MODEL);
     // Asked before the search, which Gemini bills: this check costs nothing.

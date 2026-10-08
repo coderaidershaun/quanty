@@ -19,8 +19,8 @@ use std::path::{Path, PathBuf};
 use sha2::{Digest, Sha256};
 
 use crate::content::{
-    ChapterIndex, ContentError, FORMAT_VERSION, PageIndex, book_folder_name, chapter_folder_name,
-    page_folder_name, parse_chapter_file_name,
+    ChapterIndex, ContentError, DocumentName, FORMAT_VERSION, MediaDocument, PageIndex,
+    media_folder_name, page_folder_name,
 };
 
 use services::{ClaudeError, LiveServices, PageServices, ServiceError};
@@ -103,23 +103,22 @@ pub enum ConvertError {
 
 #[derive(Debug, Clone)]
 pub struct ChapterJob {
-    book_title: String,
+    media_title: String,
+    name: DocumentName,
     chapter_pdf: PathBuf,
     source_file_name: String,
-    chapter_number: u32,
-    chapter_name: String,
     chapter_folder: PathBuf,
 }
 
 impl ChapterJob {
-    /// Reads the chapter number and name from the file's name, and works out the chapter's
-    /// folder under `output_root`. Opens no file.
+    /// Works out the document's folder under `output_root`. Opens no file, and the name of the
+    /// document comes from `document`, never from the file's name.
     ///
     /// # Errors
-    /// Fails if the name is not `chapter-<number>-<name>.pdf` or the book title has no letters
-    /// or digits.
+    /// [`ConvertError::Content`] when the media title or the document title has no letters or
+    /// digits.
     pub fn new(
-        book_title: &str,
+        document: MediaDocument,
         chapter_pdf: &Path,
         output_root: &Path,
     ) -> Result<Self, ConvertError> {
@@ -127,21 +126,19 @@ impl ChapterJob {
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let chapter = parse_chapter_file_name(&source_file_name)?;
         let chapter_folder = output_root
-            .join(book_folder_name(book_title)?)
-            .join(chapter_folder_name(chapter.number));
+            .join(media_folder_name(&document.media_title)?)
+            .join(document.name.folder_name()?);
         Ok(Self {
-            book_title: book_title.to_owned(),
+            media_title: document.media_title,
+            name: document.name,
             chapter_pdf: chapter_pdf.to_path_buf(),
             source_file_name,
-            chapter_number: chapter.number,
-            chapter_name: chapter.name,
             chapter_folder,
         })
     }
 
-    /// `<output root>/<book folder>/chapter-<number>`.
+    /// `<output root>/<media folder>/<document folder>`.
     pub fn chapter_folder(&self) -> PathBuf {
         self.chapter_folder.clone()
     }

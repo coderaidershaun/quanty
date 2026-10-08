@@ -5,7 +5,7 @@ mod chunks;
 mod image;
 mod pieces;
 
-use ocr::{Chapter, ChapterIndex, PieceId, SectionHeading};
+use ocr::{Chapter, ChapterIndex, DocumentName, PieceId, SectionHeading};
 use rag_core::{DocId, DocumentInput, DocumentLabels, ItemId, ItemKind, ItemPayload};
 
 pub use image::{LoneImage, image_items};
@@ -79,11 +79,15 @@ pub(super) fn document_id(index: &ChapterIndex) -> DocId {
     DocId::from_source_sha256(&index.source_sha256)
 }
 
+/// The title is embedded with every item and is part of the key of the cached concepts, so the
+/// title of a chapter must not change.
 pub(super) fn document_title(index: &ChapterIndex) -> String {
-    format!(
-        "{}, chapter {}: {}",
-        index.book_title, index.chapter_number, index.chapter_name
-    )
+    match &index.name {
+        DocumentName::Chapter { number, name } => {
+            format!("{}, chapter {number}: {name}", index.media_title)
+        }
+        DocumentName::Title(title) => title.clone(),
+    }
 }
 
 /// The document title followed by the headings the piece sits under, outermost first.

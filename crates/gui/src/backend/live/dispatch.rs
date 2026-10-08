@@ -23,14 +23,17 @@ impl<S: Services> Handler for LiveContext<S> {
             Command::LoadCatalogue { request } => {
                 library::load_catalogue(self, request, &reply).await;
             }
-            Command::SetLabels { request, edit } => {
-                library::set_labels(self, request, &edit, &reply).await;
+            Command::SetDocumentTags { request, edit } => {
+                library::set_document_tags(self, request, &edit, &reply).await;
             }
             Command::DeleteDocument { request, doc } => {
                 library::delete(self, request, doc, &reply).await;
             }
-            Command::SaveBook { request, book } => {
-                library::save_book(self, request, &book, &reply).await;
+            Command::SaveMedia { request, media } => {
+                library::save_media(self, request, &media, &reply).await;
+            }
+            Command::EditMedia { request, edit } => {
+                library::edit_media(self, request, &edit, &reply).await;
             }
             Command::Preflight { request, ingest } => {
                 ingest::preflight(self, request, &ingest, &reply).await;

@@ -1,5 +1,5 @@
 //! The paid work of one ingest job, the same steps that `rag-ingest pdf` takes: save an uploaded
-//! PDF, set up the models and the stores, convert and ingest the chapter, and write the labels.
+//! PDF, set up the models and the stores, convert and ingest the PDF, and write its own tags.
 
 use std::sync::Arc;
 
@@ -7,7 +7,8 @@ use graph::FalkorGraph;
 use ocr::ChapterJob;
 use rag_core::{ConceptStore, Config, ItemStore};
 use rag_ingestion::{
-    ChapterPdf, ConceptExtractor, EXTRACTION_MODEL, Models, PdfOutcome, Stores, ingest_pdf, relabel,
+    ChapterPdf, ConceptExtractor, EXTRACTION_MODEL, Models, PdfOutcome, Stores, ingest_pdf,
+    relabel_document_tags,
 };
 use tokio::sync::watch;
 
@@ -55,6 +56,7 @@ impl<S: Services> Work<S> {
         let outcome = ingest_pdf(
             ChapterPdf {
                 job: &pdf.chapter,
+                new_media: &pdf.new_media,
                 convert: async |chapter: &ChapterJob| {
                     report.send_modify(|report| report.stage = Some(Stage::Converting));
                     let summary = services.convert(chapter, config).await?;
@@ -67,10 +69,10 @@ impl<S: Services> Work<S> {
         )
         .await
         .map_err(|error| PdfIngestError::Pdf(Box::new(error)))?;
-        // The labels come after the ingest, so a run that stops in the ingest labels nothing,
+        // The own tags come after the ingest, so a run that stops in the ingest tags nothing,
         // and the same PDF sent again finishes both.
-        if !pdf.labels.is_empty() {
-            relabel(outcome.doc_id(), &pdf.labels, &stores).await?;
+        if !pdf.document_tags.is_empty() {
+            relabel_document_tags(outcome.doc_id(), &pdf.document_tags, &stores).await?;
         }
         Ok(outcome)
     }

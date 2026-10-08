@@ -35,12 +35,19 @@ struct Found {
 pub(super) struct ItemView {
     /// The document the item is from. Give it to `read_page`.
     document_id: String,
-    /// The title of the document: the book and the chapter.
+    /// The title of the document: the media and the chapter, or a title of its own.
     document: String,
+    /// The title of the media the document belongs to. A picture that stands alone has none.
     #[serde(skip_serializing_if = "Option::is_none")]
-    book: Option<String>,
+    media: Option<String>,
+    /// `book`, `paper` or `other`: the category of the media.
     #[serde(skip_serializing_if = "Option::is_none")]
-    author: Option<String>,
+    category: Option<String>,
+    /// The authors of the media.
+    authors: Vec<String>,
+    /// The tags of the media.
+    media_tags: Vec<String>,
+    /// The tags of the document itself.
     tags: Vec<String>,
     /// The place of the page in the chapter, from 1. Give it to `read_page`.
     page: u32,
@@ -137,17 +144,15 @@ impl Found {
 
 impl From<&ItemPayload> for ItemView {
     fn from(payload: &ItemPayload) -> ItemView {
+        let labels = &payload.document_labels;
         ItemView {
             document_id: payload.doc_id.to_string(),
             document: payload.doc_title.clone(),
-            book: payload.document_labels.book.clone(),
-            author: payload.document_labels.author.clone(),
-            tags: payload
-                .document_labels
-                .tags
-                .iter()
-                .map(ToString::to_string)
-                .collect(),
+            media: labels.media.clone(),
+            category: labels.category.map(|category| category.as_str().to_owned()),
+            authors: labels.authors.clone(),
+            media_tags: labels.media_tags.iter().map(ToString::to_string).collect(),
+            tags: labels.tags.iter().map(ToString::to_string).collect(),
             page: payload.page,
             printed_page: payload.printed_page.clone(),
             kind: payload.kind.as_str().to_owned(),

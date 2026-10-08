@@ -1,5 +1,6 @@
 //! A chapter is checked and started from the Ingest page and runs to its end on the fake backend,
-//! the catalogue is loaded again when it is stored, and a start that fails says so with its hint.
+//! the catalogue is loaded again when it is stored, and a start that fails says so with its hint. A
+//! media is saved before its first PDF, and a paper's PDF of any name is checked and ingested.
 
 use std::path::PathBuf;
 
@@ -8,7 +9,7 @@ use eframe::egui::accesskit::Role;
 use gui::app::layout::{DEFAULT_WINDOW, MIN_WINDOW};
 use gui::backend::fake::Fake;
 use gui::backend::{Handler, Reply};
-use gui::contract::{Book, Command, IngestRequest, Intent, NewBook, Tab};
+use gui::contract::{Category, Command, DocumentName, IngestRequest, Intent, Media, NewMedia, Tab};
 use gui::state::IngestJob;
 use gui::testkit;
 
@@ -36,16 +37,20 @@ fn place_of(seen: &Seen, is: fn(&Command) -> bool) -> Option<usize> {
 fn a_checked_chapter_runs_to_done_and_loads_the_catalogue_again() {
     let (mut harness, seen) = open("ingest-ready", DEFAULT_WINDOW);
     assert_eq!(shared(&harness).tab, Tab::Ingest);
-    let book = node(&harness, Role::ComboBox, "Book").value();
-    assert_eq!(book.as_deref(), Some("Option Volatility and Pricing"));
+    let media = node(&harness, Role::ComboBox, "Media").value();
+    assert_eq!(media.as_deref(), Some("Option Volatility and Pricing"));
     assert!(
-        !has(&harness, Role::TextInput, "Book title"),
-        "a book of the library is chosen from the list, not typed"
+        !has(&harness, Role::TextInput, "Media title"),
+        "a media of the library is chosen from the list, not typed"
     );
-    let form = ["Sheldon Natenberg", "options, volatility"];
-    for (name, text) in ["Author", "Tags"].into_iter().zip(form) {
-        assert_eq!(field(&harness, name).as_deref(), Some(text), "{name}");
-    }
+    assert!(
+        !has(&harness, Role::TextInput, "Authors"),
+        "the labels of a chosen media come from the media, not from the form"
+    );
+    assert_eq!(
+        field(&harness, "Tags for this PDF").as_deref(),
+        Some("greeks")
+    );
     assert!(says(&harness, "Chapter 3 · Greeks"));
     assert!(has(&harness, Role::Button, "Start ingest"));
     testkit::save_png(&mut harness, "app-ingest-ready");
@@ -105,7 +110,7 @@ fn the_tab_and_the_keys_open_the_page_and_go_back() {
     assert_eq!(shared(&harness).tab, Tab::Ask);
     click(&mut harness, Role::Tab, "Ingest");
     assert_eq!(shared(&harness).tab, Tab::Ingest);
-    assert!(says(&harness, "Add a chapter"));
+    assert!(says(&harness, "Add media"));
     testkit::save_png(&mut harness, "app-idle-tabs");
 
     press(&mut harness, COMMAND, egui::Key::Num1);
@@ -137,30 +142,30 @@ fn a_checked_chapter_runs_to_done_on_the_fake_and_the_catalogue_is_loaded_again(
 }
 
 fn is_save(command: &Command) -> bool {
-    matches!(command, Command::SaveBook { .. })
+    matches!(command, Command::SaveMedia { .. })
 }
 
 fn is_catalogue_load(command: &Command) -> bool {
     matches!(command, Command::LoadCatalogue { .. })
 }
 
-fn saved_books(seen: &Seen) -> Vec<NewBook> {
+fn saved_media(seen: &Seen) -> Vec<NewMedia> {
     seen.all()
         .into_iter()
         .filter_map(|command| match command {
-            Command::SaveBook { book, .. } => Some(book),
+            Command::SaveMedia { media, .. } => Some(media),
             _ => None,
         })
         .collect()
 }
 
-fn open_the_form_of_a_new_book(harness: &mut Window) {
-    click(harness, Role::ComboBox, "Book");
-    click(harness, Role::Button, "Add a new book…");
+fn open_the_form_of_a_new_media(harness: &mut Window) {
+    click(harness, Role::ComboBox, "Media");
+    click(harness, Role::Button, "Add new media…");
 }
 
-fn choose_in_the_book_list(harness: &mut Window, title: &str) {
-    click(harness, Role::ComboBox, "Book");
+fn choose_in_the_media_list(harness: &mut Window, title: &str) {
+    click(harness, Role::ComboBox, "Media");
     click(harness, Role::Button, title);
 }
 
@@ -168,19 +173,20 @@ fn close_the_open_list(harness: &mut Window) {
     press(harness, egui::Modifiers::NONE, egui::Key::Escape);
 }
 
-const PLACEHOLDER_OF_THE_BOOK_LIST: &str = "Choose a book";
+const PLACEHOLDER_OF_THE_MEDIA_LIST: &str = "Choose a media";
+const SAVED_PAPER: &str = "Rough Volatility";
 
-fn cancel_clears_the_form_of_a_new_book_and_sends_nothing(harness: &mut Window, seen: &Seen) {
+fn cancel_clears_the_form_of_a_new_media_and_sends_nothing(harness: &mut Window, seen: &Seen) {
     click(harness, Role::Tab, "Ingest");
-    open_the_form_of_a_new_book(harness);
-    assert!(has(harness, Role::Button, "Save book"));
+    open_the_form_of_a_new_media(harness);
+    assert!(has(harness, Role::Button, "Save media"));
     assert!(has(harness, Role::Button, "Cancel"));
     assert!(
         !has(harness, Role::Button, "Choose from the library"),
         "Cancel is the one way back"
     );
-    type_into(harness, "Book title", "Natenberg on Options");
-    type_into(harness, "Author", "Sheldon Natenberg");
+    type_into(harness, "Media title", "Natenberg on Options");
+    type_into(harness, "Authors", "Sheldon Natenberg");
     type_into(harness, "Tags", "Volatility, options");
     testkit::save_png(harness, "app-ingest-new-book-cancel");
 
@@ -189,73 +195,61 @@ fn cancel_clears_the_form_of_a_new_book_and_sends_nothing(harness: &mut Window, 
 
     assert_eq!(seen.all().len(), sent, "Cancel sends no command");
     assert_eq!(seen.count(is_save), 0);
-    assert!(!has(harness, Role::TextInput, "Book title"));
-    for name in ["Author", "Tags"] {
-        assert_eq!(field(harness, name).as_deref(), Some(""), "{name}");
+    for name in ["Media title", "Authors", "Tags"] {
+        assert!(!has(harness, Role::TextInput, name), "{name}");
     }
-    let book = node(harness, Role::ComboBox, "Book").value();
-    assert_eq!(book.as_deref(), Some(PLACEHOLDER_OF_THE_BOOK_LIST));
-    assert!(!has(harness, Role::Button, "Save book"));
+    let media = node(harness, Role::ComboBox, "Media").value();
+    assert_eq!(media.as_deref(), Some(PLACEHOLDER_OF_THE_MEDIA_LIST));
+    assert!(!has(harness, Role::Button, "Save media"));
     assert!(!is_enabled(harness, Role::Button, "Check the chapter"));
 }
 
-fn a_new_book_is_typed_and_saved_with_no_pdf(harness: &mut Window, seen: &Seen) {
+fn a_new_paper_is_typed_and_saved_with_no_pdf(harness: &mut Window, seen: &Seen) {
     click(harness, Role::Tab, "Ingest");
-    open_the_form_of_a_new_book(harness);
-    assert!(has(harness, Role::Button, "Save book"));
+    open_the_form_of_a_new_media(harness);
+    assert!(has(harness, Role::Button, "Save media"));
     assert!(
-        !is_enabled(harness, Role::Button, "Save book"),
-        "a book with no title cannot be saved"
+        !is_enabled(harness, Role::Button, "Save media"),
+        "a media with no title cannot be saved"
     );
 
-    type_into(harness, "Book title", "Natenberg on Options");
-    type_into(harness, "Author", "Sheldon Natenberg");
-    type_into(harness, "Tags", "Volatility, options");
-    click(harness, Role::Button, "Save book");
+    click(harness, Role::ComboBox, "Category");
+    click(harness, Role::Button, "Paper");
+    type_into(harness, "Media title", SAVED_PAPER);
+    type_into(harness, "Authors", "A. Author, B. Author");
+    type_into(harness, "Tags", "Volatility, rough");
+    click(harness, Role::Button, "Save media");
 
-    let wanted = NewBook {
-        title: "Natenberg on Options".to_owned(),
-        author: Some("Sheldon Natenberg".to_owned()),
-        tags: vec!["Volatility".to_owned(), "options".to_owned()],
+    let wanted = NewMedia {
+        title: SAVED_PAPER.to_owned(),
+        category: Category::Paper,
+        authors: vec!["A. Author".to_owned(), "B. Author".to_owned()],
+        tags: vec!["Volatility".to_owned(), "rough".to_owned()],
     };
-    assert_eq!(saved_books(seen), [wanted]);
+    assert_eq!(saved_media(seen), [wanted]);
     assert_eq!(seen.count(is_preflight), 0, "no PDF was chosen");
     assert_eq!(
         seen.count(is_catalogue_load),
         2,
         "the catalogue is loaded at the start and again after the save"
     );
-    let book = node(harness, Role::ComboBox, "Book").value();
-    assert_eq!(book.as_deref(), Some("Natenberg on Options"));
-    assert!(!has(harness, Role::TextInput, "Book title"));
-    assert_eq!(
-        field(harness, "Author").as_deref(),
-        Some("Sheldon Natenberg")
-    );
-    assert_eq!(
-        field(harness, "Tags").as_deref(),
-        Some("options, volatility")
-    );
+    let media = node(harness, Role::ComboBox, "Media").value();
+    assert_eq!(media.as_deref(), Some(SAVED_PAPER));
+    assert!(!has(harness, Role::TextInput, "Media title"));
+    assert!(says(harness, "Paper · A. Author, B. Author"));
+    for tag in ["rough", "volatility"] {
+        assert!(has(harness, Role::Label, tag), "the tag `{tag}` is shown");
+    }
     testkit::save_png(harness, "app-ingest-new-book-saved");
 }
 
-fn the_saved_book_fills_author_and_tags_each_time_it_is_chosen(harness: &mut Window) {
-    choose_in_the_book_list(harness, "Quanty Sample Notes");
-    assert_ne!(
-        field(harness, "Tags").as_deref(),
-        Some("options, volatility")
-    );
+fn the_saved_media_shows_its_labels_each_time_it_is_chosen(harness: &mut Window) {
+    choose_in_the_media_list(harness, "Quanty Sample Notes");
+    assert!(says(harness, "Book · Quanty Team"));
+    assert!(!says(harness, "Paper · A. Author, B. Author"));
 
-    choose_in_the_book_list(harness, "Natenberg on Options");
-
-    assert_eq!(
-        field(harness, "Author").as_deref(),
-        Some("Sheldon Natenberg")
-    );
-    assert_eq!(
-        field(harness, "Tags").as_deref(),
-        Some("options, volatility")
-    );
+    choose_in_the_media_list(harness, SAVED_PAPER);
+    assert!(says(harness, "Paper · A. Author, B. Author"));
 }
 
 fn last_checked(seen: &Seen) -> IngestRequest {
@@ -270,24 +264,45 @@ fn last_checked(seen: &Seen) -> IngestRequest {
     checked.expect("the chapter was not checked")
 }
 
-fn a_chapter_of_the_saved_book_is_labelled_with_what_was_saved(harness: &mut Window, seen: &Seen) {
+fn a_paper_pdf_of_the_saved_paper_is_checked_and_ingested(harness: &mut Window, seen: &Seen) {
     harness
         .state_mut()
-        .push(Intent::PdfPicked(PathBuf::from("chapter-1-basics.pdf")));
+        .push(Intent::PdfPicked(PathBuf::from("hawkes-notes.pdf")));
     testkit::settle(harness);
+    assert!(
+        !says(harness, "must be named chapter-"),
+        "the file-name rule is for a book"
+    );
+    type_into(harness, "Tags for this PDF", "Hawkes, intensity");
     click(harness, Role::Button, "Check the chapter");
 
-    let ingest = last_checked(seen);
-    assert_eq!(ingest.book, "Natenberg on Options");
-    assert_eq!(ingest.author.as_deref(), Some("Sheldon Natenberg"));
-    assert_eq!(ingest.tags, ["options", "volatility"]);
+    let wanted = IngestRequest {
+        pdf: PathBuf::from("hawkes-notes.pdf"),
+        media: SAVED_PAPER.to_owned(),
+        category: Category::Paper,
+        name: DocumentName::Title(SAVED_PAPER.to_owned()),
+        tags: vec!["Hawkes".to_owned(), "intensity".to_owned()],
+    };
+    assert_eq!(last_checked(seen), wanted);
+    let loads = seen.count(is_catalogue_load);
+    click(harness, Role::Button, "Start ingest");
+    let IngestJob::Finished { result, .. } = &shared(harness).ingest else {
+        panic!("the ingest did not finish: {:?}", shared(harness).ingest);
+    };
+    assert!(result.is_ok(), "{result:?}");
+    assert!(says(harness, &format!("Ingested {SAVED_PAPER}")));
+    assert_eq!(
+        seen.count(is_catalogue_load),
+        loads + 1,
+        "the catalogue is loaded again when the document is stored"
+    );
 }
 
-fn a_book_with_no_chapter_is_not_a_filter_and_not_in_the_source_pickers(harness: &mut Window) {
+fn a_media_with_no_document_is_not_a_filter_and_not_in_the_source_pickers(harness: &mut Window) {
     click(harness, Role::Tab, "Ask");
     click(harness, Role::ComboBox, "Books");
     assert!(has(harness, Role::Button, "All books"));
-    assert!(!has(harness, Role::Button, "Natenberg on Options"));
+    assert!(!has(harness, Role::Button, SAVED_PAPER));
     close_the_open_list(harness);
 
     click(harness, Role::ComboBox, "Book");
@@ -295,34 +310,32 @@ fn a_book_with_no_chapter_is_not_a_filter_and_not_in_the_source_pickers(harness:
         has(harness, Role::Button, "Quanty Sample Notes"),
         "the list of the Source panel is open"
     );
-    assert!(!has(harness, Role::Button, "Natenberg on Options"));
+    assert!(!has(harness, Role::Button, SAVED_PAPER));
     close_the_open_list(harness);
 }
 
-fn a_second_book_with_the_same_title_is_refused_by_name(harness: &mut Window, seen: &Seen) {
+fn a_second_media_with_the_same_title_is_refused_by_name(harness: &mut Window, seen: &Seen) {
     click(harness, Role::Tab, "Ingest");
-    open_the_form_of_a_new_book(harness);
-    type_into(harness, "Book title", "  natenberg ON options ");
-    click(harness, Role::Button, "Save book");
-    assert!(says(
-        harness,
-        "Natenberg on Options is in the library already"
-    ));
-    // A second book would have the title as it was typed, so capitals are not compared.
+    let loads = seen.count(is_catalogue_load);
+    open_the_form_of_a_new_media(harness);
+    type_into(harness, "Media title", "  rough VOLATILITY ");
+    click(harness, Role::Button, "Save media");
+    assert!(says(harness, "Rough Volatility is in the library already"));
+    // A second media would have the title as it was typed, so capitals are not compared.
     let catalogue = shared(harness).library.catalogue.ready();
-    let books = catalogue.map_or(0, |catalogue| {
-        let is_the_book = |book: &&Book| {
-            let title = book.title.as_deref();
-            title.is_some_and(|title| title.eq_ignore_ascii_case("Natenberg on Options"))
+    let copies = catalogue.map_or(0, |catalogue| {
+        let is_the_paper = |media: &&Media| {
+            let title = media.title.as_deref();
+            title.is_some_and(|title| title.eq_ignore_ascii_case(SAVED_PAPER))
         };
-        catalogue.books.iter().filter(is_the_book).count()
+        catalogue.media.iter().filter(is_the_paper).count()
     });
-    assert_eq!(books, 1, "the book was not saved a second time");
+    assert_eq!(copies, 1, "the media was not saved a second time");
 
     click(harness, Role::Button, "Cancel");
-    open_the_form_of_a_new_book(harness);
-    type_into(harness, "Book title", "option volatility and pricing");
-    click(harness, Role::Button, "Save book");
+    open_the_form_of_a_new_media(harness);
+    type_into(harness, "Media title", "option volatility and pricing");
+    click(harness, Role::Button, "Save media");
     assert!(says(
         harness,
         "Option Volatility and Pricing is in the library already"
@@ -331,98 +344,33 @@ fn a_second_book_with_the_same_title_is_refused_by_name(harness: &mut Window, se
     assert_eq!(seen.count(is_save), 3);
     assert_eq!(
         seen.count(is_catalogue_load),
-        2,
+        loads,
         "a refusal changes nothing"
     );
 }
 
-fn cancel_clears_a_check_that_was_made_for_the_new_book(harness: &mut Window, seen: &Seen) {
-    click(harness, Role::Tab, "Ingest");
-    click(harness, Role::Button, "Cancel");
-    open_the_form_of_a_new_book(harness);
-    type_into(harness, "Book title", "Dynamic Hedging");
-    harness
-        .state_mut()
-        .push(Intent::PdfPicked(PathBuf::from("chapter-2-hedging.pdf")));
-    testkit::settle(harness);
-    let checks = seen.count(is_preflight);
-    click(harness, Role::Button, "Check the chapter");
-    assert_eq!(seen.count(is_preflight), checks + 1);
-    assert!(
-        matches!(shared(harness).ingest, IngestJob::Checked { .. }),
-        "{:?}",
-        shared(harness).ingest
-    );
-    assert!(has(harness, Role::Button, "Start ingest"));
-
-    click(harness, Role::Button, "Cancel");
-
-    assert_eq!(
-        shared(harness).ingest,
-        IngestJob::Idle,
-        "the old check is gone"
-    );
-    assert!(!has(harness, Role::Button, "Start ingest"));
-    let book = node(harness, Role::ComboBox, "Book").value();
-    assert_eq!(book.as_deref(), Some(PLACEHOLDER_OF_THE_BOOK_LIST));
-    assert!(!is_enabled(harness, Role::Button, "Check the chapter"));
-
-    choose_in_the_book_list(harness, "Quanty Sample Notes");
-    assert!(is_enabled(harness, Role::Button, "Check the chapter"));
-    click(harness, Role::Button, "Check the chapter");
-    assert_eq!(seen.count(is_preflight), checks + 2);
-    assert!(matches!(shared(harness).ingest, IngestJob::Checked { .. }));
-}
-
-fn a_typed_title_of_a_stored_book_is_sent_as_the_library_has_it() {
-    let (mut harness, seen) = open("idle", DEFAULT_WINDOW);
-    click(&mut harness, Role::Tab, "Ingest");
-    open_the_form_of_a_new_book(&mut harness);
-    type_into(
-        &mut harness,
-        "Book title",
-        " option volatility AND pricing ",
-    );
-    harness
-        .state_mut()
-        .push(Intent::PdfPicked(PathBuf::from("chapter-4-vega.pdf")));
-    testkit::settle(&mut harness);
-    click(&mut harness, Role::Button, "Check the chapter");
-
-    assert_eq!(
-        last_checked(&seen).book,
-        "Option Volatility and Pricing",
-        "the title as it was typed would start a second book"
-    );
-    assert!(
-        matches!(shared(&harness).ingest, IngestJob::Checked { .. }),
-        "the check stands: {:?}",
-        shared(&harness).ingest
-    );
-}
-
-fn with_no_book_in_the_library_the_list_is_there_to_go_back_to() {
+fn with_no_media_in_the_library_the_list_is_there_to_go_back_to() {
     let (mut harness, _) = open("empty-library", DEFAULT_WINDOW);
     click(&mut harness, Role::Tab, "Ingest");
     assert!(
-        !has(&harness, Role::TextInput, "Book title"),
+        !has(&harness, Role::TextInput, "Media title"),
         "the box for a title does not open by itself"
     );
-    assert!(says(&harness, "No book is stored yet."));
-    let book = node(&harness, Role::ComboBox, "Book").value();
-    assert_eq!(book.as_deref(), Some(PLACEHOLDER_OF_THE_BOOK_LIST));
+    assert!(says(&harness, "No media is stored yet."));
+    let media = node(&harness, Role::ComboBox, "Media").value();
+    assert_eq!(media.as_deref(), Some(PLACEHOLDER_OF_THE_MEDIA_LIST));
 
-    open_the_form_of_a_new_book(&mut harness);
-    assert!(has(&harness, Role::TextInput, "Book title"));
-    assert!(has(&harness, Role::Button, "Save book"));
+    open_the_form_of_a_new_media(&mut harness);
+    assert!(has(&harness, Role::TextInput, "Media title"));
+    assert!(has(&harness, Role::Button, "Save media"));
     assert!(has(&harness, Role::Button, "Cancel"));
 
     click(&mut harness, Role::Button, "Cancel");
-    assert!(!has(&harness, Role::TextInput, "Book title"));
-    assert!(has(&harness, Role::ComboBox, "Book"));
+    assert!(!has(&harness, Role::TextInput, "Media title"));
+    assert!(has(&harness, Role::ComboBox, "Media"));
 }
 
-/// Answers every command but the save of a book, so that save never ends.
+/// Answers every command but the save of a media, so that save never ends.
 struct SaveNeverEnds(Fake);
 
 impl Handler for SaveNeverEnds {
@@ -437,31 +385,29 @@ fn cancel_is_off_while_the_save_runs() {
     let (mut harness, _) = recording::open_with("idle", DEFAULT_WINDOW, SaveNeverEnds);
     testkit::settle(&mut harness);
     click(&mut harness, Role::Tab, "Ingest");
-    open_the_form_of_a_new_book(&mut harness);
-    type_into(&mut harness, "Book title", "Dynamic Hedging");
+    open_the_form_of_a_new_media(&mut harness);
+    type_into(&mut harness, "Media title", "Dynamic Hedging");
     assert!(is_enabled(&harness, Role::Button, "Cancel"));
     // The save never ends, so the app is never idle again, and `click` and `settle` wait for an
     // idle app.
-    node(&harness, Role::Button, "Save book").click();
+    node(&harness, Role::Button, "Save media").click();
     harness.run_ok();
     assert!(
         !is_enabled(&harness, Role::Button, "Cancel"),
         "a save that runs cannot be given up"
     );
-    assert!(has(&harness, Role::TextInput, "Book title"));
+    assert!(has(&harness, Role::TextInput, "Media title"));
 }
 
 #[test]
 fn a_book_is_saved_with_no_pdf_is_offered_after_and_is_refused_a_second_time() {
     let (mut harness, seen) = open("idle", DEFAULT_WINDOW);
-    cancel_clears_the_form_of_a_new_book_and_sends_nothing(&mut harness, &seen);
-    a_new_book_is_typed_and_saved_with_no_pdf(&mut harness, &seen);
-    the_saved_book_fills_author_and_tags_each_time_it_is_chosen(&mut harness);
-    a_chapter_of_the_saved_book_is_labelled_with_what_was_saved(&mut harness, &seen);
-    a_book_with_no_chapter_is_not_a_filter_and_not_in_the_source_pickers(&mut harness);
-    a_second_book_with_the_same_title_is_refused_by_name(&mut harness, &seen);
-    cancel_clears_a_check_that_was_made_for_the_new_book(&mut harness, &seen);
-    a_typed_title_of_a_stored_book_is_sent_as_the_library_has_it();
-    with_no_book_in_the_library_the_list_is_there_to_go_back_to();
+    cancel_clears_the_form_of_a_new_media_and_sends_nothing(&mut harness, &seen);
+    a_new_paper_is_typed_and_saved_with_no_pdf(&mut harness, &seen);
+    the_saved_media_shows_its_labels_each_time_it_is_chosen(&mut harness);
+    a_paper_pdf_of_the_saved_paper_is_checked_and_ingested(&mut harness, &seen);
+    a_media_with_no_document_is_not_a_filter_and_not_in_the_source_pickers(&mut harness);
+    a_second_media_with_the_same_title_is_refused_by_name(&mut harness, &seen);
+    with_no_media_in_the_library_the_list_is_there_to_go_back_to();
     cancel_is_off_while_the_save_runs();
 }

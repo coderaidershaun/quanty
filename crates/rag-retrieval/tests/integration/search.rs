@@ -1,16 +1,17 @@
 //! Asks questions of throwaway stores that hold the three committed chapters or items placed by
 //! hand, with an embedder that makes up its vectors, so nothing is billed.
 
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use graph::RelationKind;
-use rag_core::{DocumentLabels, ItemId, ItemKind};
+use rag_core::{Category, DocumentLabels, ItemId, ItemKind, LabelFilter, MediaLabels};
 use rag_ingestion::testing::ThrowawayStores;
 use rag_retrieval::{MAX_RESULTS_PER_DOCUMENT, RESULTS_PER_QUERY, Reason, Retriever};
 
 use crate::support::{
     self, Fixture, Placed, SAMPLE_CHAPTER_TITLE, SCORE_ERROR, WordEmbedder, find_item, found_among,
-    store_samples, tagged, texts_of,
+    store_samples, tagged, texts_of, wanting,
 };
 
 #[tokio::test(flavor = "multi_thread")]
@@ -30,7 +31,7 @@ async fn a_question_finds_its_item_and_prints_title_page_kind_text_and_picture()
     };
 
     let results = retriever
-        .search(&question, None, &DocumentLabels::default())
+        .search(&question, None, &LabelFilter::default())
         .await
         .unwrap();
 
@@ -90,14 +91,18 @@ async fn an_item_of_another_document_comes_back_through_a_shared_concept_and_the
     let c1 = fixture.add(Placed::chunk(document_c, "c1", 0.20));
     let d1 = fixture.add(Placed::chunk(document_d, "d1", 0.10));
     fixture.add(Placed::chunk(document_e, "e1", 0.50));
-    fixture.label(
-        document_a,
-        DocumentLabels {
-            book: Some("Pricing Options".to_owned()),
-            author: Some("Sheldon Natenberg".to_owned()),
-            ..tagged(&["options"])
+    // Document A is of a paper with two authors and the media tag `options`; C has `options` as
+    // its own tag.
+    let mut of_a_paper = DocumentLabels::default();
+    of_a_paper.take_media(
+        "Pricing Options",
+        &MediaLabels {
+            category: Category::Paper,
+            authors: vec!["Sheldon Natenberg".to_owned(), "Euan Sinclair".to_owned()],
+            tags: BTreeSet::from(["options".parse().unwrap()]),
         },
     );
+    fixture.label(document_a, of_a_paper);
     fixture.label(document_b, tagged(&["futures"]));
     fixture.label(document_c, tagged(&["options"]));
     fixture.label(document_d, tagged(&["futures"]));
@@ -122,7 +127,7 @@ async fn an_item_of_another_document_comes_back_through_a_shared_concept_and_the
         graph: stores.graph,
     };
 
-    let results = found_among(&retriever, None, &DocumentLabels::default()).await;
+    let results = found_among(&retriever, None, &LabelFilter::default()).await;
 
     let found: Vec<&str> = results
         .hits
@@ -176,27 +181,43 @@ async fn an_item_of_another_document_comes_back_through_a_shared_concept_and_the
 
     // Document E is behind a1 to a9 and no concept leads to it, so only a seed query that looks at
     // the labels finds it.
-    let results = found_among(&retriever, None, &tagged(&["rates"])).await;
+    let results = found_among(&retriever, None, &wanting(&["rates"])).await;
     assert_eq!(texts_of(&results), ["e1"]);
     assert_eq!(results.hits[0].reason, Reason::Nearest);
-    // Documents A and C are tagged `options`. b1 and d1 come through the graph and are left out.
-    let results = found_among(&retriever, None, &tagged(&["options"])).await;
+    // A has `options` as a media tag and C as its own tag. b1 and d1 come through the graph and
+    // are left out.
+    let results = found_among(&retriever, None, &wanting(&["options"])).await;
     assert_eq!(texts_of(&results), ["a1", "a2", "a3", "c1"]);
     assert_eq!(
         results.hits[3].reason,
         Reason::Concept("Itô's lemma".to_owned())
     );
-    let of_document_a = DocumentLabels {
-        book: Some("pricing options".to_owned()),
+    let of_document_a = LabelFilter {
+        media: Some("pricing options".to_owned()),
         author: Some("SHELDON NATENBERG".to_owned()),
-        ..DocumentLabels::default()
+        ..LabelFilter::default()
     };
     let results = found_among(&retriever, None, &of_document_a).await;
     assert_eq!(texts_of(&results), ["a1", "a2", "a3"]);
-    // Every label that is given must fit, and A is not tagged `futures`.
-    let not_document_a = DocumentLabels {
-        book: Some("Pricing Options".to_owned()),
-        ..tagged(&["futures"])
+    // The second author of A fits as well as the first.
+    let by_the_second_author = LabelFilter {
+        author: Some("EUAN SINCLAIR".to_owned()),
+        ..LabelFilter::default()
+    };
+    let results = found_among(&retriever, None, &by_the_second_author).await;
+    assert_eq!(texts_of(&results), ["a1", "a2", "a3"]);
+    let of_category = |category| LabelFilter {
+        category: Some(category),
+        ..LabelFilter::default()
+    };
+    let results = found_among(&retriever, None, &of_category(Category::Paper)).await;
+    assert_eq!(texts_of(&results), ["a1", "a2", "a3"]);
+    let results = found_among(&retriever, None, &of_category(Category::Other)).await;
+    assert!(results.hits.is_empty(), "{results}");
+    // Every label that is given must fit, and A has no tag `futures`.
+    let not_document_a = LabelFilter {
+        media: Some("Pricing Options".to_owned()),
+        ..wanting(&["futures"])
     };
     let results = found_among(&retriever, None, &not_document_a).await;
     assert!(results.hits.is_empty(), "{results}");
@@ -241,7 +262,7 @@ async fn a_returned_paragraph_pulls_in_the_figure_and_the_formula_it_cites() {
         graph: stores.graph,
     };
 
-    let results = found_among(&retriever, None, &DocumentLabels::default()).await;
+    let results = found_among(&retriever, None, &LabelFilter::default()).await;
 
     let found: Vec<&str> = results
         .hits
@@ -280,12 +301,7 @@ async fn a_returned_paragraph_pulls_in_the_figure_and_the_formula_it_cites() {
         "{printed}"
     );
 
-    let chunks_only = found_among(
-        &retriever,
-        Some(ItemKind::Chunk),
-        &DocumentLabels::default(),
-    )
-    .await;
+    let chunks_only = found_among(&retriever, Some(ItemKind::Chunk), &LabelFilter::default()).await;
     let found: Vec<&str> = chunks_only
         .hits
         .iter()
@@ -298,13 +314,13 @@ async fn a_returned_paragraph_pulls_in_the_figure_and_the_formula_it_cites() {
     );
 
     // The labels of A keep what A cites, and nothing of B comes in.
-    let results = found_among(&retriever, None, &tagged(&["options"])).await;
+    let results = found_among(&retriever, None, &wanting(&["options"])).await;
     assert_eq!(
         texts_of(&results),
         ["a1", "a2", "a3", "figure of A", "formula of A"]
     );
     // The formula of B is nearer and is a formula, so the result is A's only when both the kind and
     // the labels are kept.
-    let formulas = found_among(&retriever, Some(ItemKind::Formula), &tagged(&["options"])).await;
+    let formulas = found_among(&retriever, Some(ItemKind::Formula), &wanting(&["options"])).await;
     assert_eq!(texts_of(&formulas), ["formula of A"]);
 }

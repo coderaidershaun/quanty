@@ -208,7 +208,7 @@ fn an_ask_runs_from_the_question_to_the_cited_page_on_the_live_adapters() {
         reply
             .results
             .iter()
-            .all(|result| result.book.as_deref() == Some(VOLATILITY_BOOK))
+            .all(|result| result.media.as_deref() == Some(VOLATILITY_BOOK))
     );
     assert_eq!(reply.trace.documents_searched, Some(1));
     assert_eq!(ask.answer, Loadable::Idle);
@@ -216,7 +216,7 @@ fn an_ask_runs_from_the_question_to_the_cited_page_on_the_live_adapters() {
     let no_such_book = AskDraft {
         question: QUESTION.to_owned(),
         filters: Filters {
-            book: Some("No such book".to_owned()),
+            media: Some("No such book".to_owned()),
             ..Filters::default()
         },
         ..AskDraft::default()

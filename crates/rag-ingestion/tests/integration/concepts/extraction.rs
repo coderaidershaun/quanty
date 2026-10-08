@@ -83,9 +83,13 @@ async fn ingest_asks_about_every_item_and_writes_concepts_mentions_and_relations
     });
     let models = throwaway.models(model.clone());
 
-    let summary = assert_send(ingest_chapter(&support::sample_chapter(), &models, &stores))
-        .await
-        .unwrap();
+    let summary = assert_send(ingest_chapter(
+        support::chapter_at(&support::sample_chapter()),
+        &models,
+        &stores,
+    ))
+    .await
+    .unwrap();
 
     assert_eq!(model.calls(), n, "one question for each item");
     let questions = model.questions();
@@ -199,7 +203,8 @@ async fn ingest_asks_about_every_item_and_writes_concepts_mentions_and_relations
     expected_relations.sort();
     assert_eq!(relations, expected_relations);
 
-    let nodes = 2 * (n as u64 + 1);
+    // The items, their document and its media, and a concept of each item and the one they share.
+    let nodes = 2 * (n as u64 + 1) + 1;
     let edges = n as u64 + (n as u64 - 1) + 2 * n as u64 + (2 * n as u64 - 1);
     assert_eq!(size(&stores.graph).await, GraphSize { nodes, edges });
 

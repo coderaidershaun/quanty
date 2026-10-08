@@ -8,26 +8,28 @@ use std::path::{Path, PathBuf};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
-use ocr::ChapterJob;
-use ocr::content::book_folder_name;
-use rag_core::{Config, Tag};
-use rag_ingestion::LabelChange;
+use ocr::content::media_folder_name;
+use ocr::{ChapterJob, MediaDocument};
+use rag_core::{Category, Config, MediaLabels, Tag, author_list};
+use rag_ingestion::{TagChange, document_name};
 
 use super::{IngestPdfArgs, PdfIngestError};
 
 const PDF_START: &[u8] = b"%PDF-";
 
-/// The folder under the content folder that uploads are saved in. A book folder name never holds
-/// an underscore, so no upload can land in the folder of a book.
+/// The folder under the content folder that uploads are saved in. A media folder name never holds
+/// an underscore, so no upload can land in the folder of a media.
 const UPLOADS_FOLDER: &str = "_uploads";
 
 pub(super) struct CheckedPdf {
     pub(super) chapter: ChapterJob,
-    pub(super) book: String,
+    pub(super) media: String,
     pub(super) file_name: String,
     /// The bytes to save first, when the PDF was sent as base64.
     pub(super) upload: Option<Upload>,
-    pub(super) labels: LabelChange,
+    /// The labels the media is made with when the library does not have it yet.
+    pub(super) new_media: MediaLabels,
+    pub(super) document_tags: TagChange,
 }
 
 pub(super) struct Upload {
@@ -48,23 +50,29 @@ pub(super) fn check(
     config: &Config,
     max_pdf_bytes: u64,
 ) -> Result<CheckedPdf, PdfIngestError> {
-    let book = non_blank(Some(args.book)).ok_or(PdfIngestError::BlankBook)?;
-    // The book is checked here, so that the last check below can fail for the file name only.
-    let book_folder = book_folder_name(&book).map_err(PdfIngestError::Book)?;
+    let media = non_blank(Some(args.media)).ok_or(PdfIngestError::BlankMedia)?;
+    let category = non_blank(args.category)
+        .map(|category| category.parse::<Category>())
+        .transpose()
+        .map_err(PdfIngestError::Category)?
+        .unwrap_or_default();
+    // The media is checked here, so that the checks below can fail for the document only.
+    let media_folder = media_folder_name(&media).map_err(PdfIngestError::Media)?;
+    let document_title = non_blank(args.document_title);
+    if category == Category::Book && document_title.is_some() {
+        return Err(PdfIngestError::TitleForABook);
+    }
     let path = non_blank(args.path);
     // The base64 text can be megabytes long, so it is not trimmed or copied here.
     let pdf_base64 = args.pdf_base64.filter(|text| !text.trim().is_empty());
     let file_name = non_blank(args.file_name);
-    let tags = args
-        .tags
-        .unwrap_or_default()
-        .iter()
-        .map(|tag| tag.parse::<Tag>())
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(PdfIngestError::Tag)?;
-    let labels = LabelChange {
-        author: non_blank(args.author),
-        add: tags,
+    let new_media = MediaLabels {
+        category,
+        authors: author_list(args.authors.unwrap_or_default()),
+        tags: tags_of(args.tags)?.into_iter().collect(),
+    };
+    let document_tags = TagChange {
+        add: tags_of(args.document_tags)?,
         remove: Vec::new(),
     };
 
@@ -84,7 +92,7 @@ pub(super) fn check(
         }
         (None, Some(text)) => {
             let name = file_name.ok_or(PdfIngestError::MissingFileName)?;
-            let save_to = upload_path(config, &book_folder, &name)?;
+            let save_to = upload_path(config, &media_folder, &name)?;
             let bytes = decoded_pdf(&text, max_pdf_bytes)?;
             let upload = Upload {
                 bytes,
@@ -93,15 +101,32 @@ pub(super) fn check(
             (save_to, name, Some(upload))
         }
     };
-    let chapter = ChapterJob::new(&book, &pdf_path, &config.content_folder)
-        .map_err(PdfIngestError::Chapter)?;
+    let title = document_title.as_deref().unwrap_or(&media);
+    let name =
+        document_name(category, title, &pdf_path).map_err(PdfIngestError::ChapterFileName)?;
+    let document = MediaDocument {
+        media_title: media.clone(),
+        name,
+    };
+    let chapter = ChapterJob::new(document, &pdf_path, &config.content_folder)
+        .map_err(PdfIngestError::DocumentTitle)?;
     Ok(CheckedPdf {
         chapter,
-        book,
+        media,
         file_name,
         upload,
-        labels,
+        new_media,
+        document_tags,
     })
+}
+
+fn tags_of(texts: Option<Vec<String>>) -> Result<Vec<Tag>, PdfIngestError> {
+    texts
+        .unwrap_or_default()
+        .iter()
+        .map(|tag| tag.parse::<Tag>())
+        .collect::<Result<_, _>>()
+        .map_err(PdfIngestError::Tag)
 }
 
 fn path_of_a_pdf(path: &str, max_pdf_bytes: u64) -> Result<PathBuf, PdfIngestError> {
@@ -133,10 +158,10 @@ fn path_of_a_pdf(path: &str, max_pdf_bytes: u64) -> Result<PathBuf, PdfIngestErr
 }
 
 /// Where an uploaded PDF is saved: never a path that the caller chose, only a file name that
-/// has no folder in it, under the folder of the book under the uploads folder.
+/// has no folder in it, under the folder of the media under the uploads folder.
 fn upload_path(
     config: &Config,
-    book_folder: &str,
+    media_folder: &str,
     file_name: &str,
 ) -> Result<PathBuf, PdfIngestError> {
     let is_plain = Path::new(file_name)
@@ -150,7 +175,7 @@ fn upload_path(
     Ok(config
         .content_folder
         .join(UPLOADS_FOLDER)
-        .join(book_folder)
+        .join(media_folder)
         .join(file_name))
 }
 

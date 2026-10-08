@@ -31,9 +31,9 @@ fn a_follow_up_starts_a_new_ask_and_copies_reach_the_clipboard() {
         .ready()
         .map(|catalogue| {
             catalogue
-                .books
+                .media
                 .iter()
-                .filter_map(|b| b.title.clone())
+                .filter_map(|media| media.title.clone())
                 .collect()
         })
         .unwrap_or_default();
@@ -56,7 +56,7 @@ fn a_follow_up_starts_a_new_ask_and_copies_reach_the_clipboard() {
     );
     click(&mut harness, Role::Button, "Ask");
     assert_new_ask(&harness, before, &question);
-    assert_eq!(shared(&harness).ask.filters.book.as_ref(), Some(&books[0]));
+    assert_eq!(shared(&harness).ask.filters.media.as_ref(), Some(&books[0]));
 
     click(&mut harness, Role::Tab, "Results");
     let follow_up = shared(&harness)

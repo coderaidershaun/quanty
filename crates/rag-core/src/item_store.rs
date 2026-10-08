@@ -1,6 +1,8 @@
 //! The Qdrant collection that holds every item: one unnamed vector and the payload of an item
 //! for each point. Ingestion writes it and retrieval reads it, so both use this one definition.
 
+use std::collections::BTreeSet;
+
 use qdrant_client::Payload;
 use qdrant_client::qdrant::{
     Condition, CountPointsBuilder, CreateFieldIndexCollectionBuilder, DeletePayloadPointsBuilder,
@@ -188,11 +190,20 @@ impl ItemStore {
         document: DocId,
         labels: &DocumentLabels,
     ) -> Result<(), StoreError> {
-        let tags: Vec<&str> = labels.tags.iter().map(Tag::as_str).collect();
         let fields = [
-            (BOOK_FIELD, labels.book.as_deref().map(Value::from)),
-            (AUTHOR_FIELD, labels.author.as_deref().map(Value::from)),
-            (TAGS_FIELD, (!tags.is_empty()).then(|| Value::from(tags))),
+            (MEDIA_FIELD, labels.media.as_deref().map(Value::from)),
+            (
+                CATEGORY_FIELD,
+                labels
+                    .category
+                    .map(|category| Value::from(category.as_str())),
+            ),
+            (
+                AUTHORS_FIELD,
+                (!labels.authors.is_empty()).then(|| Value::from(labels.authors.clone())),
+            ),
+            (MEDIA_TAGS_FIELD, tag_list(&labels.media_tags)),
+            (TAGS_FIELD, tag_list(&labels.tags)),
         ];
         let mut given = Map::new();
         let mut left_out = Vec::new();
@@ -239,6 +250,11 @@ impl ItemStore {
     }
 }
 
+fn tag_list(tags: &BTreeSet<Tag>) -> Option<Value> {
+    let tags: Vec<&str> = tags.iter().map(Tag::as_str).collect();
+    (!tags.is_empty()).then(|| Value::from(tags))
+}
+
 fn points_of(document: DocId) -> Filter {
     Filter::must([Condition::matches(DOC_ID_FIELD, document.to_string())])
 }
@@ -275,8 +291,10 @@ const DOC_ID_FIELD: &str = "doc_id";
 
 /// The names of the payload fields that hold the labels of a document. They must match the field
 /// names of `DocumentLabels`.
-const BOOK_FIELD: &str = "book";
-const AUTHOR_FIELD: &str = "author";
+const MEDIA_FIELD: &str = "media";
+const CATEGORY_FIELD: &str = "category";
+const AUTHORS_FIELD: &str = "authors";
+const MEDIA_TAGS_FIELD: &str = "media_tags";
 const TAGS_FIELD: &str = "tags";
 
 /// The name of the payload field that holds the printed label of an item. It must match the field

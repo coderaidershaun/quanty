@@ -31,9 +31,8 @@ pub(super) async fn run<S: PageServices>(
     std::fs::create_dir_all(folder).map_err(write_error(folder))?;
     let mut index = ChapterIndex {
         format_version: FORMAT_VERSION,
-        book_title: job.book_title.clone(),
-        chapter_number: job.chapter_number,
-        chapter_name: job.chapter_name.clone(),
+        media_title: job.media_title.clone(),
+        name: job.name.clone(),
         source_file: job.source_file_name.clone(),
         source_sha256: source_sha256.to_owned(),
         page_count,

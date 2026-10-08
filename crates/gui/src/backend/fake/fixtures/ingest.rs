@@ -1,12 +1,13 @@
-//! The steps of an ingest, its report and the way it can fail.
+//! The steps of an ingest and its report.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use uuid::Uuid;
 
+use super::library::document_title;
 use crate::contract::{
-    ChapterLabel, ChapterState, DocId, Failure, FailureKind, IngestReport, IngestRequest,
-    ItemCounts, PageToCheck, Preflight,
+    Category, ChapterState, DocId, DocumentName, IngestReport, IngestRequest, ItemCounts,
+    PageToCheck, Preflight,
 };
 
 /// The chapter that the two ingest scenes check as they open: the form as the page draws it, so
@@ -14,74 +15,31 @@ use crate::contract::{
 pub(in crate::backend::fake) fn request() -> IngestRequest {
     IngestRequest {
         pdf: PathBuf::from("/books/option-volatility/chapter-3-greeks.pdf"),
-        book: "Option Volatility and Pricing".to_owned(),
-        author: Some("Sheldon Natenberg".to_owned()),
-        tags: vec!["options".to_owned(), "volatility".to_owned()],
+        media: "Option Volatility and Pricing".to_owned(),
+        category: Category::Book,
+        name: DocumentName::Chapter {
+            number: 3,
+            name: "Greeks".to_owned(),
+        },
+        tags: vec!["greeks".to_owned()],
     }
 }
 
-fn file_name(pdf: &Path) -> String {
-    pdf.file_name()
-        .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
-}
-
-/// Reads `chapter-<number>-<name>.pdf` the way the real check does. The fake may not name the
-/// crate that reads it for real, so the rule is written out here.
-fn parse(name: &str) -> Option<ChapterLabel> {
-    let stem = name.strip_prefix("chapter-")?.strip_suffix(".pdf")?;
-    let (digits, words) = stem.split_once('-')?;
-    if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
-        return None;
-    }
-    let words: Vec<String> = words
-        .split('-')
-        .filter(|word| !word.is_empty())
-        .map(|word| {
-            let mut letters = word.chars();
-            letters.next().map_or_else(String::new, |first| {
-                first.to_uppercase().chain(letters).collect()
-            })
-        })
-        .collect();
-    if words.is_empty() {
-        return None;
-    }
-    Some(ChapterLabel {
-        number: digits.parse().ok()?,
-        name: words.join(" "),
-    })
-}
-
-fn chapter_of(pdf: &Path) -> Result<ChapterLabel, Failure> {
-    let name = file_name(pdf);
-    parse(&name).ok_or_else(|| {
-        Failure::new(
-            FailureKind::BadFile,
-            format!("{name} is not named chapter-<number>-<name>.pdf"),
-        )
-        .with_hint(format!(
-            "{name} is not named chapter-<number>-<name>.pdf. Rename the file, for example chapter-3-greeks.pdf."
-        ))
-    })
-}
-
-pub(in crate::backend::fake) fn preflight(request: &IngestRequest) -> Result<Preflight, Failure> {
-    Ok(Preflight {
-        chapter: chapter_of(&request.pdf)?,
+/// The panel sends a book chapter only when its file name is one, so the name is taken as it
+/// comes.
+pub(in crate::backend::fake) fn preflight(request: &IngestRequest) -> Preflight {
+    Preflight {
+        name: request.name.clone(),
         pages: None,
         state: Some(ChapterState::New),
         blockers: Vec::new(),
-    })
+    }
 }
 
 pub(in crate::backend::fake) fn report(request: &IngestRequest) -> IngestReport {
-    let chapter = chapter_of(&request.pdf).unwrap_or_default();
     IngestReport {
         doc: DocId(Uuid::from_u128(9)),
-        title: format!(
-            "{}, chapter {}: {}",
-            request.book, chapter.number, chapter.name
-        ),
+        title: document_title(&request.media, &request.name),
         pages: 12,
         items: ItemCounts {
             chunks: 31,

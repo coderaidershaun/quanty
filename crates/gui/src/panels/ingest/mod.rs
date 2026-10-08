@@ -1,18 +1,20 @@
-//! The panel that adds a chapter PDF to the library, or saves a book before its first chapter:
+//! The panel that adds a PDF of a media to the library, or saves a media before its first PDF:
 //! the form, then what the one ingest of the app is doing.
 
-mod books;
 mod form;
+mod media;
 mod status;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use eframe::egui;
 
-use self::books::{BookChoice, Offer};
-use crate::contract::{Catalogue, IngestRequest, Intent, NewBook, is_same_title};
+use self::media::{MediaChoice, NewMediaForm};
+use crate::contract::{
+    Catalogue, Category, DocumentName, IngestRequest, Intent, Media, is_same_title,
+};
 use crate::panels::PanelCx;
-use crate::panels::labels::{author_label, author_text, tag_labels, tags_text};
+use crate::panels::labels::{list_of, text_of};
 use crate::state::{IngestJob, Shared};
 use crate::widgets;
 
@@ -22,108 +24,121 @@ const COLUMN_WIDTH: f32 = 720.0;
 #[derive(Debug, Default)]
 pub struct Local {
     pdf: Option<PathBuf>,
-    book: BookChoice,
-    author: String,
-    tags: String,
+    media: MediaChoice,
+    /// The tags of this PDF only, as typed.
+    own_tags: String,
     seen_picks: u64,
     seen_saves: u64,
 }
 
+fn file_name_of(pdf: &Path) -> String {
+    pdf.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
 impl Local {
-    /// A typed title that names a book of the library is sent as the library has it, so a
-    /// chapter never starts a second book that differs only in capitals.
-    fn draft(&self, catalogue: Option<&Catalogue>) -> Option<IngestRequest> {
+    /// A PDF can be ingested only into a media of the library. A book chapter is named by its
+    /// file name, and there is no request while the file name is not one; a paper or another
+    /// media names its document after the media.
+    fn draft(&self) -> Option<IngestRequest> {
         let pdf = self.pdf.clone()?;
-        let book = match &self.book {
-            BookChoice::Unchosen => return None,
-            BookChoice::Existing(title) => title.as_str(),
-            BookChoice::New(text) => {
-                let typed = text.trim();
-                catalogue
-                    .and_then(|catalogue| catalogue.stored_title(typed))
-                    .unwrap_or(typed)
-            }
-        };
-        if book.is_empty() {
+        let MediaChoice::Existing { title, category } = &self.media else {
             return None;
-        }
+        };
+        let name = match category {
+            Category::Book => DocumentName::from_chapter_file_name(&file_name_of(&pdf))?,
+            Category::Paper | Category::Other => DocumentName::Title(title.clone()),
+        };
         Some(IngestRequest {
             pdf,
-            book: book.to_owned(),
-            author: author_label(&self.author),
-            tags: tag_labels(&self.tags),
-        })
-    }
-
-    fn book_to_save(&self) -> Option<NewBook> {
-        let BookChoice::New(text) = &self.book else {
-            return None;
-        };
-        let title = text.trim();
-        (!title.is_empty()).then(|| NewBook {
-            title: title.to_owned(),
-            author: author_label(&self.author),
-            tags: tag_labels(&self.tags),
+            media: title.clone(),
+            category: *category,
+            name,
+            tags: list_of(&self.own_tags),
         })
     }
 
     fn is_untouched(&self) -> bool {
-        self.pdf.is_none() && self.book == BookChoice::Unchosen
+        self.pdf.is_none() && self.media == MediaChoice::Unchosen
     }
 
+    /// A media that a ready library does not hold is offered as a new media of that title.
     fn fill_from(&mut self, request: &IngestRequest, catalogue: Option<&Catalogue>) {
-        let is_in_library =
-            catalogue.is_some_and(|catalogue| books::has_titled(catalogue, &request.book));
+        let is_gone =
+            catalogue.is_some_and(|catalogue| media::titled(catalogue, &request.media).is_none());
         self.pdf = Some(request.pdf.clone());
-        self.book = if is_in_library {
-            BookChoice::Existing(request.book.clone())
+        self.media = if is_gone {
+            MediaChoice::New(NewMediaForm {
+                category: request.category,
+                title: request.media.clone(),
+                ..NewMediaForm::default()
+            })
         } else {
-            BookChoice::New(request.book.clone())
+            MediaChoice::Existing {
+                title: request.media.clone(),
+                category: request.category,
+            }
         };
-        self.author = author_text(request.author.as_deref());
-        self.tags = tags_text(&request.tags);
+        self.own_tags = text_of(&request.tags);
     }
 
-    fn choose(&mut self, offer: &Offer<'_>) {
-        self.book = BookChoice::Existing(offer.title.to_owned());
-        self.author = author_text(offer.author);
-        self.tags = tags_text(&offer.tags);
+    fn choose(&mut self, media: &Media) {
+        if let Some(title) = &media.title {
+            self.media = MediaChoice::Existing {
+                title: title.clone(),
+                category: media.category,
+            };
+        }
     }
 
-    fn start_new_book(&mut self) {
-        self.book = BookChoice::New(String::new());
-        self.author.clear();
-        self.tags.clear();
+    fn start_new_media(&mut self) {
+        self.media = MediaChoice::New(NewMediaForm::default());
     }
 
-    /// The chosen file stays: it was not typed for the new book, and a form with no file and no
-    /// book is filled again from the last check.
-    fn cancel_new_book(&mut self) {
-        self.book = BookChoice::Unchosen;
-        self.author.clear();
-        self.tags.clear();
+    /// The chosen file and the tags for it stay: they were not typed for the new media.
+    fn cancel_new_media(&mut self) {
+        self.media = MediaChoice::Unchosen;
     }
 
-    /// Chooses the book that was just saved, once the catalogue that holds it has arrived. The
+    /// Chooses the media that was just saved, once the catalogue that holds it has arrived. The
     /// cue is used up whether or not the form still shows that title, so a title typed later
-    /// does not choose the book again.
-    fn choose_saved_book(&mut self, shared: &Shared) {
-        if shared.cues.book_saves == self.seen_saves {
+    /// does not choose the media again.
+    fn choose_saved_media(&mut self, shared: &Shared) {
+        if shared.cues.media_saves == self.seen_saves {
             return;
         }
-        let Some(saved) = shared.cues.saved_book.as_deref() else {
+        let Some(saved) = shared.cues.saved_media.as_deref() else {
             return;
         };
         let Some(catalogue) = shared.library.catalogue.ready() else {
             return;
         };
-        let offers = books::offers(catalogue);
-        let Some(offer) = books::offer_titled(&offers, saved) else {
+        let Some(media) = catalogue.media_titled(saved) else {
             return;
         };
-        self.seen_saves = shared.cues.book_saves;
-        if matches!(&self.book, BookChoice::New(text) if is_same_title(text, saved)) {
-            self.choose(offer);
+        self.seen_saves = shared.cues.media_saves;
+        if matches!(&self.media, MediaChoice::New(form) if is_same_title(&form.title, saved)) {
+            self.choose(media);
+        }
+    }
+
+    /// A chosen media takes its category from the library, where an edit may have changed it. A
+    /// media that left the library, after a delete, stays as the title of a new media.
+    fn follow_the_chosen_media(&mut self, catalogue: &Catalogue) {
+        let MediaChoice::Existing { title, category } = &mut self.media else {
+            return;
+        };
+        match media::titled(catalogue, title) {
+            Some(stored) => *category = stored.category,
+            None => {
+                let form = NewMediaForm {
+                    category: *category,
+                    title: std::mem::take(title),
+                    ..NewMediaForm::default()
+                };
+                self.media = MediaChoice::New(form);
+            }
         }
     }
 
@@ -141,16 +156,11 @@ impl Local {
         {
             self.fill_from(request, catalogue.ready());
         }
-        self.choose_saved_book(shared);
-        // A book that left the library, after a delete, stays as the title of a new book.
-        if let BookChoice::Existing(title) = &self.book
-            && catalogue
-                .ready()
-                .is_some_and(|catalogue| !books::has_titled(catalogue, title))
-        {
-            self.book = BookChoice::New(title.clone());
+        self.choose_saved_media(shared);
+        if let Some(catalogue) = catalogue.ready() {
+            self.follow_the_chosen_media(catalogue);
         }
-        let draft = self.draft(catalogue.ready());
+        let draft = self.draft();
         let is_checked = matches!(
             shared.ingest,
             IngestJob::Checking { .. }

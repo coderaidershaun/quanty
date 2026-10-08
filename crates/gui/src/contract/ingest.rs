@@ -3,15 +3,17 @@
 
 use super::failure::Failure;
 use super::ids::DocId;
-use super::library::{ChapterLabel, ItemCounts};
+use super::library::{Category, DocumentName, ItemCounts};
 
-/// The book names the chapter's folder. The author and the tags are not part of the ingest: they
-/// are written after it, as a change to the stored document.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+/// The media and the name of the document name its folder. The labels of the media come from the
+/// stored media, which is saved before its first document. The tags are the document's own: they
+/// are not part of the ingest, and are written after it, as a change to the stored document.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct IngestRequest {
     pub pdf: std::path::PathBuf,
-    pub book: String,
-    pub author: Option<String>,
+    pub media: String,
+    pub category: Category,
+    pub name: DocumentName,
     pub tags: Vec<String>,
 }
 
@@ -23,9 +25,9 @@ pub enum ChapterState {
     Ingested { items: u64 },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Preflight {
-    pub chapter: ChapterLabel,
+    pub name: DocumentName,
     /// `None`: the number of pages could not be read.
     pub pages: Option<u32>,
     /// `None`: it could not be read, and a blocker says why.
@@ -77,9 +79,9 @@ pub struct IngestReport {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum IngestOutcome {
-    /// Nothing was converted, embedded or asked, but an author or tags that were given have
-    /// still been written. `pages_to_check` is `None` when the chapter's folder is gone, so they
-    /// are not known.
+    /// Nothing was converted, embedded or asked, but own tags that were given have still been
+    /// written. `pages_to_check` is `None` when the chapter's folder is gone, so they are not
+    /// known.
     AlreadyIngested {
         doc: DocId,
         items: u64,

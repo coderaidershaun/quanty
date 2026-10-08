@@ -73,7 +73,7 @@ async fn an_ask_sends_the_results_with_their_trace_then_the_graph_then_the_answe
     assert_eq!(formula.label.as_deref(), Some("(2.4)"));
     assert_eq!(formula.text, picks.formula.payload.text);
     assert_eq!(formula.printed_page.as_deref(), Some("7"));
-    assert_eq!(formula.book.as_deref(), Some("Quanty Sample Notes"));
+    assert_eq!(formula.media.as_deref(), Some("Quanty Sample Notes"));
     assert_eq!(
         formula.doc_title,
         "Quanty Sample Notes, chapter 2: Black Scholes In Depth"

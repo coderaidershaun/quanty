@@ -1,8 +1,12 @@
 {
   "format-version": 1,
-  "book-title": "Quanty Sample Notes",
-  "chapter-number": 1,
-  "chapter-name": "Options Pricing Intuition",
+  "media-title": "Quanty Sample Notes",
+  "name": {
+    "chapter": {
+      "number": 1,
+      "name": "Options Pricing Intuition"
+    }
+  },
   "source-file": "chapter-1-options-pricing-intuition.pdf",
   "source-sha256": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
   "page-count": 3,

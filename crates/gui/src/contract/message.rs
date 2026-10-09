@@ -22,9 +22,21 @@ impl Tab {
     pub const ALL: [Tab; 3] = [Tab::Ask, Tab::Library, Tab::Ingest];
 }
 
+/// The panels of the Ask tab that a person can maximise.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Panel {
+    Source,
+    ConceptGraph,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Intent {
     OpenTab(Tab),
+    Maximise(Panel),
+    RestorePanels,
+    /// What Escape asks for: a running ask stops, and with none running the maximised panel is
+    /// put back.
+    StopOrRestore,
     ToggleHelp,
     FocusAskBar,
     CopyText(String),

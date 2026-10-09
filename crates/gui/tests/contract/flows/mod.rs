@@ -27,7 +27,7 @@ fn shared(harness: &Window) -> &Shared {
     harness.state().shared()
 }
 
-fn panels(size: [f32; 2]) -> ShellRects {
+pub(super) fn panels(size: [f32; 2]) -> ShellRects {
     layout::shell(egui::Rect::from_min_size(
         egui::Pos2::ZERO,
         egui::Vec2::from(size),

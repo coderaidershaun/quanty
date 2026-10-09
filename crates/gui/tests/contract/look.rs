@@ -8,8 +8,10 @@ use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::Queryable as _;
 use egui_kittest::{Harness, SnapshotOptions};
 use gui::app::App;
-use gui::app::layout::{self, DEFAULT_WINDOW, MIN_WINDOW};
+use gui::app::layout::{DEFAULT_WINDOW, MIN_WINDOW};
 use gui::testkit;
+
+use super::flows::panels;
 
 type Window = Harness<'static, App>;
 
@@ -21,6 +23,7 @@ const FOLDER: &str = "tests/snapshots";
 /// The chip of the figure's result. Its click is what a person does to open the source.
 const FIGURE_CITATION: &str = "Citation 8";
 const START_INGEST: &str = "Start ingest";
+const MAXIMISE: &str = "Maximise";
 /// The pencil of the first media of the scene, whose form is on screen with no scroll.
 const FIRST_MEDIA_PENCIL: &str = "Edit Hawkes Processes in Finance";
 /// The ingest of its scene stops for ever at page 3, so its bar rests there.
@@ -35,6 +38,7 @@ enum Start {
     AfterANewMediaIsTyped,
     AfterAClickOnTheLibraryTab,
     AfterAClickOnAMediaPencil,
+    AfterAClickOnMaximiseInTheConceptGraph,
 }
 
 struct Row {
@@ -44,7 +48,7 @@ struct Row {
     start: Start,
 }
 
-const ROWS: [Row; 15] = [
+const ROWS: [Row; 16] = [
     Row {
         picture: "ask-idle",
         scene: "idle",
@@ -135,16 +139,18 @@ const ROWS: [Row; 15] = [
         window: DEFAULT_WINDOW,
         start: Start::AfterAClickOnAMediaPencil,
     },
+    Row {
+        picture: "ask-graph-maximised",
+        scene: "black-scholes",
+        window: DEFAULT_WINDOW,
+        start: Start::AfterAClickOnMaximiseInTheConceptGraph,
+    },
 ];
 
 /// Turns the wheel over the Answer pane until the chip is wholly inside it, then clicks it. A chip
 /// that is cut by the edge of the pane is not what a person clicks.
 fn click_the_figure_citation(harness: &mut Window, window: [f32; 2]) {
-    let answer = layout::shell(egui::Rect::from_min_size(
-        egui::Pos2::ZERO,
-        egui::Vec2::from(window),
-    ))
-    .answer;
+    let answer = panels(window).answer;
     for _ in 0..40 {
         let chip = harness
             .query_all_by_role_and_label(Role::Button, FIGURE_CITATION)
@@ -164,6 +170,17 @@ fn click_the_figure_citation(harness: &mut Window, window: [f32; 2]) {
     }
     harness
         .get_by_role_and_label(Role::Button, FIGURE_CITATION)
+        .click();
+    testkit::settle(harness);
+}
+
+/// The Source panel has a button of the same name, so this one is found by the panel it is in.
+fn maximise_the_concept_graph(harness: &mut Window, window: [f32; 2]) {
+    let graph = panels(window).concept_graph;
+    harness
+        .query_all_by_role_and_label(Role::Button, MAXIMISE)
+        .find(|button| graph.contains(button.rect().center()))
+        .expect("the Concept Graph has a Maximise button")
         .click();
     testkit::settle(harness);
 }
@@ -234,6 +251,9 @@ impl Row {
             Start::AfterAClickOnAMediaPencil => {
                 click(&mut harness, Role::Tab, "Library");
                 click(&mut harness, Role::Button, FIRST_MEDIA_PENCIL);
+            }
+            Start::AfterAClickOnMaximiseInTheConceptGraph => {
+                maximise_the_concept_graph(&mut harness, self.window);
             }
         }
         // The pointer is painted in the picture until a frame has run without it.

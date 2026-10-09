@@ -64,7 +64,7 @@ pub(super) fn cards(ui: &mut egui::Ui, state: &mut State) {
 
 pub(super) fn panel_header(ui: &mut egui::Ui, state: &mut State) {
     section_header(ui, "A panel header", |ui| {
-        ui.add(Button::icon_only(Icon::FIT, "Fit to width"));
+        ui.add(Button::icon_only(Icon::MAXIMISE, "Maximise"));
         let paged = Stepper::new(HEADER_STEP)
             .previous("Previous figure", true)
             .next("Next figure", true)

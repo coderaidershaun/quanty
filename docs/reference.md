@@ -263,11 +263,16 @@ The program is `quanty`, built as `target/release/quanty`. It opens one window w
 | `/` or `⌘K` | Write a question (`Enter` asks it) |
 | `J`, `K` | Next and previous result |
 | `⌘.` or `Esc` | Stop the search or the answer |
+| `Esc` | Put a maximised panel back, when no search or answer is running |
 | `⇧⌘S` | Copy the answer with its citations |
 | `⌘]`, `⌘[` | Next and previous page of the source |
 | `⌘+`, `⌘−`, `⌘0` | Zoom the page while the pointer is over it |
 
 `/`, `J`, `K` and `Esc` do this only while no text box has the keyboard.
+
+Source in Context and Concept Graph each have **Maximise**, the corner brackets at the top right of the panel. It gives the panel the whole tab under the top bar: the Ask bar and the other four panels are not drawn, the page is fitted to the wider room, and the graph is drawn in the middle of the larger one. **Restore**, in the same place, puts every panel back where it was. So does `Esc` when no search or answer is running, a click on a tab, and `/` or `⌘K`, which also puts the keyboard in the question box. One panel is maximised at a time.
+
+Two other buttons put a view back and leave the panels where they are. **Reset view**, the round arrow beside Maximise in Concept Graph, undoes a drag or a zoom of the picture. **Fit to width**, the two-way arrow at the right end of the zoom bar under the page, puts the zoom back to 100%.
 
 It needs what `rag-query --answer` needs: Qdrant and FalkorDB, `EMBEDDING_GEMINI_API_KEY`, and `claude` signed in with `ANTHROPIC_API_KEY` not set. An ask makes one embedding call and one Sonnet call. In the mode **Results only** it makes the embedding call alone. When a service is not ready, the part of the window that needed it says which one and what to do.
 

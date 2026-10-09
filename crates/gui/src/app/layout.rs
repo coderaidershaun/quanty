@@ -42,7 +42,7 @@ pub struct ShellRects {
     pub concept_graph: Rect,
     pub retrieval_path: Rect,
     pub follow_up: Rect,
-    /// The whole area under the top bar, for Library and Ingest.
+    /// The whole area under the top bar, for Library, Ingest and a maximised panel of Ask.
     pub page: Rect,
 }
 

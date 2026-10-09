@@ -1,4 +1,5 @@
-//! The top of the source panel: its title, the media and document pickers, and the page pager.
+//! The top of the source panel: its title with the maximise button, the media and document
+//! pickers, and the page pager.
 
 mod pager;
 mod pickers;
@@ -6,7 +7,7 @@ mod pickers;
 use eframe::egui;
 
 use super::row;
-use crate::contract::Intent;
+use crate::contract::{Intent, Panel};
 use crate::panels::PanelCx;
 use crate::widgets::section_header;
 use pager::PagerText;
@@ -43,7 +44,7 @@ pub(super) fn show(ui: &mut egui::Ui, cache: &mut Cache, cx: &mut PanelCx<'_>) {
     let (mut opened_media, mut opened_document, mut turn) = (None, None, None);
     match rows {
         Rows::Three => {
-            section_header(ui, TITLE, |_| {});
+            section_header(ui, TITLE, |ui| cx.show_maximise_toggle(ui, Panel::Source));
             let room = ui.available_width();
             opened_media = media.show(ui, room);
             row::show(ui, |ui| {
@@ -55,7 +56,10 @@ pub(super) fn show(ui: &mut egui::Ui, cache: &mut Cache, cx: &mut PanelCx<'_>) {
         }
         Rows::Two => {
             turn = row::show(ui, |ui| {
-                section_header(ui, TITLE, |ui| cache.pager.show(ui, &shared.source))
+                section_header(ui, TITLE, |ui| {
+                    cx.show_maximise_toggle(ui, Panel::Source);
+                    cache.pager.show(ui, &shared.source)
+                })
             });
             row::show(ui, |ui| {
                 opened_media = media.show(ui, MEDIA_SHARE * ui.available_width());

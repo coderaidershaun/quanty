@@ -91,9 +91,10 @@ The window has three tabs:
 | `/` or `⌘K` | Write a question (`Enter` asks it) |
 | `J`, `K` | Next and previous result |
 | `⌘.` or `Esc` | Stop the search or the answer |
+| `Esc` | Put a maximised panel back, when no search or answer is running |
 | `⇧⌘S` | Copy the answer with its citations |
 
-The six panels of Ask and every key are in [docs/reference.md](docs/reference.md#the-desktop-app). When a store, a key or `claude` is not ready, the part of the window that needed it says which one and what to do.
+In Ask, **Maximise**, at the top right of the page's panel and of the concept graph, gives that panel the whole tab, and **Restore**, in the same place, puts every panel back. The six panels of Ask and every key are in [docs/reference.md](docs/reference.md#the-desktop-app). When a store, a key or `claude` is not ready, the part of the window that needed it says which one and what to do.
 
 Not built yet: the notices tray, the help sheet, the health check and the delete of a document. Delete one with `rag-ingest delete-document`.
 

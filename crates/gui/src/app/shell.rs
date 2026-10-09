@@ -10,7 +10,7 @@ use super::layout::{self, ShellRects};
 use super::region::region;
 use super::{shortcuts, top_bar};
 use crate::backend::{Backend, Handler};
-use crate::contract::{self, Effect, Intent, StartupFacts};
+use crate::contract::{self, Effect, Intent, Panel, StartupFacts};
 use crate::media::Media;
 use crate::panels::{
     Locals, PanelCx, answer, ask_bar, concept_graph, follow_up, ingest, library, retrieval_path,
@@ -24,6 +24,11 @@ use crate::widgets::gallery;
 const DRAIN_BUDGET: Duration = Duration::from_millis(4);
 
 const GALLERY_SCENE: &str = "gallery";
+
+/// A panel keeps the name of its region while it is maximised, so what egui remembers of it,
+/// such as how far a list is scrolled, is the same before and after.
+const SOURCE_REGION: &str = "source";
+const GRAPH_REGION: &str = "concept_graph";
 
 type FilePicker = Box<dyn FnMut() -> Option<PathBuf>>;
 
@@ -205,26 +210,34 @@ pub fn run(handler: impl Handler, facts: StartupFacts, opening: Vec<Intent>) -> 
 
 fn draw_tab(ui: &mut egui::Ui, rects: &ShellRects, locals: &mut Locals, cx: &mut PanelCx<'_>) {
     match cx.shared.tab {
-        contract::Tab::Ask => {
-            region(ui, "ask_bar", rects.ask_bar, |ui| {
-                ask_bar::show(ui, &mut locals.ask_bar, cx);
-            });
-            region(ui, "answer", rects.answer, |ui| {
-                answer::show(ui, &mut locals.answer, cx);
-            });
-            region(ui, "source", rects.source, |ui| {
+        contract::Tab::Ask => match cx.shared.maximised {
+            Some(Panel::Source) => region(ui, SOURCE_REGION, rects.page, |ui| {
                 source::show(ui, &mut locals.source, cx);
-            });
-            region(ui, "concept_graph", rects.concept_graph, |ui| {
+            }),
+            Some(Panel::ConceptGraph) => region(ui, GRAPH_REGION, rects.page, |ui| {
                 concept_graph::show(ui, &mut locals.concept_graph, cx);
-            });
-            region(ui, "retrieval_path", rects.retrieval_path, |ui| {
-                retrieval_path::show(ui, &mut locals.retrieval_path, cx);
-            });
-            region(ui, "follow_up", rects.follow_up, |ui| {
-                follow_up::show(ui, &mut locals.follow_up, cx);
-            });
-        }
+            }),
+            None => {
+                region(ui, "ask_bar", rects.ask_bar, |ui| {
+                    ask_bar::show(ui, &mut locals.ask_bar, cx);
+                });
+                region(ui, "answer", rects.answer, |ui| {
+                    answer::show(ui, &mut locals.answer, cx);
+                });
+                region(ui, SOURCE_REGION, rects.source, |ui| {
+                    source::show(ui, &mut locals.source, cx);
+                });
+                region(ui, GRAPH_REGION, rects.concept_graph, |ui| {
+                    concept_graph::show(ui, &mut locals.concept_graph, cx);
+                });
+                region(ui, "retrieval_path", rects.retrieval_path, |ui| {
+                    retrieval_path::show(ui, &mut locals.retrieval_path, cx);
+                });
+                region(ui, "follow_up", rects.follow_up, |ui| {
+                    follow_up::show(ui, &mut locals.follow_up, cx);
+                });
+            }
+        },
         contract::Tab::Library => region(ui, "library", rects.page, |ui| {
             library::show(ui, &mut locals.library, cx);
         }),

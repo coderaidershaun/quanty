@@ -5,7 +5,8 @@ use std::path::PathBuf;
 
 use super::{AskSession, Health, IngestJob, Library, SourceNav};
 use crate::contract::{
-    Command, Effect, Event, Intent, Notice, NoticeId, NoticeKind, RequestId, StartupFacts, Tab,
+    Command, Effect, Event, Intent, Notice, NoticeId, NoticeKind, Panel, RequestId, StartupFacts,
+    Tab,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -34,6 +35,8 @@ pub struct Cues {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
 pub struct Shared {
     pub tab: Tab,
+    /// The panel that has the whole Ask tab. The other panels of the tab are not drawn.
+    pub maximised: Option<Panel>,
     pub help_open: bool,
     pub quit: Quit,
     pub cues: Cues,
@@ -58,10 +61,13 @@ impl Shared {
 
     pub fn apply_intent(&mut self, intent: Intent, effects: &mut Vec<Effect>) {
         match intent {
-            Intent::OpenTab(tab) => self.tab = tab,
+            Intent::OpenTab(tab) => self.open_tab(tab),
+            Intent::Maximise(panel) => self.maximised = Some(panel),
+            Intent::RestorePanels => self.maximised = None,
+            Intent::StopOrRestore => self.stop_or_restore(effects),
             Intent::ToggleHelp => self.help_open = !self.help_open,
             Intent::FocusAskBar => {
-                self.tab = Tab::Ask;
+                self.open_tab(Tab::Ask);
                 self.cues.focus_ask_bar += 1;
             }
             Intent::CopyText(text) => effects.push(Effect::CopyText(text)),
@@ -171,6 +177,22 @@ impl Shared {
                 read: false,
             },
         );
+    }
+
+    /// A tab that a person opens has every panel in its place. A result or a document that is
+    /// opened from inside a maximised panel does not come here, so the panel stays maximised.
+    fn open_tab(&mut self, tab: Tab) {
+        self.tab = tab;
+        self.maximised = None;
+    }
+
+    /// A running ask is stopped first, so Escape still stops it while a panel is maximised.
+    fn stop_or_restore(&mut self, effects: &mut Vec<Effect>) {
+        if self.ask.is_running() {
+            self.cancel_ask(effects);
+        } else {
+            self.maximised = None;
+        }
     }
 
     fn request_quit(&mut self, effects: &mut Vec<Effect>) {

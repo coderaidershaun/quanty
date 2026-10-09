@@ -1,6 +1,7 @@
 //! The Source panel shows the page its pickers and its pager name, turns to the next page with
 //! no spinner in between, and shows a chapter with no page pictures as its pieces. The pickers
-//! name a chapter as "Chapter N · Name" and a paper's document by its title.
+//! name a chapter as "Chapter N · Name" and a paper's document by its title. The Source panel or
+//! the Concept Graph, once maximised, is alone in the tab until it is put back.
 
 use std::time::{Duration, Instant};
 
@@ -11,6 +12,19 @@ use gui::contract::{Category, DocId, Intent, Loadable, PieceKind};
 use gui::testkit;
 
 use super::{COMMAND, Window, click, click_in, has, is_enabled, node, panels, press, says, shared};
+
+const SOURCE_TITLE: &str = "Source in Context";
+const GRAPH_TITLE: &str = "Concept Graph";
+const ONE_NODE_OF_EACH_PANEL: [(Role, &str); 6] = [
+    (Role::TextInput, "Question"),
+    (Role::Tab, "Results"),
+    (Role::Label, SOURCE_TITLE),
+    (Role::Label, GRAPH_TITLE),
+    (Role::Label, "Retrieval Path"),
+    (Role::Label, "Follow up"),
+];
+/// A control in a corner of a panel is no farther than this from the corner, in points.
+const CORNER_REACH: f32 = 32.0;
 
 fn shown_page(harness: &Window) -> Option<u32> {
     shared(harness).source.page.ready().map(|view| view.page)
@@ -66,6 +80,84 @@ fn queue_click(harness: &mut Window, role: Role, name: &str) {
             modifiers: egui::Modifiers::NONE,
         });
     }
+}
+
+fn place(harness: &Window, role: Role, name: &str) -> Option<egui::Rect> {
+    has(harness, role, name).then(|| node(harness, role, name).rect())
+}
+
+fn places_of_the_panels(harness: &Window) -> Vec<Option<egui::Rect>> {
+    ONE_NODE_OF_EACH_PANEL
+        .iter()
+        .map(|(role, name)| place(harness, *role, name))
+        .collect()
+}
+
+fn is_near(found: Option<egui::Rect>, corner: egui::Pos2) -> bool {
+    found.is_some_and(|rect| rect.distance_to_pos(corner) <= CORNER_REACH)
+}
+
+/// Both panels have a button named Maximise, so the one to click is found by `area`, the place
+/// of its panel.
+fn maximise_makes_it_the_only_panel(harness: &mut Window, title: &str, area: egui::Rect) {
+    let body = panels(DEFAULT_WINDOW).page;
+    click_in(harness, Role::Button, "Maximise", area);
+    for (role, name) in ONE_NODE_OF_EACH_PANEL {
+        assert_eq!(
+            has(harness, role, name),
+            name == title,
+            "`{title}` is maximised, so it alone is drawn: `{name}`"
+        );
+    }
+    assert!(
+        is_near(place(harness, Role::Label, title), body.left_top()),
+        "the title of `{title}` is at the top left of the tab's body"
+    );
+    assert!(
+        is_near(place(harness, Role::Button, "Restore"), body.right_top()),
+        "Restore is at the top right of the tab's body"
+    );
+}
+
+fn a_maximised_panel_is_alone_in_the_tab_until_it_is_put_back(
+    harness: &mut Window,
+    page_picture: &str,
+) {
+    let rects = panels(DEFAULT_WINDOW);
+    let before = places_of_the_panels(harness);
+    assert!(
+        before.iter().all(Option::is_some),
+        "every panel of the Ask tab is drawn"
+    );
+    let assert_all_are_back = |harness: &Window, way: &str| {
+        let now = places_of_the_panels(harness);
+        assert_eq!(now, before, "{way} puts every panel back where it was");
+    };
+
+    maximise_makes_it_the_only_panel(harness, GRAPH_TITLE, rects.concept_graph);
+    click(harness, Role::Button, "Restore");
+    assert_all_are_back(harness, "Restore");
+
+    let width = |harness: &Window| node(harness, Role::Image, page_picture).rect().width();
+    let narrow = width(harness);
+    maximise_makes_it_the_only_panel(harness, SOURCE_TITLE, rects.source);
+    assert!(width(harness) > narrow, "the page takes the larger room");
+    let fit = place(harness, Role::Button, "Fit to width");
+    assert!(
+        is_near(fit, rects.page.right_bottom()),
+        "the zoom bar is at the foot of the tab's body"
+    );
+    press(harness, egui::Modifiers::NONE, egui::Key::Escape);
+    assert_all_are_back(harness, "Escape");
+
+    maximise_makes_it_the_only_panel(harness, GRAPH_TITLE, rects.concept_graph);
+    click(harness, Role::Tab, "Library");
+    click(harness, Role::Tab, "Ask");
+    assert_all_are_back(harness, "a click on a tab");
+
+    maximise_makes_it_the_only_panel(harness, SOURCE_TITLE, rects.source);
+    press(harness, COMMAND, egui::Key::K);
+    assert_all_are_back(harness, "⌘K, which needs the question box,");
 }
 
 fn a_chapter_with_no_page_pictures_shows_its_pieces(harness: &mut Window, doc: DocId) {
@@ -183,6 +275,9 @@ fn the_source_shows_the_page_its_pickers_and_pager_name() {
         "the figure is framed on the page"
     );
     testkit::save_png(&mut harness, "app-source");
+
+    let picture = format!("Picture of page {}", figure.page);
+    a_maximised_panel_is_alone_in_the_tab_until_it_is_put_back(&mut harness, &picture);
 
     a_chapter_with_no_page_pictures_shows_its_pieces(&mut harness, notes.doc);
     a_paper_is_named_by_its_title(&mut harness);

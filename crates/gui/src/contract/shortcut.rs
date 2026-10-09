@@ -178,8 +178,8 @@ pub static SHORTCUTS: [Shortcut; 14] = [
         chord: plain(KeyName::Escape),
         when: When::NotTyping,
         repeats: false,
-        intent: Intent::CancelAsk,
-        help: "Stop the search or the answer",
+        intent: Intent::StopOrRestore,
+        help: "Stop the search or the answer, or put a maximised panel back",
     },
     Shortcut {
         chord: plain(KeyName::J),

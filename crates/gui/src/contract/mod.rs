@@ -30,7 +30,7 @@ pub use library::{
     Catalogue, Category, ChapterLabel, Document, DocumentName, DocumentTagsEdit, ItemCounts, Media,
     MediaEdit, NewMedia, is_same_name,
 };
-pub use message::{Command, Effect, Event, Intent, Tab};
+pub use message::{Command, Effect, Event, Intent, Panel, Tab};
 pub use notice::{Notice, NoticeKind};
 pub use shortcut::{Chord, KeyName, PANEL_KEYS, SHORTCUTS, Shortcut, When};
 pub use source::{ImageRef, PageBox, PageConcept, PagePiece, PageView, PieceKind};

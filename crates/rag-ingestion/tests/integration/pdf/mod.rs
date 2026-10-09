@@ -15,7 +15,7 @@ use graph::testing::{
 use ocr::convert::convert_chapter_with_progress;
 use ocr::testing::{Scenario, StubServices, sample_job};
 use ocr::{ChapterJob, PageProgress};
-use rag_core::{DocId, Llm, LlmError, MediaLabels};
+use rag_core::{DocId, Llm, LlmError, MediaLabels, UsageTally};
 use rag_ingestion::testing::StandInEmbedder;
 use rag_ingestion::{ChapterPdf, IngestStep, Models, PdfError, PdfOutcome, Stores, ingest_pdf};
 use serde_json::{Value, json};
@@ -28,7 +28,8 @@ struct StandInPdf {
     new_media: MediaLabels,
     stubs: StubServices,
     conversions_started: AtomicUsize,
-    steps: Mutex<Vec<IngestStep>>,
+    /// Each step with what the run had used when it was told.
+    steps: Mutex<Vec<(IngestStep, UsageTally)>>,
 }
 
 impl StandInPdf {
@@ -64,7 +65,9 @@ impl StandInPdf {
                     self.conversions_started.fetch_add(1, Ordering::SeqCst);
                     convert_chapter_with_progress(job, &self.stubs, on_page).await
                 },
-            on_step: |step| self.steps.lock().unwrap().push(step),
+            on_step: |step, spent: &UsageTally| {
+                self.steps.lock().unwrap().push((step, spent.clone()));
+            },
         };
         ingest_pdf(pdf, models, stores).await
     }
@@ -75,7 +78,14 @@ impl StandInPdf {
 
     /// Every step that the runs of this pdf told, in the order they came.
     fn steps(&self) -> Vec<IngestStep> {
-        self.steps.lock().unwrap().clone()
+        let steps = self.steps.lock().unwrap();
+        steps.iter().map(|(step, _)| step.clone()).collect()
+    }
+
+    /// What the runs had used at each step, in the order the steps came.
+    fn spent(&self) -> Vec<UsageTally> {
+        let steps = self.steps.lock().unwrap();
+        steps.iter().map(|(_, spent)| spent.clone()).collect()
     }
 }
 

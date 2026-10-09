@@ -2,9 +2,11 @@
 //! to look at are always read from the saved `page.json` files, so a fresh run and a re-run print
 //! the same.
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use super::services::CallUsage;
 use crate::content::{
     ChapterIndex, ContentError, Conversion, FigureImage, ImageShows, PageIndex, PieceDetail, Route,
     page_folder_name,
@@ -20,26 +22,47 @@ const LOW_WORD_MATCH: f64 = 0.60;
 const MOST_OF_THE_PAGE_PERCENT: i64 = 80;
 
 /// What a chapter run tells its caller while it works, as it happens.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PageProgress {
     /// The pages are known, before any page is cut out or paid for: `total` in the PDF, and
     /// `done_before` of them saved by an earlier run. It comes once, before the first page is cut
     /// out, on every run of a chapter that is not finished.
     Pages { total: u32, done_before: u32 },
-    /// One more page is saved. `cost_usd` is what its calls cost. Pages end in any order.
-    PageDone { position: u32, cost_usd: f64 },
+    /// One more page is saved. `calls` are the paid calls of that page. Pages end in any order.
+    PageDone { position: u32, calls: CallTally },
     /// A page failed. No new page starts; the pages that are running finish first.
     PageFailed { position: u32 },
 }
 
-/// The paid calls a run made. A corrected retry counts as a call of its own.
+/// What the calls of one model used, as `claude` reported it.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct ModelCalls {
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub cache_read_tokens: u64,
+    pub cache_write_tokens: u64,
+    pub cost_usd: f64,
+}
+
+impl ModelCalls {
+    fn add(&mut self, other: &ModelCalls) {
+        self.input_tokens += other.input_tokens;
+        self.output_tokens += other.output_tokens;
+        self.cache_read_tokens += other.cache_read_tokens;
+        self.cache_write_tokens += other.cache_write_tokens;
+        self.cost_usd += other.cost_usd;
+    }
+}
+
+/// The paid calls a run made. A corrected retry counts as a call of its own.
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct CallTally {
     pub tag: u32,
     pub math_check: u32,
     pub copy: u32,
     pub transcribe: u32,
-    pub cost_usd: f64,
+    /// The calls of each model that answered, by the model's name.
+    pub by_model: BTreeMap<String, ModelCalls>,
 }
 
 impl CallTally {
@@ -48,7 +71,24 @@ impl CallTally {
         self.math_check += other.math_check;
         self.copy += other.copy;
         self.transcribe += other.transcribe;
-        self.cost_usd += other.cost_usd;
+        for (model, calls) in &other.by_model {
+            self.by_model.entry(model.clone()).or_default().add(calls);
+        }
+    }
+
+    /// Adds what one call used to the line of its model. The call itself is counted by its step.
+    pub(super) fn add_usage(&mut self, usage: &CallUsage) {
+        let calls = ModelCalls {
+            input_tokens: usage.input_tokens,
+            output_tokens: usage.output_tokens,
+            cache_read_tokens: usage.cache_read_tokens,
+            cache_write_tokens: usage.cache_write_tokens,
+            cost_usd: usage.cost_usd,
+        };
+        self.by_model
+            .entry(usage.model.clone())
+            .or_default()
+            .add(&calls);
     }
 
     fn total(&self) -> u32 {
@@ -258,16 +298,29 @@ impl fmt::Display for ConversionSummary {
             pieces.table,
             pieces.footnote
         )?;
+        // No cost is printed: this crate has no table of prices, and the figure that `claude`
+        // reports is not the one the programs that do have the table print.
         writeln!(
             formatter,
-            "calls this run: {} (tag {}, math check {}, copy {}, transcribe {}), cost ${:.2}",
+            "calls this run: {} (tag {}, math check {}, copy {}, transcribe {})",
             calls.total(),
             calls.tag,
             calls.math_check,
             calls.copy,
-            calls.transcribe,
-            calls.cost_usd
+            calls.transcribe
         )?;
+        // SMELL: the programs that price a run write the line of a model in these same words, and
+        // this crate cannot reach their code, so a change to the words must be made in both.
+        for (model, used) in &calls.by_model {
+            writeln!(
+                formatter,
+                "tokens of {model}: {} in, {} out, {} cache read, {} cache write",
+                used.input_tokens,
+                used.output_tokens,
+                used.cache_read_tokens,
+                used.cache_write_tokens
+            )?;
+        }
         if self.out_of_sequence.is_empty() {
             writeln!(formatter, "printed page numbers: in sequence")?;
         } else {

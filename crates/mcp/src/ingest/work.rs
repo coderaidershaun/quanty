@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use graph::FalkorGraph;
 use ocr::{ChapterJob, PageProgress};
-use rag_core::{ConceptStore, Config, ItemStore};
+use rag_core::{ConceptStore, Config, ItemStore, UsageTally};
 use rag_ingestion::{
     ChapterPdf, ConceptExtractor, EXTRACTION_MODEL, Models, PdfOutcome, Stores, ingest_pdf,
     relabel_document_tags,
@@ -65,7 +65,7 @@ impl<S: Services> Work<S> {
                         report.send_modify(|report| report.stage = Some(Stage::Ingesting));
                         Ok(summary)
                     },
-                on_step: |_| {},
+                on_step: |_, _: &UsageTally| {},
             },
             &models,
             &stores,

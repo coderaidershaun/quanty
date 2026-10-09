@@ -10,7 +10,8 @@ use serde_json::{Map, Value};
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
-use crate::llm::{Llm, LlmError, Question};
+use crate::llm::{Llm, LlmError, LlmReply, Question};
+use crate::usage::{ModelUsage, Usage, UsageTally};
 
 const STATUS_TIMEOUT: Duration = Duration::from_secs(10);
 const QUESTION_TIMEOUT: Duration = Duration::from_secs(120);
@@ -197,7 +198,7 @@ impl Llm for ClaudeCli {
             })
     }
 
-    async fn ask(&self, question: Question<'_>) -> Result<Value, LlmError> {
+    async fn ask(&self, question: Question<'_>) -> Result<LlmReply, LlmError> {
         if self.api_key_is_set() {
             return Err(LlmError::ApiKeySet);
         }
@@ -245,35 +246,100 @@ struct Envelope {
     structured_output: Option<Value>,
     #[serde(default)]
     total_cost_usd: Option<f64>,
+    #[serde(default)]
+    usage: Value,
     #[serde(default, rename = "modelUsage")]
     model_usage: Map<String, Value>,
 }
 
+/// What `claude` says a reply used: the whole reply under `usage`, and each model under
+/// `modelUsage`, which names the same fields in camel case.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct Figures {
+    #[serde(alias = "inputTokens")]
+    input_tokens: u64,
+    #[serde(alias = "outputTokens")]
+    output_tokens: u64,
+    #[serde(alias = "cacheReadInputTokens")]
+    cache_read_input_tokens: u64,
+    #[serde(alias = "cacheCreationInputTokens")]
+    cache_creation_input_tokens: u64,
+    #[serde(rename = "costUSD")]
+    cost_usd: Option<f64>,
+}
+
+impl Figures {
+    /// A figure that cannot be read must never fail an answer, so it counts as no tokens.
+    fn read(value: &Value) -> Figures {
+        Figures::deserialize(value).unwrap_or_default()
+    }
+
+    fn usage(&self, reported_usd: Option<f64>) -> ModelUsage {
+        let tokens = Usage {
+            input_tokens: self.input_tokens,
+            output_tokens: self.output_tokens,
+            cache_read_tokens: self.cache_read_input_tokens,
+            cache_write_tokens: self.cache_creation_input_tokens,
+        };
+        ModelUsage {
+            tokens,
+            reported_usd,
+            estimated: false,
+        }
+    }
+}
+
 /// Standard output is read before the exit code: a run that fails still prints a JSON result that
 /// says why.
-fn read_answer(output: &Output, asked_model: &str, elapsed: Duration) -> Result<Value, LlmError> {
+fn read_answer(
+    output: &Output,
+    asked_model: &str,
+    elapsed: Duration,
+) -> Result<LlmReply, LlmError> {
     let mut envelope: Envelope =
         serde_json::from_slice(&output.stdout).map_err(|source| LlmError::UnreadableOutput {
             exit_code: output.status.code(),
             stderr: String::from_utf8_lossy(&output.stderr).trim().to_owned(),
             source,
         })?;
-    log_cost(&envelope, asked_model, elapsed);
+    let usage = usage_of(&envelope, asked_model);
+    log_usage(&envelope, &usage, asked_model, elapsed);
     match envelope.structured_output.take() {
-        Some(value) if output.status.success() => Ok(value),
+        Some(value) if output.status.success() => Ok(LlmReply { value, usage }),
         _ => Err(failure(output, &envelope)),
     }
 }
 
-fn log_cost(envelope: &Envelope, asked_model: &str, elapsed: Duration) {
+/// One entry for each model that `claude` names, with what it says that model cost. A reply that
+/// names no model is counted as the model that was asked, with the tokens and the cost of the
+/// whole reply.
+fn usage_of(envelope: &Envelope, asked_model: &str) -> UsageTally {
+    if envelope.model_usage.is_empty() {
+        let whole = Figures::read(&envelope.usage);
+        return UsageTally::of(asked_model, whole.usage(envelope.total_cost_usd));
+    }
+    let mut tally = UsageTally::default();
+    for (model, value) in &envelope.model_usage {
+        let figures = Figures::read(value);
+        tally.add(model, figures.usage(figures.cost_usd));
+    }
+    tally
+}
+
+/// No dollar figure is logged: the programs that turn this log on print the cost of the whole
+/// run from the price table, and a second figure would differ from it.
+fn log_usage(envelope: &Envelope, usage: &UsageTally, asked_model: &str, elapsed: Duration) {
     let mut names = envelope.model_usage.keys();
     let model = match (names.next(), names.next()) {
         (Some(only), None) => only.as_str(),
         _ => asked_model,
     };
+    let tokens = usage.tokens();
     tracing::info!(
         model,
-        cost_usd = envelope.total_cost_usd.unwrap_or(0.0),
+        input_tokens = tokens.input_tokens,
+        output_tokens = tokens.output_tokens,
         seconds = elapsed.as_secs_f64(),
         "claude answered"
     );

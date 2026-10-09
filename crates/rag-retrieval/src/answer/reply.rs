@@ -3,12 +3,12 @@
 
 use std::fmt;
 
-use rag_core::{ItemKind, ItemPayload};
+use rag_core::{ItemKind, ItemPayload, UsageTally};
 use serde::Deserialize;
 use serde_json::Value;
 
 use super::AnswerError;
-use crate::search::{SearchResults, page_text};
+use crate::search::{SearchResults, page_text, write_usage};
 
 /// How many follow-up questions an answer keeps. The prompt and the comment on
 /// `Answer::follow_ups` say this number too, so change the three together.
@@ -61,16 +61,22 @@ pub struct Answer {
     /// At most four questions to ask next. The model is told to write each one so that it can be
     /// asked on its own.
     pub follow_ups: Vec<String>,
+    /// What the question used: the search and the answer.
+    pub usage: UsageTally,
 }
 
 /// A source that a claim names twice is kept once. A title, a heading or a follow-up question that
-/// is blank is left out, and never an error.
+/// is blank is left out, and never an error. `usage` is what the question used.
 ///
 /// # Errors
 /// - [`AnswerError::Unreadable`] when the reply is not a list of claims
 /// - [`AnswerError::NoSource`] when a claim names no source
 /// - [`AnswerError::UnknownSource`] when a claim names a number that is not the number of an item
-pub(super) fn read(reply: Value, results: &SearchResults) -> Result<Answer, AnswerError> {
+pub(super) fn read(
+    reply: Value,
+    results: &SearchResults,
+    usage: UsageTally,
+) -> Result<Answer, AnswerError> {
     let reply: Reply = serde_json::from_value(reply).map_err(AnswerError::Unreadable)?;
     let item_count = results.hits.len();
     let mut claims = Vec::with_capacity(reply.claims.len());
@@ -117,6 +123,7 @@ pub(super) fn read(reply: Value, results: &SearchResults) -> Result<Answer, Answ
         title,
         claims,
         follow_ups: kept_follow_ups(&reply.follow_ups),
+        usage,
     })
 }
 
@@ -177,7 +184,7 @@ fn with_backslashes_restored(text: &str) -> String {
 impl fmt::Display for Answer {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.claims.is_empty() {
-            return formatter.write_str("the stored items do not answer the question");
+            formatter.write_str("the stored items do not answer the question")?;
         }
         for (index, claim) in self.claims.iter().enumerate() {
             if index > 0 {
@@ -188,7 +195,7 @@ impl fmt::Display for Answer {
                 write_source(formatter, &source.payload)?;
             }
         }
-        Ok(())
+        write_usage(formatter, &self.usage)
     }
 }
 

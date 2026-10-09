@@ -30,8 +30,8 @@ pub use image::{ConvertedImage, convert_image, convert_image_with};
 pub use page::PageError;
 pub use poppler::PopplerError;
 pub use summary::{
-    CallTally, ConversionSummary, OutOfSequence, PageProgress, PageToCheck, PieceCounts,
-    RouteCounts,
+    CallTally, ConversionSummary, ModelCalls, OutOfSequence, PageProgress, PageToCheck,
+    PieceCounts, RouteCounts,
 };
 
 #[derive(thiserror::Error, Debug)]

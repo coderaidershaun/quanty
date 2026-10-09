@@ -13,6 +13,7 @@ pub(super) fn view(answer: rag_retrieval::Answer) -> contract::Answer {
         title: answer.title,
         blocks: blocks(&answer.claims),
         follow_ups: answer.follow_ups,
+        usage: (&answer.usage).into(),
     }
 }
 

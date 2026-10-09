@@ -164,6 +164,15 @@ async fn an_ask_sends_the_results_with_their_trace_then_the_graph_then_the_answe
         ]
     );
     assert_eq!(answer.follow_ups, ["What is a put?"]);
+    let searched: Vec<(&str, bool)> = (search.usage.models.iter())
+        .map(|model| (model.model.as_str(), model.estimated))
+        .collect();
+    assert_eq!(searched, [("gemini-embedding-2", true)]);
+    let answered: Vec<&str> = (answer.usage.models.iter())
+        .map(|model| model.model.as_str())
+        .collect();
+    assert_eq!(answered, ["gemini-embedding-2", "stand-in"]);
+    assert!(answer.usage.cost_usd.is_some());
     let asked = answering.questions();
     assert_eq!(asked.len(), 1);
     assert!(asked[0].input.contains(QUESTION));

@@ -11,6 +11,7 @@ use tokio::sync::watch;
 use uuid::Uuid;
 
 use super::PdfIngestError;
+use crate::usage::Spent;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -57,6 +58,9 @@ pub(crate) struct IngestReport {
     /// What the ingest did, as `rag-ingest pdf` prints it. When `done`.
     #[serde(skip_serializing_if = "Option::is_none")]
     summary: Option<String>,
+    /// What the ingest used. When `done`.
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    spent: Option<Spent>,
     /// Why the ingest stopped, and what to do. When `failed`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) error: Option<String>,
@@ -73,6 +77,7 @@ impl IngestReport {
             document_id: None,
             items: None,
             summary: None,
+            spent: None,
             error: None,
         }
     }
@@ -90,6 +95,7 @@ impl IngestReport {
                 self.state = JobState::Done;
                 self.items = Some(summary.ingest.items_by_kind.total() as u64);
                 self.summary = Some(outcome.to_string());
+                self.spent = Some((&summary.usage()).into());
             }
         }
     }

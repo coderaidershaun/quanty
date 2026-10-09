@@ -1,17 +1,17 @@
-//! The ids, the item kind, the category, the document name and the label shapes, to and from the
-//! types of the backend. Every part of the live backend converts through these and writes none of
-//! its own.
+//! The ids, the item kind, the category, the document name, the label shapes and what a run used,
+//! to and from the types of the backend. Every part of the live backend converts through these and
+//! writes none of its own.
 
 use std::collections::BTreeSet;
 
 use graph::MediaNode;
-use rag_core::{LabelFilter, MediaLabels, Tag, author_list};
+use rag_core::{LabelFilter, MediaLabels, Tag, UsageTally, author_list};
 use rag_ingestion::{MediaChange, TagChange};
 use uuid::Uuid;
 
 use crate::contract::{
     Category, ConceptId, DocId, DocumentName, DocumentTagsEdit, Filters, ItemId, ItemKind,
-    MediaEdit, NewMedia,
+    MediaEdit, ModelTokens, NewMedia, Usage,
 };
 
 fn uuid_of(text: &str) -> Uuid {
@@ -170,6 +170,26 @@ impl From<&MediaEdit> for MediaChange {
             category: Some(edit.category.into()),
             authors: Some(edit.authors.clone()),
             tags: Some(tags(&edit.tags).collect()),
+        }
+    }
+}
+
+impl From<&UsageTally> for Usage {
+    fn from(tally: &UsageTally) -> Usage {
+        let models = tally
+            .models()
+            .map(|(model, used)| ModelTokens {
+                model: model.to_owned(),
+                input: used.tokens.input_tokens,
+                output: used.tokens.output_tokens,
+                cache_read: used.tokens.cache_read_tokens,
+                cache_write: used.tokens.cache_write_tokens,
+                estimated: used.estimated,
+            })
+            .collect();
+        Usage {
+            models,
+            cost_usd: tally.cost_usd(),
         }
     }
 }

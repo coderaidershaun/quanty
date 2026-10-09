@@ -70,6 +70,25 @@ async fn a_question_finds_its_item_and_prints_title_page_kind_text_and_picture()
     assert!(header.contains(&"kind: figure"));
     assert!(header.contains(&format!("picture: {}", picture.display()).as_str()));
     assert!(printed.contains(&first.payload.text));
+
+    let used: Vec<_> = results.usage.models().collect();
+    let [("gemini-embedding-2", embedded)] = used[..] else {
+        panic!("expected the embedding of the question alone, got {used:?}");
+    };
+    assert!(embedded.estimated && embedded.tokens.input_tokens > 0);
+    let last_lines: Vec<&str> = printed.lines().rev().take(3).collect();
+    let [cost, tokens, blank] = last_lines[..] else {
+        panic!("{printed}");
+    };
+    assert_eq!(blank, "");
+    assert_eq!(
+        tokens,
+        format!(
+            "tokens of gemini-embedding-2: {} in, 0 out, 0 cache read, 0 cache write (estimated)",
+            embedded.tokens.input_tokens
+        )
+    );
+    assert_eq!(cost, "cost: under $0.01");
 }
 
 #[tokio::test(flavor = "multi_thread")]

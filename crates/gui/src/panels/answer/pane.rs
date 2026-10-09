@@ -6,7 +6,7 @@ use eframe::egui;
 use super::heights::Heights;
 use super::listing::{Listing, Row};
 use super::phase::{AnswerTab, Phase};
-use crate::contract::{Intent, ResultItem};
+use crate::contract::{AskMode, Intent, Loadable, ResultItem, Usage};
 use crate::media::rich_text::{self, Clicked};
 use crate::panels::PanelCx;
 use crate::state::AskSession;
@@ -65,6 +65,22 @@ pub(super) struct Pane<'a, 'c> {
 impl<'a> Pane<'a, '_> {
     pub(super) fn active(&self) -> AnswerTab {
         self.view.tab.unwrap_or(AnswerTab::opened_by(self.ask.mode))
+    }
+
+    /// What the ask used, once there is something to tell: the whole ask when its answer has
+    /// landed, and the search alone when the ask is for its results alone and found some.
+    pub(super) fn spent(&self) -> Option<&'a Usage> {
+        if let Loadable::Ready(answer) = &self.ask.answer {
+            return Some(&answer.usage);
+        }
+        match &self.ask.search {
+            Loadable::Ready(reply)
+                if self.ask.mode == AskMode::ResultsOnly && !reply.results.is_empty() =>
+            {
+                Some(&reply.usage)
+            }
+            _ => None,
+        }
     }
 
     pub(super) fn is_selected(&self, number: usize) -> bool {

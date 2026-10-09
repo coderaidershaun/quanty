@@ -9,7 +9,7 @@ use super::concepts;
 use super::library::{self, SampleError, title_of};
 use crate::contract::{
     Answer, AnswerBlock, ConceptGraph, DocId, EdgeKind, GraphEdge, GraphNode, ItemId, ItemKind,
-    NodeId, NodeKind, Reason, ResultItem, RetrievalTrace, SearchReply,
+    ModelTokens, NodeId, NodeKind, Reason, ResultItem, RetrievalTrace, SearchReply, Usage,
 };
 
 pub(in crate::backend::fake) const QUESTION: &str =
@@ -125,7 +125,35 @@ pub(in crate::backend::fake) fn reply(samples: &Path) -> Result<SearchReply, Sam
             passed_over,
             cited: names(&[CITED]),
         },
+        usage: Usage {
+            models: vec![embedded_question()],
+            cost_usd: Some(0.000_002_4),
+        },
     })
+}
+
+/// The question is short, so embedding it costs a few millionths of a dollar.
+fn embedded_question() -> ModelTokens {
+    ModelTokens {
+        model: "gemini-embedding-2".to_owned(),
+        input: 12,
+        estimated: true,
+        ..ModelTokens::default()
+    }
+}
+
+/// The search, and Sonnet reading the results and writing the answer.
+fn spent_on_the_answer() -> Usage {
+    let written = ModelTokens {
+        model: "claude-sonnet-5-5".to_owned(),
+        input: 11_000,
+        output: 1_000,
+        ..ModelTokens::default()
+    };
+    Usage {
+        models: vec![written, embedded_question()],
+        cost_usd: Some(0.032_002_4),
+    }
 }
 
 /// # Errors
@@ -150,6 +178,7 @@ pub(in crate::backend::fake) fn no_result() -> SearchReply {
     SearchReply {
         results: Vec::new(),
         trace: RetrievalTrace::default(),
+        usage: Usage::default(),
     }
 }
 
@@ -162,6 +191,7 @@ pub(in crate::backend::fake) fn no_document_has_the_labels() -> SearchReply {
             nearest: 0,
             ..RetrievalTrace::default()
         },
+        usage: Usage::default(),
     }
 }
 
@@ -285,6 +315,7 @@ pub(in crate::backend::fake) fn answer() -> Answer {
         title: Some("Black–Scholes formula, derivation and assumptions".to_owned()),
         blocks,
         follow_ups: follow_ups(),
+        usage: spent_on_the_answer(),
     }
 }
 
@@ -293,5 +324,6 @@ pub(in crate::backend::fake) fn answer_without_blocks() -> Answer {
         title: None,
         blocks: Vec::new(),
         follow_ups: follow_ups(),
+        usage: spent_on_the_answer(),
     }
 }

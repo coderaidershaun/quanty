@@ -60,7 +60,10 @@ pub struct CallUsage {
     /// The model that answered when `claude` names exactly one, otherwise the one asked for.
     pub model: String,
     pub cost_usd: f64,
+    pub input_tokens: u64,
     pub output_tokens: u64,
+    pub cache_read_tokens: u64,
+    pub cache_write_tokens: u64,
     pub thinking_tokens: u64,
     pub seconds: f64,
 }
@@ -178,7 +181,13 @@ struct Envelope {
 #[derive(Deserialize, Default)]
 struct UsageFigures {
     #[serde(default)]
+    input_tokens: u64,
+    #[serde(default)]
     output_tokens: u64,
+    #[serde(default)]
+    cache_read_input_tokens: u64,
+    #[serde(default)]
+    cache_creation_input_tokens: u64,
     #[serde(default)]
     output_tokens_details: OutputTokenDetails,
 }
@@ -357,7 +366,10 @@ fn read_answer<T: DeserializeOwned>(
         usage: CallUsage {
             model,
             cost_usd: envelope.total_cost_usd.unwrap_or(0.0),
+            input_tokens: envelope.usage.input_tokens,
             output_tokens: envelope.usage.output_tokens,
+            cache_read_tokens: envelope.usage.cache_read_input_tokens,
+            cache_write_tokens: envelope.usage.cache_creation_input_tokens,
             thinking_tokens: envelope.usage.output_tokens_details.thinking_tokens,
             seconds: elapsed.as_secs_f64(),
         },

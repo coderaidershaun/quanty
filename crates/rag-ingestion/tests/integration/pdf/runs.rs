@@ -106,6 +106,42 @@ async fn a_chapter_pdf_is_converted_and_ingested_in_one_run_and_a_second_run_doe
         "{printed}"
     );
     assert_steps_of_one_run(&pdf.steps(), n);
+    // Items with the same text are asked about once, and a kept answer costs nothing.
+    let calls = summary.ingest.concepts.llm_calls;
+    let asked = format!(
+        "tokens of stand-in: {} in, {} out, 0 cache read, 0 cache write",
+        calls * 1000,
+        calls * 100
+    );
+    for line in [
+        "tokens of stub-transcriber: 800 in, 80 out, 0 cache read, 0 cache write",
+        asked.as_str(),
+    ] {
+        assert!(
+            printed.lines().any(|printed| printed == line),
+            "{line} is not in {printed}"
+        );
+    }
+    assert!(
+        printed
+            .lines()
+            .any(|line| line.starts_with("tokens of gemini-embedding-2: ")
+                && line.ends_with(" (estimated)")),
+        "{printed}"
+    );
+    assert!(printed.contains("\ncost of this run: ≈ $"), "{printed}");
+    let spent = pdf.spent();
+    assert!(
+        spent
+            .windows(2)
+            .all(|pair| pair[0].tokens().total() <= pair[1].tokens().total()),
+        "the tokens that a run has used never go down"
+    );
+    assert_eq!(
+        spent.last(),
+        Some(&summary.usage()),
+        "the last step tells what the whole run used"
+    );
 
     let points = points_in(config).await;
     assert_eq!(points.len(), n);

@@ -5,14 +5,14 @@ use std::error::Error;
 
 use futures_util::StreamExt;
 use futures_util::stream;
-use rag_core::{Embedding, ItemFilter, ItemId, ItemStore, Llm, LlmError, Question};
+use rag_core::{Embedding, ItemFilter, ItemId, ItemStore, Llm, LlmError, Question, UsageTally};
 use serde_json::Value;
 
 use super::cache::{Cache, key_of};
 use super::question::{Extraction, SCHEMA, SYSTEM_PROMPT, input_for, related_material};
 use super::{ConceptError, ConceptExtractor, EmbeddedItems, SkippedItem};
 use crate::ingest::items::Item;
-use crate::ingest::{IngestStep, OnStep};
+use crate::ingest::{IngestStep, Meter};
 
 const CALLS_AT_A_TIME: usize = 4;
 /// How many of the stored items nearest to a lone item are added to its question.
@@ -41,6 +41,8 @@ pub(super) struct ItemAnswer {
 
 pub(super) struct Reading<T> {
     pub llm_calls: usize,
+    /// What the replies used, counting a reply that was refused, because it was paid for.
+    pub usage: UsageTally,
     pub outcome: Outcome<T>,
 }
 
@@ -74,7 +76,7 @@ impl<L: Llm> ConceptExtractor<L> {
         cache: &Cache,
         embedded: &EmbeddedItems<'_>,
         stored_items: &ItemStore,
-        on_step: OnStep<'_>,
+        meter: &mut Meter<'_>,
     ) -> Result<Answers, ConceptError> {
         let items = embedded.items;
         let related = match (items, embedded.vectors) {
@@ -97,6 +99,7 @@ impl<L: Llm> ConceptExtractor<L> {
         while let Some((item, read)) = reads.next().await {
             let read = read?;
             answers.llm_calls += read.llm_calls;
+            meter.spend(&read.usage);
             let answered = |extraction| ItemAnswer {
                 item: item.id,
                 items_before: taken,
@@ -123,7 +126,7 @@ impl<L: Llm> ConceptExtractor<L> {
                 }
             }
             taken += 1;
-            on_step(IngestStep::ReadingConcepts {
+            meter.step(IngestStep::ReadingConcepts {
                 done: taken,
                 total: items.len(),
             });
@@ -179,10 +182,12 @@ impl<L: Llm> ConceptExtractor<L> {
         {
             return Ok(Reading {
                 llm_calls: 0,
+                usage: UsageTally::default(),
                 outcome: Outcome::Cached(answer),
             });
         }
         let mut llm_calls = 0;
+        let mut usage = UsageTally::default();
         let mut reason = String::new();
         for _ in 0..TRIES_FOR_ONE_QUESTION {
             llm_calls += 1;
@@ -191,6 +196,7 @@ impl<L: Llm> ConceptExtractor<L> {
                 Err(error) if error.stops_the_run() => {
                     return Ok(Reading {
                         llm_calls,
+                        usage,
                         outcome: Outcome::Stopped(error),
                     });
                 }
@@ -199,11 +205,13 @@ impl<L: Llm> ConceptExtractor<L> {
                     continue;
                 }
             };
-            match read(&reply) {
+            usage.add_all(&reply.usage);
+            match read(&reply.value) {
                 Ok(answer) => {
-                    cache.put(key, &reply)?;
+                    cache.put(key, &reply.value)?;
                     return Ok(Reading {
                         llm_calls,
+                        usage,
                         outcome: Outcome::Asked(answer),
                     });
                 }
@@ -212,6 +220,7 @@ impl<L: Llm> ConceptExtractor<L> {
         }
         Ok(Reading {
             llm_calls,
+            usage,
             outcome: Outcome::Failed(reason),
         })
     }

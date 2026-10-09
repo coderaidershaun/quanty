@@ -136,6 +136,8 @@ Every command and flag is in [docs/reference.md](docs/reference.md).
 | Jev | Your Jev API key | The pages of a PDF, when they are converted |
 | `claude` (Haiku and Sonnet) | The subscription `claude` is signed in to, never the API | Converting pages, finding concepts and writing an answer |
 
+Every ingest and every question reports the tokens each model used and about what they cost, such as `cost of this run: ≈ $1.75`. The figure comes from one table of prices per million tokens: it is what the API would charge, not what your subscription bills. The table, its date and how each figure is made are in [docs/reference.md](docs/reference.md#costs).
+
 Converted pages and the answers about concepts are kept on disk, so a run that stopped goes on without paying twice, and a PDF that is already ingested costs nothing. `rag-ingest pdf` checks the Gemini key and both stores before the first page is paid for. These cost nothing: the two stores, which run on your machine; `health`, `--fixture`, `list_documents`, `read_page`, `ingest_status`, `media`, `tag` and `delete-document`; and the check and every edit of the desktop app.
 
 ## Start fresh

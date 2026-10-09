@@ -11,7 +11,8 @@ use gui::app::layout::{DEFAULT_WINDOW, MIN_WINDOW};
 use gui::backend::fake::Fake;
 use gui::backend::{Handler, Reply};
 use gui::contract::{
-    Category, Command, DocumentName, IngestProgress, IngestRequest, IngestStage, RequestId, Tab,
+    Category, Command, DocumentName, IngestProgress, IngestRequest, IngestStage, ModelTokens,
+    RequestId, Tab, Usage,
 };
 use gui::panels::ingest;
 use gui::state::{IngestJob, Shared};
@@ -87,6 +88,10 @@ fn a_checked_chapter_runs_to_done_and_loads_the_catalogue_again() {
     assert!(says(
         &harness,
         "Ingested Option Volatility and Pricing, chapter 3: Greeks"
+    ));
+    assert!(says(
+        &harness,
+        "Tokens: claude-haiku-5-5 48k, claude-sonnet-5-5 192k, gemini-embedding-2 9k (estimated). Cost ≈ $1.75."
     ));
     assert!(has(&harness, Role::Button, "Add another PDF"));
     testkit::save_png(&mut harness, "app-ingest-done");
@@ -221,7 +226,7 @@ fn a_run_shows_its_page_and_its_cost() {
     let words = "Converting the pages — page 3 of 12";
     let bar = node(&harness, Role::ProgressIndicator, words);
     assert_eq!(bar.accesskit_node().numeric_value(), Some(0.25));
-    assert!(says(&harness, "≈ $0.42 so far"));
+    assert!(says(&harness, "48k tokens · ≈ $0.42 so far"));
     assert!(
         !is_enabled(&harness, Role::Button, "Choose a PDF"),
         "the form is off while an ingest runs"
@@ -234,13 +239,25 @@ fn the_check_and_the_run_show_their_progress() {
     a_run_shows_its_page_and_its_cost();
 }
 
-fn progress(stage: IngestStage, counts: (Option<u32>, Option<u32>), cost: f64) -> IngestProgress {
+/// What the run used after `pages` pages: Sonnet reads 12,000 tokens and writes 4,000 for each
+/// page, at $0.14 a page.
+fn progress(stage: IngestStage, counts: (Option<u32>, Option<u32>), pages: u32) -> IngestProgress {
+    let pages_read = u64::from(pages);
+    let sonnet = ModelTokens {
+        model: "claude-sonnet-5-5".to_owned(),
+        input: 12_000 * pages_read,
+        output: 4_000 * pages_read,
+        ..ModelTokens::default()
+    };
     IngestProgress {
         stage,
         done: counts.0,
         total: counts.1,
         pages_failed: 0,
-        cost_usd: cost,
+        spent: Usage {
+            models: vec![sonnet],
+            cost_usd: Some(0.14 * f64::from(pages)),
+        },
     }
 }
 
@@ -253,7 +270,7 @@ struct Shown {
 }
 
 fn every_stage() -> [Shown; 8] {
-    let spent = Some("≈ $1.68 so far");
+    let spent = Some("192k tokens · ≈ $1.68 so far");
     let shown = |progress, words, share, cost| Shown {
         progress,
         words,
@@ -263,31 +280,31 @@ fn every_stage() -> [Shown; 8] {
     [
         shown(None, "Reading the PDF", None, None),
         shown(
-            Some(progress(IngestStage::PreparingPages, (None, Some(12)), 0.0)),
+            Some(progress(IngestStage::PreparingPages, (None, Some(12)), 0)),
             "Reading the PDF",
             None,
             None,
         ),
         shown(
-            Some(progress(IngestStage::Converting, (Some(3), Some(12)), 0.42)),
+            Some(progress(IngestStage::Converting, (Some(3), Some(12)), 3)),
             "Converting the pages — page 3 of 12",
             Some(0.25),
-            Some("≈ $0.42 so far"),
+            Some("48k tokens · ≈ $0.42 so far"),
         ),
         shown(
-            Some(progress(IngestStage::WritingGraph, (None, None), 1.68)),
+            Some(progress(IngestStage::WritingGraph, (None, None), 12)),
             "Writing the graph",
             None,
             spent,
         ),
         shown(
-            Some(progress(IngestStage::Embedding, (None, Some(120)), 1.68)),
+            Some(progress(IngestStage::Embedding, (None, Some(120)), 12)),
             "Embedding 120 items",
             None,
             spent,
         ),
         shown(
-            Some(progress(IngestStage::Storing, (None, None), 1.68)),
+            Some(progress(IngestStage::Storing, (None, None), 12)),
             "Storing the items",
             None,
             spent,
@@ -296,7 +313,7 @@ fn every_stage() -> [Shown; 8] {
             Some(progress(
                 IngestStage::ReadingConcepts,
                 (Some(40), Some(120)),
-                1.68,
+                12,
             )),
             "Reading the concepts — 40 of 120",
             Some(40.0 / 120.0),
@@ -306,7 +323,7 @@ fn every_stage() -> [Shown; 8] {
             Some(progress(
                 IngestStage::LinkingConcepts,
                 (Some(10), Some(120)),
-                1.68,
+                12,
             )),
             "Linking the concepts — 10 of 120",
             Some(10.0 / 120.0),

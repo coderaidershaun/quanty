@@ -4,12 +4,12 @@
 use std::collections::HashMap;
 
 use graph::{GraphError, GraphStore, Mention, Relation};
-use rag_core::{ConceptId, Embedder, Llm, LlmError};
+use rag_core::{ConceptId, Embedder, Llm, LlmError, UsageTally};
 
 use super::ask::ItemAnswer;
 use super::resolve::{Resolved, Resolver, normalised};
 use super::{ConceptError, ConceptSummary};
-use crate::ingest::{IngestStep, OnStep};
+use crate::ingest::{IngestStep, Meter};
 
 enum ReplyConcepts {
     Resolved {
@@ -42,12 +42,14 @@ pub(super) async fn write<L: Llm, E: Embedder, G: GraphStore>(
     resolver: &Resolver<'_, L, E, G>,
     answers: &[ItemAnswer],
     items: usize,
-    on_step: OnStep<'_>,
+    meter: &mut Meter<'_>,
 ) -> Result<ConceptSummary, ConceptError> {
     let graph = &resolver.stores.graph;
     let mut summary = ConceptSummary::default();
     for (index, answer) in answers.iter().enumerate() {
-        let (names, mentions) = match resolve_concepts(resolver, answer, &mut summary).await? {
+        let mut spent = UsageTally::default();
+        let resolved = resolve_concepts(resolver, answer, &mut summary, &mut spent).await?;
+        let (names, mentions) = match resolved {
             ReplyConcepts::Resolved { names, mentions } => (names, mentions),
             ReplyConcepts::Stopped(source) => {
                 return Err(ConceptError::Stopped {
@@ -65,7 +67,8 @@ pub(super) async fn write<L: Llm, E: Embedder, G: GraphStore>(
         summary.mentions_written += mentions.len();
         summary.relations_written += relations.kept.len();
         summary.relations_dropped += relations.dropped;
-        on_step(IngestStep::LinkingConcepts {
+        meter.spend(&spent);
+        meter.step(IngestStep::LinkingConcepts {
             done: index + 1,
             total: answers.len(),
         });
@@ -73,7 +76,8 @@ pub(super) async fn write<L: Llm, E: Embedder, G: GraphStore>(
     Ok(summary)
 }
 
-/// It stops at the first concept that the model cannot be asked about.
+/// It stops at the first concept that the model cannot be asked about. What resolving the
+/// concepts used is added to `spent`.
 ///
 /// # Errors
 /// Every error that [`Resolver::resolve`] returns.
@@ -81,6 +85,7 @@ async fn resolve_concepts<L: Llm, E: Embedder, G: GraphStore>(
     resolver: &Resolver<'_, L, E, G>,
     answer: &ItemAnswer,
     summary: &mut ConceptSummary,
+    spent: &mut UsageTally,
 ) -> Result<ReplyConcepts, ConceptError> {
     // The concepts of this reply are kept by normalised name, so that a relation finds them
     // without asking the graph.
@@ -98,7 +103,10 @@ async fn resolve_concepts<L: Llm, E: Embedder, G: GraphStore>(
         if names.contains_key(&normalised_name) {
             continue;
         }
-        let id = match resolver.resolve(answer.item, concept, summary).await? {
+        let id = match resolver
+            .resolve(answer.item, concept, summary, spent)
+            .await?
+        {
             Resolved::Created(id) => {
                 summary.concepts_created += 1;
                 id

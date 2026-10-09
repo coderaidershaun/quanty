@@ -51,8 +51,7 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    // `rag_core` logs what each `claude` question cost, so a person sees what an answer cost as it
-    // happens.
+    // `rag_core` logs what each `claude` question used, so a person sees it as it happens.
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
         .with(
@@ -126,7 +125,7 @@ async fn ask(question: &str, kind: Option<ItemKind>, wanted: &LabelFilter) -> Re
     Ok(())
 }
 
-/// Prints the answer and nothing else. When nothing is found there is nothing to write an answer
+/// Prints the answer and what it used. When nothing is found there is nothing to write an answer
 /// from, so the model is not asked.
 async fn answer_question(
     question: &str,

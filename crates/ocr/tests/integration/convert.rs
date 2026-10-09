@@ -1,18 +1,16 @@
 //! Runs the whole chapter conversion on the sample chapter with stubbed paid services, and the
 //! built command with no services at all. Poppler and the file system are real.
 
-// SMELL: this file is close to the limit of 500 lines. A new test of a chapter run needs a file
-// of its own, and the checks that both files use then need a module of their own.
+// SMELL: this file is near 400 lines, where a file must be split. A new test of a chapter run
+// needs a file of its own, and the checks that two files share then need a module of their own.
 
-use std::error::Error;
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;
 
 use ocr::ConversionSummary;
-use ocr::content::{ContentError, RelationshipKind};
-use ocr::convert::{
-    ConvertError, PageProgress, convert_chapter_with, convert_chapter_with_progress,
-};
+use ocr::content::RelationshipKind;
+use ocr::convert::{PageProgress, convert_chapter_with_progress};
 use ocr::reader::{PieceId, read_chapter};
 use ocr::testing::{Call, Scenario, StubServices, page_folder, read_json, sample_job, sample_pdf};
 
@@ -142,6 +140,9 @@ fn assert_routes_reasons_and_calls(chapter: &Path, stubs: &StubServices) {
             );
         }
         assert_eq!(call_steps(&page), steps, "page {position}");
+        for call in page["conversion"]["calls"].as_array().unwrap() {
+            assert_eq!(call["input-tokens"], 100, "page {position}: {call}");
+        }
         assert_eq!(
             stubs.calls_for(position).len(),
             steps.len() + 1,
@@ -219,6 +220,11 @@ fn assert_summary_counts_and_lists(summary: &ConversionSummary) {
         printed.contains("printed page numbers out of sequence: page 6 shows 9\n"),
         "{printed}"
     );
+    assert!(
+        printed
+            .contains("tokens of stub-transcriber: 800 in, 80 out, 0 cache read, 0 cache write\n"),
+        "{printed}"
+    );
     let to_check = printed
         .lines()
         .find(|line| line.starts_with("pages to check:"))
@@ -286,24 +292,47 @@ fn assert_each_page_told_once_with_its_cost(heard: &[PageProgress], summary: &Co
     );
     let mut positions = Vec::new();
     let mut cost_usd = 0.0;
+    // Input tokens, output tokens and cents, for each model.
+    let mut told: BTreeMap<&str, [u64; 3]> = BTreeMap::new();
+    let cents = |usd: f64| (usd * 100.0).round() as u64;
     for progress in &heard[1..] {
         match progress {
-            PageProgress::PageDone {
-                position,
-                cost_usd: page_cost,
-            } => {
+            PageProgress::PageDone { position, calls } => {
                 positions.push(*position);
-                cost_usd += page_cost;
+                for (model, used) in &calls.by_model {
+                    cost_usd += used.cost_usd;
+                    let sum = told.entry(model.as_str()).or_default();
+                    sum[0] += used.input_tokens;
+                    sum[1] += used.output_tokens;
+                    sum[2] += cents(used.cost_usd);
+                }
             }
             other => panic!("only finished pages should follow the count, got {other:?}"),
         }
     }
     positions.sort_unstable();
     assert_eq!(positions, (1..=7).collect::<Vec<u32>>());
+    let in_summary: BTreeMap<&str, [u64; 3]> = (summary.calls.by_model.iter())
+        .map(|(model, used)| {
+            let figures = [used.input_tokens, used.output_tokens, cents(used.cost_usd)];
+            (model.as_str(), figures)
+        })
+        .collect();
+    let expected = [
+        ("stub-copier", [500, 50, 5]),
+        ("stub-tagger", [700, 70, 7]),
+        ("stub-transcriber", [800, 80, 8]),
+    ];
+    assert_eq!(in_summary, BTreeMap::from(expected));
+    assert_eq!(
+        told, in_summary,
+        "the pages tell the tokens and the cost of the run"
+    );
+    let reported = summary.calls.by_model.values().map(|used| used.cost_usd);
+    let summary_cost: f64 = reported.sum();
     assert!(
-        (cost_usd - summary.calls.cost_usd).abs() < 1e-9,
-        "the pages told {cost_usd}, the summary says {}",
-        summary.calls.cost_usd
+        (cost_usd - summary_cost).abs() < 1e-9,
+        "the pages told {cost_usd}, the summary says {summary_cost}"
     );
 }
 
@@ -368,117 +397,4 @@ async fn chapter_converts_then_reruns_without_calls() {
             "{expected} missing from {printed}"
         );
     }
-}
-
-#[tokio::test]
-async fn failing_page_is_named_and_the_next_run_resumes() {
-    let root = tempfile::tempdir().unwrap();
-    let job = sample_job(root.path());
-    let failing = StubServices::new(Scenario::AllTables {
-        broken_page: Some(7),
-    });
-    let mut heard = Vec::new();
-
-    let error = convert_chapter_with_progress(&job, &failing, |progress| heard.push(progress))
-        .await
-        .unwrap_err();
-
-    let chapter = job.chapter_folder();
-    let rejected = chapter.join("page-num-7.partial/rejected-reply.json");
-    assert!(
-        matches!(
-            &error,
-            ConvertError::PageFailed { position: 7, source, .. }
-                if matches!(**source, ocr::PageError::ReplyRejected { .. })
-        ),
-        "{error:?}"
-    );
-    let mut chain = vec![error.to_string()];
-    let mut source = error.source();
-    while let Some(next) = source {
-        chain.push(next.to_string());
-        source = next.source();
-    }
-    let chain = chain.join(": ");
-    assert!(chain.contains("page 7"), "{chain}");
-    assert!(chain.contains("page-num-7.partial"), "{chain}");
-    assert!(chain.contains(&rejected.display().to_string()), "{chain}");
-
-    let transcriptions: Vec<Call> = failing
-        .calls_for(7)
-        .into_iter()
-        .filter(|call| matches!(call, Call::Transcribe { .. }))
-        .collect();
-    assert_eq!(transcriptions.len(), 2);
-    assert!(matches!(
-        &transcriptions[0],
-        Call::Transcribe {
-            correction: None,
-            ..
-        }
-    ));
-    assert!(matches!(
-        &transcriptions[1],
-        Call::Transcribe {
-            correction: Some(_),
-            ..
-        }
-    ));
-    assert!(
-        std::fs::read_to_string(&rejected)
-            .unwrap()
-            .contains("frac{a")
-    );
-    for position in 1..=6 {
-        assert!(page_folder(&chapter, position).join("page.json").is_file());
-    }
-    assert!(!page_folder(&chapter, 7).exists());
-    assert_eq!(read_json(&chapter.join("chapter.json"))["finished"], false);
-    let failed: Vec<&PageProgress> = heard
-        .iter()
-        .filter(|progress| matches!(progress, PageProgress::PageFailed { .. }))
-        .collect();
-    assert_eq!(failed, [&PageProgress::PageFailed { position: 7 }]);
-
-    // A page.json that cannot be read for any reason except being missing or malformed is an
-    // error to report, not a reason to delete the page and pay to convert it again.
-    let page_json = page_folder(&chapter, 3).join("page.json");
-    let saved_page_json = std::fs::read(&page_json).unwrap();
-    std::fs::remove_file(&page_json).unwrap();
-    std::fs::create_dir(&page_json).unwrap();
-    let unreadable = StubServices::new(Scenario::AllTables { broken_page: None });
-    let error = convert_chapter_with(&job, &unreadable).await.unwrap_err();
-    assert!(
-        matches!(error, ConvertError::Content(ContentError::Read { .. })),
-        "{error:?}"
-    );
-    assert!(unreadable.calls().is_empty());
-    assert!(page_folder(&chapter, 3).join("02-text.md").is_file());
-    std::fs::remove_dir(&page_json).unwrap();
-    std::fs::write(&page_json, saved_page_json).unwrap();
-
-    let working = StubServices::new(Scenario::AllTables { broken_page: None });
-    let mut heard = Vec::new();
-    let summary = convert_chapter_with_progress(&job, &working, |progress| heard.push(progress))
-        .await
-        .unwrap();
-
-    assert!(working.calls().iter().all(|call| call.position() == 7));
-    assert!(!working.calls().is_empty());
-    assert!(!chapter.join("page-num-7.partial").exists());
-    assert_eq!(read_json(&chapter.join("chapter.json"))["finished"], true);
-    assert_eq!((summary.converted_now, summary.already_done), (1, 6));
-    assert!(
-        matches!(
-            heard.as_slice(),
-            [
-                PageProgress::Pages {
-                    total: 7,
-                    done_before: 6
-                },
-                PageProgress::PageDone { position: 7, .. }
-            ]
-        ),
-        "{heard:?}"
-    );
 }

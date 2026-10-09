@@ -61,6 +61,7 @@ pub async fn ask<S: Services>(
             result: Ok(SearchReply {
                 results: Vec::new(),
                 trace: trace::view(&trace, &[]),
+                usage: (&results.usage).into(),
             }),
         });
         return;
@@ -80,6 +81,7 @@ pub async fn ask<S: Services>(
         result: Ok(SearchReply {
             results: items,
             trace: trace::view(&trace, &results.hits),
+            usage: (&results.usage).into(),
         }),
     });
 

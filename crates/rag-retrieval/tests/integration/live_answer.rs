@@ -1,7 +1,7 @@
 //! Asks the real `claude` program for one answer from the items of a committed chapter, made into
 //! results by hand. Only the real model shows that the schema and the prompt work.
 
-use rag_core::{ClaudeCli, ItemHit, ItemKind};
+use rag_core::{ClaudeCli, ItemHit, ItemKind, UsageTally};
 use rag_retrieval::{ANSWER_MODEL, Reason, SearchHit, SearchResults, answer};
 
 use crate::support::sample_items;
@@ -40,7 +40,10 @@ fn in_depth_results() -> SearchResults {
             reason: Reason::Nearest,
         })
         .collect();
-    SearchResults { hits }
+    SearchResults {
+        hits,
+        usage: UsageTally::default(),
+    }
 }
 
 #[tokio::test]

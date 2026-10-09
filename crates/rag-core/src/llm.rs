@@ -3,6 +3,8 @@
 
 use serde_json::Value;
 
+use crate::usage::UsageTally;
+
 /// One question to a language model. The answer must fit the schema.
 #[derive(Debug, Clone, Copy)]
 pub struct Question<'a> {
@@ -11,6 +13,13 @@ pub struct Question<'a> {
     pub schema: &'a str,
     /// The whole message the model reads.
     pub input: &'a str,
+}
+
+/// What a model replied, and what the reply used.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LlmReply {
+    pub value: Value,
+    pub usage: UsageTally,
 }
 
 pub trait Llm {
@@ -27,12 +36,17 @@ pub trait Llm {
     /// [`LlmError::TimedOut`] when no question can be answered until the person acts.
     fn check_ready(&self) -> impl Future<Output = Result<(), LlmError>> + Send;
 
+    /// A failed question reports no usage.
+    ///
     /// # Errors
     /// - [`LlmError::ApiKeySet`], [`LlmError::Start`], [`LlmError::NotSignedIn`] and
     ///   [`LlmError::UsageLimit`] when no question can be answered until the person acts
     /// - [`LlmError::TimedOut`], [`LlmError::Wait`], [`LlmError::UnreadableOutput`] and
     ///   [`LlmError::Failed`] when this question failed and another may not
-    fn ask(&self, question: Question<'_>) -> impl Future<Output = Result<Value, LlmError>> + Send;
+    fn ask(
+        &self,
+        question: Question<'_>,
+    ) -> impl Future<Output = Result<LlmReply, LlmError>> + Send;
 }
 
 #[derive(thiserror::Error, Debug)]

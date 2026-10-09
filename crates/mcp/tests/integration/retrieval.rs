@@ -45,6 +45,14 @@ async fn search_gives_the_placed_item_first_and_explain_says_how_it_was_found() 
         .map(|result| result["number"].as_u64().unwrap())
         .collect();
     assert_eq!(numbers, (1..=results.len() as u64).collect::<Vec<_>>());
+    let used = found["usage"].as_array().unwrap();
+    let [embedded] = used.as_slice() else {
+        panic!("expected the embedding of the question alone: {found}");
+    };
+    assert_eq!(embedded["model"], "gemini-embedding-2");
+    assert_eq!(embedded["estimated"], true);
+    assert!(embedded["input_tokens"].as_u64().unwrap() > 0);
+    assert!(found["cost_usd"].is_number(), "{found}");
 
     let result = call(
         &client,
@@ -117,6 +125,11 @@ async fn answer_gives_claims_with_the_results_they_rest_on() {
     assert_eq!(sources[0]["document_id"], sample_document_id().to_string());
     assert_eq!(sources[0]["page"], 5);
     assert_eq!(sources[0]["kind"], "figure");
+    let used: Vec<&Value> = (answer["usage"].as_array().unwrap().iter())
+        .map(|model| &model["model"])
+        .collect();
+    assert_eq!(used, ["gemini-embedding-2", "stand-in"]);
+    assert!(answer["cost_usd"].is_number(), "{answer}");
     assert_eq!(
         library.llm.calls(),
         calls_before + 1,

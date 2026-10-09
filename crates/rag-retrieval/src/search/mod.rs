@@ -10,11 +10,11 @@ mod trace;
 use graph::{GraphError, GraphStore};
 use rag_core::{
     ConceptStore, DocId, EmbedError, Embedder, ItemFilter, ItemKind, ItemStore, LabelFilter,
-    StoreError,
+    StoreError, UsageTally, question_usage,
 };
 
-pub(crate) use results::page_text;
 pub use results::{Reason, SearchHit, SearchResults};
+pub(crate) use results::{page_text, write_usage};
 pub use trace::{SearchTrace, TracedSearch};
 
 // The four numbers below are starting values.
@@ -115,20 +115,21 @@ impl<E: Embedder, G: GraphStore> Retriever<E, G> {
                 .map(|node| node.id)
                 .collect();
             if carrying.is_empty() {
-                return Ok(nothing_found(Some(0)));
+                return Ok(nothing_found(Some(0), UsageTally::default()));
             }
             Some(carrying)
         };
         let documents_searched = documents.as_ref().map(Vec::len);
         let filter = ItemFilter { kind, documents };
         let vector = self.embedder.embed_query(question).await?;
+        let usage = question_usage(question);
         let seeds = self
             .items
             .search(vector.clone(), &filter, RESULTS_PER_QUERY)
             .await
             .map_err(SearchError::Items)?;
         if seeds.is_empty() {
-            return Ok(nothing_found(documents_searched));
+            return Ok(nothing_found(documents_searched, usage));
         }
         let expansion = expand::from_seeds(&self.concepts, &self.graph, &vector, &seeds).await?;
         let candidates = expansion.candidates.len();
@@ -141,7 +142,7 @@ impl<E: Embedder, G: GraphStore> Retriever<E, G> {
             cited::pull_in(&self.items, &vector, &mut hits).await?;
         }
         Ok(TracedSearch {
-            results: SearchResults { hits },
+            results: SearchResults { hits, usage },
             trace: SearchTrace {
                 documents_searched,
                 seeds,
@@ -157,9 +158,12 @@ impl<E: Embedder, G: GraphStore> Retriever<E, G> {
     }
 }
 
-fn nothing_found(documents_searched: Option<usize>) -> TracedSearch {
+fn nothing_found(documents_searched: Option<usize>, usage: UsageTally) -> TracedSearch {
     TracedSearch {
-        results: SearchResults { hits: Vec::new() },
+        results: SearchResults {
+            hits: Vec::new(),
+            usage,
+        },
         trace: SearchTrace {
             documents_searched,
             ..SearchTrace::default()

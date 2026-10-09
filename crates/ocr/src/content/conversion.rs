@@ -156,7 +156,14 @@ pub struct CallRecord {
     pub step: CallStep,
     pub model: String,
     pub cost_usd: f64,
+    /// A file saved before the input and cache counts were kept reads them as 0.
+    #[serde(default)]
+    pub input_tokens: u64,
     pub output_tokens: u64,
+    #[serde(default)]
+    pub cache_read_tokens: u64,
+    #[serde(default)]
+    pub cache_write_tokens: u64,
     pub thinking_tokens: u64,
     pub seconds: f64,
 }

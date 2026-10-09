@@ -37,31 +37,35 @@ pub enum PageError {
     Content(#[from] ContentError),
 }
 
+/// The paid calls of one conversion: the records that are saved with it, and their tally.
 #[derive(Default)]
-struct Ledger {
-    records: Vec<CallRecord>,
-    tally: CallTally,
+pub(super) struct Ledger {
+    pub(super) records: Vec<CallRecord>,
+    pub(super) tally: CallTally,
 }
 
 impl Ledger {
-    fn add(&mut self, step: CallStep, usage: &CallUsage) {
+    pub(super) fn add(&mut self, step: CallStep, usage: &CallUsage) {
         match step {
             CallStep::Tag => self.tally.tag += 1,
             CallStep::Copy => self.tally.copy += 1,
             CallStep::Transcribe => self.tally.transcribe += 1,
         }
-        self.tally.cost_usd += usage.cost_usd;
+        self.tally.add_usage(usage);
         self.records.push(call_record(step, usage));
     }
 }
 
 /// What a paid call leaves in the saved files.
-pub(super) fn call_record(step: CallStep, usage: &CallUsage) -> CallRecord {
+fn call_record(step: CallStep, usage: &CallUsage) -> CallRecord {
     CallRecord {
         step,
         model: usage.model.clone(),
         cost_usd: usage.cost_usd,
+        input_tokens: usage.input_tokens,
         output_tokens: usage.output_tokens,
+        cache_read_tokens: usage.cache_read_tokens,
+        cache_write_tokens: usage.cache_write_tokens,
         thinking_tokens: usage.thinking_tokens,
         seconds: usage.seconds,
     }

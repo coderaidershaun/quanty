@@ -7,6 +7,7 @@ mod retrieval;
 mod server;
 mod services;
 mod transport;
+mod usage;
 
 pub use server::{DEFAULT_MAX_PDF_BYTES, QuantyServer};
 pub use services::{PaidServices, Services};

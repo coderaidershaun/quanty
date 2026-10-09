@@ -2,10 +2,12 @@
 //! of the steps that found them.
 
 use graph::ConceptNode;
-use rag_core::{ConceptHit, ItemPayload};
+use rag_core::{ConceptHit, ItemPayload, UsageTally};
 use rag_retrieval::{Reason, SearchHit, SearchTrace};
 use schemars::JsonSchema;
 use serde::Serialize;
+
+use crate::usage::Spent;
 
 /// The items a search found, best first.
 #[derive(Serialize, JsonSchema)]
@@ -15,6 +17,9 @@ pub(crate) struct SearchResult {
     /// How the search got to the results. Only with `explain`.
     #[serde(skip_serializing_if = "Option::is_none")]
     trace: Option<Trace>,
+    /// What embedding the question used, estimated.
+    #[serde(flatten)]
+    spent: Spent,
 }
 
 /// One stored item that a search found.
@@ -118,8 +123,13 @@ struct ConceptView {
 }
 
 impl SearchResult {
-    /// The hits in order, numbered from 1, and the trace when one was asked for.
-    pub(super) fn of(hits: &[SearchHit], trace: Option<SearchTrace>) -> SearchResult {
+    /// The hits in order, numbered from 1, the trace when one was asked for, and what the search
+    /// used.
+    pub(super) fn of(
+        hits: &[SearchHit],
+        trace: Option<SearchTrace>,
+        usage: &UsageTally,
+    ) -> SearchResult {
         SearchResult {
             results: hits
                 .iter()
@@ -127,6 +137,7 @@ impl SearchResult {
                 .map(|(index, hit)| Found::of(index + 1, hit))
                 .collect(),
             trace: trace.map(Trace::from),
+            spent: usage.into(),
         }
     }
 }

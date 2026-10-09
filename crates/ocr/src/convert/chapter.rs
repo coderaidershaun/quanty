@@ -65,8 +65,8 @@ pub(super) async fn run<S: PageServices>(
     )?)
 }
 
-/// Converts the pages a few at a time and adds up what their calls cost, telling each page as it
-/// ends. When pages fail, the error is for the one with the lowest position.
+/// Converts the pages a few at a time and adds up their calls, telling each page as it ends.
+/// When pages fail, the error is for the one with the lowest position.
 async fn convert_pages<S: PageServices>(
     services: &S,
     chapter_folder: &Path,
@@ -97,7 +97,7 @@ async fn convert_pages<S: PageServices>(
                 calls.add(&page_calls);
                 on_progress(PageProgress::PageDone {
                     position,
-                    cost_usd: page_calls.cost_usd,
+                    calls: page_calls,
                 });
             }
             Some(Err(error)) => {

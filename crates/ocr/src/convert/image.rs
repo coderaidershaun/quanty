@@ -4,11 +4,11 @@
 use std::path::{Path, PathBuf};
 
 use super::checks::{ReplyFault, clean_and_check};
-use super::page::call_record;
+use super::page::Ledger;
 use super::reply::{TranscribedPage, TranscribedPiece};
 use super::save::figure_file;
 use super::services::{Answer, ImageServices, LiveImageServices};
-use super::{ConvertError, sha256_hex, write_error};
+use super::{CallTally, ConvertError, sha256_hex, write_error};
 use crate::content::{
     CallStep, ContentError, FORMAT_VERSION, IMAGE_EXPLANATION_FILE, ImageIndex,
     image_copy_file_name, image_folder,
@@ -25,6 +25,8 @@ pub struct ConvertedImage {
     /// The copy of the picture inside the folder, as an absolute path with every symbolic link
     /// resolved.
     pub picture: PathBuf,
+    /// The paid calls of this run: none when an earlier run saved the picture.
+    pub calls: CallTally,
 }
 
 /// Converts the picture with the real model, or returns what an earlier run saved. See
@@ -82,7 +84,7 @@ pub async fn convert_image_with<S: ImageServices>(
     std::fs::create_dir_all(&folder).map_err(write_error(&folder))?;
     std::fs::write(&copy, &bytes).map_err(write_error(&copy))?;
 
-    let mut calls = Vec::new();
+    let mut ledger = Ledger::default();
     let mut correction: Option<String> = None;
     let figure = loop {
         let answer = services
@@ -92,7 +94,7 @@ pub async fn convert_image_with<S: ImageServices>(
                 picture: picture.to_path_buf(),
                 source,
             })?;
-        calls.push(call_record(CallStep::Transcribe, &answer.usage));
+        ledger.add(CallStep::Transcribe, &answer.usage);
         match only_figure(answer) {
             Ok(figure) => break figure,
             Err(fault) if correction.is_none() => correction = Some(fault.to_string()),
@@ -119,13 +121,14 @@ pub async fn convert_image_with<S: ImageServices>(
         label: figure.label,
         caption: figure.caption,
         printed_text: figure.printed_text,
-        calls,
+        calls: ledger.records,
     };
     index.write(&folder)?;
     Ok(ConvertedImage {
         picture: canonical(&folder)?.join(&index.picture),
         index,
         explanation,
+        calls: ledger.tally,
     })
 }
 
@@ -204,6 +207,7 @@ fn read_saved(folder: &Path, source_sha256: &str) -> Result<Option<ConvertedImag
         picture: canonical(folder)?.join(&index.picture),
         index,
         explanation,
+        calls: CallTally::default(),
     }))
 }
 

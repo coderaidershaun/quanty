@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use rag_core::{DocId, DocumentLabels, ItemHit, ItemId, ItemKind, ItemPayload};
+use rag_core::{DocId, DocumentLabels, ItemHit, ItemId, ItemKind, ItemPayload, Usage, UsageTally};
 use rag_ingestion::testing::StandInLlm;
 use rag_retrieval::{AnswerError, Reason, SearchHit, SearchResults, Source, answer};
 use serde_json::{Value, json};
@@ -76,6 +76,7 @@ fn found_items() -> SearchResults {
                 Reason::Concept("straddle".to_owned()),
             ),
         ],
+        usage: UsageTally::default(),
     }
 }
 
@@ -144,6 +145,21 @@ async fn an_answer_cites_document_and_printed_page_and_keeps_the_latex_of_a_form
             "  source: {NOTES_TITLE}, page 7 (formula (7.3))\n{LATEX}\n"
         )),
         "the formula is printed as the document has it, on lines of its own, under its source line:\n{printed}"
+    );
+    let used: Vec<(&str, Usage)> = (answer_found.usage.models())
+        .map(|(model, used)| (model, used.tokens))
+        .collect();
+    let one_question = Usage {
+        input_tokens: 1000,
+        output_tokens: 100,
+        ..Usage::default()
+    };
+    assert_eq!(used, [("stand-in", one_question)]);
+    assert!(
+        printed.ends_with(
+            "\n\ntokens of stand-in: 1000 in, 100 out, 0 cache read, 0 cache write\ncost: ≈ $0.01"
+        ),
+        "{printed}"
     );
 
     let unknown = replying(json!([{ "text": "A claim.", "sources": [1, 99] }]));

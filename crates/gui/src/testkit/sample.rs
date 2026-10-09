@@ -6,7 +6,7 @@ use uuid::Uuid;
 use super::samples_folder;
 use crate::contract::{
     Answer, AnswerBlock, ConceptGraph, ConceptId, DocId, EdgeKind, GraphEdge, GraphNode, ImageRef,
-    ItemId, ItemKind, NodeId, NodeKind, Reason, ResultItem, RetrievalTrace, SearchReply,
+    ItemId, ItemKind, NodeId, NodeKind, Reason, ResultItem, RetrievalTrace, SearchReply, Usage,
 };
 
 const NOTES_TITLE: &str = "Quanty Sample Notes";
@@ -102,6 +102,7 @@ pub fn search_reply() -> SearchReply {
             passed_over: Vec::new(),
             cited: Some(Vec::new()),
         },
+        usage: Usage::default(),
     }
 }
 
@@ -132,6 +133,7 @@ pub fn answer() -> Answer {
             "What does the volatility term do in the equation?".to_owned(),
             "How is the equation solved for a call option?".to_owned(),
         ],
+        usage: Usage::default(),
     }
 }
 

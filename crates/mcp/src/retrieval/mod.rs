@@ -159,6 +159,7 @@ pub(crate) async fn search<S: Services>(
     Ok(SearchResult::of(
         &hits,
         args.explain.unwrap_or(false).then_some(found.trace),
+        &found.results.usage,
     ))
 }
 
@@ -182,7 +183,7 @@ pub(crate) async fn answer<S: Services>(
         .search(&asked.question, asked.kind, &asked.wanted)
         .await?;
     if results.hits.is_empty() {
-        return Ok(AnswerResult::unanswered());
+        return Ok(AnswerResult::unanswered(&results.usage));
     }
     let written = rag_retrieval::answer(&llm, &asked.question, &results).await?;
     Ok(written.into())

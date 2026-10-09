@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use graph::RelationKind;
 use graph::testing::{GraphSize, size, stored_concept_graph};
-use rag_core::ConceptId;
+use rag_core::{ConceptId, ModelUsage, Usage};
 use rag_ingestion::{ConceptSummary, ingest_chapter};
 use serde_json::{Value, json};
 
@@ -221,6 +221,19 @@ async fn ingest_asks_about_every_item_and_writes_concepts_mentions_and_relations
             skipped_items: Vec::new(),
         }
     );
+    let used: Vec<(&str, &ModelUsage)> = summary.usage.models().collect();
+    let [("gemini-embedding-2", embedded), ("stand-in", asked)] = used[..] else {
+        panic!("expected the embedder and the model, got {used:?}");
+    };
+    assert!(embedded.estimated && embedded.tokens.input_tokens > 0);
+    let one_question_for_each_item = Usage {
+        input_tokens: n as u64 * 1000,
+        output_tokens: n as u64 * 100,
+        ..Usage::default()
+    };
+    assert_eq!(asked.tokens, one_question_for_each_item);
+    let embedded_tokens = embedded.tokens.input_tokens;
+    let cost = n as f64 * 0.01 + embedded_tokens as f64 * 0.20 / 1_000_000.0;
     let printed = summary.to_string();
     let concept_lines: Vec<&str> = printed.lines().skip(4).collect();
     assert_eq!(
@@ -235,6 +248,15 @@ async fn ingest_asks_about_every_item_and_writes_concepts_mentions_and_relations
             format!("relations written: {}, dropped: 1", 2 * n - 1),
             format!("claude calls made: {n}, cache hits: 0"),
             "items skipped: 0".to_owned(),
+            format!(
+                "tokens of gemini-embedding-2: {embedded_tokens} in, 0 out, 0 cache read, 0 cache write (estimated)"
+            ),
+            format!(
+                "tokens of stand-in: {} in, {} out, 0 cache read, 0 cache write",
+                n * 1000,
+                n * 100
+            ),
+            format!("cost of this run: ≈ ${cost:.2}"),
         ]
     );
 }

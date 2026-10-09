@@ -61,9 +61,12 @@ impl ImageServices for StandInImageServices {
                 ends_mid_sentence: false,
             },
             usage: CallUsage {
-                model: "stand-in".to_owned(),
+                model: "stand-in-picture-reader".to_owned(),
                 cost_usd: 0.0,
+                input_tokens: 100,
                 output_tokens: 1,
+                cache_read_tokens: 0,
+                cache_write_tokens: 0,
                 thinking_tokens: 0,
                 seconds: 0.0,
             },

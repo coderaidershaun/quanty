@@ -4,7 +4,7 @@
 use graph::{ConceptAlias, ConceptNode, GraphStore};
 use rag_core::{
     ConceptHit, ConceptId, ConceptPoint, EmbedError, Embedder, Embedding, ItemId, Llm, LlmError,
-    concept_input,
+    UsageTally, concept_input, embedding_usage,
 };
 
 use super::ask::Outcome;
@@ -87,8 +87,8 @@ impl<L: Llm, E: Embedder, G: GraphStore> Resolver<'_, L, E, G> {
     // time can each create the same concept.
     /// Links the concept that `item` named to the stored concept that is the same, or makes a new
     /// one. A linked name becomes an alias of the stored concept. Each decision is added to the
-    /// decision log after its writes succeeded, and the questions that were asked are counted in
-    /// the summary.
+    /// decision log after its writes succeeded, the questions that were asked are counted in the
+    /// summary, and what the embedding and the questions used is added to `spent`.
     ///
     /// # Errors
     /// - [`ConceptError::Embed`] when the concept cannot be embedded
@@ -104,6 +104,7 @@ impl<L: Llm, E: Embedder, G: GraphStore> Resolver<'_, L, E, G> {
         item: ItemId,
         concept: &ExtractedConcept,
         summary: &mut ConceptSummary,
+        spent: &mut UsageTally,
     ) -> Result<Resolved, ConceptError> {
         let normalised_name = normalised(&concept.name);
         let naming = Naming {
@@ -121,7 +122,7 @@ impl<L: Llm, E: Embedder, G: GraphStore> Resolver<'_, L, E, G> {
             return Ok(Resolved::Linked(stored.id));
         }
 
-        let vector = self.embed(concept).await?;
+        let vector = self.embed(concept, spent).await?;
         // SMELL: only the nearest stored concept is compared, so a name whose true match is the
         // second nearest becomes a new concept. Measured on real concepts, that happens for one or
         // two of eight true pairs, depending on the order of the names.
@@ -139,7 +140,7 @@ impl<L: Llm, E: Embedder, G: GraphStore> Resolver<'_, L, E, G> {
             return Ok(Resolved::Created(id));
         };
 
-        match self.judge(concept, &hit, summary).await? {
+        match self.judge(concept, &hit, summary, spent).await? {
             Judgement::Stopped(error) => Ok(Resolved::Stopped(error)),
             Judgement::Same(rule, stored) => {
                 self.link(concept, normalised_name, &hit).await?;
@@ -157,17 +158,22 @@ impl<L: Llm, E: Embedder, G: GraphStore> Resolver<'_, L, E, G> {
     }
 
     /// The vector of the concept, from the same form of text that stored concepts are embedded in.
-    async fn embed(&self, concept: &ExtractedConcept) -> Result<Embedding, ConceptError> {
+    async fn embed(
+        &self,
+        concept: &ExtractedConcept,
+        spent: &mut UsageTally,
+    ) -> Result<Embedding, ConceptError> {
         let embed_error = |source| ConceptError::Embed {
             name: concept.name.clone(),
             source,
         };
-        let input = concept_input(&concept.name, &concept.definition);
+        let inputs = [concept_input(&concept.name, &concept.definition)];
         let vectors = self
             .embedder
-            .embed_document(&[input])
+            .embed_document(&inputs)
             .await
             .map_err(embed_error)?;
+        spent.add_all(&embedding_usage(&inputs));
         let [vector] = <[Embedding; 1]>::try_from(vectors).map_err(|vectors| {
             embed_error(EmbedError::WrongVectorCount {
                 expected: 1,
@@ -182,6 +188,7 @@ impl<L: Llm, E: Embedder, G: GraphStore> Resolver<'_, L, E, G> {
         concept: &ExtractedConcept,
         hit: &ConceptHit,
         summary: &mut ConceptSummary,
+        spent: &mut UsageTally,
     ) -> Result<Judgement, ConceptError> {
         let band = Band::of(hit.score);
         if band == Band::Low {
@@ -205,6 +212,7 @@ impl<L: Llm, E: Embedder, G: GraphStore> Resolver<'_, L, E, G> {
             .same_concept(self.cache, concept, &stored)
             .await?;
         summary.llm_calls += reading.llm_calls;
+        spent.add_all(&reading.usage);
         let same = match reading.outcome {
             Outcome::Cached(same) => {
                 summary.cache_hits += 1;

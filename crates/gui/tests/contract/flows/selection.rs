@@ -11,7 +11,7 @@ use gui::contract::{ConceptId, Loadable, NodeId, NodeKind, ResultItem};
 use gui::state::SourceTarget;
 use gui::testkit;
 
-use super::{Wheel, Window, click, has, is_open_tab, node, panels, press, scroll_to, shared};
+use super::{Wheel, Window, click, has, is_open_tab, node, panels, press, says, scroll_to, shared};
 
 fn result(harness: &Window, number: usize) -> ResultItem {
     shared(harness)
@@ -248,6 +248,29 @@ fn a_choice_in_one_panel_shows_in_every_panel() {
     every_panel_follows_a_choice(DEFAULT_WINDOW, "app-black-scholes");
     every_panel_follows_a_choice(MIN_WINDOW, "app-black-scholes-min");
     both_phases_of_an_ask_can_be_used_before_the_answer_is_written();
+    the_header_says_what_an_ask_used();
+}
+
+/// The answer tells what the whole ask used once it lands, and an ask for results alone tells what
+/// its search used.
+fn the_header_says_what_an_ask_used() {
+    let mut answered = testkit::app("black-scholes", DEFAULT_WINDOW);
+    testkit::settle(&mut answered);
+    assert!(has(&answered, Role::Label, "12k tokens · ≈ $0.03"));
+
+    let mut answering = testkit::app("answering", DEFAULT_WINDOW);
+    wait_until(&mut answering, "the results", |harness| {
+        shared(harness).ask.search.ready().is_some()
+    });
+    assert!(shared(&answering).ask.answer.is_loading());
+    assert!(
+        !says(&answering, "tokens"),
+        "what an ask used is said once its answer lands"
+    );
+
+    let mut results_only = testkit::app("results-only", DEFAULT_WINDOW);
+    testkit::settle(&mut results_only);
+    assert!(has(&results_only, Role::Label, "12 tokens · under $0.01"));
 }
 
 fn both_phases_of_an_ask_can_be_used_before_the_answer_is_written() {

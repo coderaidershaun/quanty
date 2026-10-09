@@ -9,6 +9,7 @@ use gui::backend::{Handler, Reply};
 use gui::contract::{
     Catalogue, Category, ChapterState, Command, DocumentName, Event, Failure, FailureKind,
     IngestOutcome, IngestProgress, IngestRequest, IngestStage, NewMedia, Preflight, RequestId,
+    Usage,
 };
 use ocr::testing::{Scenario, StubServices, sample_pdf};
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores};
@@ -102,7 +103,7 @@ async fn started<S: Services>(
             Event::IngestProgress {
                 request: REQUEST,
                 progress,
-            } => *progress,
+            } => progress.clone(),
             other => panic!("only progress comes before the end: {other:#?}"),
         })
         .collect();
@@ -110,9 +111,9 @@ async fn started<S: Services>(
 }
 
 /// The seven pages of the sample are counted up one at a time, whatever order they end in, and
-/// each later stage counts the `items` of the document. The cost of the last step is the cost of
-/// the run.
-fn assert_progress_of_one_run(progress: &[IngestProgress], items: u32, cost_usd: f64) {
+/// each later stage counts the `items` of the document. What the last step used is what the run
+/// used.
+fn assert_progress_of_one_run(progress: &[IngestProgress], items: u32, used: &Usage) {
     let counted: Vec<(IngestStage, Option<u32>, Option<u32>)> = progress
         .iter()
         .map(|progress| (progress.stage, progress.done, progress.total))
@@ -130,16 +131,13 @@ fn assert_progress_of_one_run(progress: &[IngestProgress], items: u32, cost_usd:
         .extend((1..=items).map(|done| (IngestStage::LinkingConcepts, Some(done), Some(items))));
     assert_eq!(counted, expected);
     assert!(
-        progress
-            .windows(2)
-            .all(|pair| pair[0].cost_usd <= pair[1].cost_usd),
-        "the cost never goes down: {progress:?}"
+        progress.windows(2).all(|pair| {
+            let (before, after) = (&pair[0].spent, &pair[1].spent);
+            before.tokens() <= after.tokens() && before.cost_usd <= after.cost_usd
+        }),
+        "the tokens and the cost never go down: {progress:?}"
     );
-    let last = progress.last().map(|progress| progress.cost_usd);
-    assert!(
-        last.is_some_and(|last| (last - cost_usd).abs() < 1e-9),
-        "the last progress says {last:?}, the run cost {cost_usd}"
-    );
+    assert_eq!(progress.last().map(|progress| &progress.spent), Some(used));
 }
 
 async fn catalogue_of<S: Services>(cx: &LiveContext<S>) -> Catalogue {
@@ -192,8 +190,21 @@ async fn a_checked_chapter_is_ingested_with_its_labels_and_a_second_start_finds_
     let counts = report.items;
     let items = counts.chunks + counts.formulas + counts.figures + counts.tables;
     assert!(items > 0, "{report:#?}");
-    let cost_usd = report.cost_usd.expect("pages were converted in this run");
-    assert_progress_of_one_run(&progress, items as u32, cost_usd);
+    let used: Vec<(&str, bool)> = (report.usage.models.iter())
+        .map(|model| (model.model.as_str(), model.estimated))
+        .collect();
+    assert_eq!(
+        used,
+        [
+            ("gemini-embedding-2", true),
+            ("stand-in", false),
+            ("stub-copier", false),
+            ("stub-tagger", false),
+            ("stub-transcriber", false)
+        ]
+    );
+    assert!(report.usage.cost_usd.is_some());
+    assert_progress_of_one_run(&progress, items as u32, &report.usage);
     let catalogue = catalogue_of(&cx).await;
     let book = catalogue
         .media_of(report.doc)

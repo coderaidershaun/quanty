@@ -6,7 +6,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use rag_core::{ClaudeCli, Llm, LlmError, Question};
+use rag_core::{ClaudeCli, Llm, LlmError, Question, Usage, price_of};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
@@ -68,16 +68,50 @@ fn question() -> Question<'static> {
     }
 }
 
-fn success_with(structured_output: &Value, cost: f64) -> String {
+const HAIKU_TOKENS: Usage = Usage {
+    input_tokens: 1200,
+    output_tokens: 300,
+    cache_read_tokens: 4000,
+    cache_write_tokens: 500,
+};
+const UNPRICED_TOKENS: Usage = Usage {
+    input_tokens: 50,
+    output_tokens: 5,
+    cache_read_tokens: 0,
+    cache_write_tokens: 0,
+};
+
+/// A reply in which `claude` names two models, as it does when it makes a helper call of its own.
+fn success_with(structured_output: &Value) -> String {
     json!({
         "type": "result",
         "subtype": "success",
         "is_error": false,
         "result": "",
         "structured_output": structured_output,
-        "total_cost_usd": cost,
+        "total_cost_usd": 0.0025,
+        "usage": {
+            "input_tokens": 1250,
+            "output_tokens": 305,
+            "cache_read_input_tokens": 4000,
+            "cache_creation_input_tokens": 500,
+        },
         "api_error_status": null,
-        "modelUsage": { "claude-haiku-4-5-20251001": { "costUSD": cost } },
+        "modelUsage": {
+            "claude-haiku-5-5": {
+                "inputTokens": HAIKU_TOKENS.input_tokens,
+                "outputTokens": HAIKU_TOKENS.output_tokens,
+                "cacheReadInputTokens": HAIKU_TOKENS.cache_read_tokens,
+                "cacheCreationInputTokens": HAIKU_TOKENS.cache_write_tokens,
+                "webSearchRequests": 0,
+                "costUSD": 0.0021,
+            },
+            "claude-unpriced-9-9": {
+                "inputTokens": UNPRICED_TOKENS.input_tokens,
+                "outputTokens": UNPRICED_TOKENS.output_tokens,
+                "costUSD": 0.0004,
+            },
+        },
     })
     .to_string()
 }
@@ -125,7 +159,7 @@ fn log() -> &'static SharedLog {
 async fn claude_cli_asks_one_locked_down_question_on_stdin_and_reads_the_structured_output() {
     let log = log();
     let answer = json!({ "name": "Black–Scholes model" });
-    let stand_in = StandIn::printing(&success_with(&answer, 0.006815), 0);
+    let stand_in = StandIn::printing(&success_with(&answer), 0);
     let environment = stand_in.environment(&[
         ("CLAUDECODE", "1"),
         ("CLAUDE_CODE_ENTRYPOINT", "cli"),
@@ -135,10 +169,38 @@ async fn claude_cli_asks_one_locked_down_question_on_stdin_and_reads_the_structu
     ]);
     let claude = ClaudeCli::with_environment("haiku", environment);
 
-    let value = claude.ask(question()).await.unwrap();
+    let reply = claude.ask(question()).await.unwrap();
 
-    assert_eq!(value, answer, "the value is exactly the structured output");
+    assert_eq!(
+        reply.value, answer,
+        "the value is exactly the structured output"
+    );
     assert_eq!(claude.model(), "haiku");
+
+    let models: Vec<(&str, Usage)> = reply
+        .usage
+        .models()
+        .map(|(model, usage)| (model, usage.tokens))
+        .collect();
+    assert_eq!(
+        models,
+        [
+            ("claude-haiku-5-5", HAIKU_TOKENS),
+            ("claude-unpriced-9-9", UNPRICED_TOKENS)
+        ],
+        "each model that claude names keeps its own tokens"
+    );
+    let haiku = price_of("claude-haiku-5-5").expect("the table prices Haiku 5.5");
+    assert_eq!(price_of("claude-unpriced-9-9"), None);
+    let cost = reply
+        .usage
+        .cost_usd()
+        .expect("each model has a price or a report");
+    let expected = haiku.cost_usd(&HAIKU_TOKENS) + 0.0004;
+    assert!(
+        (cost - expected).abs() < 1e-12,
+        "the table prices Haiku and claude's own figure prices the model the table lacks: {cost} against {expected}"
+    );
 
     let recorded = stand_in.recorded("arguments");
     let mut arguments: Vec<&str> = std::str::from_utf8(&recorded)
@@ -190,15 +252,15 @@ async fn claude_cli_asks_one_locked_down_question_on_stdin_and_reads_the_structu
     assert!(lines.contains(&"MAX_THINKING_TOKENS=0"));
 
     assert!(
-        log.text().contains("cost_usd=0.006815"),
-        "the cost of the call is logged: {}",
+        log.text().contains("output_tokens=305"),
+        "the tokens of the call are logged: {}",
         log.text()
     );
 }
 
 #[tokio::test]
 async fn claude_cli_refuses_to_start_while_an_api_key_is_set() {
-    let stand_in = StandIn::printing(&success_with(&json!({ "name": "x" }), 0.0), 0);
+    let stand_in = StandIn::printing(&success_with(&json!({ "name": "x" })), 0);
     let environment = stand_in.environment(&[("ANTHROPIC_API_KEY", "set-for-this-test")]);
     let claude = ClaudeCli::with_environment("haiku", environment);
 

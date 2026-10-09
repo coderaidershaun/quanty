@@ -2,11 +2,13 @@
 
 use std::collections::BTreeMap;
 
+use rag_core::UsageTally;
 use rag_retrieval::Answer;
 use schemars::JsonSchema;
 use serde::Serialize;
 
 use super::found::ItemView;
+use crate::usage::Spent;
 
 /// An answer written from the stored items, with the items it rests on.
 #[derive(Serialize, JsonSchema)]
@@ -22,6 +24,9 @@ pub(crate) struct AnswerResult {
     sources: Vec<SourceView>,
     /// Questions to ask next, each worded so that it can be asked on its own.
     follow_ups: Vec<String>,
+    /// What the search and the answer used.
+    #[serde(flatten)]
+    spent: Spent,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -44,13 +49,15 @@ struct SourceView {
 }
 
 impl AnswerResult {
-    pub(super) fn unanswered() -> AnswerResult {
+    /// Nothing was found, so the model was not asked, and only the search was used.
+    pub(super) fn unanswered(searched: &UsageTally) -> AnswerResult {
         AnswerResult {
             answered: false,
             title: None,
             claims: Vec::new(),
             sources: Vec::new(),
             follow_ups: Vec::new(),
+            spent: searched.into(),
         }
     }
 }
@@ -82,6 +89,7 @@ impl From<Answer> for AnswerResult {
             claims,
             sources: sources.into_values().collect(),
             follow_ups: answer.follow_ups,
+            spent: (&answer.usage).into(),
         }
     }
 }

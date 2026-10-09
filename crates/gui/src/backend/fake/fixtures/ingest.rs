@@ -7,11 +7,15 @@ use uuid::Uuid;
 use super::library::document_title;
 use crate::contract::{
     Category, ChapterState, DocId, DocumentName, IngestProgress, IngestReport, IngestRequest,
-    IngestStage, ItemCounts, PageToCheck, Preflight,
+    IngestStage, ItemCounts, ModelTokens, PageToCheck, Preflight, Usage,
 };
 
 const PAGES: u32 = 12;
+// SMELL: the dollars of this play are made up and do not follow the price table, so they are
+// about twice what its tokens would cost.
 const COST_OF_A_PAGE: f64 = 0.14;
+/// What Sonnet reads and what it writes to convert one page.
+const TOKENS_OF_A_PAGE: (u64, u64) = (12_000, 4_000);
 const ITEM_COUNTS: ItemCounts = ItemCounts {
     chunks: 31,
     formulas: 8,
@@ -51,32 +55,43 @@ pub(in crate::backend::fake) fn preflight(request: &IngestRequest) -> Preflight 
 /// The play of one ingest of the chapter: the count of its pages, each page, the later stages,
 /// then the concepts read and linked in four steps each.
 pub(in crate::backend::fake) fn steps() -> Vec<IngestProgress> {
-    let at = |stage, done, total, cost_usd| IngestProgress {
+    let at = |stage, done, total, spent| IngestProgress {
         stage,
         done,
         total,
         pages_failed: 0,
-        cost_usd,
+        spent,
     };
-    let every_page = cost_of_pages(PAGES);
-    let mut steps = vec![at(IngestStage::PreparingPages, None, Some(PAGES), 0.0)];
+    let every_page = spent_on_pages(PAGES);
+    let mut steps = vec![at(
+        IngestStage::PreparingPages,
+        None,
+        Some(PAGES),
+        Usage::default(),
+    )];
     steps.extend((1..=PAGES).map(|page| {
         at(
             IngestStage::Converting,
             Some(page),
             Some(PAGES),
-            cost_of_pages(page),
+            spent_on_pages(page),
         )
     }));
     steps.extend([
-        at(IngestStage::WritingGraph, None, None, every_page),
-        at(IngestStage::Embedding, None, Some(ITEMS), every_page),
-        at(IngestStage::Storing, None, None, every_page),
+        at(IngestStage::WritingGraph, None, None, every_page.clone()),
+        at(
+            IngestStage::Embedding,
+            None,
+            Some(ITEMS),
+            every_page.clone(),
+        ),
+        at(IngestStage::Storing, None, None, every_page.clone()),
     ]);
     for stage in [IngestStage::ReadingConcepts, IngestStage::LinkingConcepts] {
-        steps.extend(
-            (1..=4).map(|quarter| at(stage, Some(ITEMS / 4 * quarter), Some(ITEMS), every_page)),
-        );
+        steps.extend((1..=4).map(|quarter| {
+            let done = ITEMS / 4 * quarter;
+            at(stage, Some(done), Some(ITEMS), every_page.clone())
+        }));
     }
     steps
 }
@@ -89,8 +104,27 @@ pub(in crate::backend::fake) fn steps_to_the_stall() -> Vec<IngestProgress> {
     steps
 }
 
-fn cost_of_pages(pages: u32) -> f64 {
-    COST_OF_A_PAGE * f64::from(pages)
+/// What converting the first `pages` pages used: Sonnet alone.
+fn spent_on_pages(pages: u32) -> Usage {
+    let (input, output) = TOKENS_OF_A_PAGE;
+    let pages_read = u64::from(pages);
+    Usage {
+        models: vec![model(
+            "claude-sonnet-5-5",
+            input * pages_read,
+            output * pages_read,
+        )],
+        cost_usd: Some(COST_OF_A_PAGE * f64::from(pages)),
+    }
+}
+
+fn model(name: &str, input: u64, output: u64) -> ModelTokens {
+    ModelTokens {
+        model: name.to_owned(),
+        input,
+        output,
+        ..ModelTokens::default()
+    }
 }
 
 pub(in crate::backend::fake) fn report(request: &IngestRequest) -> IngestReport {
@@ -102,7 +136,17 @@ pub(in crate::backend::fake) fn report(request: &IngestRequest) -> IngestReport 
         concepts_created: 14,
         concepts_linked: 9,
         skipped_items: 1,
-        cost_usd: Some(cost_of_pages(PAGES)),
+        usage: Usage {
+            models: vec![
+                model("claude-haiku-5-5", 44_000, 4_400),
+                model("claude-sonnet-5-5", 144_000, 48_000),
+                ModelTokens {
+                    estimated: true,
+                    ..model("gemini-embedding-2", 9_000, 0)
+                },
+            ],
+            cost_usd: Some(1.75),
+        },
         pages_to_check: vec![PageToCheck {
             page: 7,
             reasons: vec!["A figure may be cut short.".to_owned()],

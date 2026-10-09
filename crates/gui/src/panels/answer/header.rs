@@ -1,10 +1,13 @@
-//! The row over the body: the tabs, Share at the right end, and the line under both.
+//! The row over the body: the tabs, Share at the right end with what the ask used beside it, and
+//! the line under both.
 
 use eframe::egui;
 
 use super::pane::{Copied, Pane};
 use super::phase::{AnswerTab, Phase, Written};
-use crate::theme::{self, Icon, color, size};
+use crate::contract::Usage;
+use crate::panels::labels::spent_text;
+use crate::theme::{self, Icon, TextRole, color, size, space};
 use crate::widgets::{self, ControlSize, TabStrip};
 
 const SHARE_WIDTH: f32 = 3.0 * size::CONTROL_MD;
@@ -39,9 +42,13 @@ pub(super) fn show(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>) {
         pane.view.tab = Some(*tab);
         pane.view.revealed = None;
     }
+    let tabs_end = strip.response.rect.right();
     let right = egui::Layout::right_to_left(egui::Align::Center);
     ui.scope_builder(egui::UiBuilder::new().max_rect(row).layout(right), |ui| {
         share(ui, pane);
+        if let Some(spent) = pane.spent() {
+            spent_label(ui, spent, tabs_end);
+        }
     });
 
     // The strip draws its own line under its tabs, but fades it while the strip is switched off.
@@ -75,5 +82,15 @@ fn share(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>) {
         pane.share();
     } else if is_copied && !ui.rect_contains_pointer(response.rect) {
         pane.view.copied = None;
+    }
+}
+
+/// What the ask used, in small muted words left of Share. It is left out when it would reach the
+/// tabs, as it does in a narrow pane, so it never covers one.
+fn spent_label(ui: &mut egui::Ui, usage: &Usage, tabs_end: f32) {
+    let galley = TextRole::Small.galley(ui, &spent_text(usage), color::TEXT_MUTED);
+    let room = ui.available_rect_before_wrap().right() - tabs_end - space::SM;
+    if galley.size().x <= room {
+        ui.add(egui::Label::new(galley).selectable(false));
     }
 }

@@ -12,7 +12,7 @@ use graph::{DocumentNode, GraphError, GraphStore, ItemNode, MediaNode};
 use ocr::ReadChapterError;
 use rag_core::{
     DocumentInput, DocumentLabels, EmbedError, Embedder, ItemPoint, Llm, LlmError, MediaLabels,
-    StoreError,
+    StoreError, UsageTally, embedding_usage,
 };
 
 pub use concepts::{
@@ -20,8 +20,8 @@ pub use concepts::{
     SkippedItem,
 };
 pub use items::{Item, LoneImage, chapter_items, image_items};
-pub(crate) use summary::OnStep;
-pub use summary::{IngestStep, IngestSummary, ItemCounts};
+pub use summary::{IngestStep, IngestSummary, ItemCounts, usage_of};
+pub(crate) use summary::{Meter, OnStep, write_usage};
 
 use concepts::EmbeddedItems;
 use items::{document_id, document_title};
@@ -83,6 +83,9 @@ struct Document {
     /// The media of a chapter, with the labels a new media is made with. A picture that stands
     /// alone has none.
     media: Option<MediaNode>,
+    /// What making the document used before the ingest: the conversion of a picture. A chapter's
+    /// conversion is counted by its caller.
+    spent: UsageTally,
 }
 
 /// The language model is asked first whether it can answer, which costs nothing, so a `claude`
@@ -125,7 +128,7 @@ pub async fn ingest_chapter<E: Embedder, L: Llm, G: GraphStore>(
     models: &Models<E, L>,
     stores: &Stores<G>,
 ) -> Result<IngestSummary, IngestError> {
-    ingest_chapter_reporting(chapter, models, stores, &mut |_| {}).await
+    ingest_chapter_reporting(chapter, models, stores, &mut |_, _| {}).await
 }
 
 /// [`ingest_chapter`], telling each step to `on_step` as it happens.
@@ -154,6 +157,7 @@ pub(crate) async fn ingest_chapter_reporting<E: Embedder, L: Llm, G: GraphStore>
             title: converted.index.media_title.trim().to_owned(),
             labels: chapter.new_media.clone(),
         }),
+        spent: UsageTally::default(),
     };
     ingest_items(document, models, stores, on_step).await
 }
@@ -182,8 +186,9 @@ pub async fn ingest_image<E: Embedder, L: Llm, G: GraphStore>(
         },
         items,
         media: None,
+        spent: usage_of(&picture.image.calls),
     };
-    ingest_items(document, models, stores, &mut |_| {}).await
+    ingest_items(document, models, stores, &mut |_, _| {}).await
 }
 
 async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
@@ -201,7 +206,9 @@ async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
         mut node,
         mut items,
         media,
+        spent,
     } = document;
+    let mut meter = Meter::new(on_step, spent);
     if let Some(media) = media {
         let media = stored_or_added(media, stores).await?;
         node.labels.take_media(&media.title, &media.labels);
@@ -221,15 +228,16 @@ async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
     // SMELL: nothing removes the item nodes of an earlier run either, with their `NEXT` edges. A
     // chapter that is cut into items differently ends up with two chains of items in the graph,
     // until its document is deleted and ingested again.
-    on_step(IngestStep::WritingGraph);
+    meter.step(IngestStep::WritingGraph);
     stores.graph.upsert_document(&node).await?;
     // A run that stops after this line must not leave the mark that an earlier run set.
     stores.graph.set_ingested_items(node.id, None).await?;
     stores.graph.upsert_items(node.id, &nodes).await?;
 
     let inputs: Vec<DocumentInput> = items.iter().map(|item| item.input.clone()).collect();
-    on_step(IngestStep::Embedding { items: items.len() });
+    meter.step(IngestStep::Embedding { items: items.len() });
     let vectors = models.embedder.embed_document(&inputs).await?;
+    meter.spend(&embedding_usage(&inputs));
     if vectors.len() != items.len() {
         return Err(IngestError::VectorCount {
             items: items.len(),
@@ -249,7 +257,7 @@ async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
     // SMELL: nothing removes the points of an earlier run. When the way a chapter is cut into
     // items changes, its items get other positions and so other identifiers, and the old points
     // of the chapter stay in the collection beside the new ones.
-    on_step(IngestStep::Storing);
+    meter.step(IngestStep::Storing);
     stores.items.upsert(&points).await?;
     let points_in_collection = stores.items.count().await?;
 
@@ -259,7 +267,7 @@ async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
     };
     let concepts = models
         .concepts
-        .extract(&embedded, &models.embedder, stores, on_step)
+        .extract(&embedded, &models.embedder, stores, &mut meter)
         .await?;
     // An item that was skipped was not read for its concepts, so the document is not whole yet.
     // Keep this the last step: a step that failed after it would leave the mark on a run that did
@@ -278,6 +286,7 @@ async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
         items_by_kind,
         points_in_collection,
         concepts,
+        usage: meter.into_spent(),
     })
 }
 

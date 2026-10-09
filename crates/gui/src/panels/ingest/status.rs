@@ -9,6 +9,7 @@ use crate::contract::{
     Intent, Preflight,
 };
 use crate::panels::PanelCx;
+use crate::panels::labels::{cost_text, spent_text, tokens_by_model};
 use crate::state::IngestJob;
 use crate::theme::{TextRole, color, space};
 use crate::widgets::{self, Button, Notice};
@@ -163,7 +164,7 @@ fn running(ui: &mut egui::Ui, progress: Option<&IngestProgress>) {
         ui.label(TextRole::BodyStrong.rich(&words));
         if let Some(progress) = progress {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                cost_so_far(ui, progress);
+                spent_so_far(ui, progress);
             });
         }
     });
@@ -176,10 +177,10 @@ fn running(ui: &mut egui::Ui, progress: Option<&IngestProgress>) {
     ui.label(TextRole::Small.rich(KEEP_OPEN));
 }
 
-fn cost_so_far(ui: &mut egui::Ui, progress: &IngestProgress) {
-    if progress.cost_usd > 0.0 {
-        let cost = format!("≈ ${:.2} so far", progress.cost_usd);
-        ui.label(TextRole::Small.rich(cost).color(color::TEXT_MUTED));
+fn spent_so_far(ui: &mut egui::Ui, progress: &IngestProgress) {
+    if progress.spent.tokens() > 0 {
+        let spent = format!("{} so far", spent_text(&progress.spent));
+        ui.label(TextRole::Small.rich(spent).color(color::TEXT_MUTED));
     }
 }
 
@@ -236,8 +237,13 @@ fn summary(report: &IngestReport) -> String {
         "{} pages, {}. {} concepts created, {} linked.",
         report.pages, report.items, report.concepts_created, report.concepts_linked
     );
-    if let Some(cost) = report.cost_usd {
-        text.push_str(&format!(" The conversion cost ${cost:.2}."));
+    let usage = &report.usage;
+    if !usage.models.is_empty() {
+        text.push_str(&format!(
+            " Tokens: {}. Cost {}.",
+            tokens_by_model(usage),
+            cost_text(usage.cost_usd)
+        ));
     }
     match report.pages_to_check.len() {
         0 => {}

@@ -26,7 +26,7 @@ struct Cli {
 #[tokio::main]
 async fn main() -> ExitCode {
     // The standard output belongs to the protocol while the server talks over it, so every log
-    // line goes to the standard error. `rag_core` logs what each `claude` question cost.
+    // line goes to the standard error. `rag_core` logs what each `claude` question used.
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
         .with(

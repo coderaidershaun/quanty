@@ -58,5 +58,7 @@ pub async fn answer(
             input: &input,
         })
         .await?;
-    reply::read(reply, results)
+    let mut usage = results.usage.clone();
+    usage.add_all(&reply.usage);
+    reply::read(reply.value, results, usage)
 }

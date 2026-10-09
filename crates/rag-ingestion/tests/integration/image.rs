@@ -8,8 +8,8 @@ use ocr::convert::convert_image_with;
 use ocr::convert::reply::TranscribedPage;
 use ocr::convert::services::{Answer, ClaudeError, ImageServices, ServiceError};
 use ocr::{ConvertError, ConvertedImage};
-use rag_core::DocId;
-use rag_ingestion::{LoneImage, ingest_image};
+use rag_core::{DocId, Usage};
+use rag_ingestion::{IngestSummary, LoneImage, ingest_image};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
@@ -19,6 +19,14 @@ use crate::support::{
 };
 
 const NOTE: &str = "A chart from a book on option trading.";
+
+fn picture_reading(summary: &IngestSummary) -> Option<Usage> {
+    summary
+        .usage
+        .models()
+        .find(|(model, _)| *model == "stand-in-picture-reader")
+        .map(|(_, used)| used.tokens)
+}
 
 fn sha256_hex(path: &Path) -> String {
     Sha256::digest(std::fs::read(path).unwrap())
@@ -58,9 +66,15 @@ async fn a_lone_picture_becomes_a_one_figure_document_and_a_second_ingest_calls_
         image: &image,
         note: Some(NOTE),
     };
-    ingest_image(&lone, &models, &stores).await.unwrap();
+    let first = ingest_image(&lone, &models, &stores).await.unwrap();
 
     assert_eq!(services.calls(), 1, "one transcription call");
+    let one_transcription = Usage {
+        input_tokens: 100,
+        output_tokens: 1,
+        ..Usage::default()
+    };
+    assert_eq!(picture_reading(&first), Some(one_transcription));
     let folder = config.content_folder.join("images").join(&sha256[..16]);
     for file in ["figure.md", "image.json", "picture.png"] {
         assert!(folder.join(file).is_file(), "{file} is not in {folder:?}");
@@ -143,7 +157,10 @@ async fn a_lone_picture_becomes_a_one_figure_document_and_a_second_ingest_calls_
     assert_eq!(after_first.0, GraphSize { nodes: 3, edges: 2 });
     assert_eq!(after_first.3.len(), 1);
     let again = convert(&throwaway, &services).await;
-    assert_eq!(again, image);
+    assert_eq!(
+        (&again.index, &again.explanation, &again.picture),
+        (&image.index, &image.explanation, &image.picture)
+    );
     let second = ingest_image(
         &LoneImage {
             image: &again,
@@ -158,6 +175,11 @@ async fn a_lone_picture_becomes_a_one_figure_document_and_a_second_ingest_calls_
     assert_eq!(model.calls(), 1, "no second question");
     assert_eq!(second.concepts.llm_calls, 0);
     assert_eq!(second.concepts.cache_hits, 1);
+    assert_eq!(
+        picture_reading(&second),
+        None,
+        "a saved picture is not paid for again"
+    );
     let after_second = (
         size(&stores.graph).await,
         stored_concept_graph(&stores.graph).await,

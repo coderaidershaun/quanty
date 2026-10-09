@@ -7,10 +7,11 @@ use std::path::Path;
 use graph::{GraphError, GraphStore};
 use ocr::content::parse_chapter_file_name;
 use ocr::{ChapterJob, ContentError, ConversionSummary, ConvertError, DocumentName, PageProgress};
-use rag_core::{Category, DocId, Embedder, Llm, MediaLabels, StoreError};
+use rag_core::{Category, DocId, Embedder, Llm, MediaLabels, StoreError, UsageTally};
 
 use crate::ingest::{
     ChapterFolder, IngestError, IngestStep, IngestSummary, Models, ingest_chapter_reporting,
+    usage_of, write_usage,
 };
 use crate::stores::Stores;
 
@@ -53,7 +54,8 @@ pub struct ChapterPdf<'a, C, O> {
     /// Called at most once, and only when the document is not ingested yet. Its second argument
     /// hears each page as it ends.
     pub convert: C,
-    /// Hears each step of the run as it happens. A PDF that is ingested already hears nothing.
+    /// Hears each step of the run as it happens, with what the run used up to and with that step.
+    /// A PDF that is ingested already hears nothing.
     pub on_step: O,
 }
 
@@ -66,10 +68,26 @@ impl PdfOutcome {
     }
 }
 
+impl PdfSummary {
+    /// What the whole run used: the conversion of the pages that this run converted, then the
+    /// ingest.
+    pub fn usage(&self) -> UsageTally {
+        let mut usage = usage_of(&self.conversion.calls);
+        usage.add_all(&self.ingest.usage);
+        usage
+    }
+}
+
+/// The conversion lists the tokens of its own models, so the ingest lists only the tokens of its
+/// models, and one cost closes the whole run.
+// SMELL: a model that both parts used has a line in each, and the conversion keeps the name that
+// `claude` gave, so one model can show as `haiku` and as `claude-haiku-5-5`. The cost counts each
+// model once.
 impl fmt::Display for PdfSummary {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(formatter, "{}", self.conversion)?;
-        write!(formatter, "{}", self.ingest)
+        self.ingest.write_counts(formatter)?;
+        write_usage(formatter, &self.ingest.usage, self.usage().cost_usd())
     }
 }
 
@@ -91,7 +109,8 @@ impl fmt::Display for PdfOutcome {
 /// Hashes the PDF, and unless both stores already hold the whole document, converts the chapter
 /// with `pdf.convert` and ingests the converted folder with [`crate::ingest_chapter`].
 ///
-/// Each page and each later step is told to `pdf.on_step` as it happens.
+/// Each page and each later step is told to `pdf.on_step` as it happens, with what the run used
+/// so far: the pages converted so far, then the whole conversion and what the ingest used.
 ///
 /// Both stores are checked before the first page is converted, so a store that is down fails the
 /// run before a page is paid for. A second call on the same PDF converts, embeds, asks and
@@ -115,7 +134,7 @@ where
         &ChapterJob,
         &mut (dyn FnMut(PageProgress) + Send),
     ) -> Result<ConversionSummary, ConvertError>,
-    O: FnMut(IngestStep) + Send,
+    O: FnMut(IngestStep, &UsageTally) + Send,
 {
     let ChapterPdf {
         job,
@@ -136,12 +155,25 @@ where
             items,
         });
     }
-    let conversion = convert(job, &mut |page| on_step(IngestStep::Converting(page))).await?;
+    let mut pages_so_far = UsageTally::default();
+    let conversion = convert(job, &mut |page| {
+        if let PageProgress::PageDone { calls, .. } = &page {
+            pages_so_far.add_all(&usage_of(calls));
+        }
+        on_step(IngestStep::Converting(page), &pages_so_far);
+    })
+    .await?;
     let chapter = ChapterFolder {
         folder: &job.chapter_folder(),
         new_media,
     };
-    let ingest = ingest_chapter_reporting(chapter, models, stores, &mut on_step).await?;
+    let converted = usage_of(&conversion.calls);
+    let ingest = ingest_chapter_reporting(chapter, models, stores, &mut |step, spent| {
+        let mut so_far = converted.clone();
+        so_far.add_all(spent);
+        on_step(step, &so_far);
+    })
+    .await?;
     Ok(PdfOutcome::Ingested(Box::new(PdfSummary {
         conversion,
         ingest,

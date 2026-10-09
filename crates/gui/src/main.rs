@@ -60,7 +60,7 @@ fn main() -> anyhow::Result<()> {
     opened.map_err(|error| anyhow::anyhow!("could not open the window: {error}"))
 }
 
-/// What the backend logs goes to the terminal, so a person sees what each model call cost.
+/// What the backend logs goes to the terminal, so a person sees what each model call used.
 fn log_to_stderr() {
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))

@@ -3,7 +3,7 @@
 
 use std::fmt;
 
-use rag_core::{ItemHit, ItemPayload};
+use rag_core::{ItemHit, ItemPayload, UsageTally, cost_text};
 
 /// Why an item is in the results.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,12 +29,14 @@ pub struct SearchHit {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SearchResults {
     pub hits: Vec<SearchHit>,
+    /// What finding these results used: the embedding of the question, estimated.
+    pub usage: UsageTally,
 }
 
 impl fmt::Display for SearchResults {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.hits.is_empty() {
-            return formatter.write_str("no items found");
+            formatter.write_str("no items found")?;
         }
         for (index, hit) in self.hits.iter().enumerate() {
             if index > 0 {
@@ -42,8 +44,21 @@ impl fmt::Display for SearchResults {
             }
             write_hit(formatter, index + 1, hit)?;
         }
-        Ok(())
+        write_usage(formatter, &self.usage)
     }
+}
+
+/// A blank line, the lines of each model, and the cost, after what was written before. Nothing
+/// when nothing was used.
+pub(crate) fn write_usage(formatter: &mut fmt::Formatter<'_>, usage: &UsageTally) -> fmt::Result {
+    if usage.is_empty() {
+        return Ok(());
+    }
+    write!(
+        formatter,
+        "\n\n{usage}\ncost: {}",
+        cost_text(usage.cost_usd())
+    )
 }
 
 pub(crate) fn page_text(payload: &ItemPayload) -> String {

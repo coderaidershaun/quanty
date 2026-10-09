@@ -159,6 +159,23 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
     assert!(ended.get("stage").is_none());
     let summary = ended["summary"].as_str().unwrap();
     assert!(summary.contains("pages: 7"), "{summary}");
+    let used = ended["usage"]
+        .as_array()
+        .expect("a done job says what it used");
+    assert!(!used.is_empty());
+    for model in used {
+        for field in [
+            "model",
+            "input_tokens",
+            "output_tokens",
+            "cache_read_tokens",
+            "cache_write_tokens",
+            "estimated",
+        ] {
+            assert!(model.get(field).is_some(), "{field} is not in {model}");
+        }
+    }
+    assert!(ended["cost_usd"].is_number(), "{ended}");
     let documents = call(&client, "list_documents", json!({})).await;
     assert_eq!(
         structured(&documents)["documents"],
@@ -186,6 +203,10 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
     assert_eq!(again["document_id"], ended["document_id"]);
     assert_eq!(again["items"], ended["items"]);
     assert_ne!(again["job_id"], started["job_id"], "a job of its own");
+    assert!(
+        again.get("usage").is_none() && again.get("cost_usd").is_none(),
+        "a document that was already ingested used nothing: {again}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

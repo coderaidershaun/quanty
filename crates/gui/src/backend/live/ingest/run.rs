@@ -2,7 +2,7 @@
 //! stores, convert and ingest the document, and write its own tags.
 
 use ocr::{ChapterJob, PageProgress};
-use rag_core::MediaLabels;
+use rag_core::{MediaLabels, UsageTally};
 use rag_ingestion::{
     ChapterPdf, IngestStep, PdfOutcome, PdfSummary, TagChange, ingest_pdf, relabel_document_tags,
 };
@@ -53,8 +53,8 @@ async fn finish<S: Services>(
                 async |chapter: &ChapterJob, on_page: &mut (dyn FnMut(PageProgress) + Send + '_)| {
                     cx.convert_chapter(chapter, on_page).await
                 },
-            on_step: |step| {
-                if let Some(progress) = line.after(step) {
+            on_step: |step, spent: &UsageTally| {
+                if let Some(progress) = line.after(step, spent) {
                     reply.send(Event::IngestProgress { request, progress });
                 }
             },
@@ -80,22 +80,21 @@ async fn finish<S: Services>(
 struct ProgressLine {
     pages_done: u32,
     pages: u32,
-    cost_usd: f64,
     pages_failed: u32,
 }
 
 impl ProgressLine {
-    /// `None` for a failed page: it is counted, and shows with the next step.
-    fn after(&mut self, step: IngestStep) -> Option<IngestProgress> {
+    /// `None` for a failed page: it is counted, and shows with the next step. `spent` is what the
+    /// run used up to and with this step.
+    fn after(&mut self, step: IngestStep, spent: &UsageTally) -> Option<IngestProgress> {
         let (stage, done, total) = match step {
             IngestStep::Converting(PageProgress::Pages { total, done_before }) => {
                 self.pages = total;
                 self.pages_done = done_before;
                 (IngestStage::PreparingPages, None, Some(total))
             }
-            IngestStep::Converting(PageProgress::PageDone { cost_usd, .. }) => {
+            IngestStep::Converting(PageProgress::PageDone { .. }) => {
                 self.pages_done += 1;
-                self.cost_usd += cost_usd;
                 (
                     IngestStage::Converting,
                     Some(self.pages_done),
@@ -125,7 +124,7 @@ impl ProgressLine {
             done,
             total,
             pages_failed: self.pages_failed,
-            cost_usd: self.cost_usd,
+            spent: spent.into(),
         })
     }
 }
@@ -154,6 +153,7 @@ fn report(outcome: PdfOutcome) -> IngestOutcome {
 }
 
 fn ingested(summary: PdfSummary) -> IngestReport {
+    let usage = (&summary.usage()).into();
     let PdfSummary { conversion, ingest } = summary;
     let counts = ingest.items_by_kind;
     IngestReport {
@@ -169,8 +169,7 @@ fn ingested(summary: PdfSummary) -> IngestReport {
         concepts_created: ingest.concepts.concepts_created,
         concepts_linked: ingest.concepts.concepts_linked,
         skipped_items: ingest.concepts.skipped_items.len(),
-        // A chapter that was found converted cost nothing in this run.
-        cost_usd: (conversion.converted_now > 0).then_some(conversion.calls.cost_usd),
+        usage,
         pages_to_check: conversion
             .pages_to_check
             .iter()

@@ -43,6 +43,8 @@ cargo run --release -p ocr -- --book "Option Volatility and Pricing" samples/cha
 
 The command reads `CONVERTER_JEV_API_KEY` from `.env`, and it refuses to run while `ANTHROPIC_API_KEY` is set, so the work is billed to the `claude` subscription. A second run on a finished chapter makes no outside call and costs nothing. An interrupted run picks up at the pages that are missing. A different PDF for the same chapter is refused.
 
+The summary at the end counts the pages, the routes, the pieces and the paid calls of this run, and gives one line for each model that answered: `tokens of <model>: <input> in, <output> out, <cache read> cache read, <cache write> cache write`. It gives no cost, because `ocr` has no table of prices: `rag-ingest pdf` gives the cost of a conversion. See "Costs".
+
 Every way of converting a PDF uses the same folders. The media folder is the title of the media in lower case, with one dash for each run of characters that are not letters or digits, so "Option Volatility and Pricing" is `option-volatility-and-pricing`. In it, each document has a folder of its own:
 
 | Document | Folder |
@@ -97,7 +99,7 @@ If `claude` fails twice to say whether two concepts are the same, the run stops 
 
 Every good answer is kept as a file in the folder that `CONCEPT_CACHE_DIR` names, `data/concept-cache` unless set. The name of the file is made from the prompt, its version, the schema, the model and the text that was sent, so a second run on the same document asks `claude` no question and adds no node, no edge, no concept point and no alias: every name is now found in step 1, so no concept is embedded and no comparison is asked. The answer to a question about two concepts is kept in the same folder, and the summary counts these questions with the others. Every run first checks that `ANTHROPIC_API_KEY` is not set and runs `claude auth status` once, which is free and asks no question. A set key, a missing sign-in, or a `claude` program that cannot be started stops the run there, with `claude cannot be asked for the concepts of the document, so nothing was embedded or stored` and the reason. A usage limit, or a sign-in that is lost during the run, stops the run with a clear message and is never tried again: the document is stored and can be searched, and running the same command again goes on from the answers that are kept. Any other failure of one item is tried once more, and then the item is skipped, not kept, and named in the summary, and the run goes on. The next run asks about it again.
 
-After the lines about items and points, the summary prints how many concepts were created and how many were linked to an existing one, the mentions written, the relations written and dropped, the `claude` calls made and the cache hits, and the number of items skipped with one line for each.
+After the lines about items and points, the summary prints how many concepts were created and how many were linked to an existing one, the mentions written, the relations written and dropped, the `claude` calls made and the cache hits, and the number of items skipped with one line for each. Last come one line for each model that the run used, `tokens of <model>: <input> in, <output> out, <cache read> cache read, <cache write> cache write`, with ` (estimated)` after the embedding, whose count is worked out, and `cost of this run: ≈ $<cost>`. A kept answer costs nothing. For a picture, the Sonnet call that explained it is one of the lines. See "Costs".
 
 ## Ingesting a PDF
 
@@ -129,7 +131,7 @@ While it runs, the command prints one line on standard error for each step, so t
 | Line | When |
 | --- | --- |
 | `converting <n> of <total> pages (<done> already done)` | The pages are counted, and `<n>` of them are left to convert |
-| `page <n> converted ($<cost>)` | A page is converted. The cost is what its calls cost |
+| `page <n> converted ($<cost>)` | A page is converted. The cost is its calls at the prices of "Costs", or `page <n> converted (cost unknown)` when a model of the page has no price |
 | `page <n> failed` | A page failed |
 | `writing the graph` | The document and its items are written to the graph |
 | `embedding <n> items` | Gemini embeds the items |
@@ -137,9 +139,9 @@ While it runs, the command prints one line on standard error for each step, so t
 | `reading the concepts of <n> items` | `claude` is asked which concepts the items discuss |
 | `linking the concepts of <n> items` | The concepts are matched to the stored ones and linked |
 
-A PDF that is already ingested prints none of these lines. What each `claude` question cost is also written to standard error.
+A PDF that is already ingested prints none of these lines. The tokens and the seconds of each `claude` question of the concepts are also written to standard error.
 
-The summary is the summary that `ocr` prints (the pages processed, with how many were converted now and how many were already done, the routes, the pieces, the calls and the pages to check), then the lines that an ingest of a converted folder prints, which count the items written by kind, the concepts created and the concepts linked to existing ones.
+The summary is the summary that `ocr` prints (the pages processed, with how many were converted now and how many were already done, the routes, the pieces, the calls, the tokens of each model of the conversion and the pages to check), then the lines that an ingest of a converted folder prints, which count the items written by kind, the concepts created and the concepts linked to existing ones, and the tokens of each model of the ingest. One line closes it: `cost of this run: ≈ $<cost>`, for the conversion and the ingest together.
 
 A page that fails stops the run, and the message names its page number. The pages that were converted stay saved, so the same command goes on from the pages that are missing and then ingests the document. A run that stops during the ingest, for example at a usage limit of `claude`, is finished the same way: the same command converts nothing more and goes on from the answers that are kept.
 
@@ -221,7 +223,7 @@ The search has six steps, in this order:
 
 The four numbers of these steps are constants in `crates/rag-retrieval/src/search/mod.rs`. The two that matter most are `RESULTS_PER_QUERY` (8) and `MAX_RESULTS_PER_DOCUMENT` (3). All four are starting values. A document gives at most three results in steps 1 to 5, also when it is the only document in the store. An item that is not a seed never scores above a seed, so an item that came in through the graph is shown only where the cap left a place free. When no document has more than three of the eight nearest items, no result comes in through the graph. With no concept in the graph, the results are the nearest items only.
 
-Each result prints the title of its document, its page (the printed page number where there is one), its kind, its label where it has one, its score and its text. A figure also prints the path of its own picture. Two notes can follow the score:
+Each result prints the title of its document, its page (the printed page number where there is one), its kind, its label where it has one, its score and its text. A figure also prints the path of its own picture. After the last result come a blank line, the tokens of the embedding of the question, `tokens of gemini-embedding-2: <n> in, 0 out, 0 cache read, 0 cache write (estimated)`, and `cost: under $0.01`. Two notes can follow the score:
 
 - `reached via concept <name>` marks an item that came in through the graph. The name is the first of the concepts, in the order of the steps above, that the item mentions.
 - `cited by result <n> as <label>` marks an item that was added in step 6 because result `n` cites it.
@@ -230,7 +232,7 @@ The items of step 6 come after the others. They are not counted in the 8 or in t
 
 `--media "<title>"`, `--author "<name>"`, `--category <category>` and `--tag <tag>` look only at items of documents that have those labels, as "Labelling a media and a document" describes them. Each is optional and `--tag` can be repeated. A document must match everything that is given: the media matches the title of its media whatever the capitals, the author matches any one of its authors whatever the capitals, the category is `book`, `paper` or `other`, and each tag must be a tag of its media or one of its own tags. The filter holds for every item that is printed, the nearest items, the items that the graph adds and the items of step 6, and it works with `--kind` and with `--answer`. When no document matches, the command prints `no items found` and the question is not embedded.
 
-`--answer` asks Sonnet, `claude-sonnet-5-5`, to write an answer from the items that were found. It runs through the `claude` command on your subscription, with no tools, and it is not started while `ANTHROPIC_API_KEY` is set. It makes one call. Before the search, the command checks that the key is not set and runs `claude auth status` once, which is free and asks no question, so nothing is embedded when `claude` cannot answer: it prints `claude cannot write an answer, so nothing was searched for` and the reason. The model is given the question and the items, numbered: the document, the page, the kind, the label, and the text, the raw LaTeX of a formula, or the explanation of a figure with the path of its picture. It replies with claims, and each claim names the numbers of the items that support it. The command prints only the answer, not the results, and what the call cost goes to standard error. After each claim it prints one line for each source: the title of the document (which names the book and the chapter, for a chapter), the printed page, and the kind and label of the item. Under the line of a formula it prints the LaTeX exactly as the document has it, and under the line of a figure it prints the path of the picture. The program writes the citations and the LaTeX, not the model, so a title, a page or a formula is never retyped. A reply with a claim that names no source, or an item that was not given, is an error, and the question is not asked again. When nothing is found, the command prints `no items found` and does not ask the model. When the model replies with no claim, the command prints `the stored items do not answer the question`. The prompt and the JSON Schema of the reply are in `crates/rag-retrieval/src/answer/prompts/`.
+`--answer` asks Sonnet, `claude-sonnet-5-5`, to write an answer from the items that were found. It runs through the `claude` command on your subscription, with no tools, and it is not started while `ANTHROPIC_API_KEY` is set. It makes one call. Before the search, the command checks that the key is not set and runs `claude auth status` once, which is free and asks no question, so nothing is embedded when `claude` cannot answer: it prints `claude cannot write an answer, so nothing was searched for` and the reason. The model is given the question and the items, numbered: the document, the page, the kind, the label, and the text, the raw LaTeX of a formula, or the explanation of a figure with the path of its picture. It replies with claims, and each claim names the numbers of the items that support it. The command prints the answer, not the results, then a blank line, one line for the tokens of each model that the question used (the embedding and Sonnet) and `cost: ≈ $<cost>`. The tokens and the seconds of the `claude` call also go to standard error. After each claim it prints one line for each source: the title of the document (which names the book and the chapter, for a chapter), the printed page, and the kind and label of the item. Under the line of a formula it prints the LaTeX exactly as the document has it, and under the line of a figure it prints the path of the picture. The program writes the citations and the LaTeX, not the model, so a title, a page or a formula is never retyped. A reply with a claim that names no source, or an item that was not given, is an error, and the question is not asked again. When nothing is found, the command prints `no items found` and does not ask the model. When the model replies with no claim, the command prints `the stored items do not answer the question`. The prompt and the JSON Schema of the reply are in `crates/rag-retrieval/src/answer/prompts/`.
 
 ## The desktop app
 
@@ -263,6 +265,8 @@ The program is `quanty`, built as `target/release/quanty`. It opens one window w
 
 It needs what `rag-query --answer` needs: Qdrant and FalkorDB, `EMBEDDING_GEMINI_API_KEY`, and `claude` signed in with `ANTHROPIC_API_KEY` not set. An ask makes one embedding call and one Sonnet call. In the mode **Results only** it makes the embedding call alone. When a service is not ready, the part of the window that needed it says which one and what to do.
 
+Once the answer has landed, the row of tabs of the Answer panel says what the ask used, left of **Share**, such as `12k tokens · ≈ $0.03`. In the mode **Results only** it says what the search used, such as `12 tokens · under $0.01`. In a window too narrow for it beside the tabs, it is left out.
+
 The program reads `.env`, `content/` and `data/` from its home folder. It finds that folder in this order: the folder given with `--home <folder>`; the folder that `QUANTY_HOME` names; the nearest folder at or above the current one that holds a `.env`; the nearest folder at or above the program's own folder that holds one, which is what a start from Finder uses; and last the current folder, with no `.env`.
 
 A citation opens its page when the document's folder is found. The document is looked for under the content folder, by its source file; a folder that is stored with the document is used first, when there is one. A document that is found in neither way shows "The page was not found" with what to do: this is what a document that was ingested from a folder outside the content folder shows.
@@ -279,10 +283,44 @@ The **Ingest** tab is the **Add media** journey, in three steps:
 
 1. The media. The **Media** list holds every stored media, as "<title> · <category>", and last **Add new media…**. A chosen media shows as a card with its title, its category badge, its authors and its tags. Its labels are fixed here, and its pencil **✎ Edit** opens the same form as in the Library. **Add new media…** opens the form of a new media: the category chips, **Media title**, **Authors** and **Tags**, then **Save media** and **Cancel**. A saved media is chosen at once, and it stays in the list each time the app starts, also before its first PDF. A title that the library already has, whatever its capitals, is refused: choose that media from the list.
 2. The PDF. **Choose a PDF** opens a file dialog. The PDF of a book takes **Chapter number** and **Chapter name**, which are filled in from a file named `chapter-<number>-<name>.pdf` and else typed. The PDF of a paper or another media takes a **Title**, filled in with the title of the media. **Tags for this PDF** are its own tags; the tags of the media apply as well.
-3. The check and the ingest. The check runs by itself once a media and a PDF are chosen and the fields are filled, and again when one of them changes. It does not run on each key: a box is read once it no longer has the keyboard. While it runs, a bar moves. It is free: it counts the pages of the PDF, says how many are converted already, and shows a notice for what would stop a start, such as `claude` not signed in. **Start ingest** is paid work, the same as `rag-ingest pdf`. While the ingest runs, a bar shows the stage: "Reading the PDF", "Converting the pages — page 3 of 12" with what the pages cost so far beside it, "Writing the graph", "Embedding N items", "Storing the items", "Reading the concepts — N of M" and "Linking the concepts — N of M". Keep the app open while it runs. If it stops, start the same PDF again and it carries on. At the end, a notice says what was ingested and what the conversion cost, and **Add another PDF** clears the PDF and keeps the media chosen.
+3. The check and the ingest. The check runs by itself once a media and a PDF are chosen and the fields are filled, and again when one of them changes. It does not run on each key: a box is read once it no longer has the keyboard. While it runs, a bar moves. It is free: it counts the pages of the PDF, says how many are converted already, and shows a notice for what would stop a start, such as `claude` not signed in. **Start ingest** is paid work, the same as `rag-ingest pdf`. While the ingest runs, a bar shows the stage: "Reading the PDF", "Converting the pages — page 3 of 12" with the tokens and the cost so far beside it, such as `48k tokens · ≈ $0.42 so far`, "Writing the graph", "Embedding N items", "Storing the items", "Reading the concepts — N of M" and "Linking the concepts — N of M". Keep the app open while it runs. If it stops, start the same PDF again and it carries on. At the end, a notice says what was ingested, the tokens of each model and the cost of the run, and **Add another PDF** clears the PDF and keeps the media chosen.
 
 Not built yet: the notices tray, the help sheet, the health check and the delete of a document. Delete one with `rag-ingest delete-document`.
 
 ## The MCP server
 
 `quanty-mcp` lets an AI agent search the stored library, read the pages of its documents, get a cited answer and send a PDF to be ingested, over the Model Context Protocol. How to build and start it, its tools and their costs are in [mcp.md](mcp.md).
+
+## Costs
+
+Every ingest and every question says what it used: the tokens of each model, and about what they cost.
+
+| Where | What it shows |
+| --- | --- |
+| `rag-ingest <folder>`, `rag-ingest <picture>` and `rag-ingest pdf` | At the end of the summary, one line for each model, `tokens of <model>: <input> in, <output> out, <cache read> cache read, <cache write> cache write`, then `cost of this run: ≈ $<cost>` |
+| `rag-ingest pdf` while it runs | `page <n> converted ($<cost>)` for each page |
+| `rag-query` and `rag-query --answer` | The same lines after the results or the answer, then `cost: ≈ $<cost>` |
+| The desktop app | `48k tokens · ≈ $0.42 so far` beside the running ingest; the tokens of each model and the cost in the notice at its end; `12k tokens · ≈ $0.03` in the row of tabs of the Answer panel |
+| The MCP server | `usage` and `cost_usd` in `search`, `answer` and a `done` report of `ingest_status`, as [mcp.md](mcp.md) shows |
+
+A cost is the tokens of each model times the price of that model in the table below, added up. A model that the table does not have is counted at what `claude` reported for it. When a model has neither, the cost is `unknown` (`null` in the MCP server). A cost that would round to nothing shows as `under $0.01`.
+
+These figures are what the API would charge for the tokens. `claude` runs on the subscription that it is signed in to, which bills in its own way, so they show the size of a run and are not a bill. `claude` reports a dollar figure of its own, which is not shown and can differ: for one, it writes some cache entries at the one-hour price, and the table has the five-minute price.
+
+US dollars for one million tokens, as of 9 October 2026:
+
+| Model | Input | Output | Cache read | Cache write |
+| --- | --- | --- | --- | --- |
+| `claude-fable-5-1` | 10.00 | 50.00 | 0.25 | 12.50 |
+| `claude-opus-5-5` | 4.00 | 20.00 | 0.20 | 5.00 |
+| `claude-sonnet-5-5` | 2.00 | 10.00 | 0.10 | 2.50 |
+| `claude-haiku-5-5` | 0.10 | 0.50 | 0.01 | 0.125 |
+| `claude-haiku-4-5` | 1.00 | 5.00 | 0.10 | 1.25 |
+| `gemini-embedding-2` | 0.20 | — | — | — |
+
+The Claude prices are from the Claude pricing page (platform.claude.com/docs/en/about-claude/pricing); a cache write is the five-minute write, and Haiku 5.5 is priced for prompts of up to 100,000 tokens. The Gemini price is from the Gemini API pricing page (ai.google.dev/gemini-api/docs/pricing): Gemini Embedding 2, standard paid tier, text input. The names that `claude --model` takes, `haiku`, `sonnet` and `opus`, are Haiku 5.5, Sonnet 5.5 and Opus 5.5, and an id with a date after it, such as `claude-haiku-4-5-20251001`, has the price of the id without the date. The table is the constant `PRICES` in `crates/rag-core/src/usage.rs`.
+
+- The tokens of the embedding are worked out, because the embeddings API gives no count: one token for every four characters of the text that is sent, rounded up, marked `(estimated)`. A picture is counted by its text alone.
+- Jev has no price and is left out.
+- `ocr` counts the tokens of a page call under the one model that answered, from the whole reply, while a question of the concepts or of an answer counts each model that `claude` names. So a short helper call that `claude` makes with another model inside a page call is priced as the model of the page call.
+- A run that fails or is stopped prints no total. The page lines, and the running line of the desktop app, show what it used up to the stop.

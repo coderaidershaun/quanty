@@ -4,6 +4,7 @@
 use super::ids::{DocId, ItemId};
 use super::library::Category;
 use super::source::ImageRef;
+use super::usage::Usage;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub enum AskMode {
@@ -137,6 +138,8 @@ impl RetrievalTrace {
 pub struct SearchReply {
     pub results: Vec<ResultItem>,
     pub trace: RetrievalTrace,
+    /// What the search used: the embedding of the question.
+    pub usage: Usage,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -151,11 +154,13 @@ pub enum AnswerBlock {
     Item(usize),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
 pub struct Answer {
     pub title: Option<String>,
     /// Empty means the stored items do not answer the question.
     pub blocks: Vec<AnswerBlock>,
     /// Standalone questions, also when `blocks` is empty.
     pub follow_ups: Vec<String>,
+    /// What the whole ask used: the search and the answer.
+    pub usage: Usage,
 }

@@ -8,6 +8,8 @@ use std::path::PathBuf;
 
 pub use gemini::GeminiEmbedder;
 
+use crate::usage::{ModelUsage, Usage, UsageTally};
+
 pub const EMBEDDING_MODEL: &str = "gemini-embedding-2";
 pub const EMBEDDING_DIMENSIONS: usize = 768;
 
@@ -39,6 +41,38 @@ pub trait Embedder {
         &self,
         query: &str,
     ) -> impl Future<Output = Result<Embedding, EmbedError>> + Send;
+}
+
+/// What embedding these inputs uses, worked out from the length of the text that is sent, because
+/// the embeddings API gives no count: one token for every four characters, rounded up. A picture
+/// is counted by its text alone.
+pub fn embedding_usage(inputs: &[DocumentInput]) -> UsageTally {
+    let tokens = inputs
+        .iter()
+        .map(|input| tokens_of(&request::document_text(input)))
+        .sum();
+    estimated(tokens)
+}
+
+/// What embedding a question uses, worked out as [`embedding_usage`] works it out.
+pub fn question_usage(question: &str) -> UsageTally {
+    estimated(tokens_of(&request::query_text(question)))
+}
+
+fn tokens_of(text: &str) -> u64 {
+    text.chars().count().div_ceil(4) as u64
+}
+
+fn estimated(input_tokens: u64) -> UsageTally {
+    let usage = ModelUsage {
+        tokens: Usage {
+            input_tokens,
+            ..Usage::default()
+        },
+        reported_usd: None,
+        estimated: true,
+    };
+    UsageTally::of(EMBEDDING_MODEL, usage)
 }
 
 #[derive(thiserror::Error, Debug)]

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
-use rag_core::{Llm, LlmError, Question};
+use rag_core::{Llm, LlmError, LlmReply, ModelUsage, Question, Usage, UsageTally};
 use serde_json::{Value, json};
 
 /// Long enough for the other questions of a batch to start while this one is still open.
@@ -120,7 +120,9 @@ impl Llm for StandInLlm {
         }
     }
 
-    async fn ask(&self, question: Question<'_>) -> Result<Value, LlmError> {
+    /// Every answer says it read 1,000 tokens, wrote 100 and cost $0.01. No table prices the
+    /// stand-in, so what it says it cost is what a run counts.
+    async fn ask(&self, question: Question<'_>) -> Result<LlmReply, LlmError> {
         let asked = AskedQuestion {
             system_prompt: question.system_prompt.to_owned(),
             schema: question.schema.to_owned(),
@@ -141,6 +143,20 @@ impl Llm for StandInLlm {
         };
         tokio::time::sleep(ANSWER_DELAY).await;
         self.locked_record().open -= 1;
-        (self.rule)(&asked, earlier_calls)
+        let value = (self.rule)(&asked, earlier_calls)?;
+        let tokens = Usage {
+            input_tokens: 1000,
+            output_tokens: 100,
+            ..Usage::default()
+        };
+        let usage = ModelUsage {
+            tokens,
+            reported_usd: Some(0.01),
+            estimated: false,
+        };
+        Ok(LlmReply {
+            value,
+            usage: UsageTally::of(&self.model, usage),
+        })
     }
 }

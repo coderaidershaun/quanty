@@ -4,6 +4,7 @@
 use super::failure::Failure;
 use super::ids::DocId;
 use super::library::{Category, DocumentName, ItemCounts};
+use super::usage::Usage;
 
 /// The media and the name of the document name its folder. The labels of the media come from the
 /// stored media, which is saved before its first document. The tags are the document's own: they
@@ -48,7 +49,7 @@ pub enum IngestStage {
     LinkingConcepts,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct IngestProgress {
     pub stage: IngestStage,
     /// PreparingPages: `total` is the number of pages. Converting: pages saved of all pages.
@@ -57,8 +58,8 @@ pub struct IngestProgress {
     pub done: Option<u32>,
     pub total: Option<u32>,
     pub pages_failed: u32,
-    /// Spent so far in this run.
-    pub cost_usd: f64,
+    /// What the run used so far.
+    pub spent: Usage,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -76,8 +77,8 @@ pub struct IngestReport {
     pub concepts_created: usize,
     pub concepts_linked: usize,
     pub skipped_items: usize,
-    /// `None`: nothing was converted in this run.
-    pub cost_usd: Option<f64>,
+    /// What the whole run used.
+    pub usage: Usage,
     pub pages_to_check: Vec<PageToCheck>,
 }
 

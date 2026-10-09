@@ -25,7 +25,7 @@ pub use question::EXTRACTION_MODEL;
 pub use resolve::{ASK_SCORE, LINK_SCORE};
 
 use super::items::Item;
-use super::summary::OnStep;
+use super::summary::Meter;
 use crate::stores::Stores;
 
 /// The items of one document and the vector of each one, in the same order.
@@ -89,14 +89,14 @@ impl<L: Llm> ConceptExtractor<L> {
         embedded: &EmbeddedItems<'_>,
         embedder: &E,
         stores: &Stores<G>,
-        on_step: OnStep<'_>,
+        meter: &mut Meter<'_>,
     ) -> Result<ConceptSummary, ConceptError> {
         let cache = Cache::open(&self.cache_folder)?;
         // Opened before the first question, so that a log that cannot be used stops the run before
         // anything is paid for.
         let log = DecisionLog::open(&self.decision_log)?;
         let answers = self
-            .read_items(&cache, embedded, &stores.items, on_step)
+            .read_items(&cache, embedded, &stores.items, meter)
             .await?;
         let resolver = Resolver {
             extractor: self,
@@ -105,13 +105,8 @@ impl<L: Llm> ConceptExtractor<L> {
             stores,
             log: &log,
         };
-        let mut summary = link::write(
-            &resolver,
-            &answers.extractions,
-            embedded.items.len(),
-            on_step,
-        )
-        .await?;
+        let mut summary =
+            link::write(&resolver, &answers.extractions, embedded.items.len(), meter).await?;
         summary.llm_calls += answers.llm_calls;
         summary.cache_hits += answers.cache_hits;
         summary.skipped_items = answers.skipped;

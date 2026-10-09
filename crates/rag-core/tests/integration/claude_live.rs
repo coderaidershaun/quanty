@@ -28,5 +28,9 @@ async fn claude_cli_answers_a_structured_question_live() {
         .await
         .unwrap();
 
-    assert_eq!(answer["capital"], "Paris", "the whole answer: {answer}");
+    assert_eq!(
+        answer.value["capital"], "Paris",
+        "the whole answer: {}",
+        answer.value
+    );
 }

@@ -65,10 +65,7 @@ pub(crate) fn piece_strings(piece: &TranscribedPiece) -> Vec<&str> {
             copied.push(text);
         }
         TranscribedPiece::Text { markdown, .. } => copied.push(markdown),
-        // SMELL: a formula's printed label is copied from the page too, but it is left out
-        // here, so a page with labelled formulas matches a little less of its text layer.
-        // Adding it would change the ratios, which are already saved for converted pages.
-        TranscribedPiece::Formula { .. } => {}
+        TranscribedPiece::Formula { label, .. } => copied.extend(label.as_deref()),
         TranscribedPiece::Figure {
             label,
             caption,
@@ -133,5 +130,33 @@ pub(crate) fn word_match(page: &TranscribedPage, text_layer: &str) -> WordMatch 
     WordMatch {
         piece_words_in_text_layer: ratio(page_words.len()),
         text_layer_words_in_pieces: ratio(layer_words.len()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn formula_label_counts_as_copied() {
+        let page = TranscribedPage {
+            printed_page_number: None,
+            running_header: None,
+            pieces: vec![TranscribedPiece::Formula {
+                number: 1,
+                latex: "a = b".to_owned(),
+                label: Some("(2.14)".to_owned()),
+                name: None,
+                statement: "The first equals the second.".to_owned(),
+                symbols: Vec::new(),
+            }],
+            discusses: Vec::new(),
+            starts_mid_sentence: false,
+            ends_mid_sentence: false,
+        };
+
+        let matched = word_match(&page, "a = b (2.14)");
+
+        assert_eq!(matched.piece_words_in_text_layer, 1.0);
     }
 }

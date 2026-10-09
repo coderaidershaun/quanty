@@ -11,8 +11,8 @@ use super::chapters::chapters_on_disk;
 use super::{LiveContext, Services};
 use crate::backend::Reply;
 use crate::contract::{
-    DocId, DocumentName, Event, Failure, FailureKind, ImageRef, PageBox, PageConcept, PagePiece,
-    PageView, PieceKind, RequestId,
+    DocId, DocumentName, Event, Failure, ImageRef, PageBox, PageConcept, PagePiece, PageView,
+    PieceKind, RequestId,
 };
 
 /// The page to read, and the folder of its chapter if the catalogue knows it.
@@ -68,29 +68,23 @@ impl PageFault {
         match self {
             PageFault::Read(error) => cx.failure(error),
             PageFault::FolderUnknown => {
-                let searched = cx.config().content_folder.display();
-                Failure::new(
-                    FailureKind::SourceMissing,
-                    format!(
+                let content_folder = &cx.config().content_folder;
+                let searched = content_folder.display();
+                Failure {
+                    detail: format!(
                         "no folder was found for document {}: none was given that holds a {CHAPTER_INDEX_FILE}, and no converted folder that could be read under {searched} is its own",
                         target.doc.0
                     ),
-                )
-                .with_hint(format!(
-                    "quanty does not know where this document's pages are. Put its folder inside its media's folder under {searched}, or ingest its PDF again with rag-ingest pdf."
-                ))
+                    ..Failure::pages_not_found(content_folder)
+                }
             }
-            PageFault::NoSuchPage { page_count } => Failure::new(
-                FailureKind::SourceMissing,
-                format!(
+            PageFault::NoSuchPage { page_count } => Failure {
+                detail: format!(
                     "page {} is not in document {}, which has {page_count} pages",
                     target.page, target.doc.0
                 ),
-            )
-            .with_hint(format!(
-                "This document has {page_count} pages, so page {} is not in it. Ingest its PDF again with rag-ingest pdf.",
-                target.page
-            )),
+                ..Failure::no_such_page(target.page, page_count)
+            },
         }
     }
 }
@@ -244,8 +238,10 @@ fn piece_view(piece: ChapterPiece) -> PagePiece {
             caption,
             image: figure_image.and_then(|picture| existing(picture.path)),
             cut: image
-                .filter(|saved| saved.shows == ImageShows::Figure)
-                .and_then(|saved| saved.cut)
+                .and_then(|saved| match saved.shows {
+                    ImageShows::Figure { cut, .. } => cut,
+                    ImageShows::WholePage => None,
+                })
                 .and_then(page_box),
             ..plain
         },

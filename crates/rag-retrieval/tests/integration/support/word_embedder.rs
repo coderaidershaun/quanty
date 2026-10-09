@@ -4,9 +4,8 @@ use std::sync::{Arc, Mutex};
 
 use rag_core::{DocumentInput, EMBEDDING_DIMENSIONS, EmbedError, Embedder, Embedding};
 
-// SMELL: this is a stand-in that knows nothing of meaning. Every word counts the same and many
-// words share one place in the vector, so only a question that is the whole stored text of an
-// item is sure to find it. It shows that search is wired up, not that it finds good answers.
+/// A stand-in by design that knows nothing of meaning: many words share one place in the vector,
+/// so only a question that is the whole stored text of an item is sure to find that item.
 #[derive(Clone, Default)]
 pub struct WordEmbedder {
     questions: Arc<Mutex<Vec<String>>>,

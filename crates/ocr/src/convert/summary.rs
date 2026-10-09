@@ -249,10 +249,26 @@ fn reasons_to_check(page: &PageIndex, conversion: &Conversion) -> Vec<&'static s
     if has_text && images.iter().any(|image| covers_most_of_the_page(image)) {
         reasons.push("figure image is most of the page");
     }
-    if images.iter().any(|image| image.holds_body_text) {
+    if images.iter().any(|image| {
+        matches!(
+            image.shows,
+            ImageShows::Figure {
+                holds_body_text: true,
+                ..
+            }
+        )
+    }) {
         reasons.push("figure image holds body text");
     }
-    if images.iter().any(|image| image.unchecked) {
+    if images.iter().any(|image| {
+        matches!(
+            image.shows,
+            ImageShows::Figure {
+                unchecked: true,
+                ..
+            }
+        )
+    }) {
         reasons.push("figure image was not checked against the page's text");
     }
     reasons
@@ -261,11 +277,11 @@ fn reasons_to_check(page: &PageIndex, conversion: &Conversion) -> Vec<&'static s
 fn covers_most_of_the_page(image: &FigureImage) -> bool {
     // A rectangle is in thousandths of the page each way, so the whole page is a million.
     const WHOLE_PAGE: i64 = 1_000_000;
-    image.shows == ImageShows::Figure
-        && image.cut.is_some_and(|cut| {
-            let area = i64::from(cut.right - cut.left) * i64::from(cut.bottom - cut.top);
-            area * 100 > MOST_OF_THE_PAGE_PERCENT * WHOLE_PAGE
-        })
+    let ImageShows::Figure { cut: Some(cut), .. } = image.shows else {
+        return false;
+    };
+    let area = i64::from(cut.right - cut.left) * i64::from(cut.bottom - cut.top);
+    area * 100 > MOST_OF_THE_PAGE_PERCENT * WHOLE_PAGE
 }
 
 impl fmt::Display for ConversionSummary {
@@ -309,8 +325,8 @@ impl fmt::Display for ConversionSummary {
             calls.copy,
             calls.transcribe
         )?;
-        // SMELL: the programs that price a run write the line of a model in these same words, and
-        // this crate cannot reach their code, so a change to the words must be made in both.
+        // SMELL: the core crate keeps its own copy of these words, and this crate does not depend
+        // on it, so a change to one must be made in both.
         for (model, used) in &calls.by_model {
             writeln!(
                 formatter,

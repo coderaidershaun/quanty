@@ -1,14 +1,19 @@
 //! Checks how a panel and the app hand things to each other: the panel gets a read-only view of
-//! the state, answers with intents, and the test kit carries a click all the way to one.
+//! the state, answers with intents, and the test kit carries a click all the way to one. A panel
+//! also counts on a widget of the kit to keep its place while its state changes.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use eframe::egui;
+use egui::accesskit::Role;
 use egui_kittest::kittest::Queryable;
 use gui::contract::Intent;
 use gui::media::rich_text::{self, Clicked, RichText};
+use gui::state::Shared;
 use gui::testkit::{self, sample};
 use gui::theme::TextRole;
+use gui::widgets::Button;
 
 #[test]
 fn a_panel_gives_its_intents_and_never_changes_what_it_reads() {
@@ -92,4 +97,22 @@ fn a_panel_gives_its_intents_and_never_changes_what_it_reads() {
         vec![Intent::SelectResult(2)],
         "a frame that is laid out twice gives the intent of a click once"
     );
+}
+
+/// Where the button beside a Save button stands, while the save runs or not.
+fn beside_a_save(is_saving: bool) -> egui::Rect {
+    let mut harness = testkit::panel([400.0, 80.0], Shared::default(), move |ui, _| {
+        ui.horizontal(|ui| {
+            ui.add(Button::secondary("Save media").loading(is_saving));
+            ui.add(Button::secondary("Cancel"));
+        });
+    });
+    // The spinner asks for a frame after every frame, so the run stops at its limit.
+    harness.run_ok();
+    harness.get_by_role_and_label(Role::Button, "Cancel").rect()
+}
+
+#[test]
+fn a_button_that_loads_leaves_what_stands_beside_it_in_place() {
+    assert_eq!(beside_a_save(true), beside_a_save(false));
 }

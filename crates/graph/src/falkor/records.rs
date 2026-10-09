@@ -6,8 +6,8 @@ use std::path::PathBuf;
 use falkordb::FalkorValue;
 use rag_core::ItemKind;
 
-use super::FalkorGraph;
-use super::reads::{DOCUMENT_COLUMNS, document_from_row, unreadable_reply};
+use super::documents::{DOCUMENT_COLUMNS, document_from_row};
+use super::{FalkorGraph, unreadable_reply};
 use crate::contents::{DocumentRecord, ItemsByKind};
 use crate::store::GraphError;
 

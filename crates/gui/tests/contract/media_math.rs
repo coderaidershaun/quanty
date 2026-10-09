@@ -243,3 +243,40 @@ fn broken_latex_fails_and_the_widget_keeps_its_name() {
     testkit::save_png(&mut good, "math-ready");
     testkit::save_png(&mut broken, "math-failed");
 }
+
+#[test]
+fn two_equal_wide_formulas_scroll_apart() {
+    let mut harness = testkit::panel([120.0, 200.0], testkit::asked("q"), |ui, cx| {
+        for _ in 0..2 {
+            math::show(ui, cx.media, &MathRef::block(GOOD_BLOCK));
+        }
+    });
+    harness.run();
+    harness.state_mut().media.run_pending();
+    harness.run();
+    let lefts = |harness: &Harness<'_, Host>| -> Vec<f32> {
+        harness
+            .query_all_by_label(GOOD_BLOCK)
+            .map(|node| node.rect().left())
+            .collect()
+    };
+    let before = lefts(&harness);
+    assert_eq!(before.len(), 2, "each formula names its own node");
+
+    let first = harness
+        .query_all_by_label(GOOD_BLOCK)
+        .next()
+        .expect("the first formula")
+        .rect();
+    harness.hover_at(first.center());
+    harness.event(egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(-80.0, 0.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: egui::Modifiers::NONE,
+    });
+    harness.run();
+    let after = lefts(&harness);
+    assert!(after[0] < before[0] - 1.0, "the first formula scrolls");
+    assert_eq!(after[1], before[1], "the second formula stays where it was");
+}

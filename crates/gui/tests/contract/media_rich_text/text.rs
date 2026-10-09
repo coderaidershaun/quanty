@@ -1,54 +1,16 @@
-//! Checks what a panel gets when it hands stored text to the media code: the text is read as the
-//! pipeline wrote it, laid out once, and a click comes back as the source to copy.
+//! Checks blocks of stored text: they are read as the pipeline writes them, laid out once more
+//! when their formulas settle, and copied as their stored source.
 
 use eframe::egui;
-use eframe::egui::epaint::text::ByteRangeExt as _;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use gui::contract::Intent;
 use gui::media::math::{MathImage, MathRef, MathState};
-use gui::media::rich_text::{self, Clicked, RichText};
+use gui::media::rich_text::{self, RichText};
 use gui::testkit::{self, Host};
 use gui::theme::TextRole;
 
-struct Painted {
-    text: String,
-    right: f32,
-    baseline: f32,
-    sections: Vec<(String, egui::text::TextFormat)>,
-}
-
-fn painted(harness: &Harness<'_, Host>) -> Vec<Painted> {
-    fn collect(shape: &egui::Shape, found: &mut Vec<Painted>) {
-        match shape {
-            egui::Shape::Text(text) => {
-                let galley = &text.galley;
-                let first = galley.rows.first().and_then(|row| row.row.glyphs.first());
-                found.push(Painted {
-                    text: galley.text().to_owned(),
-                    right: text.pos.x + galley.size().x,
-                    baseline: text.pos.y + first.map_or(0.0, |glyph| glyph.pos.y),
-                    sections: galley
-                        .job
-                        .sections
-                        .iter()
-                        .map(|section| {
-                            let words = section.byte_range.slice(&galley.job.text);
-                            (words.to_owned(), section.format.clone())
-                        })
-                        .collect(),
-                });
-            }
-            egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| collect(shape, found)),
-            _ => {}
-        }
-    }
-    let mut found = Vec::new();
-    for clipped in &harness.output().shapes {
-        collect(&clipped.shape, &mut found);
-    }
-    found
-}
+use super::{LAST_HEADER, Painted, TABLE, painted, route, squeezed};
 
 fn pictures(harness: &Harness<'_, Host>) -> Vec<(egui::TextureId, egui::Rect)> {
     fn collect(shape: &egui::Shape, found: &mut Vec<(egui::TextureId, egui::Rect)>) {
@@ -81,24 +43,6 @@ fn sections_with<'a>(
         .flat_map(|piece| piece.sections.iter())
         .filter(|(text, _)| text.contains(words))
         .collect()
-}
-
-/// All the painted text with no white space, so that a line break cannot split what is asked.
-fn squeezed(painted: &[Painted]) -> String {
-    painted
-        .iter()
-        .flat_map(|piece| piece.text.chars())
-        .filter(|c| !c.is_whitespace())
-        .collect()
-}
-
-/// What a panel does with what `show` returns.
-fn route(click: Option<Clicked>, intents: &mut Vec<Intent>) {
-    match click {
-        Some(Clicked::Citation(number)) => intents.push(Intent::SelectResult(number)),
-        Some(Clicked::CopyText(source)) => intents.push(Intent::CopyText(source)),
-        None => {}
-    }
 }
 
 /// One text with every rule of the stored dialect: emphasis, strong and both, code, formulas,
@@ -232,20 +176,6 @@ fn stored_text_is_read_as_the_pipeline_writes_it() {
     testkit::save_png(&mut harness, "rich-text-ready");
 }
 
-/// The five-column table of the sample chapter, as the page reader stored it.
-const TABLE: &str = "| | If domestic rates rise | If domestic rates fall | If foreign rates rise | If foreign rates fall |
-|---|---|---|---|---|
-| stock option calls will | rise | fall | not applicable | not applicable |
-| stock option puts will | fall | rise | not applicable | not applicable |
-| futures option calls (stock-type settlement) | fall | fall | not applicable | not applicable |
-| futures option puts (stock-type settlement) | fall | fall | not applicable | not applicable |
-| futures option calls (futures-type settlement) | no effect | no effect | not applicable | not applicable |
-| futures option puts (futures-type settlement) | no effect | no effect | not applicable | not applicable |
-| foreign currency option calls | rise | fall | fall | rise |
-| foreign currency option puts | fall | rise | rise | fall |";
-
-const LAST_HEADER: &str = "If foreign rates fall";
-
 #[test]
 fn copy_text_returns_the_stored_source() {
     const COPIED: &str = r"The *delta* of \(x\) is **risk**.";
@@ -348,64 +278,4 @@ fn a_block_is_laid_out_once_more_when_its_formulas_settle() {
         settled,
         "the text stays where it is"
     );
-}
-
-fn table_in(width: f32, picture: &str) -> (egui::Rect, Vec<Painted>) {
-    let mut harness = testkit::panel([width, 600.0], testkit::asked("q"), |ui, cx| {
-        route(
-            rich_text::table(ui, cx.media, TABLE, TextRole::Body),
-            cx.intents,
-        );
-    });
-    harness.run();
-    let node = harness.get_by_label_contains(LAST_HEADER).rect();
-    let shapes = painted(&harness);
-    testkit::save_png(&mut harness, picture);
-    (node, shapes)
-}
-
-#[test]
-fn a_wide_table_scrolls_sideways_and_a_narrow_one_fits() {
-    let furthest = |pieces: &[&Painted]| {
-        pieces
-            .iter()
-            .map(|piece| piece.right)
-            .fold(f32::MIN, f32::max)
-    };
-    let header_font = TextRole::Small.strong_font();
-
-    let (node, shapes) = table_in(900.0, "rich-text-table-wide");
-    assert!(node.width() <= 900.0 + 0.5, "the table fits its panel");
-    let header: Vec<&Painted> = shapes
-        .iter()
-        .filter(|piece| piece.sections.iter().all(|(_, f)| f.font_id == header_font))
-        .collect();
-    assert!(
-        squeezed_of(&header).ends_with("Ifforeignratesfall"),
-        "the last header cell is drawn after the others"
-    );
-    let all: Vec<&Painted> = shapes.iter().collect();
-    assert!(
-        furthest(&all) <= node.right() + 0.5,
-        "nothing of the table is scrolled out of its node"
-    );
-
-    let (narrow, shapes) = table_in(220.0, "rich-text-table-narrow");
-    assert!(
-        narrow.width() <= 220.0 + 0.5,
-        "a narrow panel is not overflowed"
-    );
-    let all: Vec<&Painted> = shapes.iter().collect();
-    assert!(
-        furthest(&all) > narrow.right() + 0.5,
-        "the columns that do not fit are scrolled out of the node, not squeezed"
-    );
-}
-
-fn squeezed_of(pieces: &[&Painted]) -> String {
-    pieces
-        .iter()
-        .flat_map(|piece| piece.text.chars())
-        .filter(|c| !c.is_whitespace())
-        .collect()
 }

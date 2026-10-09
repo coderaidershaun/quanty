@@ -21,8 +21,6 @@ pub struct SearchTrace {
     pub question_concepts: Vec<ConceptHit>,
     /// Step 2: the concepts that the seeds mention, the one that the most seeds mention first.
     /// One of them can also be among `question_concepts`.
-    // SMELL: the steps of a search call these concepts and `question_concepts` together "the seed
-    // concepts", so this name promises more than the field holds. It wants a name of its own.
     pub seed_concepts: Vec<ConceptNode>,
     /// Step 3: the concepts one `RELATES_TO` edge away from the concepts of step 2. None of them
     /// is a concept of step 2.

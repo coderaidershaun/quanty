@@ -121,3 +121,32 @@ async fn failing_page_is_named_and_the_next_run_resumes() {
         "{heard:?}"
     );
 }
+
+/// Two runs on one chapter at the same time: one converts it, and the other is refused before it
+/// makes a call or removes the first one's working folders.
+#[tokio::test]
+async fn a_second_run_at_the_same_time_is_refused() {
+    let root = tempfile::tempdir().unwrap();
+    let job = sample_job(root.path());
+    let first = StubServices::new(Scenario::AllTables { broken_page: None });
+    let second = StubServices::new(Scenario::AllTables { broken_page: None });
+
+    let (first_run, second_run) = tokio::join!(
+        convert_chapter_with(&job, &first),
+        convert_chapter_with(&job, &second)
+    );
+
+    let (summary, refused, refused_stubs) = match (first_run, second_run) {
+        (Ok(summary), Err(refused)) => (summary, refused, &second),
+        (Err(refused), Ok(summary)) => (summary, refused, &first),
+        both => panic!("one run should finish and the other be refused: {both:?}"),
+    };
+    assert!(
+        matches!(refused, ConvertError::ChapterBusy { .. }),
+        "{refused:?}"
+    );
+    assert!(refused_stubs.calls().is_empty());
+    assert_eq!(summary.converted_now, 7);
+    let chapter = job.chapter_folder();
+    assert_eq!(read_json(&chapter.join("chapter.json"))["finished"], true);
+}

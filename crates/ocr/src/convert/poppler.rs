@@ -5,9 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::{ExitStatus, Output, Stdio};
 use std::time::Duration;
 
-use tokio::process::Command;
-
-use super::services::JEV_API_KEY_VARIABLE;
+use super::child_process;
 use super::usable_box::UsableBox;
 use crate::content::PageBox;
 
@@ -64,14 +62,10 @@ async fn run(
     file: &Path,
     arguments: &[&std::ffi::OsStr],
 ) -> Result<Output, PopplerError> {
-    let mut command = Command::new(tool);
+    let mut command = child_process(tool);
     command
         .args(arguments)
         .stdin(Stdio::null())
-        // The tools have no use for the Jev API key, so they never get it.
-        // SMELL: `claude` is kept from the key by a line of its own elsewhere. A new kind of child
-        // process gets the key unless someone remembers to write a third.
-        .env_remove(JEV_API_KEY_VARIABLE)
         .kill_on_drop(true);
     let output = tokio::time::timeout(TOOL_TIMEOUT, command.output())
         .await

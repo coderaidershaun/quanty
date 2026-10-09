@@ -10,6 +10,7 @@ use crate::theme::{Icon, Kind, TextRole, Tone, color, radius, size, space, strok
 
 const TAG_GLYPH: f32 = 10.0;
 const TAG_BOX: f32 = 16.0;
+const MARGIN: f32 = space::MD;
 
 #[derive(Default)]
 pub struct Card<'a> {
@@ -29,6 +30,16 @@ pub struct CardResponse<R> {
 impl<'a> Card<'a> {
     pub fn new() -> Self {
         Card::default()
+    }
+
+    /// How much higher a card with a tag or an action is than what it holds: the header row, the
+    /// gap under it, the margins and the border.
+    pub fn height_around_content(ui: &egui::Ui) -> f32 {
+        let spacing = ui.spacing();
+        // The header is a row, and egui makes a row at least this high. The tag and the action
+        // button are no higher than that.
+        let header = spacing.interact_size.y;
+        header + spacing.item_spacing.y + 2.0 * (MARGIN + stroke::BORDER)
     }
 
     pub fn tag(mut self, kind: Kind, text: &'a str) -> Self {
@@ -79,7 +90,7 @@ impl<'a> Card<'a> {
             let mut frame = egui::Frame::NONE
                 .stroke(Stroke::new(stroke::BORDER, edge))
                 .corner_radius(radius::LG)
-                .inner_margin(space::MD)
+                .inner_margin(MARGIN)
                 .begin(ui);
             let room = frame.content_ui.available_width();
             if room.is_finite() {

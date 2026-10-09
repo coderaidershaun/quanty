@@ -16,7 +16,7 @@ use rag_retrieval::{SearchError, SearchResults, TracedSearch};
 use self::results::PieceFacts;
 use crate::backend::Reply;
 use crate::backend::live::chapters::chapters_on_disk;
-use crate::backend::live::{LiveContext, Services};
+use crate::backend::live::{Kept, LiveContext, Services};
 use crate::contract::{AskDraft, AskMode, Event, RequestId, SearchReply};
 
 /// A search that finds nothing or fails is the only event: the window settles
@@ -27,32 +27,8 @@ pub async fn ask<S: Services>(
     ask: &AskDraft,
     reply: &Reply,
 ) {
-    let wanted = LabelFilter::from(&ask.filters);
-    let retriever = match cx.retriever().await {
-        Ok(retriever) => retriever,
-        Err(failure) => {
-            reply.send(Event::Search {
-                request,
-                result: Err(failure),
-            });
-            return;
-        }
-    };
-    let traced = match retriever.search_traced(&ask.question, None, &wanted).await {
-        Ok(traced) => traced,
-        Err(error) => {
-            // Stores with nothing in them cannot be searched yet, and that is the first run of
-            // the app, not a store that is down.
-            let is_first_run = matches!(error, SearchError::Items(_))
-                && matches!(retriever.items.collection_exists().await, Ok(false));
-            let result = if is_first_run {
-                Ok(SearchReply::default())
-            } else {
-                Err(cx.failure(error))
-            };
-            reply.send(Event::Search { request, result });
-            return;
-        }
+    let Some((retriever, traced)) = search(cx, request, ask, reply).await else {
+        return;
     };
     let TracedSearch { results, trace } = traced;
     if results.hits.is_empty() {
@@ -106,34 +82,67 @@ pub async fn ask<S: Services>(
     });
 }
 
+/// `None` when the search has already sent the event that ends the ask: its failure, or the empty
+/// reply of the first run of the app.
+async fn search<S: Services>(
+    cx: &LiveContext<S>,
+    request: RequestId,
+    ask: &AskDraft,
+    reply: &Reply,
+) -> Option<(Kept<S>, TracedSearch)> {
+    let wanted = LabelFilter::from(&ask.filters);
+    let retriever = match cx.retriever().await {
+        Ok(retriever) => retriever,
+        Err(failure) => {
+            reply.send(Event::Search {
+                request,
+                result: Err(failure),
+            });
+            return None;
+        }
+    };
+    let error = match retriever.search_traced(&ask.question, None, &wanted).await {
+        Ok(traced) => return Some((retriever, traced)),
+        Err(error) => error,
+    };
+    // Stores with nothing in them cannot be searched yet, and that is the first run of
+    // the app, not a store that is down.
+    let is_first_run = matches!(error, SearchError::Items(_))
+        && matches!(retriever.items.collection_exists().await, Ok(false));
+    let result = if is_first_run {
+        Ok(SearchReply::default())
+    } else {
+        Err(cx.failure(error))
+    };
+    reply.send(Event::Search { request, result });
+    None
+}
+
 /// A reading that does not finish gives an empty list, which leaves every hit without facts.
-/// Neither that nor a document list that cannot be read stops the ask, because the facts are
-/// optional.
+/// Neither that nor folders that cannot be read stop the ask, because the facts are optional.
 async fn pieces_on_disk<G: GraphStore>(
     graph: &G,
     results: &Arc<SearchResults>,
     content_folder: PathBuf,
 ) -> Vec<Option<PieceFacts>> {
-    // SMELL: this read also counts every item of every document, and only the folders are used.
-    // The results wait for it, and the graph store has no lighter read that gives the folders.
-    let stored_folders: HashMap<DocId, PathBuf> = match graph.document_records().await {
-        Ok(records) => records
-            .into_iter()
-            .filter_map(|record| Some((record.node.id, record.chapter_folder?)))
-            .collect(),
-        Err(error) => {
+    let mut seen = HashSet::new();
+    let documents: Vec<DocId> = results
+        .hits
+        .iter()
+        .map(|hit| hit.item.payload.doc_id)
+        .filter(|id| seen.insert(*id))
+        .collect();
+    let stored_folders = graph
+        .chapter_folders(&documents)
+        .await
+        .unwrap_or_else(|error| {
             tracing::warn!(?error, "could not read the folders of the documents");
             HashMap::new()
-        }
-    };
+        });
     let results = Arc::clone(results);
     tokio::task::spawn_blocking(move || {
-        let mut seen = HashSet::new();
-        let documents = results
-            .hits
-            .iter()
-            .map(|hit| hit.item.payload.doc_id)
-            .filter(|id| seen.insert(*id))
+        let documents = documents
+            .into_iter()
             .map(|id| (id, stored_folders.get(&id).map(PathBuf::as_path)));
         let folders: HashMap<DocId, PathBuf> = chapters_on_disk(documents, &content_folder)
             .into_iter()

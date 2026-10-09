@@ -6,5 +6,7 @@ mod health;
 mod image;
 mod ingest;
 mod items;
+mod media;
 mod pdf;
+mod reingest;
 mod support;

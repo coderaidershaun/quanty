@@ -7,7 +7,7 @@ use super::{CATALOGUE_WAIT, Fake};
 use crate::backend::Reply;
 use crate::contract::{
     Catalogue, DocumentTagsEdit, Event, Failure, Media, MediaEdit, NewMedia, RequestId,
-    is_same_title,
+    is_same_name,
 };
 
 pub(super) fn starting_catalogue(library: Library, samples: Catalogue) -> Catalogue {
@@ -48,8 +48,8 @@ impl Fake {
 
     /// Adds the media the way the live backend stores it: the title and the authors trimmed, a
     /// blank author dropped, and the tags in lower case, each once, in order.
-    // SMELL: how a saved media is stored is written here and again in the live backend, which
-    // does it with the types of the stores. A change to one must be made in both.
+    // SMELL: the core crate keeps its own copy of this rule, and the fake may not name that crate,
+    // so a change to one must be made in both.
     fn add_media(&self, media: &NewMedia) -> Result<(), Failure> {
         let mut catalogue = self.catalogue();
         if let Some(stored) = catalogue.stored_title(&media.title) {
@@ -73,8 +73,8 @@ impl Fake {
 
     /// The media takes the new category, authors and tags, and every document of it a copy of the
     /// authors and the tags.
-    // SMELL: how a media is relabelled is written here and again in the ingestion crate, which the
-    // fake may not name. A change to one must be made in both.
+    // SMELL: the ingestion crate keeps its own copy of this rule, and the fake may not name that
+    // crate, so a change to one must be made in both.
     fn relabel_media(&self, edit: &MediaEdit) -> Result<(), Failure> {
         let mut catalogue = self.catalogue();
         let media = catalogue
@@ -84,7 +84,7 @@ impl Fake {
                 media
                     .title
                     .as_deref()
-                    .is_some_and(|title| is_same_title(title, &edit.title))
+                    .is_some_and(|title| is_same_name(title, &edit.title))
             })
             .ok_or_else(|| {
                 Failure::internal(format!("the library has no media titled {}", edit.title))
@@ -115,8 +115,8 @@ impl Fake {
 
     /// The tags to add are added, and then the tags to remove are taken away. The tags end in
     /// lower case, each once, in order.
-    // SMELL: how a change of own tags is applied is written here and again in the ingestion
-    // crate, which the fake may not name. A change to one must be made in both.
+    // SMELL: the ingestion crate keeps its own copy of this rule, and the fake may not name that
+    // crate, so a change to one must be made in both.
     fn retag(&self, edit: &DocumentTagsEdit) -> Result<(), Failure> {
         let mut catalogue = self.catalogue();
         let document = catalogue

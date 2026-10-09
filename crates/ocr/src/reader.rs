@@ -131,9 +131,9 @@ pub fn read_chapter(chapter_folder: &Path) -> Result<Chapter, ReadChapterError> 
 
     let mut pieces = Vec::new();
     let mut pages = Vec::new();
-    // SMELL: a heading's rank is judged from one page at a time, so two pages can disagree about
-    // the same kind of heading and the sections of the pieces after it come out wrong. Nothing
-    // here repairs that.
+    // SMELL: a heading's rank is judged one page at a time, so two pages can rank the same kind
+    // of heading differently and the sections after it come out wrong. A repair needs its own
+    // rule for ranks across pages.
     let mut open_sections: Vec<SectionHeading> = Vec::new();
     for position in 1..=index.page_count {
         let page_folder = chapter_folder.join(page_folder_name(position));

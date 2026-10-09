@@ -165,14 +165,15 @@ pub struct Dropdown<'a, S> {
     selected: Option<usize>,
     placeholder: &'a str,
     size: ControlSize,
-    width: Option<f32>,
+    width: f32,
 }
 
 impl<'a, S: AsRef<str>> Dropdown<'a, S> {
     /// `label` is the accessible name. The open list is kept under it, so a dropdown that
     /// shares its label with another one in the same `Ui`, or whose label changes, needs an
-    /// `id_salt`.
-    pub fn new(label: &'a str, options: &'a [S]) -> Self {
+    /// `id_salt`. `width` is fixed, so a long choice is cut and never moves what stands beside
+    /// the box.
+    pub fn new(label: &'a str, options: &'a [S], width: f32) -> Self {
         Dropdown {
             label,
             id_salt: label,
@@ -180,7 +181,7 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
             selected: None,
             placeholder: "",
             size: ControlSize::Small,
-            width: None,
+            width,
         }
     }
 
@@ -205,11 +206,6 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
         self
     }
 
-    pub fn width(mut self, width: f32) -> Self {
-        self.width = Some(width);
-        self
-    }
-
     pub fn show(self, ui: &mut egui::Ui) -> Option<usize> {
         let chosen_text = self.selected.and_then(|index| self.options.get(index));
         let shown = match chosen_text {
@@ -220,13 +216,12 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
         let response = ui
             .scope(|ui| {
                 ui.spacing_mut().interact_size.y = self.size.height();
-                let width = self.width.unwrap_or_else(|| self.widest(ui));
                 // `truncate` cuts the text to the room it is given, and `width` is only a
                 // minimum, so the room is capped here.
-                ui.set_max_width(width);
+                ui.set_max_width(self.width);
                 egui::ComboBox::from_id_salt(self.id_salt)
                     .selected_text(shown)
-                    .width(width)
+                    .width(self.width)
                     .truncate()
                     .icon(|ui, rect, _visuals, _is_open| {
                         ui.painter().text(
@@ -250,20 +245,6 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
         ui.ctx()
             .accesskit_node_builder(response.response.id, |node| node.set_label(self.label));
         chosen
-    }
-
-    fn widest(&self, ui: &egui::Ui) -> f32 {
-        // SMELL: this lays out every choice on every frame. A dropdown with hundreds of
-        // choices must be given a `width` instead.
-        let longest = self
-            .options
-            .iter()
-            .map(AsRef::as_ref)
-            .chain([self.placeholder])
-            .map(|text| TextRole::Label.galley(ui, text, color::TEXT).size().x)
-            .fold(0.0, f32::max);
-        let spacing = ui.spacing();
-        longest + spacing.icon_spacing + spacing.icon_width + 2.0 * spacing.button_padding.x
     }
 }
 

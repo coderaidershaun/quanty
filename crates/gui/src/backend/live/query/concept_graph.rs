@@ -115,11 +115,7 @@ pub(super) async fn read<G: GraphStore>(
     Ok(assemble(candidates, &relations, &mentions))
 }
 
-pub(super) fn assemble(
-    candidates: Candidates,
-    relations: &[Relation],
-    mentions: &[Mention],
-) -> ConceptGraph {
+fn assemble(candidates: Candidates, relations: &[Relation], mentions: &[Mention]) -> ConceptGraph {
     let Candidates { seeds, pool, items } = candidates;
     let relations = distinct(relations);
     let seed_ids: HashSet<ConceptId> = seeds.iter().map(|seed| seed.id).collect();
@@ -129,54 +125,76 @@ pub(super) fn assemble(
         .copied()
         .chain(related.iter().map(|concept| concept.id))
         .collect();
+    let items = items_to_draw(items, mentions, &drawn);
+    let mut edges = relation_edges(&relations, &drawn);
+    edges.extend(mention_edges(mentions, &drawn, &items));
+
+    let mut nodes: Vec<GraphNode> = seeds
+        .into_iter()
+        .map(|seed| GraphNode {
+            id: NodeId::Concept(seed.id.into()),
+            kind: NodeKind::Concept,
+            label: seed.name,
+            detail: seed.definition,
+        })
+        .collect();
+    nodes.extend(related.into_iter().map(|concept| GraphNode {
+        id: NodeId::Concept(concept.id.into()),
+        kind: NodeKind::Related,
+        label: concept.name,
+        detail: None,
+    }));
+    nodes.extend(items.into_iter().map(|item| item.node));
+    ConceptGraph { nodes, edges }
+}
+
+fn items_to_draw(
+    items: Vec<ItemCandidate>,
+    mentions: &[Mention],
+    drawn: &HashSet<ConceptId>,
+) -> Vec<ItemCandidate> {
     let mentioning: HashSet<ItemId> = mentions
         .iter()
         .filter(|mention| drawn.contains(&mention.concept))
         .map(|mention| mention.item)
         .collect();
-    let items: Vec<ItemCandidate> = items
+    items
         .into_iter()
         .filter(|item| mentioning.contains(&item.id))
         .take(MAX_ITEM_NODES)
-        .collect();
+        .collect()
+}
+
+fn relation_edges(relations: &[&Relation], drawn: &HashSet<ConceptId>) -> Vec<GraphEdge> {
+    relations
+        .iter()
+        .filter(|relation| drawn.contains(&relation.from) && drawn.contains(&relation.to))
+        .map(|relation| GraphEdge {
+            from: NodeId::Concept(relation.from.into()),
+            to: NodeId::Concept(relation.to.into()),
+            kind: edge_kind(relation.kind),
+        })
+        .collect()
+}
+
+fn mention_edges(
+    mentions: &[Mention],
+    drawn: &HashSet<ConceptId>,
+    items: &[ItemCandidate],
+) -> Vec<GraphEdge> {
     let numbers: HashMap<ItemId, NodeId> =
         items.iter().map(|item| (item.id, item.node.id)).collect();
-
-    let mut graph = ConceptGraph::default();
-    graph.nodes.extend(seeds.into_iter().map(|seed| GraphNode {
-        id: NodeId::Concept(seed.id.into()),
-        kind: NodeKind::Concept,
-        label: seed.name,
-        detail: seed.definition,
-    }));
-    graph
-        .nodes
-        .extend(related.into_iter().map(|concept| GraphNode {
-            id: NodeId::Concept(concept.id.into()),
-            kind: NodeKind::Related,
-            label: concept.name,
-            detail: None,
-        }));
-    graph.nodes.extend(items.into_iter().map(|item| item.node));
-    graph.edges.extend(
-        relations
-            .iter()
-            .filter(|relation| drawn.contains(&relation.from) && drawn.contains(&relation.to))
-            .map(|relation| GraphEdge {
-                from: NodeId::Concept(relation.from.into()),
-                to: NodeId::Concept(relation.to.into()),
-                kind: edge_kind(relation.kind),
-            }),
-    );
-    graph.edges.extend(mentions.iter().filter_map(|mention| {
-        let item = numbers.get(&mention.item)?;
-        drawn.contains(&mention.concept).then(|| GraphEdge {
-            from: *item,
-            to: NodeId::Concept(mention.concept.into()),
-            kind: EdgeKind::Mentions,
+    mentions
+        .iter()
+        .filter_map(|mention| {
+            let item = numbers.get(&mention.item)?;
+            drawn.contains(&mention.concept).then(|| GraphEdge {
+                from: *item,
+                to: NodeId::Concept(mention.concept.into()),
+                kind: EdgeKind::Mentions,
+            })
         })
-    }));
-    graph
+        .collect()
 }
 
 /// Two items can state one relation, and it is one arrow.

@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use ocr::content::{PageIndex, page_folder_name};
-use ocr::{ChapterIndex, ContentError, ConvertError};
+use ocr::{ChapterIndex, ChapterJob, ContentError, ConvertError};
 
 use super::{chapter_job, file_name_of};
 use crate::backend::Reply;
@@ -27,7 +27,6 @@ async fn check<S: Services>(
     ingest: &IngestRequest,
 ) -> Result<Preflight, Failure> {
     let job = chapter_job(cx, ingest)?;
-    let name = ingest.name.clone();
     let source_sha256 = job.source_sha256().map_err(|error| cx.failure(error))?;
     let document = rag_core::DocId::from_source_sha256(&source_sha256);
     let stores = cx.stores().await?;
@@ -37,13 +36,31 @@ async fn check<S: Services>(
     // A start of an ingested document pays for nothing, so nothing can block it.
     if let Some(items) = ingested {
         return Ok(Preflight {
-            name,
+            name: ingest.name.clone(),
             pages: None,
             state: Some(ChapterState::Ingested { items }),
             blockers: Vec::new(),
         });
     }
+    let mut preflight = folder_check(cx, ingest, &job, &source_sha256).await?;
+    // `claude` is asked last, and only when the folder said nothing that already stops a start.
+    if preflight.state.is_some()
+        && let Err(failure) = cx.claude_ready().await
+    {
+        preflight.blockers.push(failure);
+    }
+    Ok(preflight)
+}
 
+/// What the folder of the document says: how far it is converted, or, when it holds another
+/// PDF, no state and the blocker that says so.
+async fn folder_check<S: Services>(
+    cx: &LiveContext<S>,
+    ingest: &IngestRequest,
+    job: &ChapterJob,
+    source_sha256: &str,
+) -> Result<Preflight, Failure> {
+    let name = ingest.name.clone();
     let folder = job.chapter_folder();
     let mut blockers = Vec::new();
     let (pages, state) = match ChapterIndex::read(&folder) {
@@ -73,11 +90,6 @@ async fn check<S: Services>(
         }
         Err(error) => return Err(cx.failure(error)),
     };
-    // `claude` is asked last, because a document that is ingested already, or whose folder holds
-    // another PDF, needs no answer from it.
-    if let Err(failure) = cx.claude_ready().await {
-        blockers.push(failure);
-    }
     Ok(Preflight {
         name,
         pages,

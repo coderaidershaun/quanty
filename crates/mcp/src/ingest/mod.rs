@@ -9,8 +9,7 @@ mod work;
 use std::sync::Arc;
 
 use graph::FalkorGraph;
-use rag_core::{Category, Config};
-use rag_ingestion::media_category;
+use rag_core::Config;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -105,15 +104,16 @@ impl<S: Services> Ingest<S> {
         let checked = tokio::task::spawn_blocking(move || pdf::check(args, &config, max_pdf_bytes))
             .await
             .map_err(PdfIngestError::Stopped)??;
-        // A store that is down is reported like a failed job, because sending the same PDF again
-        // goes on from there.
-        let category = self
-            .category_of(&checked)
-            .await
-            .map_err(|error| PdfIngestError::Failed(format!("{} {GO_ON}", error_text(error))))?;
-        let ready = checked.named(category, &self.config)?;
+        let (ready, graph) = self.named(checked, error_text).await?;
         let started = self.jobs.start(&ready.media, &ready.file_name)?;
-        self.spawn(ready, started.report, error_text);
+        let work = Work {
+            services: Arc::clone(&self.services),
+            config: self.config.clone(),
+            pdf: ready,
+            graph,
+            report: started.report,
+        };
+        spawn(work, error_text);
         let mut watcher = started.watcher;
         let report = watcher
             .wait_for(|report| report.stage.is_some() || report.state != JobState::Running)
@@ -126,13 +126,28 @@ impl<S: Services> Ingest<S> {
         }
     }
 
-    /// The category that names the PDF: the one the library has for its media, else the one the
-    /// agent gave, else a book.
-    async fn category_of(&self, checked: &pdf::CheckedPdf) -> Result<Category, PdfIngestError> {
-        let graph = FalkorGraph::connect(&self.config).await?;
-        media_category(&checked.media, checked.category, &graph)
+    /// The PDF named by the category that the library has for its media, and the graph that the
+    /// job goes on to write to. A store that is down is reported like a failed job, because
+    /// sending the same PDF again goes on from there.
+    async fn named(
+        &self,
+        checked: pdf::CheckedPdf,
+        error_text: fn(PdfIngestError) -> String,
+    ) -> Result<(pdf::ReadyPdf, FalkorGraph), PdfIngestError> {
+        let store_down = |error: PdfIngestError| {
+            PdfIngestError::Failed(format!("{} {GO_ON}", error_text(error)))
+        };
+        let graph = FalkorGraph::connect(&self.config)
             .await
-            .map_err(PdfIngestError::ReadMedia)
+            .map_err(|error| store_down(error.into()))?;
+        let ready = checked
+            .named(&graph, &self.config)
+            .await
+            .map_err(|error| match error {
+                PdfIngestError::ReadMedia(_) => store_down(error),
+                refused => refused,
+            })?;
+        Ok((ready, graph))
     }
 
     /// The latest report of a job.
@@ -146,35 +161,25 @@ impl<S: Services> Ingest<S> {
                 job_id: args.job_id,
             })
     }
+}
 
-    /// Starts the two tasks of a job. The work task goes on after the tool call ends. The task
-    /// that waits for it writes the end of the report, and it must not panic: without that end
-    /// the report of the job would say `running` for ever.
-    fn spawn(
-        &self,
-        ready: pdf::ReadyPdf,
-        report: tokio::sync::watch::Sender<IngestReport>,
-        error_text: fn(PdfIngestError) -> String,
-    ) {
-        let work = Work {
-            services: Arc::clone(&self.services),
-            config: self.config.clone(),
-            pdf: ready,
-            report: report.clone(),
+/// Starts the two tasks of a job. The work task goes on after the tool call ends. The task that
+/// waits for it writes the end of the report, and it must not panic: without that end the report
+/// of the job would say `running` for ever.
+fn spawn<S: Services>(work: Work<S>, error_text: fn(PdfIngestError) -> String) {
+    let report = work.report.clone();
+    let running = tokio::spawn(async move { work.run().await });
+    tokio::spawn(async move {
+        let ended = match running.await {
+            Ok(ended) => ended,
+            Err(stopped) => Err(PdfIngestError::Stopped(stopped)),
         };
-        let running = tokio::spawn(async move { work.run().await });
-        tokio::spawn(async move {
-            let ended = match running.await {
-                Ok(ended) => ended,
-                Err(stopped) => Err(PdfIngestError::Stopped(stopped)),
-            };
-            match ended {
-                Ok(outcome) => report.send_modify(|report| report.finish(&outcome)),
-                Err(error) => {
-                    let text = format!("{} {GO_ON}", error_text(error));
-                    report.send_modify(|report| report.fail(text));
-                }
+        match ended {
+            Ok(outcome) => report.send_modify(|report| report.finish(&outcome)),
+            Err(error) => {
+                let text = format!("{} {GO_ON}", error_text(error));
+                report.send_modify(|report| report.fail(text));
             }
-        });
-    }
+        }
+    });
 }

@@ -6,7 +6,7 @@ use eframe::egui::{
 };
 
 use super::image::{Display, MathImage, MathRef, MathState};
-use crate::media::Media;
+use crate::media::{Media, content_salt};
 use crate::theme::{TextRole, color, radius};
 use crate::widgets::spinner;
 
@@ -78,8 +78,7 @@ fn fitted(ui: &mut Ui, image: &MathImage, latex: &str) -> Response {
 }
 
 fn scrolled(ui: &mut Ui, image: &MathImage, latex: &str) -> Response {
-    // SMELL: two equal formulas in one parent share this id, so they scroll together.
-    let scrolling = ScrollArea::horizontal().id_salt(egui::util::hash(latex));
+    let scrolling = ScrollArea::horizontal().id_salt(content_salt(ui, egui::util::hash(latex)));
     scrolling
         .show(ui, |ui| {
             let (rect, response) =

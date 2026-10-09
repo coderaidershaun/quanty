@@ -261,12 +261,7 @@ pub(super) async fn convert_page<S: PageServices>(
     let page = &written.page;
     let cut = cut_figures(&partial_folder, page).await;
 
-    let reported_displayed_math =
-        tags.math_notation || matches!(math.check, MathCheck::Block | MathCheck::Both);
-    let has_formula = page
-        .pieces
-        .iter()
-        .any(|piece| matches!(piece, TranscribedPiece::Formula { .. }));
+    let math_missing = displayed_math_without_formula(&tags, math.check, page);
     let conversion = Conversion {
         tags,
         math_check: math.check,
@@ -277,7 +272,7 @@ pub(super) async fn convert_page<S: PageServices>(
             text_layer_words: run.text_layer_words,
             piece_words: piece_word_count(page),
             word_match: word_match(page, &source.text_layer),
-            displayed_math_without_formula: reported_displayed_math && !has_formula,
+            displayed_math_without_formula: math_missing,
             reply_retried: written.retry_reason.is_some(),
             retry_reason: written.retry_reason,
             whole_page_figures: cut.whole_page,
@@ -291,14 +286,36 @@ pub(super) async fn convert_page<S: PageServices>(
         &cut.images,
         conversion,
     )?;
+    finish_folder(source, &partial_folder, chapter_folder)?;
+    Ok(run.ledger.tally)
+}
+
+fn displayed_math_without_formula(
+    tags: &PageCategories,
+    math_check: MathCheck,
+    page: &TranscribedPage,
+) -> bool {
+    let reported = tags.math_notation || matches!(math_check, MathCheck::Block | MathCheck::Both);
+    let has_formula = page
+        .pieces
+        .iter()
+        .any(|piece| matches!(piece, TranscribedPiece::Formula { .. }));
+    reported && !has_formula
+}
+
+/// The folder takes its finished name last, so a folder with that name always holds a whole page.
+fn finish_folder(
+    source: &PageSource,
+    partial_folder: &Path,
+    chapter_folder: &Path,
+) -> Result<(), ContentError> {
     std::fs::remove_file(&source.image).map_err(|error| ContentError::Write {
         path: source.image.clone(),
         source: error,
     })?;
     let done_folder = chapter_folder.join(page_folder_name(source.position));
-    std::fs::rename(&partial_folder, &done_folder).map_err(|source| ContentError::Write {
+    std::fs::rename(partial_folder, &done_folder).map_err(|source| ContentError::Write {
         path: done_folder,
         source,
-    })?;
-    Ok(run.ledger.tally)
+    })
 }

@@ -2,7 +2,7 @@
 //! of a converted chapter.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use graph::{FalkorGraph, GraphError, GraphStore};
 use ocr::{
@@ -209,22 +209,7 @@ pub(crate) fn read_page(config: &Config, args: ReadPageArgs) -> Result<PageView,
         return Err(LibraryError::ZeroPage);
     }
     let catalogue = Catalogue::read(&config.content_folder)?;
-    let entry = catalogue
-        .chapters
-        .iter()
-        .find(|entry| document_of(entry) == id)
-        .ok_or_else(|| {
-            let folder = config.content_folder.clone();
-            if catalogue.unreadable.is_empty() {
-                LibraryError::UnknownDocument { id, folder }
-            } else {
-                LibraryError::UnreadableChapters {
-                    id,
-                    folder,
-                    unreadable: unreadable_chapters(&catalogue),
-                }
-            }
-        })?;
+    let entry = chapter_entry(&catalogue, id, &config.content_folder)?;
     if args.page > entry.index.page_count {
         return Err(LibraryError::PageOutOfRange {
             page: args.page,
@@ -278,6 +263,31 @@ impl From<&ChapterPiece> for PieceView {
                 .map(|picture| picture.path.display().to_string()),
         }
     }
+}
+
+/// A chapter that cannot be read has no document id to compare, so when the catalogue has one,
+/// the error says that it may be the document.
+fn chapter_entry<'a>(
+    catalogue: &'a Catalogue,
+    id: DocId,
+    content_folder: &Path,
+) -> Result<&'a ChapterEntry, LibraryError> {
+    catalogue
+        .chapters
+        .iter()
+        .find(|entry| document_of(entry) == id)
+        .ok_or_else(|| {
+            let folder = content_folder.to_path_buf();
+            if catalogue.unreadable.is_empty() {
+                LibraryError::UnknownDocument { id, folder }
+            } else {
+                LibraryError::UnreadableChapters {
+                    id,
+                    folder,
+                    unreadable: unreadable_chapters(catalogue),
+                }
+            }
+        })
 }
 
 /// One line for each chapter of the catalogue that cannot be read. The line names the file.

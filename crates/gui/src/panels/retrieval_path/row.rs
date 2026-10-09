@@ -36,49 +36,21 @@ pub(super) fn show(
     step: &Step,
     density: Density,
 ) {
-    let marker = egui::Rect::from_center_size(
-        egui::pos2(rect.left() + HALF_STEP, rect.center().y),
-        egui::Vec2::splat(size::STEP),
-    );
-    let state = match step.progress {
-        Progress::Taken => StepState::Done,
-        Progress::Waiting | Progress::NotReached => StepState::Pending,
-    };
-    ui.place(marker, StepMarker::new(number).tone(step.tone).state(state));
-
+    let marker = place_marker(ui, rect, number, step);
     let block = match density {
         Density::Full => TWO_LINES,
         Density::Compact => TITLE,
     };
     let top = (rect.center().y - block / 2.0).round();
     let left = marker.right() + space::SM;
-    let (title_color, line_color) = match step.progress {
-        Progress::NotReached => (color::TEXT_MUTED, color::TEXT_MUTED),
-        Progress::Waiting | Progress::Taken => (color::TEXT, color::TEXT_SECONDARY),
-    };
-
-    // The badge sits on the title's line, so the line under the title can use the whole width.
-    let title_line = egui::Rect::from_min_max(
-        egui::pos2(rect.left(), top),
-        egui::pos2(rect.right(), top + TITLE),
-    );
-    let title_right = match &step.badge {
-        Some(text) => badge_in(ui, title_line, text).rect.left() - space::SM,
-        None => rect.right(),
-    };
-    let title_rect =
-        egui::Rect::from_min_max(egui::pos2(left, top), egui::pos2(title_right, top + TITLE));
-    let title = label_in(
-        ui,
-        title_rect,
-        TextRole::Label.rich(step.title).color(title_color),
-    );
+    let title = title_line(ui, rect, egui::pos2(left, top), step);
     match density {
         Density::Full => {
             let line_rect = egui::Rect::from_min_max(
                 egui::pos2(left, top + TITLE),
                 egui::pos2(rect.right(), top + TWO_LINES),
             );
+            let (_, line_color) = tints(step.progress);
             label_in(
                 ui,
                 line_rect,
@@ -88,6 +60,51 @@ pub(super) fn show(
         Density::Compact => {
             title.on_hover_text(&step.line);
         }
+    }
+}
+
+fn place_marker(ui: &mut egui::Ui, rect: egui::Rect, number: usize, step: &Step) -> egui::Rect {
+    let marker = egui::Rect::from_center_size(
+        egui::pos2(rect.left() + HALF_STEP, rect.center().y),
+        egui::Vec2::splat(size::STEP),
+    );
+    let state = match step.progress {
+        Progress::Taken => StepState::Done,
+        Progress::Waiting | Progress::NotReached => StepState::Pending,
+    };
+    ui.place(marker, StepMarker::new(number).tone(step.tone).state(state));
+    marker
+}
+
+/// The badge sits on the title's line, so the line under the title can use the whole width.
+fn title_line(
+    ui: &mut egui::Ui,
+    rect: egui::Rect,
+    start: egui::Pos2,
+    step: &Step,
+) -> egui::Response {
+    let line = egui::Rect::from_min_max(
+        egui::pos2(rect.left(), start.y),
+        egui::pos2(rect.right(), start.y + TITLE),
+    );
+    let title_right = match &step.badge {
+        Some(text) => badge_in(ui, line, text).rect.left() - space::SM,
+        None => rect.right(),
+    };
+    let title_rect = egui::Rect::from_min_max(start, egui::pos2(title_right, start.y + TITLE));
+    let (title_color, _) = tints(step.progress);
+    label_in(
+        ui,
+        title_rect,
+        TextRole::Label.rich(step.title).color(title_color),
+    )
+}
+
+/// The colours of the title and of the line under it.
+fn tints(progress: Progress) -> (egui::Color32, egui::Color32) {
+    match progress {
+        Progress::NotReached => (color::TEXT_MUTED, color::TEXT_MUTED),
+        Progress::Waiting | Progress::Taken => (color::TEXT, color::TEXT_SECONDARY),
     }
 }
 

@@ -3,9 +3,12 @@
 
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
 use uuid::Uuid;
 
+use super::reader::{
+    ChapterFile, Detail, FigureImage, PieceFile, SampleError, Shows, read_json, read_page_file,
+    read_piece,
+};
 use crate::contract::{
     Catalogue, Category, DocId, Document, DocumentName, ImageRef, ItemCounts, Media, PageBox,
     PagePiece, PageView, PieceKind,
@@ -64,160 +67,10 @@ fn paper() -> Media {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub(in crate::backend::fake) enum SampleError {
-    #[error("no sample document has the id {doc}")]
-    UnknownDocument { doc: Uuid },
-    #[error("the sample document has {page_count} pages, so page {page} is not in it")]
-    NoSuchPage { page: u32, page_count: u32 },
-    #[error("page {page} of the sample document {doc} has no piece {piece}")]
-    NoSuchPiece { doc: Uuid, page: u32, piece: u32 },
-    #[error("could not read {}: {source}", path.display())]
-    Unreadable {
-        path: PathBuf,
-        source: std::io::Error,
-    },
-    #[error("{} is not a sample file of the expected shape: {source}", path.display())]
-    Malformed {
-        path: PathBuf,
-        source: serde_json::Error,
-    },
-}
-
-// SMELL: this reads the saved chapter files a second time, apart from the real reader, because
-// the fake backend may not name a backend crate. A change to the saved format must be made here
-// too, and the test of every sample page fails when it is not.
-#[derive(Deserialize)]
-#[serde(rename_all = "kebab-case")]
-struct ChapterFile {
-    media_title: String,
-    name: NameFile,
-    page_count: u32,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "kebab-case")]
-enum NameFile {
-    Chapter { number: u32, name: String },
-    Title(String),
-}
-
-impl ChapterFile {
-    fn name(&self) -> DocumentName {
-        match &self.name {
-            NameFile::Chapter { number, name } => DocumentName::Chapter {
-                number: *number,
-                name: name.clone(),
-            },
-            NameFile::Title(title) => DocumentName::Title(title.clone()),
-        }
-    }
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "kebab-case")]
-struct PageFile {
-    printed_page_number: Option<String>,
-    pieces: Vec<PieceFile>,
-}
-
-#[derive(Deserialize)]
-struct PieceFile {
-    number: u32,
-    file: String,
-    #[serde(flatten)]
-    detail: Detail,
-}
-
-#[derive(Deserialize)]
-#[serde(
-    tag = "kind",
-    rename_all = "kebab-case",
-    rename_all_fields = "kebab-case"
-)]
-enum Detail {
-    Heading {
-        rank: u8,
-        #[serde(default)]
-        printed_number: Option<String>,
-    },
-    Text,
-    Formula {
-        #[serde(default)]
-        label: Option<String>,
-        #[serde(default)]
-        name: Option<String>,
-    },
-    Figure {
-        #[serde(default)]
-        label: Option<String>,
-        #[serde(default)]
-        caption: Option<String>,
-        #[serde(default)]
-        image: Option<FigureImage>,
-    },
-    Table {
-        #[serde(default)]
-        label: Option<String>,
-        #[serde(default)]
-        caption: Option<String>,
-    },
-    Footnote {
-        #[serde(default)]
-        marker: Option<String>,
-    },
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "kebab-case")]
-struct FigureImage {
-    file: String,
-    shows: Shows,
-    #[serde(default)]
-    cut: Option<Cut>,
-}
-
-#[derive(Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-enum Shows {
-    Figure,
-    WholePage,
-}
-
-#[derive(Deserialize)]
-struct Cut {
-    left: i32,
-    top: i32,
-    right: i32,
-    bottom: i32,
-}
-
 pub(in crate::backend::fake) fn find_samples(near: &Path) -> Option<PathBuf> {
     near.ancestors()
         .map(|folder| folder.join("samples").join("content"))
         .find(|candidate| candidate.is_dir())
-}
-
-fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, SampleError> {
-    let text = std::fs::read_to_string(path).map_err(|source| SampleError::Unreadable {
-        path: path.to_path_buf(),
-        source,
-    })?;
-    serde_json::from_str(&text).map_err(|source| SampleError::Malformed {
-        path: path.to_path_buf(),
-        source,
-    })
-}
-
-fn read_piece(path: &Path) -> Result<String, SampleError> {
-    let mut text = std::fs::read_to_string(path).map_err(|source| SampleError::Unreadable {
-        path: path.to_path_buf(),
-        source,
-    })?;
-    if text.ends_with('\n') {
-        text.pop();
-    }
-    Ok(text)
 }
 
 fn chapter_folder(samples: &Path, doc: DocId) -> Result<PathBuf, SampleError> {
@@ -306,14 +159,6 @@ pub(in crate::backend::fake) fn catalogue(samples: &Path) -> Result<Catalogue, S
     let mut catalogue = Catalogue { media };
     catalogue.sort_media();
     Ok(catalogue)
-}
-
-fn read_page_file(folder: &Path, position: u32) -> Result<PageFile, SampleError> {
-    read_json(
-        &folder
-            .join(format!("page-num-{position}"))
-            .join("page.json"),
-    )
 }
 
 fn picture(path: PathBuf) -> Option<ImageRef> {

@@ -4,4 +4,7 @@ mod claude_error;
 mod convert;
 mod figure_pictures;
 mod jev;
+mod relationships;
 mod resume;
+mod routes;
+mod summary;

@@ -119,7 +119,7 @@ pub async fn relabel_media<G: GraphStore>(
 ///
 /// # Errors
 /// [`GraphError`] when the graph cannot list its media.
-pub async fn media_category<G: GraphStore>(
+pub(crate) async fn media_category<G: GraphStore>(
     title: &str,
     given: Option<Category>,
     graph: &G,

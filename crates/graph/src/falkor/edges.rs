@@ -4,8 +4,7 @@
 use falkordb::FalkorValue;
 use rag_core::{ConceptId, ItemId};
 
-use super::FalkorGraph;
-use super::reads::{id_list, unreadable_reply};
+use super::{FalkorGraph, id_list, unreadable_reply};
 use crate::contents::{Mention, Relation};
 use crate::store::GraphError;
 
@@ -14,8 +13,6 @@ a relation (the id of the concept it leaves, the id of the concept it reaches, a
 and the id of an item)";
 const MENTION_ROW: &str = "a mention (an item id, a concept id and the wording)";
 
-// SMELL: the reads below match by `id`, which has no index, so each one looks at every node with
-// its label and gets slower as the graph grows.
 const RELATIONS_AMONG: &str = "\
 MATCH (a:Concept)-[r:RELATES_TO]->(b:Concept)
 WHERE a.id IN $concepts AND b.id IN $concepts

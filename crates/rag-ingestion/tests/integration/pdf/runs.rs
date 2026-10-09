@@ -2,15 +2,15 @@
 //! stores: one run stores the whole chapter, a second does nothing, a stopped run is finished.
 
 use std::collections::BTreeSet;
+use std::path::Path;
 
 use graph::testing::stored_document;
 use graph::{GraphStore, MediaNode};
 use ocr::testing::{Scenario, sample_pdf};
-use ocr::{ChapterJob, ConvertError, MediaDocument, PageProgress, read_chapter};
+use ocr::{ChapterJob, ConvertError, PageProgress, read_chapter};
 use rag_core::{Category, DocId, DocumentLabels, ItemKind, MediaLabels};
 use rag_ingestion::{
-    ConceptError, IngestError, IngestStep, PdfError, PdfOutcome, chapter_items, document_name,
-    media_category,
+    ConceptError, IngestError, IngestStep, PdfError, PdfOutcome, UnnamedPdf, chapter_items,
 };
 use serde_json::json;
 
@@ -321,12 +321,14 @@ async fn a_paper_pdf_with_a_plain_name_is_ingested_into_its_media_folder_with_th
     // The sample pages under a name that is not a chapter's.
     let plain = throwaway.temporary_folder().join("hawkes.pdf");
     std::fs::copy(sample_pdf(), &plain).unwrap();
-    let name = document_name(Category::Paper, "T", &plain).unwrap();
-    let document = MediaDocument {
-        media_title: "T".to_owned(),
-        name,
+    let unnamed = UnnamedPdf {
+        media_title: "T",
+        category: Some(Category::Paper),
+        document_title: None,
+        pdf: &plain,
     };
-    let job = ChapterJob::new(document, &plain, &config.content_folder).unwrap();
+    let named = unnamed.named(&stores.graph).await.unwrap();
+    let job = ChapterJob::new(named.document, &plain, &config.content_folder).unwrap();
     let media = MediaLabels {
         category: Category::Paper,
         authors: vec!["A".to_owned(), "B".to_owned()],
@@ -376,7 +378,13 @@ async fn a_paper_pdf_with_a_plain_name_is_ingested_into_its_media_folder_with_th
     // A later PDF of this media is named and labelled as a paper, whatever category its caller
     // gives; the caller's category only makes a media the library does not have.
     let category_of = async |title: &str, given: Option<Category>| {
-        media_category(title, given, &stores.graph).await.unwrap()
+        let later = UnnamedPdf {
+            media_title: title,
+            category: given,
+            document_title: None,
+            pdf: Path::new("chapter-1-later.pdf"),
+        };
+        later.named(&stores.graph).await.unwrap().category
     };
     assert_eq!(
         category_of(" t ", Some(Category::Book)).await,

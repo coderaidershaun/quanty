@@ -1,6 +1,7 @@
 //! Support for tests of other crates: a graph that is removed when the test ends, and reads of
 //! what a graph holds. The product cannot read or remove a whole graph, so it is behind a feature.
 
+use std::collections::BTreeSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use falkordb::{FalkorClientBuilder, FalkorConnectionInfo, FalkorValue};
@@ -183,6 +184,25 @@ pub async fn size(graph: &FalkorGraph) -> GraphSize {
         nodes: count(read_all(graph, "MATCH (n) RETURN count(n) AS nodes").await),
         edges: count(read_all(graph, "MATCH ()-[e]->() RETURN count(e) AS edges").await),
     }
+}
+
+/// Each label and property that has an index.
+pub async fn indexes(graph: &FalkorGraph) -> BTreeSet<(String, String)> {
+    let rows = read_all(
+        graph,
+        "CALL db.indexes() YIELD label, properties RETURN label, properties",
+    )
+    .await;
+    rows.into_iter()
+        .flat_map(|row| {
+            let mut values = row.into_iter();
+            let label = text(values.next().expect("a row has a label"));
+            let properties = texts(values.next().expect("a row has a list of properties"));
+            properties
+                .into_iter()
+                .map(move |property| (label.clone(), property))
+        })
+        .collect()
 }
 
 /// Concepts are sorted by normalised name, mentions by item and then concept, and relations by

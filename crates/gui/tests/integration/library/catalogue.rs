@@ -62,6 +62,43 @@ async fn the_catalogue_joins_stored_documents_with_their_chapter_folders() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p gui --test integration -- --ignored library::"]
+async fn a_chapter_that_is_not_finished_is_not_taken_for_the_folder_of_its_document() {
+    let cx = support::context("library-unfinished");
+    let stores = cx.stores().await.expect("the stores should open");
+    let models = cx.models().expect("the models should be made");
+    let content = cx.config().content_folder.clone();
+    let finished = content.join(IN_DEPTH);
+    copy_folder(&sample_chapter(IN_DEPTH), &finished);
+    let stored = ingest_chapter(chapter_at(&finished), &models, &stores).await;
+    let stored = stored.expect("the chapter should be ingested");
+    // A second conversion of the same PDF stopped half way, in a media folder that the scan of
+    // the content folder reads first, and the graph keeps it as the document's folder.
+    let unfinished = content.join("a-first-media").join("chapter-2");
+    copy_folder(&sample_chapter(IN_DEPTH), &unfinished);
+    let index = unfinished.join("chapter.json");
+    let saved = std::fs::read_to_string(&index).expect("the copied index should be read");
+    let stopped = saved.replace("\"finished\": true", "\"finished\": false");
+    assert_ne!(
+        stopped, saved,
+        "the copied index should say that it is finished"
+    );
+    std::fs::write(&index, stopped).expect("the copied index should be written");
+    stores
+        .graph
+        .set_chapter_folder(stored.doc_id, &unfinished)
+        .await
+        .expect("the folder should be stored");
+
+    let catalogue = catalogue_of(&cx).await.expect("the catalogue is read");
+
+    let document = catalogue
+        .document(stored.doc_id.into())
+        .expect("the chapter is listed");
+    assert_eq!(document.folder.as_deref(), Some(finished.as_path()));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p gui --test integration -- --ignored library::"]
 async fn a_saved_book_is_listed_after_a_second_start_shows_its_chapter_and_is_not_saved_twice() {
     // Every save and every ingest goes to the first start, and every catalogue is read by the
     // second one, so a saved book that is only in the memory of the first is not found.

@@ -29,9 +29,6 @@ impl CutFigures {
         let image = FigureImage {
             file: PAGE_IMAGE_FILE.to_owned(),
             shows: ImageShows::WholePage,
-            cut: None,
-            holds_body_text: false,
-            unchecked: false,
         };
         self.images.push((piece, image));
         self.whole_page.push(WholePageFigure { piece, why });
@@ -133,17 +130,19 @@ async fn draw(
     }
     Ok(FigureImage {
         file,
-        shows: ImageShows::Figure,
-        cut: Some(cut.area.page_box()),
-        holds_body_text: cut.holds_body_text,
-        unchecked: cut.unchecked,
+        shows: ImageShows::Figure {
+            cut: Some(cut.area.page_box()),
+            holds_body_text: cut.holds_body_text,
+            unchecked: cut.unchecked,
+        },
     })
 }
 
 /// A saved reason must not hold the working folder's path, which no longer exists once the page
 /// is finished.
-// SMELL: the path is taken out by matching text. A tool that prints the folder spelled another
-// way, such as through a symlink, would leave the working path in the saved reason.
+// SMELL: the folder is taken out by matching text, so a tool that prints it spelled another way
+// leaves the working path in the saved reason. Only running the tools from inside the page
+// folder would end this, and the tool runner has no such option.
 fn without_folder(error: &PopplerError, page_folder: &Path) -> String {
     error
         .to_string()

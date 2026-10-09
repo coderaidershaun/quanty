@@ -137,6 +137,16 @@ enum Fill {
 const PLACEHOLDER_TEXT_WIDTH: f32 = 360.0;
 const PLACEHOLDER_ICON: f32 = 32.0;
 
+/// What a placeholder stacks, from the top. The drawing and the measure that centres the stack
+/// both walk the same list, so a new part cannot be left out of one of them.
+#[derive(Debug, Clone, Copy)]
+enum Part<'a> {
+    Icon,
+    Title,
+    Hint(&'a str),
+    Action(&'a str),
+}
+
 pub struct Placeholder<'a> {
     fill: Fill,
     title: &'a str,
@@ -204,17 +214,8 @@ impl<'a> Placeholder<'a> {
             Layout::top_down(Align::Center),
             |ui| {
                 ui.add_space(top);
-                self.paint_icon(ui);
-                ui.scope(|ui| {
-                    ui.set_max_width(text_width);
-                    ui.label(self.title_text());
-                    if let Some(hint) = self.hint {
-                        ui.label(TextRole::Small.rich(hint));
-                    }
-                });
-                if let Some(label) = self.action {
-                    let button = Button::secondary(label).size(ControlSize::Small);
-                    action_clicked = ui.add(button).clicked();
+                for part in self.parts() {
+                    action_clicked |= self.show_part(ui, part, text_width);
                 }
             },
         );
@@ -224,6 +225,39 @@ impl<'a> Placeholder<'a> {
         PlaceholderResponse {
             response: centred.response,
             action_clicked,
+        }
+    }
+
+    fn parts(&self) -> Vec<Part<'a>> {
+        let hint = self.hint.map(Part::Hint);
+        let action = self.action.map(Part::Action);
+        [Some(Part::Icon), Some(Part::Title), hint, action]
+            .into_iter()
+            .flatten()
+            .collect()
+    }
+
+    /// Returns true when the part is the action and it was clicked.
+    fn show_part(&self, ui: &mut egui::Ui, part: Part<'_>, text_width: f32) -> bool {
+        let mut clicked = false;
+        match part {
+            Part::Icon => self.paint_icon(ui),
+            Part::Title => wrapped_label(ui, self.title_text(), text_width),
+            Part::Hint(hint) => wrapped_label(ui, TextRole::Small.rich(hint), text_width),
+            Part::Action(label) => {
+                let button = Button::secondary(label).size(ControlSize::Small);
+                clicked = ui.add(button).clicked();
+            }
+        }
+        clicked
+    }
+
+    fn height_of(&self, ui: &egui::Ui, part: Part<'_>, text_width: f32) -> f32 {
+        match part {
+            Part::Icon => PLACEHOLDER_ICON,
+            Part::Title => text_height(ui, TextRole::BodyStrong, self.title, text_width),
+            Part::Hint(hint) => text_height(ui, TextRole::Small, hint, text_width),
+            Part::Action(_) => ControlSize::Small.height(),
         }
     }
 
@@ -249,21 +283,21 @@ impl<'a> Placeholder<'a> {
     }
 
     fn content_height(&self, ui: &egui::Ui, text_width: f32) -> f32 {
-        // SMELL: this lists again what `show` stacks. A part that is added there and not here
-        // puts the placeholder off centre.
         let gap = ui.spacing().item_spacing.y;
-        let mut heights = vec![
-            PLACEHOLDER_ICON,
-            text_height(ui, TextRole::BodyStrong, self.title, text_width),
-        ];
-        if let Some(hint) = self.hint {
-            heights.push(text_height(ui, TextRole::Small, hint, text_width));
-        }
-        if self.action.is_some() {
-            heights.push(ControlSize::Small.height());
-        }
-        heights.iter().sum::<f32>() + gap * (heights.len() - 1) as f32
+        let parts = self.parts();
+        let stacked: f32 = parts
+            .iter()
+            .map(|part| self.height_of(ui, *part, text_width))
+            .sum();
+        stacked + gap * (parts.len() - 1) as f32
     }
+}
+
+fn wrapped_label(ui: &mut egui::Ui, text: egui::RichText, width: f32) {
+    ui.scope(|ui| {
+        ui.set_max_width(width);
+        ui.label(text);
+    });
 }
 
 fn paint_big_icon(ui: &mut egui::Ui, icon: Icon, tint: egui::Color32) {

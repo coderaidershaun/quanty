@@ -1,10 +1,13 @@
 //! One screen that shows the colours, the text styles and every widget in every state, so a
 //! reviewer sees the whole kit at once.
 
-mod states;
+mod controls;
+mod frames;
+mod marks;
+mod messages;
 mod tokens;
 
-use eframe::egui;
+use eframe::egui::{self, Response};
 
 use crate::theme::{TextRole, space};
 
@@ -58,9 +61,30 @@ pub fn show(ui: &mut egui::Ui, state: &mut State) {
                 let height = ui.available_height();
                 column(ui, TOKENS_WIDTH, height, tokens::show);
                 let width = ui.available_width();
-                column(ui, width, height, |ui| states::show(ui, state));
+                column(ui, width, height, |ui| widgets(ui, state));
             });
         });
+}
+
+/// The right column: every widget in every state. A demo widget that is there to be used writes
+/// its name to `last_activated`, and the gallery prints it as "Last used".
+fn widgets(ui: &mut egui::Ui, state: &mut State) {
+    controls::buttons(ui, state);
+    controls::inputs(ui, state);
+    controls::tabs(ui, state);
+    frames::cards(ui, state);
+    marks::chips(ui, state);
+    messages::notices(ui, state);
+    messages::placeholders(ui, state);
+    messages::progress(ui);
+    frames::panel_header(ui, state);
+    messages::confirm(ui, state);
+}
+
+fn used(state: &mut State, response: &Response, name: &'static str) {
+    if response.clicked() {
+        state.last_activated = Some(name);
+    }
 }
 
 fn column(ui: &mut egui::Ui, width: f32, height: f32, add_contents: impl FnOnce(&mut egui::Ui)) {

@@ -119,6 +119,5 @@ pub(crate) async fn stored_node<G: GraphStore>(
     id: DocId,
     stores: &Stores<G>,
 ) -> Result<Option<DocumentNode>, GraphError> {
-    let documents = stores.graph.documents().await?;
-    Ok(documents.into_iter().find(|node| node.id == id))
+    stores.graph.document(id).await
 }

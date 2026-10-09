@@ -6,7 +6,8 @@ use std::path::Path;
 use uuid::Uuid;
 
 use super::concepts;
-use super::library::{self, SampleError, title_of};
+use super::library::{self, title_of};
+use super::reader::SampleError;
 use crate::contract::{
     Answer, AnswerBlock, ConceptGraph, DocId, EdgeKind, GraphEdge, GraphNode, ItemId, ItemKind,
     ModelTokens, NodeId, NodeKind, Reason, ResultItem, RetrievalTrace, SearchReply, Usage,

@@ -33,8 +33,8 @@ pub(super) fn text_of<S: Borrow<str>>(items: &[S]) -> String {
 
 /// A cost in words: "≈ $0.42", "under $0.01" for a cost that would round to nothing, and
 /// "unknown" when a model has no price.
-// SMELL: the backend words a cost by this same rule, and no panel can reach the backend, so a
-// change to the rule must be made in both places.
+// SMELL: the core crate keeps its own copy of this rule, and no panel may name that crate, so a
+// change to one must be made in both.
 pub(super) fn cost_text(usd: Option<f64>) -> String {
     match usd {
         None => "unknown".to_owned(),

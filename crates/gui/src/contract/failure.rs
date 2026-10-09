@@ -1,6 +1,8 @@
 //! What went wrong, in words a person can act on, and the value that holds a result that is still
 //! on its way.
 
+use std::path::Path;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Failure {
     pub kind: FailureKind,
@@ -113,6 +115,48 @@ impl Failure {
         )
         .with_hint(format!(
             "{title} is in the library already. Choose it from the Media list."
+        ))
+    }
+
+    /// Qdrant does not answer at `url`, the address the app was given.
+    pub fn qdrant_down(url: &str) -> Failure {
+        Failure::new(
+            FailureKind::QdrantDown,
+            format!("could not reach Qdrant at {url}"),
+        )
+        .with_hint(format!("Start Qdrant at {url}, then try again."))
+    }
+
+    /// FalkorDB does not answer at `url`, the address the app was given.
+    pub fn falkordb_down(url: &str) -> Failure {
+        Failure::new(
+            FailureKind::FalkorDbDown,
+            format!("could not connect to FalkorDB at {url}"),
+        )
+        .with_hint(format!("Start FalkorDB at {url}, then try again."))
+    }
+
+    /// The document has `page_count` pages, so it has no page `page`.
+    pub fn no_such_page(page: u32, page_count: u32) -> Failure {
+        Failure::new(
+            FailureKind::SourceMissing,
+            format!("the document has {page_count} pages, so page {page} is not in it"),
+        )
+        .with_hint(format!(
+            "This document has {page_count} pages, so page {page} is not in it. Ingest its PDF again with rag-ingest pdf."
+        ))
+    }
+
+    /// No folder of the document's pages was found, neither the one kept with it nor one under
+    /// `content_folder`.
+    pub fn pages_not_found(content_folder: &Path) -> Failure {
+        let searched = content_folder.display();
+        Failure::new(
+            FailureKind::SourceMissing,
+            format!("no folder of the document's pages was found under {searched}"),
+        )
+        .with_hint(format!(
+            "quanty does not know where this document's pages are. Put its folder inside its media's folder under {searched}, or ingest its PDF again with rag-ingest pdf."
         ))
     }
 }

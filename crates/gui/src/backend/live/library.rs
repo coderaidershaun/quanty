@@ -14,7 +14,7 @@ use super::{LiveContext, Services};
 use crate::backend::Reply;
 use crate::contract::{
     Catalogue, DocId, Document, DocumentName, DocumentTagsEdit, Event, Failure, ItemCounts, Media,
-    MediaEdit, NewMedia, RequestId, is_same_title,
+    MediaEdit, NewMedia, RequestId, is_same_name,
 };
 
 /// Sends exactly one catalogue, also when it cannot be read, so the window never waits for one.
@@ -98,8 +98,8 @@ pub(super) async fn save_media<S: Services>(
 /// The title must be one that a folder can be named after, and the library must not have it yet,
 /// whether as a saved media or as a label on stored documents.
 // SMELL: the check and the write are two steps, so another program that saves a media between
-// them can store a second media whose title differs only in capitals. The store itself treats
-// only the exact same title as the same media.
+// them can store a second media whose title differs only in capitals. The store compares titles
+// as they are given, so only a change to how it writes a media can close the gap.
 async fn store_media<S: Services>(cx: &LiveContext<S>, media: &NewMedia) -> Result<(), Failure> {
     media_folder_name(&media.title).map_err(|error| cx.failure(error))?;
     if let Some(stored) = read_catalogue(cx).await?.stored_title(&media.title) {
@@ -163,7 +163,7 @@ fn catalogue_from(
             listed
                 .media
                 .as_deref()
-                .is_some_and(|title| is_same_title(title, &node.title))
+                .is_some_and(|title| is_same_name(title, &node.title))
         });
         left = others;
         media.push(Media {

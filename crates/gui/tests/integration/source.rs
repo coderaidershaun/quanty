@@ -222,10 +222,11 @@ fn saved_chapter(folder: &Path) {
     std::fs::write(page_folder.join("01-figure.png"), b"not a real picture").unwrap();
     let picture = FigureImage {
         file: "01-figure.png".to_owned(),
-        shows: ImageShows::Figure,
-        cut: None,
-        holds_body_text: false,
-        unchecked: false,
+        shows: ImageShows::Figure {
+            cut: None,
+            holds_body_text: false,
+            unchecked: false,
+        },
     };
     let figure = PieceDetail::Figure {
         label: Some("Figure 1-1".to_owned()),

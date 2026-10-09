@@ -22,8 +22,8 @@ const API_KEY_SUFFIX: &str = "_API_KEY";
 // The variables a Claude Code session sets for its children. A child that inherits them thinks it
 // is a nested session. They are removed by name, not by prefix: `CLAUDE_CONFIG_DIR` and
 // `CLAUDE_CODE_OAUTH_TOKEN` are how some sign-ins work.
-// SMELL: this list is a second copy of the one the converter keeps, and nothing keeps the two the
-// same.
+// SMELL: the converter keeps its own copy of this list, and neither crate depends on the other,
+// so a change to one must be made in both.
 const SESSION_VARIABLES: [&str; 13] = [
     "CLAUDECODE",
     "CLAUDE_CODE_ENTRYPOINT",

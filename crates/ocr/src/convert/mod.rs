@@ -17,6 +17,7 @@ mod usable_box;
 use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
+use tokio::process::Command;
 
 use crate::content::{
     ChapterIndex, ContentError, DocumentName, FORMAT_VERSION, MediaDocument, PageIndex,
@@ -58,6 +59,12 @@ pub enum ConvertError {
         saved_file: String,
         given_file: String,
     },
+
+    #[error(
+        "another run is converting {} at this moment; wait for it to finish, then run again",
+        folder.display()
+    )]
+    ChapterBusy { folder: PathBuf },
 
     #[error(transparent)]
     Poppler(#[from] PopplerError),
@@ -173,6 +180,7 @@ enum Prepared {
 /// - [`ConvertError::ApiKeySet`] if `ANTHROPIC_API_KEY` is set, even when the chapter is
 ///   finished
 /// - [`ConvertError::Services`] if Jev cannot be reached or refuses its key
+/// - [`ConvertError::ChapterBusy`] if another run is converting the same chapter
 /// - [`ConvertError::PageFailed`] for the lowest page that failed; finished pages stay saved
 pub async fn convert_chapter(job: &ChapterJob) -> Result<ConversionSummary, ConvertError> {
     let jev_api_key = std::env::var(services::JEV_API_KEY_VARIABLE).ok();
@@ -291,6 +299,14 @@ fn is_saved(chapter_folder: &Path, position: u32) -> Result<bool, ContentError> 
         Err(ContentError::Parse { .. }) => Ok(false),
         Err(error) => Err(error),
     }
+}
+
+/// Start every child process of a conversion here: one started any other way inherits the Jev
+/// API key, which only the Jev client needs.
+fn child_process(program: &str) -> Command {
+    let mut command = Command::new(program);
+    command.env_remove(services::JEV_API_KEY_VARIABLE);
+    command
 }
 
 fn write_error(path: &Path) -> impl FnOnce(std::io::Error) -> ContentError + '_ {

@@ -7,7 +7,7 @@ use std::path::Path;
 use falkordb::FalkorValue;
 use rag_core::{DocId, Tag};
 
-use super::{FalkorGraph, id_value};
+use super::{FalkorGraph, id_value, unreadable_reply};
 use crate::contents::{
     ConceptAlias, ConceptNode, DocumentNode, ItemNode, MediaNode, Mention, Relation,
 };
@@ -38,9 +38,6 @@ const SET_INGESTED_ITEMS: &str = "MATCH (d:Document {id: $id}) SET d.ingested_it
 
 const SET_CHAPTER_FOLDER: &str = "MATCH (d:Document {id: $id}) SET d.chapter_folder = $folder";
 
-// SMELL: there is no index on `id`, so every `MERGE` reads all the nodes with its label, and a
-// write gets slower as the graph grows. In a very large graph one write would take longer than
-// the client waits for a reply, and the ingest would stop with a failed request.
 const UPSERT_ITEMS: &str = "\
 MERGE (d:Document {id: $document})
 WITH d
@@ -54,10 +51,14 @@ UNWIND $pairs AS pair
 MATCH (a:Item {id: pair[0]}), (b:Item {id: pair[1]})
 MERGE (a)-[:NEXT]->(b)";
 
+// The statement counts what it deletes itself, because the line of the reply that counts deleted
+// nodes is left out when there are none, and the client cannot tell that from a line it failed
+// to read.
 const DELETE_DOCUMENT: &str = "\
 MATCH (d:Document {id: $id})
 OPTIONAL MATCH (d)-[:HAS_ITEM]->(i:Item)
-DETACH DELETE i, d";
+DETACH DELETE i, d
+RETURN count(DISTINCT d) + count(DISTINCT i)";
 
 // A concept keeps each alias twice: as the item wrote it, for a person to read, and in the form
 // that names are compared in, for the lookup. The two lists must grow together.
@@ -73,22 +74,25 @@ WHERE c.normalised_name <> $normalised_name
 SET c.aliases = coalesce(c.aliases, []) + $name,
     c.normalised_aliases = coalesce(c.normalised_aliases, []) + $normalised_name";
 
-// SMELL: a mention whose item or concept is not in the graph is not written, and nothing reports
-// it.
+// A row whose item or concept is not in the graph matches nothing and is dropped without an error,
+// so the statement counts the rows it wrote.
 const ADD_MENTIONS: &str = "\
 UNWIND $mentions AS mention
 MATCH (i:Item {id: mention.item}), (c:Concept {id: mention.concept})
 MERGE (i)-[m:MENTIONS]->(c)
-SET m.wording = mention.wording";
+SET m.wording = mention.wording
+RETURN count(m)";
 
-// SMELL: a relation whose concepts are not in the graph is not written, and nothing reports it.
-// A relation also keeps the id of the item that stated it after the document of that item is
+// SMELL: a relation keeps the id of the item that stated it after the document of that item is
 // deleted, and a concept stays when no item mentions it any more.
 const ADD_RELATIONS: &str = "\
 UNWIND $relations AS relation
 MATCH (a:Concept {id: relation.from}), (b:Concept {id: relation.to})
 MERGE (a)-[r:RELATES_TO {type: relation.type}]->(b)
-ON CREATE SET r.item = relation.item";
+ON CREATE SET r.item = relation.item
+RETURN count(r)";
+
+const COUNT_ROW: &str = "a count (one whole number that is not negative)";
 
 pub(super) async fn upsert_document(
     graph: &FalkorGraph,
@@ -219,21 +223,8 @@ pub(super) async fn upsert_items(
 }
 
 pub(super) async fn delete_document(graph: &FalkorGraph, id: DocId) -> Result<u64, GraphError> {
-    let reply = graph
-        .run(
-            "delete the document",
-            DELETE_DOCUMENT,
-            vec![("id", id_value(id))],
-        )
-        .await?;
-    // FalkorDB leaves the count of deleted nodes out of its reply when it deleted none.
-    // SMELL: the client also gives no count when it cannot find or read that line of the
-    // reply, so if FalkorDB changes the wording, a delete that removed nodes is reported as
-    // zero.
-    let removed = reply
-        .get_nodes_deleted()
-        .and_then(|count| u64::try_from(count).ok());
-    Ok(removed.unwrap_or(0))
+    let parameters = vec![("id", id_value(id))];
+    run_counted(graph, "delete the document", DELETE_DOCUMENT, parameters).await
 }
 
 pub(super) async fn upsert_concept(
@@ -262,28 +253,56 @@ pub(super) async fn add_mentions(
     graph: &FalkorGraph,
     mentions: &[Mention],
 ) -> Result<(), GraphError> {
+    let mut written = 0;
     for group in mentions.chunks(ROWS_PER_STATEMENT) {
         let rows = group.iter().map(mention_row).collect();
         let parameters = vec![("mentions", FalkorValue::Array(rows))];
-        graph
-            .run("write the mentions", ADD_MENTIONS, parameters)
-            .await?;
+        written += run_counted(graph, "write the mentions", ADD_MENTIONS, parameters).await?;
     }
-    Ok(())
+    all_written(graph, "mentions", mentions.len(), written)
 }
 
 pub(super) async fn add_relations(
     graph: &FalkorGraph,
     relations: &[Relation],
 ) -> Result<(), GraphError> {
+    let mut written = 0;
     for group in relations.chunks(ROWS_PER_STATEMENT) {
         let rows = group.iter().map(relation_row).collect();
         let parameters = vec![("relations", FalkorValue::Array(rows))];
-        graph
-            .run("write the relations", ADD_RELATIONS, parameters)
-            .await?;
+        written += run_counted(graph, "write the relations", ADD_RELATIONS, parameters).await?;
     }
-    Ok(())
+    all_written(graph, "relations", relations.len(), written)
+}
+
+fn all_written(
+    graph: &FalkorGraph,
+    edges: &'static str,
+    asked: usize,
+    written: u64,
+) -> Result<(), GraphError> {
+    let asked = asked as u64;
+    if written == asked {
+        return Ok(());
+    }
+    Err(GraphError::MissingNodes {
+        url: graph.url.clone(),
+        graph: graph.graph.graph_name().to_owned(),
+        edges,
+        asked,
+        written,
+    })
+}
+
+async fn run_counted(
+    graph: &FalkorGraph,
+    action: &'static str,
+    statement: &str,
+    parameters: Vec<(&'static str, FalkorValue)>,
+) -> Result<u64, GraphError> {
+    let reply = graph.run(action, statement, parameters).await?;
+    let rows: Vec<Vec<FalkorValue>> = reply.data.into_values_lossy().collect();
+    count_from_rows(&rows).map_err(|found| unreadable_reply(graph, action, COUNT_ROW, found))
 }
 
 pub(super) async fn add_alias(graph: &FalkorGraph, alias: &ConceptAlias) -> Result<(), GraphError> {
@@ -344,6 +363,16 @@ fn mention_row(mention: &Mention) -> FalkorValue {
             FalkorValue::String(mention.wording.clone()),
         ),
     ]))
+}
+
+fn count_from_rows(rows: &[Vec<FalkorValue>]) -> Result<u64, String> {
+    match rows {
+        [row] => match row.as_slice() {
+            [FalkorValue::I64(count)] => u64::try_from(*count).map_err(|_| count.to_string()),
+            _ => Err(format!("{row:?}")),
+        },
+        _ => Err(format!("{rows:?}")),
+    }
 }
 
 fn relation_row(relation: &Relation) -> FalkorValue {

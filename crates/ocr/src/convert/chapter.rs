@@ -1,6 +1,7 @@
 //! The work of a chapter run once pages are known to be left: tidy the folder, cut the missing
 //! pages out, convert them a few at a time, and mark the chapter finished last.
 
+use std::fs::{File, TryLockError};
 use std::path::Path;
 use std::pin::pin;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -21,6 +22,7 @@ use crate::content::{
 
 const PARALLEL_PAGES: usize = 4;
 const MODEL_IMAGE_FILE: &str = "model-view.png";
+const LOCK_FILE: &str = "conversion.lock";
 
 pub(super) async fn run<S: PageServices>(
     job: &ChapterJob,
@@ -31,6 +33,7 @@ pub(super) async fn run<S: PageServices>(
     let folder = &job.chapter_folder;
     let page_count = poppler::page_count(&job.chapter_pdf).await?;
     std::fs::create_dir_all(folder).map_err(write_error(folder))?;
+    let _chapter_lock = lock_chapter(folder)?;
     let mut index = ChapterIndex {
         format_version: FORMAT_VERSION,
         media_title: job.media_title.clone(),
@@ -40,8 +43,6 @@ pub(super) async fn run<S: PageServices>(
         page_count,
         finished: false,
     };
-    // SMELL: nothing stops two runs on the same chapter at once. They would remove each other's
-    // working folders. Run one `ocr` run per chapter.
     index.write(folder)?;
 
     let to_do = pages_to_do(folder, page_count)?;
@@ -63,6 +64,26 @@ pub(super) async fn run<S: PageServices>(
         to_do.len() as u32,
         calls,
     )?)
+}
+
+/// The lock is held until the run ends, so a second run on the same chapter is refused instead of
+/// removing the first one's working folders. The system lets go of it when the process ends, so a
+/// run that was killed never leaves the chapter locked.
+fn lock_chapter(folder: &Path) -> Result<File, ConvertError> {
+    let path = folder.join(LOCK_FILE);
+    let file = File::options()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(&path)
+        .map_err(write_error(&path))?;
+    match file.try_lock() {
+        Ok(()) => Ok(file),
+        Err(TryLockError::WouldBlock) => Err(ConvertError::ChapterBusy {
+            folder: folder.to_path_buf(),
+        }),
+        Err(TryLockError::Error(source)) => Err(ContentError::Write { path, source }.into()),
+    }
 }
 
 /// Converts the pages a few at a time and adds up their calls, telling each page as it ends.

@@ -1,9 +1,8 @@
 //! The state that every panel reads, and the rules that change it when a person acts or the
 //! backend answers. It knows nothing of the window.
 
-// SMELL: `Shared` holds the types that the other files of this folder define, and each of those
-// files adds its rules to `Shared`. So `Shared` and every one of them import each other, and a
-// rule cannot move without the type beside it.
+// SMELL: `Shared` holds the type of each file here, and each file adds its rules to `Shared`, so
+// they all import each other. Separating them means moving every rule onto its own type.
 mod ask;
 mod health;
 mod ingest;

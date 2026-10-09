@@ -48,6 +48,11 @@ impl Verdict {
         Verdict::of(Kind::Internal)
     }
 
+    /// The kind and the hint of a failure that the contract words. The detail stays the error's.
+    fn worded(failure: Failure) -> Verdict {
+        Verdict::saying(failure.kind, failure.hint)
+    }
+
     fn failure(self, error: &dyn Error) -> Failure {
         let failure = Failure::new(self.kind, chain(error));
         match self.hint {
@@ -95,25 +100,22 @@ fn store(error: &StoreError) -> Verdict {
     match error {
         StoreError::Connect { url, .. }
         | StoreError::Unreachable { url, .. }
-        | StoreError::Request { url, .. } => Verdict::saying(
-            Kind::QdrantDown,
-            format!("Start Qdrant at {url}, then try again."),
-        ),
+        | StoreError::Request { url, .. } => Verdict::worded(Failure::qdrant_down(url)),
         _ => Verdict::internal(),
     }
 }
 
-// SMELL: a server that answers at the address but is not FalkorDB has no row here, so the person
-// is told that something went wrong inside quanty. They could act on it: another program has
-// that port.
 fn graph(error: &GraphError) -> Verdict {
     match error {
         GraphError::Connect { url, .. }
         | GraphError::Ping { url, .. }
-        | GraphError::Query { url, .. } => Verdict::saying(
-            Kind::FalkorDbDown,
-            format!("Start FalkorDB at {url}, then try again."),
-        ),
+        | GraphError::Query { url, .. } => Verdict::worded(Failure::falkordb_down(url)),
+        GraphError::NotFalkorDb { url, .. } => {
+            let hint = format!(
+                "Another program answers at {url}, not FalkorDB. Stop that program, or move FalkorDB to another port and set FALKORDB_URL to match, then start quanty again."
+            );
+            Verdict::saying(Kind::FalkorDbDown, hint)
+        }
         _ => Verdict::internal(),
     }
 }

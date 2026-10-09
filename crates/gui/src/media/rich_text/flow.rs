@@ -1,7 +1,7 @@
 //! Breaks measured lines into rows that fit a width, and puts every word, formula and chip in
 //! its place on its row. It works on numbers only and never touches the window.
 
-use eframe::egui::{Rect, Vec2, vec2};
+use eframe::egui::{Align, Rect, Vec2, vec2};
 
 use super::atom::{AtomKind, Formula, LineMetrics, Measured};
 use super::breaker::{Fragment, PieceWidth, break_line};
@@ -54,7 +54,8 @@ pub(super) fn break_lines(
         if let Some(marker) = &line.marker {
             rows_of_line[0].insert(0, Fragment::whole(marker, 0.0));
         }
-        for fragments in &rows_of_line {
+        for fragments in &mut rows_of_line {
+            align_row(fragments, wrap, look.align);
             width = fragments.iter().fold(width, |wide, fragment| {
                 wide.max(fragment.x + fragment.width)
             });
@@ -85,6 +86,21 @@ pub(super) fn break_lines(
         formulas: measured.formulas.clone(),
         is_waiting: measured.is_waiting,
         plain: measured.plain.clone(),
+    }
+}
+
+/// A row that is wider than its room stays at the left.
+fn align_row(fragments: &mut [Fragment<'_>], wrap: f32, align: Align) {
+    // The room of a block of text can be endless, and no shift can be worked out from that.
+    if align == Align::Min {
+        return;
+    }
+    let right = fragments.iter().fold(0.0, |right: f32, fragment| {
+        right.max(fragment.x + fragment.width)
+    });
+    let shift = (wrap - right).max(0.0) * align.to_factor();
+    for fragment in fragments {
+        fragment.x += shift;
     }
 }
 

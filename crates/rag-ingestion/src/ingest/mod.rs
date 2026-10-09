@@ -1,6 +1,6 @@
 //! Takes one converted chapter folder, or one picture that stands alone, from disk to stored
-//! points, graph nodes and concepts. Running it again on the same chapter or picture writes the
-//! same points and the same nodes over themselves, and asks the language model nothing.
+//! points, graph nodes and concepts. Running it again on the same chapter or picture replaces
+//! what the earlier run stored, and asks the language model nothing.
 
 mod concepts;
 mod items;
@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 use graph::{DocumentNode, GraphError, GraphStore, ItemNode, MediaNode};
 use ocr::ReadChapterError;
 use rag_core::{
-    DocumentInput, DocumentLabels, EmbedError, Embedder, ItemPoint, Llm, LlmError, MediaLabels,
-    StoreError, UsageTally, embedding_usage,
+    DocumentInput, DocumentLabels, EmbedError, Embedder, Embedding, ItemPoint, ItemStore, Llm,
+    LlmError, MediaLabels, StoreError, UsageTally, embedding_usage,
 };
 
 pub use concepts::{
@@ -92,9 +92,11 @@ struct Document {
 /// that is not signed in fails the run before anything is written or paid for.
 ///
 /// The collections are prepared and the graph is written before anything is embedded, so a store
-/// that is down fails the run before an embedding call is paid for. A run that stops after that
-/// leaves the chapter in the graph with no points yet, and running it again stores them. A point
-/// is never stored without its node. Every stored picture path is absolute.
+/// that is down fails the run before an embedding call is paid for. What an earlier run stored of
+/// the document is removed first, so no item, node or mention that this run does not make is left
+/// behind. A run that stops after that leaves the chapter in the graph with no points yet, and
+/// running it again stores them. A point is never stored without its node. Every stored picture
+/// path is absolute.
 ///
 /// The concepts come last, after the points are stored, so a chapter whose extraction failed can
 /// still be searched. Extraction that stops, for example because `claude` has reached its usage
@@ -138,8 +140,8 @@ pub(crate) async fn ingest_chapter_reporting<E: Embedder, L: Llm, G: GraphStore>
     stores: &Stores<G>,
     on_step: OnStep<'_>,
 ) -> Result<IngestSummary, IngestError> {
-    // SMELL: the stored picture paths are absolute, so they stop working when the chapter
-    // folder is moved, until the chapter is ingested again.
+    // SMELL: the stored picture paths are absolute, so they stop working when the chapter folder is
+    // moved, until it is ingested again. Every program that shows a picture opens the stored path.
     let folder =
         std::fs::canonicalize(chapter.folder).map_err(|source| IngestError::ChapterFolder {
             path: chapter.folder.to_path_buf(),
@@ -166,7 +168,7 @@ pub(crate) async fn ingest_chapter_reporting<E: Embedder, L: Llm, G: GraphStore>
 /// the same guarantees as [`ingest_chapter`]. The document id is made from the bytes of the
 /// picture, so the same picture with another note, or with none, writes over the same document.
 /// The note is part of the text that is asked about, so another note asks the model again, and
-/// the mentions that the earlier note led to stay until the document is deleted.
+/// the mentions that the earlier note led to are removed.
 ///
 /// # Errors
 /// The same as [`ingest_chapter`], except that there is no chapter to find or read.
@@ -175,8 +177,8 @@ pub async fn ingest_image<E: Embedder, L: Llm, G: GraphStore>(
     models: &Models<E, L>,
     stores: &Stores<G>,
 ) -> Result<IngestSummary, IngestError> {
-    // SMELL: the stored picture path is absolute, so it stops working when the folder of the
-    // converted picture is moved, until the picture is ingested again.
+    // SMELL: the stored picture path is absolute, so it stops working when the converted picture is
+    // moved, until it is ingested again. Every program that shows a picture opens the stored path.
     let items = image_items(picture);
     let document = Document {
         node: DocumentNode {
@@ -191,8 +193,27 @@ pub async fn ingest_image<E: Embedder, L: Llm, G: GraphStore>(
     ingest_items(document, models, stores, &mut |_, _| {}).await
 }
 
+impl Document {
+    /// Gives the node and every item the labels of the media, the stored media of that title or
+    /// else a new one that is added, and the own tags that the stored node already has.
+    async fn take_labels<G: GraphStore>(&mut self, stores: &Stores<G>) -> Result<(), GraphError> {
+        if let Some(media) = self.media.take() {
+            let media = stored_or_added(media, stores).await?;
+            self.node.labels.take_media(&media.title, &media.labels);
+        }
+        // An ingest never removes an own tag that was set after an earlier one.
+        if let Some(stored) = stored_node(self.node.id, stores).await? {
+            self.node.labels.tags = stored.labels.tags;
+        }
+        for item in &mut self.items {
+            item.payload.document_labels = self.node.labels.clone();
+        }
+        Ok(())
+    }
+}
+
 async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
-    document: Document,
+    mut document: Document,
     models: &Models<E, L>,
     stores: &Stores<G>,
     on_step: OnStep<'_>,
@@ -202,69 +223,25 @@ async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
         .check_model_ready()
         .await
         .map_err(IngestError::ModelNotReady)?;
+    // It reads the own tags of the stored node, so it must come before an earlier run is removed.
+    document.take_labels(stores).await?;
     let Document {
-        mut node,
-        mut items,
-        media,
-        spent,
+        node, items, spent, ..
     } = document;
     let mut meter = Meter::new(on_step, spent);
-    if let Some(media) = media {
-        let media = stored_or_added(media, stores).await?;
-        node.labels.take_media(&media.title, &media.labels);
-    }
-    // An ingest never removes an own tag that was set after an earlier one.
-    if let Some(stored) = stored_node(node.id, stores).await? {
-        node.labels.tags = stored.labels.tags;
-    }
-    for item in &mut items {
-        item.payload.document_labels = node.labels.clone();
-    }
-    let items_by_kind = ItemCounts::of(&items);
-    let nodes: Vec<ItemNode> = items.iter().map(item_node).collect();
 
     stores.items.ensure_collection().await?;
     stores.concepts.ensure_collection().await?;
-    // SMELL: nothing removes the item nodes of an earlier run either, with their `NEXT` edges. A
-    // chapter that is cut into items differently ends up with two chains of items in the graph,
-    // until its document is deleted and ingested again.
     meter.step(IngestStep::WritingGraph);
-    stores.graph.upsert_document(&node).await?;
-    // A run that stops after this line must not leave the mark that an earlier run set.
-    stores.graph.set_ingested_items(node.id, None).await?;
-    stores.graph.upsert_items(node.id, &nodes).await?;
+    replace_earlier_run(&node, &items, stores).await?;
 
-    let inputs: Vec<DocumentInput> = items.iter().map(|item| item.input.clone()).collect();
-    meter.step(IngestStep::Embedding { items: items.len() });
-    let vectors = models.embedder.embed_document(&inputs).await?;
-    meter.spend(&embedding_usage(&inputs));
-    if vectors.len() != items.len() {
-        return Err(IngestError::VectorCount {
-            items: items.len(),
-            vectors: vectors.len(),
-        });
-    }
-
-    let points: Vec<ItemPoint> = items
-        .iter()
-        .zip(&vectors)
-        .map(|(item, vector)| ItemPoint {
-            id: item.id,
-            vector: vector.clone(),
-            payload: item.payload.clone(),
-        })
-        .collect();
-    // SMELL: nothing removes the points of an earlier run. When the way a chapter is cut into
-    // items changes, its items get other positions and so other identifiers, and the old points
-    // of the chapter stay in the collection beside the new ones.
-    meter.step(IngestStep::Storing);
-    stores.items.upsert(&points).await?;
-    let points_in_collection = stores.items.count().await?;
-
+    let vectors = embed_items(&items, &models.embedder, &mut meter).await?;
     let embedded = EmbeddedItems {
         items: &items,
         vectors: &vectors,
     };
+    meter.step(IngestStep::Storing);
+    let points_in_collection = store_points(&embedded, &stores.items).await?;
     let concepts = models
         .concepts
         .extract(&embedded, &models.embedder, stores, &mut meter)
@@ -283,11 +260,63 @@ async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
         doc_id: node.id,
         doc_title: node.title,
         collection: stores.items.collection().to_owned(),
-        items_by_kind,
+        items_by_kind: ItemCounts::of(&items),
         points_in_collection,
         concepts,
         usage: meter.into_spent(),
     })
+}
+
+/// An earlier run may have cut the document into other items or found other concepts in them, so
+/// its points go, then its nodes with their mentions and the mark that it is ingested whole. The
+/// points go first, so that no point is ever left without its node.
+async fn replace_earlier_run<G: GraphStore>(
+    node: &DocumentNode,
+    items: &[Item],
+    stores: &Stores<G>,
+) -> Result<(), IngestError> {
+    stores.items.delete_document(node.id).await?;
+    // SMELL: from here until the new node is written, the own tags are held by this run only, so a
+    // graph that fails in between loses them. The graph cannot remove only the items of a document.
+    stores.graph.delete_document(node.id).await?;
+    stores.graph.upsert_document(node).await?;
+    let nodes: Vec<ItemNode> = items.iter().map(item_node).collect();
+    stores.graph.upsert_items(node.id, &nodes).await?;
+    Ok(())
+}
+
+async fn embed_items<E: Embedder>(
+    items: &[Item],
+    embedder: &E,
+    meter: &mut Meter<'_>,
+) -> Result<Vec<Embedding>, IngestError> {
+    let inputs: Vec<DocumentInput> = items.iter().map(|item| item.input.clone()).collect();
+    meter.step(IngestStep::Embedding { items: items.len() });
+    let vectors = embedder.embed_document(&inputs).await?;
+    meter.spend(&embedding_usage(&inputs));
+    if vectors.len() != items.len() {
+        return Err(IngestError::VectorCount {
+            items: items.len(),
+            vectors: vectors.len(),
+        });
+    }
+    Ok(vectors)
+}
+
+/// Stores a point for each item, and returns how many points the whole collection then holds.
+async fn store_points(embedded: &EmbeddedItems<'_>, store: &ItemStore) -> Result<u64, StoreError> {
+    let points: Vec<ItemPoint> = embedded
+        .items
+        .iter()
+        .zip(embedded.vectors)
+        .map(|(item, vector)| ItemPoint {
+            id: item.id,
+            vector: vector.clone(),
+            payload: item.payload.clone(),
+        })
+        .collect();
+    store.upsert(&points).await?;
+    store.count().await
 }
 
 fn item_node(item: &Item) -> ItemNode {

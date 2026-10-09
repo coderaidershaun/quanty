@@ -1,8 +1,10 @@
-//! Runs a pdf from the file to the stores through `ingest_pdf`. Nothing is billed: it converts
-//! with stand-ins for the paid calls, the stores are throwaway ones, and the content folder is a
-//! temporary one.
+//! Runs a pdf from the file to the stores through `ingest_pdf`, and names one through the
+//! `rag-ingest pdf` command. Nothing is billed: it converts with stand-ins for the paid calls, the
+//! stores are throwaway ones, and the content folder is a temporary one.
 
+mod command;
 mod runs;
+mod summary;
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;

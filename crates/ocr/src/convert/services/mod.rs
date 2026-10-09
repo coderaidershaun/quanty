@@ -110,15 +110,13 @@ impl LiveServices {
         Ok(services)
     }
 
-    // SMELL: every failure is tried once more, a refused key included, so a bad key costs a second
-    // request before the run stops. Why the first try failed is dropped.
     async fn jev_contains_math(&self, text: &str) -> Result<Option<MathPlacement>, JevError> {
         match self.jev.contains_math(text).await {
-            Ok(placement) => Ok(placement),
-            Err(_) => {
+            Err(error) if error.is_worth_retrying() => {
                 tokio::time::sleep(JEV_RETRY_DELAY).await;
                 self.jev.contains_math(text).await
             }
+            outcome => outcome,
         }
     }
 }

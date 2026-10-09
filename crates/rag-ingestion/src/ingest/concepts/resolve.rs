@@ -84,7 +84,7 @@ pub(super) struct Resolver<'a, L, E, G> {
 
 impl<L: Llm, E: Embedder, G: GraphStore> Resolver<'_, L, E, G> {
     // SMELL: finding a concept and creating it are two calls, so two ingests that run at the same
-    // time can each create the same concept.
+    // time can each create the same concept. No store here can find and create in one step.
     /// Links the concept that `item` named to the stored concept that is the same, or makes a new
     /// one. A linked name becomes an alias of the stored concept. Each decision is added to the
     /// decision log after its writes succeeded, the questions that were asked are counted in the
@@ -124,8 +124,7 @@ impl<L: Llm, E: Embedder, G: GraphStore> Resolver<'_, L, E, G> {
 
         let vector = self.embed(concept, spent).await?;
         // SMELL: only the nearest stored concept is compared, so a name whose true match is the
-        // second nearest becomes a new concept. Measured on real concepts, that happens for one or
-        // two of eight true pairs, depending on the order of the names.
+        // second nearest becomes a new concept. Comparing more would cost a paid question for each.
         let nearest = self
             .stores
             .concepts
@@ -219,9 +218,8 @@ impl<L: Llm, E: Embedder, G: GraphStore> Resolver<'_, L, E, G> {
                 same
             }
             Outcome::Asked(same) => same,
-            // SMELL: a comparison that fails every time stops every ingest of this document, and
-            // nothing skips it. A guess would be worse: "different" makes a second concept that
-            // nothing can merge, and "same" makes a wrong alias that every later item matches.
+            // SMELL: a comparison that fails every time stops every ingest of this document. It is
+            // not guessed, because either guess leaves a wrong concept or alias that stays.
             Outcome::Failed(reason) => {
                 return Err(ConceptError::Comparison {
                     new_name: concept.name.clone(),
@@ -251,9 +249,8 @@ impl<L: Llm, E: Embedder, G: GraphStore> Resolver<'_, L, E, G> {
         if !aliases.contains(&concept.name) {
             aliases.push(concept.name.clone());
         }
-        // SMELL: the aliases of the point are read by the search and written back whole, so of two
-        // ingests that run at the same time, one can drop the alias that the other added to the
-        // point. The graph keeps both.
+        // SMELL: the aliases of the point are written back whole, so of two ingests that run at the
+        // same time, one can drop the alias that the other added. Qdrant can only replace the list.
         self.stores.concepts.set_aliases(hit.id, &aliases).await?;
         let alias = ConceptAlias {
             concept: hit.id,
@@ -280,9 +277,8 @@ impl<L: Llm, E: Embedder, G: GraphStore> Resolver<'_, L, E, G> {
             definition: concept.definition.clone(),
         };
         self.stores.graph.upsert_concept(&node).await?;
-        // SMELL: a run that stops between the two writes leaves a concept with no point, and so does
-        // a concept that was made before the concepts collection existed. Such a concept is matched
-        // by its exact name only, and nothing repairs it.
+        // SMELL: a run that stops between the two writes leaves a concept with no point, so only
+        // its exact name finds it. Nothing repairs it: the concept store cannot read one point.
         let point = ConceptPoint {
             id,
             vector,

@@ -52,6 +52,24 @@ fn result(number: usize, kind: ItemKind, doc: u128, title: &str, text: &str) -> 
 }
 
 pub fn search_reply() -> SearchReply {
+    SearchReply {
+        results: vec![formula(), assumptions(), figure()],
+        trace: RetrievalTrace {
+            documents_searched: None,
+            nearest: 3,
+            seed_concepts: Some(vec!["Black–Scholes model".to_owned()]),
+            related_concepts: Some(vec!["Volatility".to_owned()]),
+            candidates: Some(4),
+            ranked: Some(4),
+            kept: Some(3),
+            passed_over: Vec::new(),
+            cited: Some(Vec::new()),
+        },
+        usage: Usage::default(),
+    }
+}
+
+fn formula() -> ResultItem {
     let black_scholes = chapter_title(NOTES_TITLE, 2, NOTES_CHAPTER_2);
     let mut formula = result(
         1,
@@ -63,6 +81,11 @@ pub fn search_reply() -> SearchReply {
     formula.label = Some("(2.3)".to_owned());
     formula.media = Some(NOTES_TITLE.to_owned());
     formula.name = Some("Black–Scholes partial differential equation".to_owned());
+    formula
+}
+
+fn assumptions() -> ResultItem {
+    let black_scholes = chapter_title(NOTES_TITLE, 2, NOTES_CHAPTER_2);
     let mut assumptions = result(
         2,
         ItemKind::Chunk,
@@ -75,6 +98,10 @@ pub fn search_reply() -> SearchReply {
     assumptions.page = 1;
     // A passage can hold several pieces of a page, so it names none.
     assumptions.piece = None;
+    assumptions
+}
+
+fn figure() -> ResultItem {
     let mut figure = result(
         3,
         ItemKind::Figure,
@@ -89,21 +116,7 @@ pub fn search_reply() -> SearchReply {
     figure.image = Some(image(&format!(
         "{VOLATILITY}/chapter-1/page-num-5/01-figure.png"
     )));
-    SearchReply {
-        results: vec![formula, assumptions, figure],
-        trace: RetrievalTrace {
-            documents_searched: None,
-            nearest: 3,
-            seed_concepts: Some(vec!["Black–Scholes model".to_owned()]),
-            related_concepts: Some(vec!["Volatility".to_owned()]),
-            candidates: Some(4),
-            ranked: Some(4),
-            kept: Some(3),
-            passed_over: Vec::new(),
-            cited: Some(Vec::new()),
-        },
-        usage: Usage::default(),
-    }
+    figure
 }
 
 pub fn answer() -> Answer {

@@ -68,10 +68,9 @@ pub enum DocumentName {
 }
 
 impl DocumentName {
-    /// Reads `chapter-<number>-<name>.pdf` the way the backend does. The contract may not name
-    /// the crate that reads it for real, so the rule is written out here.
-    // SMELL: the rule is written here and again in the crate that converts a chapter. A change to
-    // one must be made in both.
+    /// Reads `chapter-<number>-<name>.pdf` the way the converter does.
+    // SMELL: the converter keeps its own copy of this rule, and the contract may not name that
+    // crate, so a change to one must be made in both.
     pub fn from_chapter_file_name(file_name: &str) -> Option<DocumentName> {
         let stem = file_name.strip_prefix("chapter-")?.strip_suffix(".pdf")?;
         let (digits, words) = stem.split_once('-')?;
@@ -234,9 +233,9 @@ impl DocumentTagsEdit {
     }
 }
 
-// SMELL: the core crate writes this rule again as `rag_core::is_same_name`, and the contract may not
-// name it. A change to one must be made in both.
-pub fn is_same_title(one: &str, other: &str) -> bool {
+// SMELL: the core crate keeps its own copy of this rule, and the contract may not name that crate,
+// so a change to one must be made in both.
+pub fn is_same_name(one: &str, other: &str) -> bool {
     one.trim().to_lowercase() == other.trim().to_lowercase()
 }
 
@@ -259,7 +258,7 @@ impl Catalogue {
             media
                 .title
                 .as_deref()
-                .is_some_and(|stored| is_same_title(stored, title))
+                .is_some_and(|stored| is_same_name(stored, title))
         })
     }
 

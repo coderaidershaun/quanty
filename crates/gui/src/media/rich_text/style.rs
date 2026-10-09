@@ -1,7 +1,7 @@
 //! What one text role looks like in running text: its fonts, colours and lengths. Rich text reads
 //! every colour and length of the theme here only, so a theme change is a change in one place.
 
-use eframe::egui::{Color32, FontId, Painter, Stroke, text::TextFormat};
+use eframe::egui::{Align, Color32, FontId, Painter, Stroke, text::TextFormat};
 
 use super::parse::SpanStyle;
 use crate::theme::{TextRole, color, hairline, radius, space};
@@ -35,6 +35,8 @@ pub(super) struct TextLook {
     pub(super) small_gap: f32,
     /// Room between a list marker and its text.
     pub(super) list_gap: f32,
+    /// Where each row sits in the room it has. Only a column of a table moves its rows.
+    pub(super) align: Align,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -67,6 +69,7 @@ pub(super) fn text_look(role: TextRole) -> TextLook {
         paragraph_gap: space::MD,
         small_gap: space::XS,
         list_gap: space::SM,
+        align: Align::Min,
     }
 }
 

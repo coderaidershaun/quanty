@@ -46,12 +46,7 @@ pub(super) fn clean_reply(page: &mut TranscribedPage) {
                 symbols,
                 ..
             } => {
-                *latex = latex::mend_row_breaks(&remove_invisible(latex));
-                // A row break with no aligned block around it has nothing to break.
-                if latex::has_bare_row_break(latex) {
-                    *latex = format!("\\begin{{aligned}} {latex} \\end{{aligned}}");
-                }
-                clean_text(latex);
+                mend_latex(latex);
                 clean_optional(label);
                 clean_optional(name);
                 clean_text(statement);
@@ -98,6 +93,15 @@ pub(super) fn clean_reply(page: &mut TranscribedPage) {
             }
         }
     }
+}
+
+fn mend_latex(latex: &mut String) {
+    *latex = latex::mend_row_breaks(&remove_invisible(latex));
+    // A row break with no aligned block around it has nothing to break.
+    if latex::has_bare_row_break(latex) {
+        *latex = format!("\\begin{{aligned}} {latex} \\end{{aligned}}");
+    }
+    clean_text(latex);
 }
 
 fn clean_text(text: &mut String) {

@@ -66,9 +66,9 @@ pub struct TranscribedPage {
 )]
 // Do not remove: without it the doc comment above is sent to the model as the description.
 #[schemars(description = "One piece of a transcribed page.")]
-// SMELL: every kind of piece is handled kind by kind in many files: cleaning, the reply check,
-// naming a piece in a fault, word counting and saving. A new kind means editing each one. The
-// compiler points at the full matches, but not at the places that test for one kind only.
+// SMELL: a new kind of piece means editing every place that handles the kinds one by one, and the
+// compiler points only at the full matches. It stays because each place reads different fields
+// for a different reason, so one shared table would not be smaller.
 pub enum TranscribedPiece {
     #[schemars(description = HEADING)]
     Heading {
@@ -307,8 +307,6 @@ impl TranscribedPiece {
     }
 
     /// The kind as it is spelled in a reply and in `page.json`.
-    // SMELL: the six names are spelled again for the saved pieces, and nothing makes the two
-    // lists agree. A name changed in one would give a piece two different kind names.
     pub fn kind_name(&self) -> &'static str {
         match self {
             Self::Heading { .. } => "heading",

@@ -2,12 +2,16 @@
 
 use eframe::egui;
 
+use super::heights::Heights;
 use super::pane::Pane;
 use super::phase::{AnswerTab, Written};
 use super::{cards, results, states};
 use crate::contract::{Answer, AnswerBlock, ItemKind};
 use crate::media::rich_text;
 use crate::theme::{TextRole, space};
+
+/// What a block of the answer is taken to be high until it has been drawn once.
+const BLOCK_ESTIMATE: f32 = 2.0 * TextRole::Body.line_height();
 
 pub(super) fn show(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, written: Written<'_>) {
     let Written::Ready(answer) = written else {
@@ -29,7 +33,7 @@ pub(super) fn show(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, written: Written<
 fn blocks(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, answer: &Answer) {
     let ask = pane.ask;
     let title = answer.title.as_deref().unwrap_or(&ask.question);
-    let mut heights = std::mem::take(&mut pane.view.block_heights);
+    let mut heights = Heights::take(&mut pane.view.block_heights, BLOCK_ESTIMATE);
     heights.show(ui, 0, |ui| {
         ui.label(TextRole::Title.rich(title));
     });

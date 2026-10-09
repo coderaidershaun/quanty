@@ -91,11 +91,10 @@ impl Local {
         let labels = MODES.map(|(label, _)| label);
         let selected = MODES.iter().position(|(_, mode)| *mode == self.draft.mode);
         let chosen = slot(ui, "mode", rects.mode, |ui| {
-            Dropdown::new("Mode", &labels)
+            Dropdown::new("Mode", &labels, rects.mode.width())
                 .id_salt("mode")
                 .selected(selected)
                 .size(ControlSize::Large)
-                .width(rects.mode.width())
                 .show(ui)
         });
         if let Some(index) = chosen {

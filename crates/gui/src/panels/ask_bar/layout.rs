@@ -4,12 +4,10 @@
 use eframe::egui;
 
 use crate::theme::{size, space, stroke};
-use crate::widgets;
+use crate::widgets::{self, Button, ControlSize};
 
 pub(super) const CONTENT_HEIGHT: f32 = size::CONTROL_LG + space::SM + size::CONTROL_SM;
-/// SMELL: this repeats the least width of a large button, which the kit keeps to itself. If the
-/// kit makes its buttons wider, Ask and Stop leave their slot.
-const ASK_WIDTH: f32 = 2.4 * size::CONTROL_LG;
+const ASK_WIDTH: f32 = Button::least_width(ControlSize::Large);
 const PICKER_WIDTH: f32 = 4.5 * size::CONTROL_LG;
 /// The category list holds short words, so its slot is narrower and leaves the note more room.
 const CATEGORY_WIDTH: f32 = 3.5 * size::CONTROL_LG;

@@ -3,7 +3,7 @@
 
 use eframe::egui;
 
-use super::heights::Slot;
+use super::heights::{Heights, Slot};
 use super::listing::Row;
 use super::pane::Pane;
 use super::phase::AnswerTab;
@@ -16,6 +16,10 @@ const TEXT_PREVIEW: f32 = 3.0 * TextRole::Small.line_height();
 const THUMBNAIL: egui::Vec2 = egui::vec2(3.0 * TEXT_PREVIEW, 2.0 * TEXT_PREVIEW);
 /// This is room for a table's header and two rows.
 const TABLE_PREVIEW: f32 = 2.0 * TEXT_PREVIEW;
+/// What a row is taken to be high until it has been drawn once: a card with the chip line, the
+/// reason and three lines of preview.
+const ROW_ESTIMATE: f32 =
+    2.0 * space::MD + size::CHIP + 2.0 * space::SM + 4.0 * TextRole::Small.line_height();
 const SCORE_WIDTH: f32 = size::CONTROL_LG;
 /// Rounding to whole pixels can move a row by a hair. This is the room that allows for it.
 const SLACK: f32 = 1.0;
@@ -58,7 +62,7 @@ fn rows(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, tab: AnswerTab) {
     let (ask, Some(listing)) = (pane.ask, pane.listing) else {
         return;
     };
-    let mut heights = std::mem::take(&mut pane.view.row_heights);
+    let mut heights = Heights::take(&mut pane.view.row_heights, ROW_ESTIMATE);
     for (place, (item, row)) in ask.results().iter().zip(&listing.rows).enumerate() {
         if !tab.lists(item.kind) {
             continue;

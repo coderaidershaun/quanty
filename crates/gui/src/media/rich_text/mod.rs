@@ -9,7 +9,6 @@ mod measure;
 mod paint;
 mod parse;
 mod parse_table;
-mod pieces;
 mod place;
 mod style;
 mod table;

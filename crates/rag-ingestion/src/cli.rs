@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use clap::builder::NonEmptyStringValueParser;
 use clap::{Args, Parser, Subcommand};
 use rag_core::{Category, DocId, MediaLabels, Tag, author_list};
-use rag_ingestion::TagChange;
+use rag_ingestion::{MediaChange, TagChange};
 
 #[derive(Parser)]
 #[command(name = "rag-ingest", args_conflicts_with_subcommands = true)]
@@ -114,6 +114,47 @@ impl DocumentTags {
 }
 
 #[derive(Args)]
+pub(super) struct GivenMediaLabels {
+    /// The new category: book, paper or other
+    #[arg(long)]
+    category: Option<Category>,
+
+    /// An author of the media. Repeat it for more. Given at all, the list replaces the
+    /// authors the media has
+    #[arg(long = "author", value_name = "AUTHOR", value_parser = NonEmptyStringValueParser::new())]
+    authors: Vec<String>,
+
+    /// Take every author away from the media
+    #[arg(long = "no-authors", conflicts_with = "authors")]
+    clears_authors: bool,
+
+    /// A tag of the media. Repeat it for more. Given at all, the list replaces the tags the
+    /// media has
+    #[arg(long = "tag", value_name = "TAG")]
+    tags: Vec<Tag>,
+
+    /// Take every tag away from the media
+    #[arg(long = "no-tags", conflicts_with = "tags")]
+    clears_tags: bool,
+}
+
+impl GivenMediaLabels {
+    pub(super) fn change(&self) -> MediaChange {
+        MediaChange {
+            category: self.category,
+            authors: replacing(&self.authors, self.clears_authors),
+            tags: replacing(&self.tags, self.clears_tags).map(|tags| tags.into_iter().collect()),
+        }
+    }
+}
+
+/// A list that is given replaces the stored one, and so does the empty list of a `--no-` flag.
+/// With neither, the stored list stays.
+fn replacing<T: Clone>(given: &[T], clears: bool) -> Option<Vec<T>> {
+    (clears || !given.is_empty()).then(|| given.to_vec())
+}
+
+#[derive(Args)]
 #[group(required = true, multiple = false)]
 pub(super) struct PdfMedia {
     // These help texts are attributes and not doc comments, because rustdoc takes `<number>` for
@@ -179,19 +220,8 @@ pub(super) enum Command {
         /// The title of the media, whatever its capitals
         title: String,
 
-        /// The new category: book, paper or other
-        #[arg(long)]
-        category: Option<Category>,
-
-        /// An author of the media. Repeat it for more. Given at all, the list replaces the
-        /// authors the media has
-        #[arg(long = "author", value_name = "AUTHOR", value_parser = NonEmptyStringValueParser::new())]
-        authors: Vec<String>,
-
-        /// A tag of the media. Repeat it for more. Given at all, the list replaces the tags the
-        /// media has
-        #[arg(long = "tag", value_name = "TAG")]
-        tags: Vec<Tag>,
+        #[command(flatten)]
+        labels: GivenMediaLabels,
     },
 
     /// Remove one document, with its items, from Qdrant and from the graph

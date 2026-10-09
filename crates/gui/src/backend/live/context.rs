@@ -141,16 +141,13 @@ impl<S: Services> LiveContext<S> {
             Ok(connected) => connected.map_err(|failure| self.failure(failure)),
             Err(_) => {
                 let address = &self.config.falkordb_url;
-                Err(self.failure(
-                    Failure::new(
-                        FailureKind::FalkorDbDown,
-                        format!(
-                            "FalkorDB at {address} did not answer within {} seconds",
-                            CONNECT_LIMIT.as_secs()
-                        ),
-                    )
-                    .with_hint(format!("Start FalkorDB at {address}, then try again.")),
-                ))
+                Err(self.failure(Failure {
+                    detail: format!(
+                        "FalkorDB at {address} did not answer within {} seconds",
+                        CONNECT_LIMIT.as_secs()
+                    ),
+                    ..Failure::falkordb_down(address)
+                }))
             }
         }
     }

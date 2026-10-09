@@ -3,8 +3,6 @@
 
 use eframe::egui;
 
-/// `Default` exists only so a list can take its heights out of the pane while the closures that
-/// draw its blocks borrow the rest of the pane.
 #[derive(Debug, Default)]
 pub(super) struct Heights {
     estimate: f32,
@@ -18,10 +16,13 @@ pub(super) struct Slot {
 }
 
 impl Heights {
-    pub(super) fn estimating(estimate: f32) -> Heights {
+    /// Takes the heights out of the pane for as long as a list draws, so that the closures that
+    /// draw its blocks can borrow the rest of the pane. `estimate` is how high a block is taken
+    /// to be until it has been drawn once, which only the list that draws it knows.
+    pub(super) fn take(heights: &mut Heights, estimate: f32) -> Heights {
         Heights {
             estimate,
-            known: Vec::new(),
+            ..std::mem::take(heights)
         }
     }
 

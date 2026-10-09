@@ -89,7 +89,9 @@ pub fn assert_hard_fallbacks(chapter: &Path, stubs: &StubServices) {
             (&image["file"], &image["shows"]),
             (&"page.png".into(), &"whole-page".into())
         );
-        assert!(image["cut"].is_null() && image["holds-body-text"] == false);
+        for mark in ["cut", "holds-body-text", "unchecked"] {
+            assert!(image.get(mark).is_none(), "page {position} saves {mark}");
+        }
         let checks = &page["conversion"]["checks"];
         let fallbacks = checks["whole-page-figures"].as_array().unwrap();
         assert_eq!(fallbacks.len(), 1, "page {position}");
@@ -130,7 +132,7 @@ pub fn assert_figure_pictures_read_back(chapter: &Path) {
     };
     let cut = picture(2, 5).unwrap();
     assert_eq!(cut.path, chapter.join("page-num-2/05-figure.png"));
-    assert_eq!(cut.shows, ImageShows::Figure);
+    assert!(matches!(cut.shows, ImageShows::Figure { .. }), "{cut:?}");
     let whole = picture(5, 5).unwrap();
     assert_eq!(whole.path, chapter.join("page-num-5/page.png"));
     assert_eq!(whole.shows, ImageShows::WholePage);

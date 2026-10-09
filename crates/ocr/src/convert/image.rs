@@ -61,14 +61,7 @@ pub async fn convert_image_with<S: ImageServices>(
     output_root: &Path,
     services: &S,
 ) -> Result<ConvertedImage, ConvertError> {
-    let extension = picture
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .map(str::to_lowercase)
-        .filter(|extension| PICTURE_EXTENSIONS.contains(&extension.as_str()))
-        .ok_or_else(|| ConvertError::NotAPicture {
-            path: picture.to_path_buf(),
-        })?;
+    let extension = picture_extension(picture)?;
     let bytes = std::fs::read(picture).map_err(|source| ConvertError::PictureUnreadable {
         path: picture.to_path_buf(),
         source,
@@ -84,28 +77,7 @@ pub async fn convert_image_with<S: ImageServices>(
     std::fs::create_dir_all(&folder).map_err(write_error(&folder))?;
     std::fs::write(&copy, &bytes).map_err(write_error(&copy))?;
 
-    let mut ledger = Ledger::default();
-    let mut correction: Option<String> = None;
-    let figure = loop {
-        let answer = services
-            .transcribe(&copy, correction.as_deref())
-            .await
-            .map_err(|source| ConvertError::ImageCallFailed {
-                picture: picture.to_path_buf(),
-                source,
-            })?;
-        ledger.add(CallStep::Transcribe, &answer.usage);
-        match only_figure(answer) {
-            Ok(figure) => break figure,
-            Err(fault) if correction.is_none() => correction = Some(fault.to_string()),
-            Err(fault) => {
-                return Err(ConvertError::ImageReplyRejected {
-                    picture: picture.to_path_buf(),
-                    fault,
-                });
-            }
-        }
-    };
+    let (figure, ledger) = ask_for_figure(services, &copy, picture).await?;
 
     let explanation = figure_file(&figure.explanation, &figure.printed_text)
         .trim()
@@ -130,6 +102,47 @@ pub async fn convert_image_with<S: ImageServices>(
         explanation,
         calls: ledger.tally,
     })
+}
+
+fn picture_extension(picture: &Path) -> Result<String, ConvertError> {
+    picture
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_lowercase)
+        .filter(|extension| PICTURE_EXTENSIONS.contains(&extension.as_str()))
+        .ok_or_else(|| ConvertError::NotAPicture {
+            path: picture.to_path_buf(),
+        })
+}
+
+/// The model reads `copy`, never the person's own file, which `picture` names only in an error.
+async fn ask_for_figure<S: ImageServices>(
+    services: &S,
+    copy: &Path,
+    picture: &Path,
+) -> Result<(LoneFigure, Ledger), ConvertError> {
+    let mut ledger = Ledger::default();
+    let mut correction: Option<String> = None;
+    loop {
+        let answer = services
+            .transcribe(copy, correction.as_deref())
+            .await
+            .map_err(|source| ConvertError::ImageCallFailed {
+                picture: picture.to_path_buf(),
+                source,
+            })?;
+        ledger.add(CallStep::Transcribe, &answer.usage);
+        match only_figure(answer) {
+            Ok(figure) => return Ok((figure, ledger)),
+            Err(fault) if correction.is_none() => correction = Some(fault.to_string()),
+            Err(fault) => {
+                return Err(ConvertError::ImageReplyRejected {
+                    picture: picture.to_path_buf(),
+                    fault,
+                });
+            }
+        }
+    }
 }
 
 struct LoneFigure {

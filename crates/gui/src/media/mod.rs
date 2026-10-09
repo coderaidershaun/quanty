@@ -5,10 +5,12 @@ pub mod images;
 pub mod math;
 mod offload;
 pub mod rich_text;
+mod salt;
 
 use eframe::egui;
 
 pub use offload::{Offload, Urgency, Workers};
+use salt::content_salt;
 
 pub struct Media {
     pub images: images::Images,

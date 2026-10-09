@@ -37,10 +37,11 @@ impl Reply {
     /// Resolves when the app has cancelled this command, or the backend is gone. It stays
     /// true once the cancel came, even if the cancel came first, and it may be dropped and
     /// awaited again. Every task but an ingest is aborted and never sees it. An ingest is never
-    /// aborted by the runtime: the ingest code drops it itself at a safe point and then sends
+    /// aborted by the runtime, so that it can stop at a safe point and still send
     /// `IngestFinished`.
-    // SMELL: nothing calls this, so an ingest that is asked to stop runs to its end. The live
-    // ingest must wait on this at a safe point, or this and `Stop` must go.
+    // SMELL: nothing calls this, so an ingest that is asked to stop runs to its end. Neither the
+    // conversion nor the ingest has a point where it can stop safely, and only the converter can
+    // give one between pages.
     pub async fn cancelled(&self) {
         // An error here means the backend is gone, which also ends the wait.
         self.stop.clone().wait_for(|asked| *asked).await.ok();

@@ -1,77 +1,16 @@
 //! Reads what the Library, the concept graph and the source page ask of the store, on a throwaway
 //! graph, because only a real FalkorDB shows that it accepts the statements and orders their rows.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::iter::repeat_n;
 use std::path::Path;
 
-use graph::testing::ThrowawayGraph;
 use graph::{
-    ConceptNode, DocumentNode, DocumentRecord, FalkorGraph, GraphStore, ItemNode, ItemsByKind,
-    MediaNode, Mention, Relation, RelationKind,
+    DocumentNode, DocumentRecord, GraphStore, ItemNode, ItemsByKind, MediaNode, RelationKind,
 };
-use rag_core::{
-    Category, ConceptId, Config, DocId, DocumentLabels, ItemId, ItemKind, MediaLabels, Tag,
-};
+use rag_core::{Category, DocId, DocumentLabels, ItemKind, MediaLabels};
 
-const THROWAWAY_PREFIX: &str = "test-graph-";
-
-/// A graph that no one else uses, and a connection to it. The graph is removed when the first
-/// value is dropped, so keep it for the whole test.
-async fn throwaway(test_name: &str) -> (ThrowawayGraph, FalkorGraph) {
-    let settings = Config::load().expect("the settings should load");
-    let throwaway = ThrowawayGraph::new(&settings, test_name);
-    let config = Config {
-        falkordb_graph: throwaway.name().to_owned(),
-        ..settings
-    };
-    // The name is copied into the config by hand. Without this check, a copy that is missing would
-    // leave the real graph in the config, and the test would write to it.
-    assert!(config.falkordb_graph.starts_with(THROWAWAY_PREFIX));
-    let graph = FalkorGraph::connect(&config)
-        .await
-        .expect("FalkorDB should answer");
-    (throwaway, graph)
-}
-
-fn tag(text: &str) -> Tag {
-    text.parse().expect("a tag is not empty")
-}
-
-fn concept(name: &str) -> ConceptNode {
-    ConceptNode {
-        id: ConceptId::random(),
-        name: name.to_owned(),
-        normalised_name: name.to_lowercase(),
-        definition: format!("{name} in one line"),
-    }
-}
-
-fn item(document: DocId, kind: ItemKind, position: u32, page: u32) -> ItemNode {
-    ItemNode {
-        id: ItemId::new(document, kind, position),
-        kind,
-        page,
-        printed_page: None,
-    }
-}
-
-fn mention(item: &ItemNode, concept: &ConceptNode, wording: &str) -> Mention {
-    Mention {
-        item: item.id,
-        concept: concept.id,
-        wording: wording.to_owned(),
-    }
-}
-
-fn relation(from: &ConceptNode, kind: RelationKind, to: &ConceptNode, item: &ItemNode) -> Relation {
-    Relation {
-        from: from.id,
-        to: to.id,
-        kind,
-        item: item.id,
-    }
-}
+use crate::support::{concept, item, mention, relation, tag, throwaway};
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local FalkorDB from docker compose and bills nothing; run with: cargo test -p graph --test integration -- --ignored reads::"]
@@ -147,6 +86,16 @@ async fn document_records_come_back_with_their_labels_mark_folder_and_items_by_k
         .await
         .unwrap();
     assert_eq!(graph.document_records().await.unwrap(), expected);
+
+    assert_eq!(
+        graph.document(id_a).await.unwrap(),
+        Some(expected[0].node.clone())
+    );
+    assert_eq!(graph.document(unknown).await.unwrap(), None);
+    assert_eq!(
+        graph.chapter_folders(&[id_a, id_b, unknown]).await.unwrap(),
+        HashMap::from([(id_a, folder.to_path_buf())])
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

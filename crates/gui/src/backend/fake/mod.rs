@@ -12,7 +12,7 @@ use std::time::Duration;
 use super::{Handler, Reply};
 use crate::contract::{
     AskDraft, AskMode, Catalogue, Command, DocId, Event, Failure, FailureKind, Filters,
-    IngestOutcome, IngestRequest, Intent, RequestId, Service, ServiceState, Tab,
+    IngestOutcome, IngestRequest, Intent, RequestId, Service, ServiceState, Tab, is_same_name,
 };
 
 use scenes::{Answer, Concepts, Graph, Ingest, Opening, Pages, Search};
@@ -139,19 +139,10 @@ impl Fake {
     }
 
     /// The failure of this kind, with the address in the hint where the real one has it.
-    // SMELL: each hint with a value in it is written here and again in the live backend, and the
-    // one for a page outside the chapter already differs. A change to one must be made in both.
     fn failure(&self, kind: FailureKind) -> Failure {
         match kind {
-            FailureKind::QdrantDown => {
-                Failure::new(kind, format!("could not reach Qdrant at {QDRANT_URL}"))
-                    .with_hint(format!("Start Qdrant at {QDRANT_URL}, then try again."))
-            }
-            FailureKind::FalkorDbDown => Failure::new(
-                kind,
-                format!("could not connect to FalkorDB at {FALKORDB_URL}"),
-            )
-            .with_hint(format!("Start FalkorDB at {FALKORDB_URL}, then try again.")),
+            FailureKind::QdrantDown => Failure::qdrant_down(QDRANT_URL),
+            FailureKind::FalkorDbDown => Failure::falkordb_down(FALKORDB_URL),
             kind => Failure::new(
                 kind,
                 format!("the {} scene plays this failure", self.scene.name),
@@ -161,8 +152,8 @@ impl Fake {
 
     /// How many documents of the library carry the labels, or `None` when no label was asked. A
     /// document of no media has no category, so it fits no category that is asked for.
-    // SMELL: which labels fit a filter is written here and again in the core crate, which the
-    // fake may not name. A change to one must be made in both.
+    // SMELL: the core crate keeps its own copy of this rule, and the fake may not name that crate,
+    // so a change to one must be made in both.
     fn documents_with(&self, filters: &Filters) -> Option<usize> {
         let tags: Vec<String> = filters
             .tags
@@ -177,7 +168,6 @@ impl Fake {
         {
             return None;
         }
-        let same = |found: &str, wanted: &str| found.to_lowercase() == wanted.to_lowercase();
         let count = self
             .catalogue()
             .media
@@ -193,10 +183,13 @@ impl Fake {
                     media
                         .title
                         .as_deref()
-                        .is_some_and(|title| same(title, wanted))
+                        .is_some_and(|title| is_same_name(title, wanted))
                 });
                 let author_fits = filters.author.as_deref().is_none_or(|wanted| {
-                    document.authors.iter().any(|author| same(author, wanted))
+                    document
+                        .authors
+                        .iter()
+                        .any(|author| is_same_name(author, wanted))
                 });
                 let category_fits = filters
                     .category
@@ -273,21 +266,17 @@ impl Fake {
         let script = &self.scene.script;
         self.wait(PAGE_WAIT).await;
         let view = match script.pages {
-            Pages::SourceMissing => Err(self.source_missing(
-                "the scene says this document's files are not there".to_owned(),
-            )),
-            Pages::Samples => fixtures::page(&self.samples, doc, page).map_err(|error| {
-                match error {
-                    fixtures::SampleError::NoSuchPage { page_count, .. } => {
-                        Failure::new(FailureKind::SourceMissing, error.to_string()).with_hint(
-                            format!(
-                                "This document has {page_count} pages, so page {page} is not in it. Ingest its PDF again with rag-ingest pdf."
-                            ),
-                        )
-                    }
+            Pages::SourceMissing => Err(self
+                .source_missing("the scene says this document's files are not there".to_owned())),
+            Pages::Samples => {
+                fixtures::page(&self.samples, doc, page).map_err(|error| match error {
+                    fixtures::SampleError::NoSuchPage { page_count, .. } => Failure {
+                        detail: error.to_string(),
+                        ..Failure::no_such_page(page, page_count)
+                    },
                     other => self.source_missing(other.to_string()),
-                }
-            }),
+                })
+            }
         };
         reply.send(Event::Page {
             request,
@@ -332,10 +321,10 @@ impl Fake {
     }
 
     fn source_missing(&self, detail: String) -> Failure {
-        Failure::new(FailureKind::SourceMissing, detail).with_hint(format!(
-            "quanty does not know where this document's pages are. Put its folder inside its media's folder under {}, or ingest its PDF again with rag-ingest pdf.",
-            self.samples.display()
-        ))
+        Failure {
+            detail,
+            ..Failure::pages_not_found(&self.samples)
+        }
     }
 
     fn check_health(&self, request: RequestId, reply: &Reply) {

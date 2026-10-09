@@ -4,7 +4,7 @@
 use eframe::egui;
 
 use super::{SaveStep, reveal};
-use crate::contract::{Failure, Intent, Media, is_same_title};
+use crate::contract::{Failure, Intent, Media, is_same_name};
 use crate::panels::media_card::{
     self, FormSetup, MediaFields, Pressed, Purpose, Save, would_change,
 };
@@ -58,7 +58,7 @@ pub(super) fn follow(draft: &mut Draft, library: &Library) -> bool {
 fn refusal_of<'a>(draft: &Draft, library: &'a Library) -> Option<&'a Failure> {
     match &library.media_edit {
         MediaEditing::Failed { edit, failure }
-            if is_same_title(&edit.title, &draft.fields.title) =>
+            if is_same_name(&edit.title, &draft.fields.title) =>
         {
             Some(failure)
         }

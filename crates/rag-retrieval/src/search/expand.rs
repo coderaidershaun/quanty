@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use graph::{ConceptNode, GraphStore};
+use graph::{ConceptNode, GraphStore, ItemMentions};
 use rag_core::{ConceptHit, ConceptId, ConceptStore, Embedding, ItemHit, ItemId};
 
 use super::results::Reason;
@@ -56,6 +56,21 @@ pub(super) async fn from_seeds<G: GraphStore>(
     let mentions = graph
         .items_for_concepts(&ids_of(&named), MAX_EXPANSION_ITEMS)
         .await?;
+    Ok(Expansion {
+        candidates: candidates(seed_ids, mentions, &named),
+        question_concepts,
+        seed_concepts,
+        related_concepts,
+    })
+}
+
+/// The seeds, and each other item that mentions a concept, under the first concept of `named`
+/// that it mentions.
+fn candidates(
+    seed_ids: Vec<ItemId>,
+    mentions: Vec<ItemMentions>,
+    named: &[NamedConcept],
+) -> BTreeMap<ItemId, Reason> {
     let order: HashMap<ConceptId, usize> = named
         .iter()
         .enumerate()
@@ -75,12 +90,7 @@ pub(super) async fn from_seeds<G: GraphStore>(
             candidates.insert(mention.item, Reason::Concept(named[*place].1.clone()));
         }
     }
-    Ok(Expansion {
-        candidates,
-        question_concepts,
-        seed_concepts,
-        related_concepts,
-    })
+    candidates
 }
 
 fn keep_once(named: &mut Vec<NamedConcept>, id: ConceptId, name: &str) {

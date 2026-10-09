@@ -2,7 +2,7 @@
 //! the table sideways when the columns do not fit.
 
 use eframe::egui::{
-    Painter, Pos2, Rect, ScrollArea, Sense, Ui, Vec2, WidgetInfo, WidgetType, vec2,
+    Align, Painter, Pos2, Rect, ScrollArea, Sense, Ui, Vec2, WidgetInfo, WidgetType, vec2,
 };
 
 use super::Clicked;
@@ -10,9 +10,10 @@ use super::atom::{Measured, Seen};
 use super::flow::{Flow, break_lines};
 use super::measure::{WaitFor, alone_width, measure};
 use super::paint;
-use super::parse::{Parsed, Span};
+use super::parse::Span;
 use super::parse_table::{ColumnAlign, ParsedTable};
 use super::style::{TableLook, TextLook, header_look, rule, table_look, text_look};
+use crate::media::content_salt;
 use crate::media::math::{Math, MathRef, MathState};
 use crate::theme::TextRole;
 
@@ -126,16 +127,26 @@ fn column_lefts(widths: &[f32], padding: f32) -> Vec<f32> {
         .collect()
 }
 
+struct RowLooks {
+    header: TextLook,
+    body: TextLook,
+}
+
+impl RowLooks {
+    fn of(&self, is_header: bool) -> &TextLook {
+        if is_header { &self.header } else { &self.body }
+    }
+}
+
 /// Every formula is asked for, with no early exit, because the formula cache drops a loading
 /// formula that nobody asked for in a frame.
-fn is_any_formula_loading(
-    table: &ParsedTable,
-    header: &TextLook,
-    body: &TextLook,
-    math: &mut Math,
-) -> bool {
-    let header_cells = table.header.iter().map(|cell| (cell, header.role));
-    let body_cells = table.rows.iter().flatten().map(|cell| (cell, body.role));
+fn is_any_formula_loading(table: &ParsedTable, looks: &RowLooks, math: &mut Math) -> bool {
+    let header_cells = table.header.iter().map(|cell| (cell, looks.header.role));
+    let body_cells = table
+        .rows
+        .iter()
+        .flatten()
+        .map(|cell| (cell, looks.body.role));
     let mut loading = false;
     for (cell, role) in header_cells.chain(body_cells) {
         for span in cell.lines.iter().flat_map(|line| &line.spans) {
@@ -147,29 +158,80 @@ fn is_any_formula_loading(
     loading
 }
 
+/// While a formula of any cell is loading, every cell waits, so that the cells show their
+/// formulas together.
+fn measure_rows(
+    ui: &Ui,
+    math: &mut Math,
+    table: &ParsedTable,
+    looks: &RowLooks,
+) -> (Vec<MeasuredRow>, bool) {
+    let is_waiting = is_any_formula_loading(table, looks, math);
+    let wait = if is_waiting {
+        WaitFor::OthersToo
+    } else {
+        WaitFor::OwnFormulas
+    };
+    let header = std::iter::once((&table.header, true));
+    let body = table.rows.iter().map(|row| (row, false));
+    let rows = header
+        .chain(body)
+        .map(|(cells, is_header)| MeasuredRow {
+            cells: cells
+                .iter()
+                .map(|cell| measure(ui, cell, &[], looks.of(is_header), math, wait))
+                .collect(),
+            is_header,
+        })
+        .collect();
+    (rows, is_waiting)
+}
+
+fn row_align(align: ColumnAlign) -> Align {
+    match align {
+        ColumnAlign::Left => Align::Min,
+        ColumnAlign::Center => Align::Center,
+        ColumnAlign::Right => Align::Max,
+    }
+}
+
 struct Grid<'a> {
     ui: &'a Ui,
     widths: &'a [f32],
     lefts: &'a [f32],
     aligns: &'a [ColumnAlign],
     look: TableLook,
-    header: &'a TextLook,
-    body: &'a TextLook,
+    looks: &'a RowLooks,
 }
 
 impl Grid<'_> {
+    /// Every row, each under the one before it, and how tall they are together.
+    fn rows(&self, measured: &[MeasuredRow]) -> (Vec<TableRow>, f32) {
+        let mut rows: Vec<TableRow> = Vec::new();
+        let mut top = 0.0;
+        for measured_row in measured {
+            let row = self.row(measured_row, top);
+            top += row.height;
+            rows.push(row);
+        }
+        (rows, top)
+    }
+
     fn row(&self, measured: &MeasuredRow, top: f32) -> TableRow {
-        let cell_look = if measured.is_header {
-            self.header
-        } else {
-            self.body
-        };
+        let cell_look = self.looks.of(measured.is_header);
         let piece_width = alone_width(self.ui);
         let flows: Vec<Flow> = measured
             .cells
             .iter()
             .zip(self.widths)
-            .map(|(cell, width)| break_lines(cell, *width, cell_look, &piece_width))
+            .zip(self.aligns)
+            .map(|((cell, width), align)| {
+                let look = TextLook {
+                    align: row_align(*align),
+                    ..cell_look.clone()
+                };
+                break_lines(cell, *width, &look, &piece_width)
+            })
             .collect();
         let tallest = flows
             .iter()
@@ -177,20 +239,9 @@ impl Grid<'_> {
             .fold(cell_look.line_height, f32::max);
         let cells = flows
             .into_iter()
-            .enumerate()
-            .map(|(column, flow)| {
-                // SMELL: a cell that wraps is moved as one block, so its shorter rows are not
-                // centred or set to the right one by one.
-                let spare = (self.widths[column] - flow.size.x).max(0.0);
-                let shift = match self.aligns[column] {
-                    ColumnAlign::Left => 0.0,
-                    ColumnAlign::Center => spare / 2.0,
-                    ColumnAlign::Right => spare,
-                };
-                let offset = vec2(
-                    self.lefts[column] + self.look.pad_x + shift,
-                    top + self.look.pad_y,
-                );
+            .zip(self.lefts)
+            .map(|(flow, left)| {
+                let offset = vec2(left + self.look.pad_x, top + self.look.pad_y);
                 TableCell { flow, offset }
             })
             .collect();
@@ -210,29 +261,11 @@ pub(super) fn build(ui: &Ui, math: &mut Math, source: &Source<'_>) -> TableLayou
         content,
         width,
     } = *source;
-    let (body, header) = (text_look(role), header_look());
-    let is_waiting = is_any_formula_loading(table, &header, &body, math);
-    let wait = if is_waiting {
-        WaitFor::OthersToo
-    } else {
-        WaitFor::OwnFormulas
+    let looks = RowLooks {
+        header: header_look(),
+        body: text_look(role),
     };
-    let mut measure_cells = |cells: &[Parsed], cell_look: &TextLook| -> Vec<Measured> {
-        cells
-            .iter()
-            .map(|cell| measure(ui, cell, &[], cell_look, math, wait))
-            .collect()
-    };
-    let mut measured = vec![MeasuredRow {
-        cells: measure_cells(&table.header, &header),
-        is_header: true,
-    }];
-    for row in &table.rows {
-        measured.push(MeasuredRow {
-            cells: measure_cells(row, &body),
-            is_header: false,
-        });
-    }
+    let (measured, is_waiting) = measure_rows(ui, math, table, &looks);
 
     let look = table_look();
     let padding = 2.0 * look.pad_x;
@@ -246,17 +279,9 @@ pub(super) fn build(ui: &Ui, math: &mut Math, source: &Source<'_>) -> TableLayou
         lefts: &lefts,
         aligns: &table.aligns,
         look,
-        header: &header,
-        body: &body,
+        looks: &looks,
     };
-
-    let mut rows: Vec<TableRow> = Vec::new();
-    let mut top = 0.0;
-    for measured_row in &measured {
-        let row = grid.row(measured_row, top);
-        top += row.height;
-        rows.push(row);
-    }
+    let (rows, top) = grid.rows(&measured);
     let names: Vec<String> = rows.iter().map(TableRow::plain).collect();
     let right = lefts
         .last()
@@ -302,10 +327,8 @@ pub(super) fn show(
     layout: &TableLayout,
     markdown: &str,
 ) -> Option<Clicked> {
-    // SMELL: the table and its scroll area are named by what the table holds, so that a table
-    // keeps its scroll place when things above it come and go. Two equal tables in one parent
-    // then share a name: they scroll together, and a debug build reports the clash on screen.
-    let node = ui.id().with(("table", layout.content));
+    let salt = content_salt(ui, layout.content);
+    let node = ui.id().with(("table", salt));
     let response = if layout.scrolls {
         // The node is as wide as the room, not as the table, so that it stays inside the panel.
         let outer = Rect::from_min_size(
@@ -313,12 +336,10 @@ pub(super) fn show(
             vec2(ui.available_width(), layout.size.y),
         );
         let response = ui.interact(outer, node, Sense::click());
-        ScrollArea::horizontal()
-            .id_salt(layout.content)
-            .show(ui, |ui| {
-                let (rect, _) = ui.allocate_exact_size(layout.size, Sense::hover());
-                draw(ui.painter(), layout, rect.min, math);
-            });
+        ScrollArea::horizontal().id_salt(salt).show(ui, |ui| {
+            let (rect, _) = ui.allocate_exact_size(layout.size, Sense::hover());
+            draw(ui.painter(), layout, rect.min, math);
+        });
         response
     } else {
         let (rect, response) = ui.allocate_exact_size(layout.size, Sense::click());

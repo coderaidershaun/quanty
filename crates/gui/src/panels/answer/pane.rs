@@ -10,17 +10,7 @@ use crate::contract::{AskMode, Intent, Loadable, ResultItem, Usage};
 use crate::media::rich_text::{self, Clicked};
 use crate::panels::PanelCx;
 use crate::state::AskSession;
-use crate::theme::{TextRole, size, space};
-
-/// What a block of the answer is taken to be high until it has been drawn once.
-const BLOCK_ESTIMATE: f32 = 2.0 * TextRole::Body.line_height();
-
-// SMELL: this repeats the layout of a result row, which the list of results owns. It is here
-// because the list draws from the pane, and the two must not import each other.
-/// What a result row is taken to be high until it has been drawn once: a card with the chip
-/// line, the reason and three lines of preview.
-const ROW_ESTIMATE: f32 =
-    2.0 * space::MD + size::CHIP + 2.0 * space::SM + 4.0 * TextRole::Small.line_height();
+use crate::theme::TextRole;
 
 /// The button that reads "Copied". It goes back to its name when the pointer leaves it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,7 +19,7 @@ pub(super) enum Copied {
     Latex(usize),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(super) struct View {
     /// `None`: the tab the mode of the ask opens.
     pub(super) tab: Option<AnswerTab>,
@@ -38,18 +28,6 @@ pub(super) struct View {
     pub(super) copied: Option<Copied>,
     pub(super) block_heights: Heights,
     pub(super) row_heights: Heights,
-}
-
-impl Default for View {
-    fn default() -> View {
-        View {
-            tab: None,
-            revealed: None,
-            copied: None,
-            block_heights: Heights::estimating(BLOCK_ESTIMATE),
-            row_heights: Heights::estimating(ROW_ESTIMATE),
-        }
-    }
 }
 
 pub(super) struct Pane<'a, 'c> {

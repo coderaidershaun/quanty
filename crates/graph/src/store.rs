@@ -1,5 +1,6 @@
 //! What a program can ask of the graph store, and the ways a request can fail.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use falkordb::FalkorDBError;
@@ -59,6 +60,18 @@ pub enum GraphError {
     },
 
     #[error(
+        "FalkorDB at {url} wrote {written} of the {asked} {edges} in the graph {graph}; the others name an item or a concept that the graph does not hold"
+    )]
+    MissingNodes {
+        url: String,
+        graph: String,
+        /// The kind of edge, in the plural: mentions or relations.
+        edges: &'static str,
+        asked: u64,
+        written: u64,
+    },
+
+    #[error(
         "the folder {} cannot be kept in the graph because its path is not valid Unicode",
         folder.display()
     )]
@@ -85,11 +98,22 @@ pub trait GraphStore {
     ///   document
     fn documents(&self) -> impl Future<Output = Result<Vec<DocumentNode>, GraphError>> + Send;
 
+    /// The document with this id, with its title and its labels, or `None`.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   document
+    fn document(
+        &self,
+        id: DocId,
+    ) -> impl Future<Output = Result<Option<DocumentNode>, GraphError>> + Send;
+
     /// Every document, each once, ordered by title and then by id, with its labels, the mark that
     /// it is ingested whole, the folder it was ingested from and how many items of each kind it
     /// has. A document with no items has zero of each kind. This read counts every item in the
     /// graph, so [`GraphStore::documents`] is the read to use when the title and the labels are
-    /// enough.
+    /// enough, and [`GraphStore::chapter_folders`] when the folders are.
     ///
     /// # Errors
     /// - [`GraphError::Query`] when the store refuses or cannot be reached
@@ -98,6 +122,18 @@ pub trait GraphStore {
     fn document_records(
         &self,
     ) -> impl Future<Output = Result<Vec<DocumentRecord>, GraphError>> + Send;
+
+    /// The folder that each of these documents was ingested from. A document that is not in the
+    /// graph, or that has no folder, is left out. An empty slice makes no call.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   document with its folder
+    fn chapter_folders(
+        &self,
+        documents: &[DocId],
+    ) -> impl Future<Output = Result<HashMap<DocId, PathBuf>, GraphError>> + Send;
 
     /// Creates the media node. A media with exactly this title that is in the graph stays as it
     /// is, with the labels it has, so an ingest never changes a stored media and repeating it
@@ -185,7 +221,8 @@ pub trait GraphStore {
     /// which is not an error.
     ///
     /// # Errors
-    /// [`GraphError::Query`] when the store refuses or cannot be reached.
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a count
     fn delete_document(&self, id: DocId) -> impl Future<Output = Result<u64, GraphError>> + Send;
 
     /// Creates the concept node with no aliases, or writes its name, normalised name and
@@ -204,7 +241,10 @@ pub trait GraphStore {
     /// An empty slice makes no call.
     ///
     /// # Errors
-    /// [`GraphError::Query`] when the store refuses or cannot be reached.
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::MissingNodes`] when the item or the concept of a mention is not in the
+    ///   graph. That mention is not written, and every other one is.
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a count
     fn add_mentions(
         &self,
         mentions: &[Mention],
@@ -214,7 +254,10 @@ pub trait GraphStore {
     /// kind: it keeps the item that stated it first. An empty slice makes no call.
     ///
     /// # Errors
-    /// [`GraphError::Query`] when the store refuses or cannot be reached.
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::MissingNodes`] when a concept of a relation is not in the graph. That
+    ///   relation is not written, and every other one is.
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a count
     fn add_relations(
         &self,
         relations: &[Relation],

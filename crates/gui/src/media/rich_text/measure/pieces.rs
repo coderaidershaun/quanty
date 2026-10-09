@@ -3,10 +3,10 @@
 
 use eframe::egui::text::TextFormat;
 
-use super::atom::{Formula, Seen};
-use super::parse::{LineKind, Parsed, Span, SpanStyle};
-use super::style::TextLook;
 use crate::media::math::{Math, MathRef};
+use crate::media::rich_text::atom::{Formula, Seen};
+use crate::media::rich_text::parse::{LineKind, Parsed, Span, SpanStyle};
+use crate::media::rich_text::style::TextLook;
 
 /// A word, a mark or a formula, before it has a width.
 pub(super) struct Piece {

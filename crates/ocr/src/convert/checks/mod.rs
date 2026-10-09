@@ -31,7 +31,16 @@ pub(super) fn clean_and_check(
     check_reply(page, text_layer_words)
 }
 
+/// The rectangle is judged after all of the content, because a reply whose only fault is a bad
+/// rectangle is saved as good content and only that figure's picture falls back to the whole page.
 fn check_reply(page: &TranscribedPage, text_layer_words: usize) -> Result<(), ReplyFault> {
+    check_content(page, text_layer_words)?;
+    figure_bounds(page)
+}
+
+/// Every rule but the figure's rectangle. A new rule goes here, so that a reply with a bad
+/// rectangle is never saved without it.
+fn check_content(page: &TranscribedPage, text_layer_words: usize) -> Result<(), ReplyFault> {
     piece_numbers(page)?;
     no_pieces(page, text_layer_words)?;
     fields::check_strings(page)?;
@@ -39,15 +48,7 @@ fn check_reply(page: &TranscribedPage, text_layer_words: usize) -> Result<(), Re
     tables(page)?;
     discussion_links(page)?;
     mid_sentence_flags(page)?;
-    displayed_math_in_text(page)?;
-    // Keep this rule last. A reply whose only fault is a bad rectangle has passed every other
-    // rule, so it is saved as good content and only that figure's picture falls back to the
-    // whole page.
-    // SMELL: a test fails if this rule moves above the string checks, but nothing fails if it
-    // moves above a later rule, or if another rule is put after it. A rule that runs after this
-    // one is never applied to a reply with a bad rectangle, and that reply is then saved as good
-    // content.
-    figure_bounds(page)
+    displayed_math_in_text(page)
 }
 
 fn piece_numbers(page: &TranscribedPage) -> Result<(), ReplyFault> {
@@ -222,4 +223,51 @@ fn displayed_math(text: &str) -> Option<&'static str> {
     .into_iter()
     .find(|(marker, _)| text.contains(marker))
     .map(|(_, seen)| seen)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::content::PageBox;
+
+    /// The fault of the last content rule must win over a bad rectangle, wherever the rectangle
+    /// rule is moved to.
+    #[test]
+    fn content_fault_wins_over_a_bad_rectangle() {
+        let explanation = "word ".repeat(MIN_FIGURE_EXPLANATION_WORDS);
+        let page = TranscribedPage {
+            printed_page_number: None,
+            running_header: None,
+            pieces: vec![
+                TranscribedPiece::Text {
+                    number: 1,
+                    markdown: "We have $$a = b$$ here.".to_owned(),
+                    cites: Vec::new(),
+                },
+                TranscribedPiece::Figure {
+                    number: 2,
+                    label: None,
+                    caption: None,
+                    printed_text: Vec::new(),
+                    bounds: PageBox {
+                        left: 700,
+                        top: 200,
+                        right: 100,
+                        bottom: 500,
+                    },
+                    explanation: explanation.trim().to_owned(),
+                },
+            ],
+            discusses: Vec::new(),
+            starts_mid_sentence: false,
+            ends_mid_sentence: false,
+        };
+
+        let checked = check_reply(&page, 0);
+
+        assert!(
+            matches!(checked, Err(ReplyFault::DisplayedMathInText { .. })),
+            "{checked:?}"
+        );
+    }
 }

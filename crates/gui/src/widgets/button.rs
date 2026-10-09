@@ -80,6 +80,11 @@ impl<'a> Button<'a> {
         Button::with_variant(label, Variant::Danger)
     }
 
+    /// The width under which no button with a label is drawn, so a slot this wide always fits one.
+    pub const fn least_width(size: ControlSize) -> f32 {
+        MIN_WIDTH_PER_HEIGHT * size.height()
+    }
+
     /// `label` is the accessible name and the tooltip.
     pub fn icon_only(icon: Icon, label: &'a str) -> Self {
         Button {
@@ -251,9 +256,9 @@ impl egui::Widget for Button<'_> {
         let width = match &text {
             None => height,
             Some(galley) => {
-                // SMELL: a button with no icon gets wider while it loads, to make room for
-                // the spinner, so what stands beside it moves.
-                let icon_room = if self.has_icon_room() {
+                // The spinner of a button with no icon fits in the padding, so the button is as
+                // wide while it loads as at rest, and nothing beside it moves.
+                let icon_room = if self.icon.is_some() {
                     self.size.icon() + space::SM
                 } else {
                     0.0

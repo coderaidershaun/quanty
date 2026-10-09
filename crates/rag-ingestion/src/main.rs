@@ -8,18 +8,18 @@ mod progress;
 use std::path::Path;
 use std::process::ExitCode;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use clap::{CommandFactory, Parser};
 use graph::FalkorGraph;
-use ocr::{ChapterJob, DocumentName, MediaDocument, PageProgress};
+use ocr::{ChapterJob, PageProgress};
 use rag_core::{
     ApiKey, Category, ClaudeCli, ConceptStore, Config, DocId, GeminiEmbedder, ItemStore,
-    MediaLabels, Tag,
+    MediaLabels,
 };
 use rag_ingestion::{
     ChapterFolder, ChapterPdf, ConceptExtractor, EXTRACTION_MODEL, IngestSummary, LoneImage,
-    MediaChange, Models, Stores, TagChange, delete_document, document_name, health, ingest_chapter,
-    ingest_image, ingest_pdf, media_category, relabel_document_tags, relabel_media,
+    MediaChange, Models, NamePdfError, Stores, TagChange, UnnamedPdf, delete_document, health,
+    ingest_chapter, ingest_image, ingest_pdf, relabel_document_tags, relabel_media,
 };
 use tracing::Level;
 use tracing_subscriber::filter::Targets;
@@ -74,17 +74,11 @@ async fn run(cli: Cli) -> Result<ExitCode> {
         ) => tag(document_id, &TagChange { add, remove })
             .await
             .map(|()| ExitCode::SUCCESS),
-        (
-            Some(Command::Media {
-                title,
-                category,
-                authors,
-                tags,
-            }),
-            _,
-        ) => relabel_stored_media(&title, &media_change(category, authors, tags))
-            .await
-            .map(|()| ExitCode::SUCCESS),
+        (Some(Command::Media { title, labels }), _) => {
+            relabel_stored_media(&title, &labels.change())
+                .await
+                .map(|()| ExitCode::SUCCESS)
+        }
         (Some(Command::DeleteDocument { document_id }), _) => {
             delete(document_id).await.map(|()| ExitCode::SUCCESS)
         }
@@ -199,23 +193,26 @@ async fn convert_and_ingest(given: &GivenPdf) -> Result<()> {
     // fails before the first page is paid for.
     let models = set_up_models(&config)?;
     let stores = connect_stores(&config).await?;
-    // A media that the library has keeps its own category, and the category says how the PDF is
-    // named, so the graph is read first. The checks below still come before anything is paid for.
-    let category = media_category(media_title, Some(flag), &stores.graph)
+    // A media that the library has keeps its own category, which says how the PDF is named, so
+    // the PDF is named once the graph can be read. This still comes before anything is paid for.
+    let unnamed = UnnamedPdf {
+        media_title,
+        category: Some(flag),
+        document_title: given.title.as_deref(),
+        pdf,
+    };
+    let named = unnamed
+        .named(&stores.graph)
         .await
-        .context("could not read the media that the graph holds")?;
-    if category != flag {
+        .map_err(|error| naming_failure(error, &unnamed))?;
+    if named.category != flag {
         eprintln!(
-            "the library has {media_title:?} in the category {category}, so this pdf is named and labelled by that category, not by --{flag}"
+            "the library has {media_title:?} in the category {}, so this pdf is named and labelled by that category, not by --{flag}",
+            named.category
         );
     }
-    let name = name_of_the_pdf(given, category)?;
-    let new_media = given.labels.of(category);
-    let document = MediaDocument {
-        media_title: media_title.to_owned(),
-        name,
-    };
-    let job = ChapterJob::new(document, pdf, &config.content_folder)
+    let new_media = given.labels.of(named.category);
+    let job = ChapterJob::new(named.document, pdf, &config.content_folder)
         .with_context(|| format!("could not set up the conversion of {}", pdf.display()))?;
     // The key goes to the converter as a value, because the settings never enter the process
     // environment.
@@ -239,34 +236,37 @@ async fn convert_and_ingest(given: &GivenPdf) -> Result<()> {
     write_document_tags(outcome.doc_id(), &given.document.change(), &stores).await
 }
 
-/// Names the PDF by `category`, which `media_category` gave for its media. A refusal says "the
-/// library has" only when that category is not the one that the flag gave.
-fn name_of_the_pdf(given: &GivenPdf, category: Category) -> Result<DocumentName> {
-    let pdf = given.pdf.as_path();
-    let (media_title, flag) = given.media.title_and_category()?;
-    let title = given
-        .title
-        .as_deref()
-        .filter(|title| !title.trim().is_empty());
-    // `--title` cannot be given with `--book`, so a book here is the category the library has.
-    if category == Category::Book && title.is_some() {
-        bail!(
-            "the library has {media_title:?} in the category book, and a book's chapter is named by its file name; leave out --title"
-        );
-    }
-    document_name(category, title.unwrap_or(media_title), pdf).with_context(|| {
-        if category == flag {
-            format!(
-                "{} cannot be ingested as a book chapter; rename it to chapter-<number>-<name>.pdf, or, when the library does not have {media_title:?} yet, give --paper or --other, whose pdf can have any name",
-                pdf.display()
-            )
-        } else {
-            format!(
-                "the library has {media_title:?} in the category book, so its pdf must be named chapter-<number>-<name>.pdf; rename {}",
-                pdf.display()
-            )
+/// Only a book refuses a name, so a refusal says "the library has" when the flag was not
+/// `--book`: the book is then the category that the library has.
+fn naming_failure(error: NamePdfError, unnamed: &UnnamedPdf) -> anyhow::Error {
+    let UnnamedPdf {
+        media_title,
+        category: flag,
+        pdf,
+        ..
+    } = *unnamed;
+    match error {
+        NamePdfError::ReadMedia(source) => {
+            anyhow::Error::new(source).context("could not read the media that the graph holds")
         }
-    })
+        NamePdfError::TitleForABook => anyhow!(
+            "the library has {media_title:?} in the category book, and a book's chapter is named by its file name; leave out --title"
+        ),
+        NamePdfError::ChapterFileName(source) => {
+            let fix = if flag == Some(Category::Book) {
+                format!(
+                    "{} cannot be ingested as a book chapter; rename it to chapter-<number>-<name>.pdf, or, when the library does not have {media_title:?} yet, give --paper or --other, whose pdf can have any name",
+                    pdf.display()
+                )
+            } else {
+                format!(
+                    "the library has {media_title:?} in the category book, so its pdf must be named chapter-<number>-<name>.pdf; rename {}",
+                    pdf.display()
+                )
+            };
+            anyhow::Error::new(source).context(fix)
+        }
+    }
 }
 
 /// Own tags come after the ingest, so a run that stops in the ingest tags nothing, and the same
@@ -300,19 +300,11 @@ async fn write_tags(
     Ok(())
 }
 
-// SMELL: a flag that is not given keeps that label, so the authors or the tags of a media cannot
-// be emptied from here.
-fn media_change(category: Option<Category>, authors: Vec<String>, tags: Vec<Tag>) -> MediaChange {
-    MediaChange {
-        category,
-        authors: (!authors.is_empty()).then_some(authors),
-        tags: (!tags.is_empty()).then(|| tags.into_iter().collect()),
-    }
-}
-
 async fn relabel_stored_media(title: &str, change: &MediaChange) -> Result<()> {
     if change.is_empty() {
-        bail!("give at least one of --category, --author and --tag to change the media {title:?}");
+        bail!(
+            "give at least one of --category, --author, --no-authors, --tag and --no-tags to change the media {title:?}"
+        );
     }
     let config = Config::load().context("could not read the settings")?;
     let stores = connect_stores(&config).await?;

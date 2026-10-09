@@ -11,8 +11,8 @@ use crate::contract::{
 };
 
 const PAGES: u32 = 12;
-// SMELL: the dollars of this play are made up and do not follow the price table, so they are
-// about twice what its tokens would cost.
+// SMELL: the dollars of this play are made up, about twice what the price table gives for its
+// tokens, because the fake may not name the crate that holds the table.
 const COST_OF_A_PAGE: f64 = 0.14;
 /// What Sonnet reads and what it writes to convert one page.
 const TOKENS_OF_A_PAGE: (u64, u64) = (12_000, 4_000);

@@ -3,6 +3,7 @@
 #![recursion_limit = "256"]
 
 mod app;
+mod copied_rules;
 mod ingest;
 mod library;
 mod media_images;

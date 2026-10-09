@@ -22,6 +22,8 @@ pub(super) struct Work<S> {
     pub(super) services: Arc<S>,
     pub(super) config: Config,
     pub(super) pdf: ReadyPdf,
+    /// The graph that named the PDF, which the job writes to.
+    pub(super) graph: FalkorGraph,
     /// Where the stage is written. The end of the report is written by the task that waits for
     /// this one, not here.
     pub(super) report: watch::Sender<IngestReport>,
@@ -40,18 +42,19 @@ impl<S: Services> Work<S> {
             services,
             config,
             pdf,
+            graph,
             report,
-        } = &self;
+        } = self;
         // The models are set up before the first page is converted, so a missing key for the
         // embedder fails before anything is paid for.
         let models = Models {
-            embedder: services.embedder(config)?,
-            concepts: ConceptExtractor::new(services.llm(EXTRACTION_MODEL), config),
+            embedder: services.embedder(&config)?,
+            concepts: ConceptExtractor::new(services.llm(EXTRACTION_MODEL), &config),
         };
         let stores = Stores {
-            items: ItemStore::connect(config).map_err(PdfIngestError::ItemStore)?,
-            graph: FalkorGraph::connect(config).await?,
-            concepts: ConceptStore::connect(config).map_err(PdfIngestError::ConceptStore)?,
+            items: ItemStore::connect(&config).map_err(PdfIngestError::ItemStore)?,
+            graph,
+            concepts: ConceptStore::connect(&config).map_err(PdfIngestError::ConceptStore)?,
         };
         let outcome = ingest_pdf(
             ChapterPdf {
@@ -61,7 +64,7 @@ impl<S: Services> Work<S> {
                     async |chapter: &ChapterJob,
                            _pages: &mut (dyn FnMut(PageProgress) + Send + '_)| {
                         report.send_modify(|report| report.stage = Some(Stage::Converting));
-                        let summary = services.convert(chapter, config).await?;
+                        let summary = services.convert(chapter, &config).await?;
                         report.send_modify(|report| report.stage = Some(Stage::Ingesting));
                         Ok(summary)
                     },

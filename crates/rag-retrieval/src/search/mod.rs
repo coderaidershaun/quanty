@@ -30,10 +30,9 @@ pub const MAX_RESULTS_PER_DOCUMENT: usize = 3;
 const QUESTION_CONCEPTS: usize = 3;
 
 /// How many items the graph may add to the nearest ones.
-// SMELL: when more items than this mention the concepts, the graph keeps the ones that mention the
-// most of them and then the ones with the lowest ids, not the ones nearest to the question. A seed
-// that mentions a concept takes one of these places, and so does an item of another kind when the
-// search is for one kind, and an item of a document that the labels leave out.
+// SMELL: past this cap the graph keeps the items that mention the most concepts, not the nearest,
+// and seeds and items that the filters drop take places too. It stays because only the item store
+// knows nearness and the filters, so a fix needs a query that joins the two stores.
 const MAX_EXPANSION_ITEMS: usize = 50;
 
 #[derive(thiserror::Error, Debug)]
@@ -74,10 +73,10 @@ impl<E: Embedder, G: GraphStore> Retriever<E, G> {
 
     /// The items for the question, and what each step produced, in the order of the steps:
     /// 1. the [`RESULTS_PER_QUERY`] items nearest to the question are the seeds;
-    /// 2. the seed concepts are the concepts nearest to the question and the concepts that the
-    ///    seeds mention;
-    /// 3. the graph adds the items that mention a seed concept, and the concepts one `RELATES_TO`
-    ///    edge away from the seed concepts, with the items that mention those;
+    /// 2. the search starts from the concepts nearest to the question and the seed concepts, which
+    ///    are the concepts that the seeds mention;
+    /// 3. the graph adds the items that mention one of the concepts of step 2, and the concepts one
+    ///    `RELATES_TO` edge away from them, with the items that mention those;
     /// 4. the seeds and the added items are ranked together by one query;
     /// 5. no document gives more than [`MAX_RESULTS_PER_DOCUMENT`] of the first
     ///    [`RESULTS_PER_QUERY`] results;

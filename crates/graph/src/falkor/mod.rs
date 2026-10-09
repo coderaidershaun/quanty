@@ -1,11 +1,15 @@
-//! The connection to FalkorDB and the check that the store behind it answers.
+//! The connection to FalkorDB, the check that the store behind it answers, and the graph it
+//! prepares for the statements.
 
+mod concepts;
+mod documents;
 mod edges;
-mod reads;
+mod indexes;
 mod records;
 mod writes;
 
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::time::Duration;
 
@@ -31,11 +35,16 @@ pub struct FalkorGraph {
 }
 
 impl FalkorGraph {
-    /// Opens the connection, so a store that is down fails here. The client needs the
+    /// Makes the graph and its indexes when they are missing, so a store that is down fails here
+    /// and a graph that nothing was written to yet reads as an empty library. The client needs the
     /// multi-thread runtime of tokio.
     ///
     /// # Errors
-    /// [`GraphError::Connect`] when the address is not valid or nothing answers there.
+    /// - [`GraphError::Connect`] when the address is not valid or nothing answers there
+    /// - [`GraphError::Ping`] and [`GraphError::NotFalkorDb`] as for [`FalkorGraph::ping`]
+    /// - [`GraphError::Query`] when the indexes cannot be read or made
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a list
+    ///   of indexes
     pub async fn connect(config: &Config) -> Result<FalkorGraph, GraphError> {
         let url = config.falkordb_url.clone();
         let connect_error = |source| GraphError::Connect {
@@ -52,7 +61,12 @@ impl FalkorGraph {
         // "queries overflow the depth limit".
         let client = Box::pin(building).await.map_err(connect_error)?;
         let graph = client.select_graph(&config.falkordb_graph);
-        Ok(FalkorGraph { client, graph, url })
+        let connected = FalkorGraph { client, graph, url };
+        // Asked first, so that another program on the port is reported as not FalkorDB and not as
+        // a statement that failed.
+        connected.ping().await?;
+        indexes::ensure(&connected).await?;
+        Ok(connected)
     }
 
     /// Asks the store for its list of graphs, which is the cheapest request that needs the
@@ -103,11 +117,22 @@ impl GraphStore for FalkorGraph {
     }
 
     async fn documents(&self) -> Result<Vec<DocumentNode>, GraphError> {
-        reads::documents(self).await
+        documents::documents(self).await
+    }
+
+    async fn document(&self, id: DocId) -> Result<Option<DocumentNode>, GraphError> {
+        documents::document(self, id).await
     }
 
     async fn document_records(&self) -> Result<Vec<DocumentRecord>, GraphError> {
         records::document_records(self).await
+    }
+
+    async fn chapter_folders(
+        &self,
+        documents: &[DocId],
+    ) -> Result<HashMap<DocId, PathBuf>, GraphError> {
+        documents::chapter_folders(self, documents).await
     }
 
     async fn add_media(&self, media: &MediaNode) -> Result<(), GraphError> {
@@ -119,7 +144,7 @@ impl GraphStore for FalkorGraph {
     }
 
     async fn media(&self) -> Result<Vec<MediaNode>, GraphError> {
-        reads::media(self).await
+        documents::media(self).await
     }
 
     async fn upsert_items(&self, document: DocId, items: &[ItemNode]) -> Result<(), GraphError> {
@@ -135,7 +160,7 @@ impl GraphStore for FalkorGraph {
     }
 
     async fn ingested_items(&self, document: DocId) -> Result<Option<u64>, GraphError> {
-        reads::ingested_items(self, document).await
+        documents::ingested_items(self, document).await
     }
 
     async fn set_chapter_folder(&self, document: DocId, folder: &Path) -> Result<(), GraphError> {
@@ -166,15 +191,15 @@ impl GraphStore for FalkorGraph {
         &self,
         normalised_name: &str,
     ) -> Result<Option<ConceptNode>, GraphError> {
-        reads::find_concept_by_name(self, normalised_name).await
+        concepts::find_concept_by_name(self, normalised_name).await
     }
 
     async fn concept(&self, id: ConceptId) -> Result<Option<ConceptNode>, GraphError> {
-        reads::concept(self, id).await
+        concepts::concept(self, id).await
     }
 
     async fn concepts_for_items(&self, items: &[ItemId]) -> Result<Vec<ConceptNode>, GraphError> {
-        reads::concepts_for_items(self, items).await
+        concepts::concepts_for_items(self, items).await
     }
 
     async fn items_for_concepts(
@@ -182,14 +207,14 @@ impl GraphStore for FalkorGraph {
         concepts: &[ConceptId],
         limit: usize,
     ) -> Result<Vec<ItemMentions>, GraphError> {
-        reads::items_for_concepts(self, concepts, limit).await
+        concepts::items_for_concepts(self, concepts, limit).await
     }
 
     async fn related_concepts(
         &self,
         concepts: &[ConceptId],
     ) -> Result<Vec<ConceptNode>, GraphError> {
-        reads::related_concepts(self, concepts).await
+        concepts::related_concepts(self, concepts).await
     }
 
     async fn concepts_on_page(
@@ -197,7 +222,7 @@ impl GraphStore for FalkorGraph {
         document: DocId,
         page: u32,
     ) -> Result<Vec<ConceptNode>, GraphError> {
-        reads::concepts_on_page(self, document, page).await
+        concepts::concepts_on_page(self, document, page).await
     }
 
     async fn relations_among(&self, concepts: &[ConceptId]) -> Result<Vec<Relation>, GraphError> {
@@ -216,4 +241,23 @@ impl GraphStore for FalkorGraph {
 /// An id as the text that Qdrant also uses for it.
 fn id_value(id: impl ToString) -> FalkorValue {
     FalkorValue::String(id.to_string())
+}
+
+fn unreadable_reply(
+    graph: &FalkorGraph,
+    action: &'static str,
+    expected: &'static str,
+    found: String,
+) -> GraphError {
+    GraphError::UnreadableReply {
+        url: graph.url.clone(),
+        graph: graph.graph.graph_name().to_owned(),
+        action,
+        found,
+        expected,
+    }
+}
+
+fn id_list(ids: &[impl ToString + Copy]) -> FalkorValue {
+    FalkorValue::Array(ids.iter().copied().map(id_value).collect())
 }

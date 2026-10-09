@@ -63,17 +63,47 @@ pub trait RunRagIngest {
     /// Runs the `rag-ingest` command against these stores and no others, with the stand-in
     /// `claude` that finds no concept.
     fn rag_ingest(&self, arguments: impl IntoIterator<Item = impl AsRef<OsStr>>) -> Output;
+
+    /// Like [`RunRagIngest::rag_ingest`], with keys that no service takes. The real keys of a
+    /// `.env` above the test would otherwise be read, and a run that went past the check it is
+    /// meant to stop at could pay for a page.
+    fn rag_ingest_with_fake_keys(
+        &self,
+        arguments: impl IntoIterator<Item = impl AsRef<OsStr>>,
+    ) -> Output;
 }
 
 impl RunRagIngest for ThrowawayStores {
     fn rag_ingest(&self, arguments: impl IntoIterator<Item = impl AsRef<OsStr>>) -> Output {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_rag-ingest"));
-        command.args(arguments).envs(self.command_settings());
-        put_stand_in_claude_first(&mut command, self);
-        command
-            .output()
-            .expect("the rag-ingest binary should start")
+        output_of(rag_ingest_command(self, arguments))
     }
+
+    fn rag_ingest_with_fake_keys(
+        &self,
+        arguments: impl IntoIterator<Item = impl AsRef<OsStr>>,
+    ) -> Output {
+        let mut command = rag_ingest_command(self, arguments);
+        command
+            .env("EMBEDDING_GEMINI_API_KEY", "not-a-key")
+            .env("CONVERTER_JEV_API_KEY", "not-a-key");
+        output_of(command)
+    }
+}
+
+fn rag_ingest_command(
+    stores: &ThrowawayStores,
+    arguments: impl IntoIterator<Item = impl AsRef<OsStr>>,
+) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_rag-ingest"));
+    command.args(arguments).envs(stores.command_settings());
+    put_stand_in_claude_first(&mut command, stores);
+    command
+}
+
+fn output_of(mut command: Command) -> Output {
+    command
+        .output()
+        .expect("the rag-ingest binary should start")
 }
 
 fn put_stand_in_claude_first(command: &mut Command, stores: &ThrowawayStores) {

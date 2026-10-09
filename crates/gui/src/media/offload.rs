@@ -24,12 +24,21 @@ struct Queue<Job> {
     jobs: Mutex<VecDeque<Job>>,
     arrived: Condvar,
     closed: AtomicBool,
+    /// Held by a worker from the send of a result to its repaint, and by the app while it takes
+    /// results.
+    hand_back: Mutex<()>,
 }
 
 impl<Job> Queue<Job> {
     /// A worker that panicked cannot leave the list half changed, so a poisoned lock is safe.
     fn lock(&self) -> MutexGuard<'_, VecDeque<Job>> {
         self.jobs.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn lock_hand_back(&self) -> MutexGuard<'_, ()> {
+        self.hand_back
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
     }
 }
 
@@ -59,6 +68,7 @@ impl<Job: Send + 'static, Done: Send + 'static> Workers<Job, Done> {
             jobs: Mutex::new(VecDeque::new()),
             arrived: Condvar::new(),
             closed: AtomicBool::new(false),
+            hand_back: Mutex::new(()),
         });
         let (sender, done) = channel();
         if offload == Offload::Manual {
@@ -101,6 +111,7 @@ impl<Job: Send + 'static, Done: Send + 'static> Workers<Job, Done> {
     }
 
     pub fn take_done(&mut self) -> Option<Done> {
+        let _hand_back = self.queue.lock_hand_back();
         self.done.try_recv().ok()
     }
 
@@ -159,7 +170,12 @@ fn serve<Job, Done>(
                     .unwrap_or_else(PoisonError::into_inner);
             }
         };
-        if sender.send(work(ctx, job)).is_err() {
+        let done = work(ctx, job);
+        // The repaint comes after the send, so the app never sleeps on a result it has not taken.
+        // The lock keeps the app from taking the result before the repaint is asked for: a repaint
+        // that came later would wake an app that had already drawn the result and gone to rest.
+        let _hand_back = queue.lock_hand_back();
+        if sender.send(done).is_err() {
             return;
         }
         ctx.request_repaint();

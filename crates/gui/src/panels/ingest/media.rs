@@ -136,12 +136,11 @@ fn list(ui: &mut egui::Ui, local: &mut Local, offers: &[&Media]) {
         MediaChoice::Existing { title, category } if chosen.is_none() => row_of(title, *category),
         _ => "Choose a media".to_owned(),
     };
-    let picked = Dropdown::new(MEDIA, &rows)
+    let picked = Dropdown::new(MEDIA, &rows, ui.available_width())
         .id_salt("ingest_media_list")
         .selected(chosen)
         .placeholder(&placeholder)
         .size(ControlSize::Medium)
-        .width(ui.available_width())
         .show(ui);
     match picked.map(|index| offers.get(index)) {
         Some(Some(media)) => local.choose(media),

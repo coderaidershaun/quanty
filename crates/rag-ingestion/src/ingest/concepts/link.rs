@@ -26,9 +26,6 @@ struct ReplyRelations {
     dropped: usize,
 }
 
-// SMELL: nothing removes the mentions of an earlier run, so after a change of the prompt an item
-// keeps the mentions of the old answers beside the new ones, until its document is deleted and
-// ingested again.
 /// Writes the concepts, mentions and relations of every item. The returned summary counts only
 /// these writes and the questions that resolving the concepts asked. `items` is how many items
 /// the run was given, which a stop reports.

@@ -99,7 +99,28 @@ pub(super) fn show(ui: &mut egui::Ui, local: &mut Local, intents: &mut Vec<Inten
     caption(ui, PDF);
     file_row(ui, local.pdf.as_deref(), intents);
     let category = local.media.chosen().map(|(_, category)| category);
-    let typed = &mut local.typed;
+    let mut boxes = name_boxes(ui, category, &mut local.typed);
+    caption(ui, OWN_TAGS);
+    let tags = TextInput::new(OWN_TAGS, &mut local.typed.own_tags)
+        .id_salt("ingest_own_tags")
+        .placeholder("Optional. The media's tags apply as well.")
+        .show(ui);
+    boxes.push(tags);
+    // Enter, Escape and a click elsewhere each take the keyboard from a box, so each of them
+    // settles what was typed.
+    if !boxes
+        .iter()
+        .any(|shown: &TextInputResponse| shown.response.has_focus())
+    {
+        local.settled = local.typed.clone();
+    }
+}
+
+fn name_boxes(
+    ui: &mut egui::Ui,
+    category: Option<Category>,
+    typed: &mut DocumentFields,
+) -> Vec<TextInputResponse> {
     let mut boxes = Vec::new();
     match category {
         Some(Category::Book) => {
@@ -134,20 +155,7 @@ pub(super) fn show(ui: &mut egui::Ui, local: &mut Local, intents: &mut Vec<Inten
         }
         None => {}
     }
-    caption(ui, OWN_TAGS);
-    let tags = TextInput::new(OWN_TAGS, &mut typed.own_tags)
-        .id_salt("ingest_own_tags")
-        .placeholder("Optional. The media's tags apply as well.")
-        .show(ui);
-    boxes.push(tags);
-    // Enter, Escape and a click elsewhere each take the keyboard from a box, so each of them
-    // settles what was typed.
-    if !boxes
-        .iter()
-        .any(|shown: &TextInputResponse| shown.response.has_focus())
-    {
-        local.settled = local.typed.clone();
-    }
+    boxes
 }
 
 fn file_row(ui: &mut egui::Ui, pdf: Option<&Path>, intents: &mut Vec<Intent>) {

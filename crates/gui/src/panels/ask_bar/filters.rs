@@ -135,10 +135,9 @@ fn pick_one(ui: &mut egui::Ui, pick: &Pick<'_>, value: &mut Option<String>) {
         // A value that is not in the list, because the library has not loaded, shows as the
         // placeholder.
         let shown = value.as_deref().unwrap_or(pick.all);
-        let chosen = Dropdown::new(pick.label, pick.options)
+        let chosen = Dropdown::new(pick.label, pick.options, pick.width)
             .selected(selected)
             .placeholder(shown)
-            .width(pick.width)
             .show(ui);
         if let Some(index) = chosen {
             *value = (index > 0).then(|| pick.options[index].clone());
@@ -157,9 +156,8 @@ fn pick_category(ui: &mut egui::Ui, width: f32, value: &mut Option<Category>) {
             .position(|&category| category == current)
             .map(|place| place + 1),
     };
-    let chosen = Dropdown::new("Category", &options)
+    let chosen = Dropdown::new("Category", &options, width)
         .selected(selected)
-        .width(width)
         .show(ui);
     if let Some(index) = chosen {
         *value = index

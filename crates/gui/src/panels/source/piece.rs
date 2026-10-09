@@ -8,21 +8,11 @@ use crate::contract::{Intent, PagePiece, PieceKind};
 use crate::media::images;
 use crate::media::math::{self, MathRef};
 use crate::media::rich_text::{self, Clicked, RichText};
-use crate::theme::{TextRole, color, size, space, stroke};
+use crate::theme::{TextRole, color};
+use crate::widgets::Card;
 
 const MIN_FIGURE_HEIGHT: f32 = 120.0;
 const MAX_FIGURE_HEIGHT: f32 = 320.0;
-/// What a card spends on its tag, its caption, the gaps between them, its margins and its border,
-/// which the figure cannot have.
-///
-/// SMELL: this is a guess at how the card widget lays itself out. When the look of the card
-/// changes, this number is wrong and nothing says so: a figure can then be a little too high
-/// for the list.
-const CARD_ROWS: f32 = size::CONTROL_SM
-    + TextRole::Small.line_height()
-    + 2.0 * space::MD
-    + 2.0 * space::SM
-    + 2.0 * stroke::BORDER;
 
 pub(super) const fn kind_name(kind: PieceKind) -> &'static str {
     match kind {
@@ -107,8 +97,11 @@ fn note(ui: &mut egui::Ui, line: Option<&str>) {
     }
 }
 
+/// The figure fits in the view together with its card around it and its caption under it.
 fn figure_room(ui: &egui::Ui) -> egui::Vec2 {
-    let height = (ui.clip_rect().height() - CARD_ROWS).clamp(MIN_FIGURE_HEIGHT, MAX_FIGURE_HEIGHT);
+    let caption = ui.spacing().item_spacing.y + TextRole::Small.line_height();
+    let around = Card::height_around_content(ui) + caption;
+    let height = (ui.clip_rect().height() - around).clamp(MIN_FIGURE_HEIGHT, MAX_FIGURE_HEIGHT);
     egui::vec2(ui.available_width(), height)
 }
 

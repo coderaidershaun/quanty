@@ -15,8 +15,8 @@ pub(super) struct Sheet {
 pub(super) async fn read_sheet(page_folder: &Path) -> std::io::Result<Sheet> {
     let picture_size = png_size(&page_folder.join(PAGE_IMAGE_FILE))?;
     // Without lines the model's rectangle is cut as it is, padded.
-    // SMELL: why the lines could not be used (the tool failed, or the page is turned) is not
-    // saved. The figure is only marked unchecked, and the summary lists its page.
+    // SMELL: why the lines could not be used, a failed tool or a turned page, is lost, and the
+    // figure is only marked unchecked. Keeping it needs a new key in the saved page.
     let lines = match poppler::text_lines(&page_folder.join(PAGE_PDF_FILE)).await {
         Ok(text) if is_drawn_the_same_way(&text, picture_size) => text.lines,
         _ => Vec::new(),

@@ -10,7 +10,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 use tokio::process::Command;
 
-use super::jev::JEV_API_KEY_VARIABLE;
+use crate::convert::child_process;
 
 const API_KEY_VARIABLE: &str = "ANTHROPIC_API_KEY";
 
@@ -279,7 +279,7 @@ fn user_prompt(
 }
 
 fn locked_down_command(call: &ClaudeCall<'_>, prompt: String, page_folder: &Path) -> Command {
-    let mut command = Command::new("claude");
+    let mut command = child_process("claude");
     // The prompt must come right after `-p`: `--tools` and `--allowedTools` take any number of
     // values and would swallow a prompt placed after them.
     command
@@ -314,8 +314,6 @@ fn locked_down_command(call: &ClaudeCall<'_>, prompt: String, page_folder: &Path
     for variable in SESSION_VARIABLES {
         command.env_remove(variable);
     }
-    // `claude` has no use for the Jev API key, so it never gets it.
-    command.env_remove(JEV_API_KEY_VARIABLE);
     command
 }
 
@@ -324,54 +322,58 @@ fn read_answer<T: DeserializeOwned>(
     asked_model: &str,
     elapsed: Duration,
 ) -> Result<Answer<T>, ClaudeError> {
-    // Stdout is read before the exit status: a run that fails still prints a JSON result saying
-    // why, and exits with a failure status.
-    let envelope = match serde_json::from_slice::<Envelope>(&output.stdout) {
-        Ok(envelope) => envelope,
-        Err(source) if output.status.success() => {
-            return Err(ClaudeError::UnreadableResponse(source));
-        }
-        Err(source) => {
-            return Err(ClaudeError::Exited {
-                status: output.status,
-                stderr: String::from_utf8_lossy(&output.stderr).trim().to_owned(),
-                source,
-            });
-        }
-    };
+    let envelope = read_envelope(output)?;
+    let usage = envelope.call_usage(asked_model, elapsed);
+    let reply = envelope.into_reply()?;
+    let value = serde_json::from_value(reply).map_err(ClaudeError::UnexpectedReply)?;
+    Ok(Answer { value, usage })
+}
 
-    let reply = match envelope.structured_output {
-        Some(reply) if envelope.subtype == "success" => reply,
-        _ => {
-            return Err(ClaudeError::RunFailed {
-                subtype: envelope.subtype,
-                result: envelope.result,
-                errors: envelope.errors,
-                api_error_status: envelope
+// Stdout is read before the exit status: a run that fails still prints a JSON result saying why,
+// and exits with a failure status.
+fn read_envelope(output: &Output) -> Result<Envelope, ClaudeError> {
+    match serde_json::from_slice::<Envelope>(&output.stdout) {
+        Ok(envelope) => Ok(envelope),
+        Err(source) if output.status.success() => Err(ClaudeError::UnreadableResponse(source)),
+        Err(source) => Err(ClaudeError::Exited {
+            status: output.status,
+            stderr: String::from_utf8_lossy(&output.stderr).trim().to_owned(),
+            source,
+        }),
+    }
+}
+
+impl Envelope {
+    fn into_reply(self) -> Result<Value, ClaudeError> {
+        match self.structured_output {
+            Some(reply) if self.subtype == "success" => Ok(reply),
+            _ => Err(ClaudeError::RunFailed {
+                subtype: self.subtype,
+                result: self.result,
+                errors: self.errors,
+                api_error_status: self
                     .api_error_status
                     .and_then(|status| status.as_u64())
                     .and_then(|status| u16::try_from(status).ok()),
-            });
+            }),
         }
-    };
-    let value = serde_json::from_value(reply).map_err(ClaudeError::UnexpectedReply)?;
+    }
 
-    let mut model_names = envelope.model_usage.keys();
-    let model = match (model_names.next(), model_names.next()) {
-        (Some(only), None) => only.clone(),
-        _ => asked_model.to_owned(),
-    };
-    Ok(Answer {
-        value,
-        usage: CallUsage {
+    fn call_usage(&self, asked_model: &str, elapsed: Duration) -> CallUsage {
+        let mut model_names = self.model_usage.keys();
+        let model = match (model_names.next(), model_names.next()) {
+            (Some(only), None) => only.clone(),
+            _ => asked_model.to_owned(),
+        };
+        CallUsage {
             model,
-            cost_usd: envelope.total_cost_usd.unwrap_or(0.0),
-            input_tokens: envelope.usage.input_tokens,
-            output_tokens: envelope.usage.output_tokens,
-            cache_read_tokens: envelope.usage.cache_read_input_tokens,
-            cache_write_tokens: envelope.usage.cache_creation_input_tokens,
-            thinking_tokens: envelope.usage.output_tokens_details.thinking_tokens,
+            cost_usd: self.total_cost_usd.unwrap_or(0.0),
+            input_tokens: self.usage.input_tokens,
+            output_tokens: self.usage.output_tokens,
+            cache_read_tokens: self.usage.cache_read_input_tokens,
+            cache_write_tokens: self.usage.cache_creation_input_tokens,
+            thinking_tokens: self.usage.output_tokens_details.thinking_tokens,
             seconds: elapsed.as_secs_f64(),
-        },
-    })
+        }
+    }
 }

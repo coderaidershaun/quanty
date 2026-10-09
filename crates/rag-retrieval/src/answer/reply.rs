@@ -78,40 +78,12 @@ pub(super) fn read(
     usage: UsageTally,
 ) -> Result<Answer, AnswerError> {
     let reply: Reply = serde_json::from_value(reply).map_err(AnswerError::Unreadable)?;
-    let item_count = results.hits.len();
     let mut claims = Vec::with_capacity(reply.claims.len());
-    for (index, claim) in reply.claims.into_iter().enumerate() {
-        let claim_number = index + 1;
-        if claim.sources.is_empty() {
-            return Err(AnswerError::NoSource {
-                claim: claim_number,
-            });
-        }
-        let mut places: Vec<usize> = Vec::new();
-        for source in claim.sources {
-            let place = usize::try_from(source)
-                .ok()
-                .filter(|place| (1..=item_count).contains(place))
-                .ok_or(AnswerError::UnknownSource {
-                    claim: claim_number,
-                    number: source,
-                    items: item_count,
-                })?;
-            if !places.contains(&place) {
-                places.push(place);
-            }
-        }
-        let sources = places
-            .into_iter()
-            .map(|number| Source {
-                number,
-                payload: results.hits[number - 1].item.payload.clone(),
-            })
-            .collect();
+    for (index, claim) in reply.claims.iter().enumerate() {
         claims.push(Claim {
             heading: one_line(&claim.heading),
             text: with_backslashes_restored(&claim.text),
-            sources,
+            sources: sources_of(index + 1, &claim.sources, results)?,
         });
     }
     let title = if claims.is_empty() {
@@ -125,6 +97,43 @@ pub(super) fn read(
         follow_ups: kept_follow_ups(&reply.follow_ups),
         usage,
     })
+}
+
+/// The items that claim number `claim` names, each once, in the order it first names them.
+///
+/// # Errors
+/// - [`AnswerError::NoSource`] when the claim names no source
+/// - [`AnswerError::UnknownSource`] when it names a number that is not the number of an item
+fn sources_of(
+    claim: usize,
+    numbers: &[i64],
+    results: &SearchResults,
+) -> Result<Vec<Source>, AnswerError> {
+    if numbers.is_empty() {
+        return Err(AnswerError::NoSource { claim });
+    }
+    let items = results.hits.len();
+    let mut places: Vec<usize> = Vec::new();
+    for &number in numbers {
+        let place = usize::try_from(number)
+            .ok()
+            .filter(|place| (1..=items).contains(place))
+            .ok_or(AnswerError::UnknownSource {
+                claim,
+                number,
+                items,
+            })?;
+        if !places.contains(&place) {
+            places.push(place);
+        }
+    }
+    Ok(places
+        .into_iter()
+        .map(|number| Source {
+            number,
+            payload: results.hits[number - 1].item.payload.clone(),
+        })
+        .collect())
 }
 
 fn kept_follow_ups(asked: &[String]) -> Vec<String> {

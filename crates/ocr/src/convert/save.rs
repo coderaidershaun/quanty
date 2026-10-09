@@ -10,8 +10,9 @@ use crate::content::{
 };
 
 /// `images` holds the picture of each figure, by piece number.
-// SMELL: a page's position and a piece's number are both plain `u32`, here and everywhere they
-// are passed on, so one given in place of the other compiles.
+// SMELL: a page's position and a piece's number are both plain `u32` here, in every saved shape
+// and in every caller, so one given for the other compiles. It stays because a new type would
+// have to reach the saved files and every crate that reads them before it stopped a swap.
 pub(super) fn write_page(
     folder: &Path,
     position: u32,
@@ -253,4 +254,36 @@ fn footnote_links(page: &TranscribedPage) -> Vec<Relationship> {
         }
     }
     links
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::piece_parts;
+    use crate::convert::reply::TranscribedPiece;
+
+    // The kind names are written out twice, once for a reply and once for the saved pieces, and
+    // only this test keeps the two lists the same.
+    #[test]
+    fn every_kind_is_saved_under_the_name_it_has_in_a_reply() {
+        let bounds = json!({ "left": 0, "top": 0, "right": 1000, "bottom": 1000 });
+        let pieces: Vec<TranscribedPiece> = serde_json::from_value(json!([
+            { "kind": "heading", "number": 1, "rank": 1, "text": "A" },
+            { "kind": "text", "number": 2, "markdown": "B", "cites": [] },
+            { "kind": "formula", "number": 3, "latex": "c", "statement": "C", "symbols": [] },
+            { "kind": "figure", "number": 4, "printed-text": [], "bounds": bounds,
+              "explanation": "D" },
+            { "kind": "table", "number": 5, "markdown": "| e |", "summary": "E" },
+            { "kind": "footnote", "number": 6, "markdown": "F", "cites": [] }
+        ]))
+        .unwrap();
+        for piece in &pieces {
+            let name = piece.kind_name();
+            let (saved, _) = piece_parts(piece, None);
+            assert_eq!(serde_json::to_value(piece).unwrap()["kind"], name);
+            assert_eq!(saved.kind_name(), name);
+            assert_eq!(serde_json::to_value(&saved).unwrap()["kind"], name);
+        }
+    }
 }

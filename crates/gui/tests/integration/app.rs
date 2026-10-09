@@ -1,7 +1,7 @@
 //! Checks the whole app on the live backend: over throwaway stores that hold the sample
 //! chapters, and over stores that are down.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use eframe::egui;
@@ -18,13 +18,13 @@ use gui::testkit;
 
 use crate::support::{self, QUESTION, SAMPLE_PAGES};
 
+type Window = Harness<'static, App>;
+
 const SLOW: Duration = Duration::from_secs(30);
 const VOLATILITY_BOOK: &str = "Option Volatility and Pricing";
 const NOTES_BOOK: &str = "Quanty Sample Notes";
 const PAGE_WITH_THE_FIGURE: u32 = 5;
 
-// SMELL: this test walks every step of one ask in a single function of about 200 lines, so a
-// failure names the test and not the step. Each step wants its own function over the one app.
 #[test]
 #[ignore = "needs local Qdrant and FalkorDB, bills nothing; run with: cargo test -p gui --test integration -- --ignored app::"]
 fn an_ask_runs_from_the_question_to_the_cited_page_on_the_live_adapters() {
@@ -38,10 +38,31 @@ fn an_ask_runs_from_the_question_to_the_cited_page_on_the_live_adapters() {
     let mut harness = testkit::app_on(cx, facts(), Vec::new(), DEFAULT_WINDOW);
     testkit::settle_within(&mut harness, SLOW);
 
+    the_media_list_offers_each_stored_book(&mut harness);
+    let results = an_ask_brings_numbered_results_an_answer_and_a_graph(&mut harness);
+    let mentioned = a_result_in_the_graph_selects_its_result(&mut harness);
+    let figure = result_of(&results, ItemKind::Figure, "Figure 13-4");
+    let formula = result_of(&results, ItemKind::Formula, "(2.4)");
+    let table = result_of(&results, ItemKind::Table, "Table 1-1");
+    assert_eq!(
+        (formula.number, table.number, figure.number),
+        (1, 2, 4),
+        "the answer of the seed cites these three numbers"
+    );
+    a_cited_figure_opens_its_page_with_its_picture(&mut harness, figure);
+    a_cited_formula_opens_its_page_with_its_concepts(&mut harness, formula, &mentioned);
+    the_chapter_of_the_formula_is_found_in_the_content_folder(&harness, formula, &content_folder);
+    a_cited_table_with_no_chapter_says_how_to_find_it(&mut harness, table);
+    a_follow_up_asks_its_own_question(&mut harness);
+    a_media_filter_keeps_the_results_of_that_book(&mut harness);
+    a_media_that_is_not_stored_finds_nothing_and_says_so(&mut harness);
+}
+
+fn the_media_list_offers_each_stored_book(harness: &mut Window) {
     let catalogue = harness.state().shared().library.catalogue.ready();
     let documents = catalogue.map(|catalogue| catalogue.documents().count());
     assert_eq!(documents, Some(3));
-    open_in_the_ask_bar(&mut harness, "Media");
+    open_in_the_ask_bar(harness, "Media");
     for title in [VOLATILITY_BOOK, NOTES_BOOK] {
         harness.get_by_role_and_label(Role::Button, title);
     }
@@ -49,8 +70,10 @@ fn an_ask_runs_from_the_question_to_the_cited_page_on_the_live_adapters() {
         .get_by_role_and_label(Role::Button, "All media")
         .click();
     harness.run_ok();
+}
 
-    ask_in_the_box(&mut harness, Some(QUESTION));
+fn an_ask_brings_numbered_results_an_answer_and_a_graph(harness: &mut Window) -> Vec<ResultItem> {
+    ask_in_the_box(harness, Some(QUESTION));
     let shared = harness.state().shared();
     let results = shared.ask.results().to_vec();
     let numbers: Vec<usize> = results.iter().map(|result| result.number).collect();
@@ -70,7 +93,12 @@ fn an_ask_runs_from_the_question_to_the_cited_page_on_the_live_adapters() {
         .get_all_by_label("Citation 1")
         .next()
         .expect("a citation chip");
+    results
+}
 
+/// Returns the name of a concept that the graph holds.
+fn a_result_in_the_graph_selects_its_result(harness: &mut Window) -> String {
+    let graph = (harness.state().shared().ask.graph.ready()).expect("the graph should arrive");
     let concept = graph
         .nodes
         .iter()
@@ -87,22 +115,16 @@ fn an_ask_runs_from_the_question_to_the_cited_page_on_the_live_adapters() {
         })
         .expect("a result should be in the graph");
     harness.get_by_label(&of_a_result.1).click();
-    settle(&mut harness);
+    settle(harness);
     assert_eq!(
         harness.state().shared().ask.selected_result,
         Some(of_a_result.0)
     );
+    mentioned
+}
 
-    let figure = result_of(&results, ItemKind::Figure, "Figure 13-4");
-    let formula = result_of(&results, ItemKind::Formula, "(2.4)");
-    let table = result_of(&results, ItemKind::Table, "Table 1-1");
-    assert_eq!(
-        (formula.number, table.number, figure.number),
-        (1, 2, 4),
-        "the answer of the seed cites these three numbers"
-    );
-
-    cite(&mut harness, figure);
+fn a_cited_figure_opens_its_page_with_its_picture(harness: &mut Window, figure: &ResultItem) {
+    cite(harness, figure);
     let shared = harness.state().shared();
     let piece = figure
         .piece
@@ -113,7 +135,7 @@ fn an_ask_runs_from_the_question_to_the_cited_page_on_the_live_adapters() {
         .ready()
         .expect("the figure's page should load");
     assert_eq!((view.doc, view.page), (figure.doc, figure.page));
-    assert_eq!(target_piece(&harness), Some(piece));
+    assert_eq!(target_piece(harness), Some(piece));
     assert!(
         shared.source.concepts.ready().is_some(),
         "{:?}",
@@ -135,26 +157,25 @@ fn an_ask_runs_from_the_question_to_the_cited_page_on_the_live_adapters() {
         on_the_page.image.as_ref().map(|image| &image.path),
         "the result and the page must name one picture file"
     );
+}
 
-    // Only a scan of the content folder finds this chapter, since the graph keeps no folder.
-    cite(&mut harness, formula);
+fn a_cited_formula_opens_its_page_with_its_concepts(
+    harness: &mut Window,
+    formula: &ResultItem,
+    mentioned: &str,
+) {
+    cite(harness, formula);
     let shared = harness.state().shared();
     let piece = formula
         .piece
         .expect("the content folder's chapter should be found by its id");
-    let folder = (shared.library.catalogue.ready())
-        .and_then(|catalogue| catalogue.document(formula.doc))
-        .and_then(|document| document.folder.clone())
-        .expect("the catalogue should give the chapter a folder");
-    assert!(folder.starts_with(&content_folder), "{folder:?}");
-    assert_eq!(support::document_of(&folder), formula.doc);
     let view = shared
         .source
         .page
         .ready()
         .expect("the formula's page should load");
     assert_eq!((view.doc, view.page), (formula.doc, formula.page));
-    assert_eq!(target_piece(&harness), Some(piece));
+    assert_eq!(target_piece(harness), Some(piece));
     let marked = view
         .pieces
         .iter()
@@ -169,9 +190,26 @@ fn an_ask_runs_from_the_question_to_the_cited_page_on_the_live_adapters() {
         on_the_page.iter().any(|concept| concept.name == mentioned),
         "the formula mentions {mentioned}: {on_the_page:?}"
     );
+}
 
-    // No folder is stored and no scan finds this chapter.
-    cite(&mut harness, table);
+/// Only a scan of the content folder finds this chapter, since the graph keeps no folder.
+fn the_chapter_of_the_formula_is_found_in_the_content_folder(
+    harness: &Window,
+    formula: &ResultItem,
+    content_folder: &Path,
+) {
+    let shared = harness.state().shared();
+    let folder = (shared.library.catalogue.ready())
+        .and_then(|catalogue| catalogue.document(formula.doc))
+        .and_then(|document| document.folder.clone())
+        .expect("the catalogue should give the chapter a folder");
+    assert!(folder.starts_with(content_folder), "{folder:?}");
+    assert_eq!(support::document_of(&folder), formula.doc);
+}
+
+/// No folder is stored and no scan finds this chapter.
+fn a_cited_table_with_no_chapter_says_how_to_find_it(harness: &mut Window, table: &ResultItem) {
+    cite(harness, table);
     let shared = harness.state().shared();
     assert_eq!(table.piece, None);
     let failure = shared
@@ -181,25 +219,30 @@ fn an_ask_runs_from_the_question_to_the_cited_page_on_the_live_adapters() {
         .expect("the page cannot be opened");
     assert_eq!(failure.kind, FailureKind::SourceMissing);
     assert!(failure.hint.contains("rag-ingest"), "{}", failure.hint);
-    assert!(says(&harness, "rag-ingest"));
+    assert!(says(harness, "rag-ingest"));
     harness.get_by_role_and_label(Role::Button, "Try again");
+}
 
+fn a_follow_up_asks_its_own_question(harness: &mut Window) {
+    let shared = harness.state().shared();
     let generation = shared.ask.generation;
     let follow_up = (shared.ask.answer.ready())
         .and_then(|answer| answer.follow_ups.first())
         .expect("the answer should suggest a follow-up")
         .clone();
     harness.get_by_label(&follow_up).click();
-    settle(&mut harness);
+    settle(harness);
     let ask = &harness.state().shared().ask;
     assert_eq!(ask.generation, generation + 1);
     assert_eq!(ask.question, follow_up);
     assert!(ask.search.ready().is_some() && ask.graph.ready().is_some());
     assert!(ask.answer.ready().is_some());
+}
 
-    choose(&mut harness, "Media", VOLATILITY_BOOK);
-    choose(&mut harness, "Mode", "Results only");
-    ask_in_the_box(&mut harness, None);
+fn a_media_filter_keeps_the_results_of_that_book(harness: &mut Window) {
+    choose(harness, "Media", VOLATILITY_BOOK);
+    choose(harness, "Mode", "Results only");
+    ask_in_the_box(harness, None);
     let ask = &harness.state().shared().ask;
     let reply = ask.search.ready().expect("the search should arrive");
     assert!(!reply.results.is_empty());
@@ -211,7 +254,9 @@ fn an_ask_runs_from_the_question_to_the_cited_page_on_the_live_adapters() {
     );
     assert_eq!(reply.trace.documents_searched, Some(1));
     assert_eq!(ask.answer, Loadable::Idle);
+}
 
+fn a_media_that_is_not_stored_finds_nothing_and_says_so(harness: &mut Window) {
     let no_such_book = AskDraft {
         question: QUESTION.to_owned(),
         filters: Filters {
@@ -221,12 +266,12 @@ fn an_ask_runs_from_the_question_to_the_cited_page_on_the_live_adapters() {
         ..AskDraft::default()
     };
     harness.state_mut().push(Intent::Ask(no_such_book));
-    settle(&mut harness);
+    settle(harness);
     let reply = (harness.state().shared().ask.search.ready()).expect("the search should arrive");
     assert!(reply.results.is_empty());
     assert_eq!(reply.trace.documents_searched, Some(0));
-    assert!(says(&harness, "No document has these labels"));
-    assert!(!says(&harness, "No sources found"));
+    assert!(says(harness, "No document has these labels"));
+    assert!(!says(harness, "No sources found"));
 }
 
 #[test]
@@ -281,11 +326,11 @@ fn facts() -> StartupFacts {
     }
 }
 
-fn settle(harness: &mut Harness<'_, App>) {
+fn settle(harness: &mut Window) {
     testkit::settle_within(harness, SLOW);
 }
 
-fn target_piece(harness: &Harness<'_, App>) -> Option<u32> {
+fn target_piece(harness: &Window) -> Option<u32> {
     let target = harness.state().shared().source.target.as_ref();
     target.and_then(|target| target.piece)
 }
@@ -297,11 +342,11 @@ fn names_a_store(failure: &Failure) -> bool {
     )
 }
 
-fn says(harness: &Harness<'_, App>, text: &str) -> bool {
+fn says(harness: &Window, text: &str) -> bool {
     harness.query_all_by_label_contains(text).next().is_some()
 }
 
-fn ask_in_the_box(harness: &mut Harness<'_, App>, question: Option<&str>) {
+fn ask_in_the_box(harness: &mut Window, question: Option<&str>) {
     harness.get_by_label("Question").click();
     if let Some(question) = question {
         harness.get_by_label("Question").type_text(question);
@@ -313,7 +358,7 @@ fn ask_in_the_box(harness: &mut Harness<'_, App>, question: Option<&str>) {
 
 /// The Ask bar and the Source panel each have a list named "Media", so the list is found by the
 /// panel it is in.
-fn open_in_the_ask_bar(harness: &mut Harness<'_, App>, list: &str) {
+fn open_in_the_ask_bar(harness: &mut Window, list: &str) {
     let window = egui::Rect::from_min_size(egui::Pos2::ZERO, DEFAULT_WINDOW.into());
     let bar = layout::shell(window).ask_bar;
     harness
@@ -324,13 +369,13 @@ fn open_in_the_ask_bar(harness: &mut Harness<'_, App>, list: &str) {
     harness.run_ok();
 }
 
-fn choose(harness: &mut Harness<'_, App>, list: &str, row: &str) {
+fn choose(harness: &mut Window, list: &str, row: &str) {
     open_in_the_ask_bar(harness, list);
     harness.get_by_role_and_label(Role::Button, row).click();
     settle(harness);
 }
 
-fn cite(harness: &mut Harness<'_, App>, result: &ResultItem) {
+fn cite(harness: &mut Window, result: &ResultItem) {
     let name = format!("Citation {}", result.number);
     harness
         .get_all_by_label(&name)

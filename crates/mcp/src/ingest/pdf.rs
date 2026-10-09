@@ -10,10 +10,11 @@ use std::path::{Path, PathBuf};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
+use graph::GraphStore;
+use ocr::ChapterJob;
 use ocr::content::media_folder_name;
-use ocr::{ChapterJob, MediaDocument};
 use rag_core::{Category, Config, MediaLabels, Tag, author_list};
-use rag_ingestion::{TagChange, document_name};
+use rag_ingestion::{TagChange, UnnamedPdf};
 
 use super::{IngestPdfArgs, PdfIngestError};
 
@@ -27,9 +28,9 @@ const UPLOADS_FOLDER: &str = "_uploads";
 /// category of its media, which the library may already have.
 pub(super) struct CheckedPdf {
     pdf_path: PathBuf,
-    pub(super) media: String,
+    media: String,
     /// The category the agent gave. It makes a new media only.
-    pub(super) category: Option<Category>,
+    category: Option<Category>,
     document_title: Option<String>,
     file_name: String,
     upload: Option<Upload>,
@@ -56,6 +57,20 @@ pub(super) struct Upload {
     pub(super) save_to: PathBuf,
 }
 
+/// The ways to send the PDF, as the agent gave them, with the blank ones left out.
+struct GivenSource {
+    path: Option<String>,
+    pdf_base64: Option<String>,
+    file_name: Option<String>,
+}
+
+/// The PDF of the one way it was sent.
+struct Source {
+    pdf_path: PathBuf,
+    file_name: String,
+    upload: Option<Upload>,
+}
+
 pub(crate) fn base64_len(bytes: u64) -> u64 {
     bytes.div_ceil(3) * 4
 }
@@ -76,80 +91,93 @@ pub(super) fn check(
         .map_err(PdfIngestError::Category)?;
     // The media is checked here, so that the checks below can fail for the document only.
     let media_folder = media_folder_name(&media).map_err(PdfIngestError::Media)?;
-    let document_title = non_blank(args.document_title);
-    let path = non_blank(args.path);
-    // The base64 text can be megabytes long, so it is not trimmed or copied here.
-    let pdf_base64 = args.pdf_base64.filter(|text| !text.trim().is_empty());
-    let file_name = non_blank(args.file_name);
-    let authors = author_list(args.authors.unwrap_or_default());
     let media_tags = tags_of(args.tags)?.into_iter().collect();
     let document_tags = TagChange {
         add: tags_of(args.document_tags)?,
         remove: Vec::new(),
     };
-
-    let (pdf_path, file_name, upload) = match (path, pdf_base64) {
-        (None, None) => return Err(PdfIngestError::NoSource),
-        (Some(_), Some(_)) => return Err(PdfIngestError::TwoSources),
-        (Some(path), None) => {
-            if file_name.is_some() {
-                return Err(PdfIngestError::FileNameWithPath);
-            }
-            let path = path_of_a_pdf(&path, max_pdf_bytes)?;
-            let name = path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            (path, name, None)
-        }
-        (None, Some(text)) => {
-            let name = file_name.ok_or(PdfIngestError::MissingFileName)?;
-            let save_to = upload_path(config, &media_folder, &name)?;
-            let bytes = decoded_pdf(&text, max_pdf_bytes)?;
-            let upload = Upload {
-                bytes,
-                save_to: save_to.clone(),
-            };
-            (save_to, name, Some(upload))
-        }
+    let given = GivenSource {
+        path: non_blank(args.path),
+        // The base64 text can be megabytes long, so it is not trimmed or copied here.
+        pdf_base64: args.pdf_base64.filter(|text| !text.trim().is_empty()),
+        file_name: non_blank(args.file_name),
     };
+    let source = given.checked(config, &media_folder, max_pdf_bytes)?;
     Ok(CheckedPdf {
-        pdf_path,
+        pdf_path: source.pdf_path,
         media,
         category,
-        document_title,
-        file_name,
-        upload,
-        authors,
+        document_title: non_blank(args.document_title),
+        file_name: source.file_name,
+        upload: source.upload,
+        authors: author_list(args.authors.unwrap_or_default()),
         media_tags,
         document_tags,
     })
 }
 
+impl GivenSource {
+    /// Exactly one way must be given. A PDF sent as base64 is read here, and saved later.
+    fn checked(
+        self,
+        config: &Config,
+        media_folder: &str,
+        max_pdf_bytes: u64,
+    ) -> Result<Source, PdfIngestError> {
+        match (self.path, self.pdf_base64) {
+            (None, None) => Err(PdfIngestError::NoSource),
+            (Some(_), Some(_)) => Err(PdfIngestError::TwoSources),
+            (Some(path), None) => {
+                if self.file_name.is_some() {
+                    return Err(PdfIngestError::FileNameWithPath);
+                }
+                let pdf_path = path_of_a_pdf(&path, max_pdf_bytes)?;
+                let file_name = pdf_path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                Ok(Source {
+                    pdf_path,
+                    file_name,
+                    upload: None,
+                })
+            }
+            (None, Some(text)) => {
+                let file_name = self.file_name.ok_or(PdfIngestError::MissingFileName)?;
+                let save_to = upload_path(config, media_folder, &file_name)?;
+                let bytes = decoded_pdf(&text, max_pdf_bytes)?;
+                Ok(Source {
+                    pdf_path: save_to.clone(),
+                    file_name,
+                    upload: Some(Upload { bytes, save_to }),
+                })
+            }
+        }
+    }
+}
+
 impl CheckedPdf {
-    /// Names the PDF by `category`, which must be the category that
-    /// [`rag_ingestion::media_category`] gives for its media. It writes nothing.
+    /// Names the PDF by the category that the graph has for its media, or else by the one the
+    /// agent gave. It writes nothing.
     ///
     /// # Errors
+    /// - [`PdfIngestError::ReadMedia`] when the graph cannot list its media
     /// - [`PdfIngestError::TitleForABook`] when a document title was given for a book's PDF
     /// - [`PdfIngestError::ChapterFileName`] when a book's PDF is not named as a chapter
     /// - [`PdfIngestError::DocumentTitle`] when the document title cannot name a folder
-    pub(super) fn named(
+    pub(super) async fn named<G: GraphStore>(
         self,
-        category: Category,
+        graph: &G,
         config: &Config,
     ) -> Result<ReadyPdf, PdfIngestError> {
-        if category == Category::Book && self.document_title.is_some() {
-            return Err(PdfIngestError::TitleForABook);
-        }
-        let title = self.document_title.as_deref().unwrap_or(&self.media);
-        let name = document_name(category, title, &self.pdf_path)
-            .map_err(PdfIngestError::ChapterFileName)?;
-        let document = MediaDocument {
-            media_title: self.media.clone(),
-            name,
+        let unnamed = UnnamedPdf {
+            media_title: &self.media,
+            category: self.category,
+            document_title: self.document_title.as_deref(),
+            pdf: &self.pdf_path,
         };
-        let chapter = ChapterJob::new(document, &self.pdf_path, &config.content_folder)
+        let named = unnamed.named(graph).await?;
+        let chapter = ChapterJob::new(named.document, &self.pdf_path, &config.content_folder)
             .map_err(PdfIngestError::DocumentTitle)?;
         Ok(ReadyPdf {
             chapter,
@@ -157,7 +185,7 @@ impl CheckedPdf {
             file_name: self.file_name,
             upload: self.upload,
             new_media: MediaLabels {
-                category,
+                category: named.category,
                 authors: self.authors,
                 tags: self.media_tags,
             },

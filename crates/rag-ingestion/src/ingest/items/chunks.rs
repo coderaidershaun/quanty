@@ -72,8 +72,8 @@ impl Paragraph {
     /// A page break cut the sentence, so the next piece carries on from where this one stopped.
     fn continue_with(&mut self, piece: &ChapterPiece) {
         self.pieces.push(piece.id);
-        // SMELL: a word that the page break cut in two with a hyphen stays in two parts, with
-        // this space between them.
+        // SMELL: a word that the page break cut in two with a hyphen stays in two parts, with this
+        // space between them. Joining them would change the embedded text of stored chapters.
         self.text.push(' ');
         self.text.push_str(&piece.content);
         self.ends_mid_sentence = piece.ends_mid_sentence;
@@ -100,8 +100,8 @@ impl Chunk {
     fn starting_with(paragraph: &Paragraph, text: String) -> Self {
         Self {
             first_piece: paragraph.pieces[0],
-            // SMELL: a chunk that runs over a page break keeps only the page it starts on, so
-            // its text from the next page is cited with the number of the page before.
+            // SMELL: a chunk that runs over a page break keeps only the page it starts on, so its
+            // text from the next page is cited with the page before. An item holds one page number.
             printed_page: paragraph.printed_page.clone(),
             context: paragraph.context.clone(),
             text,

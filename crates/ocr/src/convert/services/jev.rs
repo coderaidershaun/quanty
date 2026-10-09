@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::time::Duration;
 
+use reqwest::StatusCode;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -55,6 +56,20 @@ pub enum JevError {
         #[source]
         source: serde_json::Error,
     },
+}
+
+impl JevError {
+    /// True for a failure that may not happen again: the network's, the server's, or a rate
+    /// limit. A missing or refused key, or a request the server calls bad, would fail again.
+    pub(super) fn is_worth_retrying(&self) -> bool {
+        match self {
+            Self::MissingApiKey => false,
+            Self::Http(_) | Self::Decode { .. } => true,
+            Self::Rejected { status, .. } => StatusCode::from_u16(*status).is_ok_and(|status| {
+                status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
+            }),
+        }
+    }
 }
 
 // Written by hand so the API key never shows up in logs or debug output. Do not derive it.
@@ -118,8 +133,9 @@ impl Jev {
     }
 }
 
-// SMELL: the whole page goes out as one request with two questions per line, and nothing here
-// splits a long page. A page of several hundred lines can exceed the model's request size limit.
+// SMELL: the whole page goes out as one request, so a page of several hundred lines may pass the
+// server's size limit. It stays because that limit is not known and the questions were tuned as
+// one request; a refused request only sends the page to Sonnet.
 fn request_body(lines: &[&str]) -> Value {
     let questions: serde_json::Map<String, Value> = lines
         .iter()
@@ -223,4 +239,21 @@ fn placement_from_body(body: &str, line_count: usize) -> Result<Option<MathPlace
         (false, true) => Some(MathPlacement::Block),
         (true, true) => Some(MathPlacement::Both),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::JevError;
+
+    #[test]
+    fn a_refused_key_is_not_asked_again_but_a_server_failure_is() {
+        let rejected = |status| JevError::Rejected {
+            status,
+            body: String::new(),
+        };
+        assert!(!rejected(401).is_worth_retrying());
+        assert!(!rejected(400).is_worth_retrying());
+        assert!(rejected(429).is_worth_retrying());
+        assert!(rejected(503).is_worth_retrying());
+    }
 }

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use graph::GraphError;
 use ocr::{ContentError, ConvertError};
 use rag_core::{EmbedError, EmptyTag, StoreError, UnknownCategory};
-use rag_ingestion::{PdfError, RelabelError};
+use rag_ingestion::{NamePdfError, PdfError, RelabelError};
 use tokio::task::JoinError;
 
 use super::jobs::KEPT_JOBS;
@@ -154,6 +154,17 @@ pub(crate) enum PdfIngestError {
 
     #[error("the ingest stopped without an answer")]
     Stopped(#[source] JoinError),
+}
+
+/// Each refusal of a name is worded for an agent, which sends arguments and not flags.
+impl From<NamePdfError> for PdfIngestError {
+    fn from(error: NamePdfError) -> PdfIngestError {
+        match error {
+            NamePdfError::ReadMedia(source) => PdfIngestError::ReadMedia(source),
+            NamePdfError::TitleForABook => PdfIngestError::TitleForABook,
+            NamePdfError::ChapterFileName(source) => PdfIngestError::ChapterFileName(source),
+        }
+    }
 }
 
 fn size_text(bytes: u64) -> String {

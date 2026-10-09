@@ -11,7 +11,7 @@ use eframe::egui;
 
 use self::document::DocumentFields;
 use self::media::MediaChoice;
-use crate::contract::{Catalogue, Category, IngestRequest, Intent, Media, is_same_title};
+use crate::contract::{Catalogue, Category, IngestRequest, Intent, Media, is_same_name};
 use crate::panels::PanelCx;
 use crate::panels::media_card::MediaFields;
 use crate::state::{IngestJob, MediaEditing, Shared};
@@ -157,7 +157,7 @@ impl Local {
             return;
         };
         self.seen_saves = shared.cues.media_saves;
-        if matches!(&self.media, MediaChoice::New(fields) if is_same_title(&fields.title, saved)) {
+        if matches!(&self.media, MediaChoice::New(fields) if is_same_name(&fields.title, saved)) {
             self.choose(media);
         }
     }

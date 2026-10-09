@@ -78,54 +78,75 @@ async fn finish<S: Services>(
 /// one step to the next.
 #[derive(Default)]
 struct ProgressLine {
-    pages_done: u32,
+    pages_saved: u32,
+    /// Pages saved before this run or cut out now.
+    pages_ready: u32,
+    pages_saved_before: u32,
     pages: u32,
-    pages_failed: u32,
 }
 
 impl ProgressLine {
-    /// `None` for a failed page: it is counted, and shows with the next step. `spent` is what the
-    /// run used up to and with this step.
+    /// `None` for a failed page: the run ends with an error that names the page, so there is
+    /// nothing to show for it here. `spent` is what the run used up to and with this step.
     fn after(&mut self, step: IngestStep, spent: &UsageTally) -> Option<IngestProgress> {
-        let (stage, done, total) = match step {
+        let stage = match step {
+            IngestStep::CheckingStored => IngestStage::CheckingStored,
+            IngestStep::OpeningPdf => IngestStage::OpeningPdf,
             IngestStep::Converting(PageProgress::Pages { total, done_before }) => {
                 self.pages = total;
-                self.pages_done = done_before;
-                (IngestStage::PreparingPages, None, Some(total))
+                self.pages_saved = done_before;
+                self.pages_ready = done_before;
+                self.pages_saved_before = done_before;
+                self.preparing_or_converting()
+            }
+            IngestStep::Converting(PageProgress::PageCut { .. }) => {
+                self.pages_ready += 1;
+                self.preparing_or_converting()
             }
             IngestStep::Converting(PageProgress::PageDone { .. }) => {
-                self.pages_done += 1;
-                (
-                    IngestStage::Converting,
-                    Some(self.pages_done),
-                    Some(self.pages),
-                )
+                self.pages_saved += 1;
+                self.converting()
             }
-            IngestStep::Converting(PageProgress::PageFailed { .. }) => {
-                self.pages_failed += 1;
-                return None;
-            }
-            IngestStep::WritingGraph => (IngestStage::WritingGraph, None, None),
-            IngestStep::Embedding { items } => (IngestStage::Embedding, None, Some(items as u32)),
-            IngestStep::Storing => (IngestStage::Storing, None, None),
-            IngestStep::ReadingConcepts { done, total } => (
-                IngestStage::ReadingConcepts,
-                Some(done as u32),
-                Some(total as u32),
-            ),
-            IngestStep::LinkingConcepts { done, total } => (
-                IngestStage::LinkingConcepts,
-                Some(done as u32),
-                Some(total as u32),
-            ),
+            IngestStep::Converting(PageProgress::PageFailed { .. }) => return None,
+            IngestStep::WritingGraph => IngestStage::WritingGraph,
+            IngestStep::Embedding { items } => IngestStage::Embedding {
+                items: items as u32,
+            },
+            IngestStep::Storing => IngestStage::Storing,
+            IngestStep::ReadingConcepts { done, total } => IngestStage::ReadingConcepts {
+                done: done as u32,
+                items: total as u32,
+            },
+            IngestStep::LinkingConcepts { done, total } => IngestStage::LinkingConcepts {
+                done: done as u32,
+                items: total as u32,
+            },
         };
         Some(IngestProgress {
             stage,
-            done,
-            total,
-            pages_failed: self.pages_failed,
             spent: spent.into(),
         })
+    }
+
+    /// The stage after the pages are counted or one is cut out. The models start the moment the
+    /// last page is cut, so the stage turns to converting then, not when the first page is saved.
+    fn preparing_or_converting(&self) -> IngestStage {
+        if self.pages_ready < self.pages {
+            IngestStage::PreparingPages {
+                ready: self.pages_ready,
+                saved_before: self.pages_saved_before,
+                pages: self.pages,
+            }
+        } else {
+            self.converting()
+        }
+    }
+
+    fn converting(&self) -> IngestStage {
+        IngestStage::Converting {
+            saved: self.pages_saved,
+            pages: self.pages,
+        }
     }
 }
 

@@ -53,6 +53,7 @@ pub(super) async fn run<S: PageServices>(
     let mut sources = Vec::new();
     for &position in &to_do {
         sources.push(cut_page_out(job, position).await?);
+        on_progress(PageProgress::PageCut { position });
     }
 
     let calls = convert_pages(services, folder, sources, on_progress).await?;

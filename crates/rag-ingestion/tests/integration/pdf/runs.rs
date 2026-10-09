@@ -19,19 +19,30 @@ use super::{
 };
 use crate::support::{StandInLlm, ThrowawayStores, assert_document_stored, points_in};
 
-/// The pages of the sample chapter end in any order, so their positions are sorted; every later
-/// step comes in one order, once for each item where it counts them.
+/// The first two steps and the cutting of the pages come in order; the pages then end in any
+/// order, so their positions are sorted; every later step comes in one order, once for each item
+/// where it counts them.
 fn assert_steps_of_one_run(steps: &[IngestStep], items: usize) {
-    assert!(steps.len() > 8, "too few steps: {steps:?}");
-    let (converting, after) = steps.split_at(8);
+    assert!(steps.len() > 3 + 7 + 7, "too few steps: {steps:?}");
+    let (before, rest) = steps.split_at(3);
     assert_eq!(
-        converting[0],
-        IngestStep::Converting(PageProgress::Pages {
-            total: 7,
-            done_before: 0
-        })
+        before,
+        [
+            IngestStep::CheckingStored,
+            IngestStep::OpeningPdf,
+            IngestStep::Converting(PageProgress::Pages {
+                total: 7,
+                done_before: 0
+            }),
+        ]
     );
-    let mut pages: Vec<u32> = converting[1..]
+    let (cut, rest) = rest.split_at(7);
+    let cut_in_order: Vec<IngestStep> = (1..=7)
+        .map(|position| IngestStep::Converting(PageProgress::PageCut { position }))
+        .collect();
+    assert_eq!(cut, cut_in_order);
+    let (converted, after) = rest.split_at(7);
+    let mut pages: Vec<u32> = converted
         .iter()
         .map(|step| match step {
             IngestStep::Converting(PageProgress::PageDone { position, .. }) => *position,
@@ -183,6 +194,8 @@ async fn a_chapter_pdf_is_converted_and_ingested_in_one_run_and_a_second_run_doe
         pdf.conversions_started(),
     );
     let held_before = held_by(&throwaway, &stores, doc_id).await;
+    let mut steps_expected = pdf.steps();
+    steps_expected.push(IngestStep::CheckingStored);
 
     let second = pdf.ingest(&models, &stores).await.unwrap();
 
@@ -206,7 +219,11 @@ async fn a_chapter_pdf_is_converted_and_ingested_in_one_run_and_a_second_run_doe
         calls_after, calls_before,
         "a second run converts, embeds and asks nothing"
     );
-    assert_steps_of_one_run(&pdf.steps(), n);
+    assert_eq!(
+        pdf.steps(),
+        steps_expected,
+        "a second run only asks the stores"
+    );
     assert_eq!(
         held_by(&throwaway, &stores, doc_id).await,
         held_before,

@@ -115,6 +115,7 @@ async fn failing_page_is_named_and_the_next_run_resumes() {
                     total: 7,
                     done_before: 6
                 },
+                PageProgress::PageCut { position: 7 },
                 PageProgress::PageDone { position: 7, .. }
             ]
         ),

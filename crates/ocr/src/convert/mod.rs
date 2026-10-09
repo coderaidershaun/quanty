@@ -191,8 +191,8 @@ pub async fn convert_chapter(job: &ChapterJob) -> Result<ConversionSummary, Conv
 /// environment, for a program that keeps its settings out of the process environment. `None` is
 /// an error only when a page is left to convert.
 ///
-/// `on_progress` hears the page count first, then each page as it ends. A finished chapter
-/// hears nothing.
+/// `on_progress` hears the page count first, then each page as it is cut out, then each page as
+/// it ends. A finished chapter hears nothing.
 ///
 /// # Errors
 /// The same as [`convert_chapter`]. A key that is `None` gives [`ConvertError::Services`].
@@ -226,7 +226,7 @@ pub async fn convert_chapter_with<S: PageServices>(
 }
 
 /// Like [`convert_chapter_with`], and `on_progress` hears the page count first, then each page
-/// as it ends. A finished chapter hears nothing.
+/// as it is cut out, then each page as it ends. A finished chapter hears nothing.
 ///
 /// # Errors
 /// The same as [`convert_chapter_with`].

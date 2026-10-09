@@ -58,7 +58,8 @@ pub fn assert_summary_counts_and_lists(summary: &ConversionSummary) {
     }
 }
 
-/// Pages end in any order, so the positions are sorted before they are compared.
+/// Every page is told cut out, in order, before the first one is told saved. Pages end in any
+/// order, so the saved positions are sorted before they are compared.
 pub fn assert_each_page_told_once_with_its_cost(
     heard: &[PageProgress],
     summary: &ConversionSummary,
@@ -70,12 +71,20 @@ pub fn assert_each_page_told_once_with_its_cost(
             done_before: 0
         })
     );
+    let cut: Vec<u32> = heard[1..]
+        .iter()
+        .map_while(|progress| match progress {
+            PageProgress::PageCut { position } => Some(*position),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(cut, (1..=7).collect::<Vec<u32>>());
     let mut positions = Vec::new();
     let mut cost_usd = 0.0;
     // Input tokens, output tokens and cents, for each model.
     let mut told: BTreeMap<&str, [u64; 3]> = BTreeMap::new();
     let cents = |usd: f64| (usd * 100.0).round() as u64;
-    for progress in &heard[1..] {
+    for progress in &heard[1 + cut.len()..] {
         match progress {
             PageProgress::PageDone { position, calls } => {
                 positions.push(*position);
@@ -87,7 +96,7 @@ pub fn assert_each_page_told_once_with_its_cost(
                     sum[2] += cents(used.cost_usd);
                 }
             }
-            other => panic!("only finished pages should follow the count, got {other:?}"),
+            other => panic!("only finished pages should follow the cut pages, got {other:?}"),
         }
     }
     positions.sort_unstable();

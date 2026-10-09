@@ -12,6 +12,11 @@ use super::items::Item;
 /// One step of an ingest, told as it happens.
 #[derive(Debug, Clone, PartialEq)]
 pub enum IngestStep {
+    /// The stores are about to be asked whether this document is ingested already.
+    CheckingStored,
+    /// The conversion is about to start: it reads what is saved, tries the key of the
+    /// conversion service and counts the pages.
+    OpeningPdf,
     /// A step of the conversion of the PDF's pages.
     Converting(PageProgress),
     /// The document and its items are about to be written to the graph.

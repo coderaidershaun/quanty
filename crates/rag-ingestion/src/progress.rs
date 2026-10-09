@@ -12,13 +12,19 @@ pub(super) fn print_step(step: IngestStep, _spent: &UsageTally) {
     }
 }
 
-/// One line for each page, and one for each later stage when it starts, never one for each item.
+/// One line for each step before the pages and for each page cut out or converted, and one for
+/// each later stage when it starts, never one for each item.
 fn progress_line(step: &IngestStep) -> Option<String> {
     match step {
+        IngestStep::CheckingStored => Some("checking what is already stored".to_owned()),
+        IngestStep::OpeningPdf => Some("opening the pdf".to_owned()),
         IngestStep::Converting(PageProgress::Pages { total, done_before }) => Some(format!(
             "converting {} of {total} pages ({done_before} already done)",
             total - done_before
         )),
+        IngestStep::Converting(PageProgress::PageCut { position }) => {
+            Some(format!("page {position} cut out"))
+        }
         IngestStep::Converting(PageProgress::PageDone { position, calls }) => {
             Some(match usage_of(calls).cost_usd() {
                 Some(cost) => format!("page {position} converted (${cost:.2})"),

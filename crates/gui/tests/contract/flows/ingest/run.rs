@@ -23,6 +23,8 @@ use crate::flows::recording;
 use crate::flows::{COMMAND, click, field, has, is_enabled, node, press, says, shared, type_into};
 
 const CHOSEN_BOOK: &str = "Option Volatility and Pricing · Book";
+/// The share of a page that the bar counts as done once the page is cut out but not yet saved.
+const CUT: f64 = 0.15;
 
 fn a_checked_chapter_runs_to_done_and_loads_the_catalogue_again() {
     let (mut harness, seen) = open("ingest-ready", DEFAULT_WINDOW);
@@ -212,7 +214,7 @@ fn is_at_page(shared: &Shared, page: u32) -> bool {
     matches!(
         &shared.ingest,
         IngestJob::Running { progress: Some(progress), .. }
-            if progress.stage == IngestStage::Converting && progress.done == Some(page)
+            if matches!(progress.stage, IngestStage::Converting { saved, .. } if saved == page)
     )
 }
 
@@ -223,9 +225,13 @@ fn a_run_shows_its_page_and_its_cost() {
     run_until(&mut harness, "page 3", |shared| is_at_page(shared, 3));
     harness.run_ok();
 
-    let words = "Converting the pages — page 3 of 12";
+    let words = "Converting the pages — 3 of 12 done · about 36%";
     let bar = node(&harness, Role::ProgressIndicator, words);
-    assert_eq!(bar.accesskit_node().numeric_value(), Some(0.25));
+    let share = bar
+        .accesskit_node()
+        .numeric_value()
+        .expect("a bar that counts");
+    assert!((share - (3.0 + CUT * 9.0) / 12.0).abs() < 1e-6, "{share}");
     assert!(says(&harness, "48k tokens · ≈ $0.42 so far"));
     assert!(
         !is_enabled(&harness, Role::Button, "Choose a PDF"),
@@ -241,7 +247,7 @@ fn the_check_and_the_run_show_their_progress() {
 
 /// What the run used after `pages` pages: Sonnet reads 12,000 tokens and writes 4,000 for each
 /// page, at $0.14 a page.
-fn progress(stage: IngestStage, counts: (Option<u32>, Option<u32>), pages: u32) -> IngestProgress {
+fn progress(stage: IngestStage, pages: u32) -> IngestProgress {
     let pages_read = u64::from(pages);
     let sonnet = ModelTokens {
         model: "claude-sonnet-5-5".to_owned(),
@@ -251,9 +257,6 @@ fn progress(stage: IngestStage, counts: (Option<u32>, Option<u32>), pages: u32) 
     };
     IngestProgress {
         stage,
-        done: counts.0,
-        total: counts.1,
-        pages_failed: 0,
         spent: Usage {
             models: vec![sonnet],
             cost_usd: Some(0.14 * f64::from(pages)),
@@ -269,7 +272,7 @@ struct Shown {
     cost: Option<&'static str>,
 }
 
-fn every_stage() -> [Shown; 8] {
+fn every_stage() -> [Shown; 12] {
     let spent = Some("192k tokens · ≈ $1.68 so far");
     let shown = |progress, words, share, cost| Shown {
         progress,
@@ -278,54 +281,109 @@ fn every_stage() -> [Shown; 8] {
         cost,
     };
     [
-        shown(None, "Reading the PDF", None, None),
+        shown(None, "Connecting to the stores", None, None),
         shown(
-            Some(progress(IngestStage::PreparingPages, (None, Some(12)), 0)),
-            "Reading the PDF",
+            Some(progress(IngestStage::CheckingStored, 0)),
+            "Checking what is already stored",
             None,
             None,
         ),
         shown(
-            Some(progress(IngestStage::Converting, (Some(3), Some(12)), 3)),
-            "Converting the pages — page 3 of 12",
-            Some(0.25),
+            Some(progress(IngestStage::OpeningPdf, 0)),
+            "Opening the PDF",
+            None,
+            None,
+        ),
+        shown(
+            Some(progress(
+                IngestStage::PreparingPages {
+                    ready: 7,
+                    saved_before: 0,
+                    pages: 12,
+                },
+                0,
+            )),
+            "Preparing the pages — 7 of 12 ready · about 9%",
+            Some(CUT * 7.0 / 12.0),
+            None,
+        ),
+        // A run that carries on: 4 pages are saved already and count as done, and 3 are cut now.
+        shown(
+            Some(progress(
+                IngestStage::PreparingPages {
+                    ready: 7,
+                    saved_before: 4,
+                    pages: 12,
+                },
+                0,
+            )),
+            "Preparing the pages — 7 of 12 ready · about 37%",
+            Some((4.0 + CUT * 3.0) / 12.0),
+            None,
+        ),
+        shown(
+            Some(progress(
+                IngestStage::Converting {
+                    saved: 0,
+                    pages: 12,
+                },
+                0,
+            )),
+            "Converting the pages — 0 of 12 done · about 15%",
+            Some(CUT),
+            None,
+        ),
+        shown(
+            Some(progress(
+                IngestStage::Converting {
+                    saved: 3,
+                    pages: 12,
+                },
+                3,
+            )),
+            "Converting the pages — 3 of 12 done · about 36%",
+            Some((3.0 + CUT * 9.0) / 12.0),
             Some("48k tokens · ≈ $0.42 so far"),
         ),
         shown(
-            Some(progress(IngestStage::WritingGraph, (None, None), 12)),
+            Some(progress(IngestStage::WritingGraph, 12)),
             "Writing the graph",
             None,
             spent,
         ),
         shown(
-            Some(progress(IngestStage::Embedding, (None, Some(120)), 12)),
+            Some(progress(IngestStage::Embedding { items: 120 }, 12)),
             "Embedding 120 items",
             None,
             spent,
         ),
         shown(
-            Some(progress(IngestStage::Storing, (None, None), 12)),
+            Some(progress(IngestStage::Storing, 12)),
             "Storing the items",
             None,
             spent,
         ),
         shown(
             Some(progress(
-                IngestStage::ReadingConcepts,
-                (Some(40), Some(120)),
+                IngestStage::ReadingConcepts {
+                    done: 40,
+                    items: 120,
+                },
                 12,
             )),
-            "Reading the concepts — 40 of 120",
+            "Reading the concepts — 40 of 120 · about 33%",
             Some(40.0 / 120.0),
             spent,
         ),
         shown(
             Some(progress(
-                IngestStage::LinkingConcepts,
-                (Some(10), Some(120)),
+                IngestStage::LinkingConcepts {
+                    done: 10,
+                    items: 120,
+                },
                 12,
             )),
-            "Linking the concepts — 10 of 120",
+            "Linking the concepts — 10 of 120 · about 8%",
             Some(10.0 / 120.0),
             spent,
         ),

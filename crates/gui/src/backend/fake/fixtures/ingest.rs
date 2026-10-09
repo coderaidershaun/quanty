@@ -52,55 +52,59 @@ pub(in crate::backend::fake) fn preflight(request: &IngestRequest) -> Preflight 
     }
 }
 
-/// The play of one ingest of the chapter: the count of its pages, each page, the later stages,
-/// then the concepts read and linked in four steps each.
+/// The play of one ingest of the chapter: the stages that a real run tells, in the same order.
+/// Only the concepts differ: they are read and linked in four steps each, not one for each item.
 pub(in crate::backend::fake) fn steps() -> Vec<IngestProgress> {
-    let at = |stage, done, total, spent| IngestProgress {
-        stage,
-        done,
-        total,
-        pages_failed: 0,
-        spent,
-    };
+    let at = |stage, spent| IngestProgress { stage, spent };
     let every_page = spent_on_pages(PAGES);
-    let mut steps = vec![at(
-        IngestStage::PreparingPages,
-        None,
-        Some(PAGES),
-        Usage::default(),
-    )];
-    steps.extend((1..=PAGES).map(|page| {
-        at(
-            IngestStage::Converting,
-            Some(page),
-            Some(PAGES),
-            spent_on_pages(page),
-        )
+    let mut steps = vec![
+        at(IngestStage::CheckingStored, Usage::default()),
+        at(IngestStage::OpeningPdf, Usage::default()),
+    ];
+    steps.extend((0..PAGES).map(|ready| {
+        let preparing = IngestStage::PreparingPages {
+            ready,
+            saved_before: 0,
+            pages: PAGES,
+        };
+        at(preparing, Usage::default())
+    }));
+    steps.extend((0..=PAGES).map(|saved| {
+        let converting = IngestStage::Converting {
+            saved,
+            pages: PAGES,
+        };
+        at(converting, spent_on_pages(saved))
     }));
     steps.extend([
-        at(IngestStage::WritingGraph, None, None, every_page.clone()),
-        at(
-            IngestStage::Embedding,
-            None,
-            Some(ITEMS),
-            every_page.clone(),
-        ),
-        at(IngestStage::Storing, None, None, every_page.clone()),
+        at(IngestStage::WritingGraph, every_page.clone()),
+        at(IngestStage::Embedding { items: ITEMS }, every_page.clone()),
+        at(IngestStage::Storing, every_page.clone()),
     ]);
-    for stage in [IngestStage::ReadingConcepts, IngestStage::LinkingConcepts] {
-        steps.extend((1..=4).map(|quarter| {
-            let done = ITEMS / 4 * quarter;
-            at(stage, Some(done), Some(ITEMS), every_page.clone())
-        }));
-    }
+    let quarters = || (1..=4).map(|quarter| ITEMS / 4 * quarter);
+    steps.extend(quarters().map(|done| {
+        let reading = IngestStage::ReadingConcepts { done, items: ITEMS };
+        at(reading, every_page.clone())
+    }));
+    steps.extend(quarters().map(|done| {
+        let linking = IngestStage::LinkingConcepts { done, items: ITEMS };
+        at(linking, every_page.clone())
+    }));
     steps
 }
 
 /// The play up to and including the step that converts page [`STALLED_AT_PAGE`].
 pub(in crate::backend::fake) fn steps_to_the_stall() -> Vec<IngestProgress> {
+    let stall = IngestStage::Converting {
+        saved: STALLED_AT_PAGE,
+        pages: PAGES,
+    };
     let mut steps = steps();
-    // The play opens with the count of the pages, then has one step for each page.
-    steps.truncate(1 + STALLED_AT_PAGE as usize);
+    let stalled_at = steps
+        .iter()
+        .position(|step| step.stage == stall)
+        .expect("the play converts every page");
+    steps.truncate(stalled_at + 1);
     steps
 }
 

@@ -28,6 +28,10 @@ pub enum PageProgress {
     /// `done_before` of them saved by an earlier run. It comes once, before the first page is cut
     /// out, on every run of a chapter that is not finished.
     Pages { total: u32, done_before: u32 },
+    /// One more page is cut out: its own PDF, its text layer and its two pictures are in its
+    /// working folder. It costs nothing. The pages to do are cut in order, and all of them are cut
+    /// before the first paid call.
+    PageCut { position: u32 },
     /// One more page is saved. `calls` are the paid calls of that page. Pages end in any order.
     PageDone { position: u32, calls: CallTally },
     /// A page failed. No new page starts; the pages that are running finish first.

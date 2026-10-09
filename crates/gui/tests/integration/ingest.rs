@@ -110,26 +110,45 @@ async fn started<S: Services>(
     (progress, result.clone())
 }
 
-/// The seven pages of the sample are counted up one at a time, whatever order they end in, and
-/// each later stage counts the `items` of the document. What the last step used is what the run
-/// used.
+/// The stage turns to converting when the last of the seven pages of the sample is cut out, before
+/// the first one is saved. The saved pages are counted up one at a time, whatever order they end
+/// in, and each later stage counts the `items` of the document. What the last step used is what
+/// the run used.
 fn assert_progress_of_one_run(progress: &[IngestProgress], items: u32, used: &Usage) {
-    let counted: Vec<(IngestStage, Option<u32>, Option<u32>)> = progress
-        .iter()
-        .map(|progress| (progress.stage, progress.done, progress.total))
-        .collect();
-    let mut expected = vec![(IngestStage::PreparingPages, None, Some(7))];
-    expected.extend((1..=7).map(|done| (IngestStage::Converting, Some(done), Some(7))));
+    let stages: Vec<IngestStage> = progress.iter().map(|progress| progress.stage).collect();
+    let mut expected = vec![IngestStage::CheckingStored, IngestStage::OpeningPdf];
+    expected.extend((0..7).map(|ready| IngestStage::PreparingPages {
+        ready,
+        saved_before: 0,
+        pages: 7,
+    }));
+    expected.extend((0..=7).map(|saved| IngestStage::Converting { saved, pages: 7 }));
     expected.extend([
-        (IngestStage::WritingGraph, None, None),
-        (IngestStage::Embedding, None, Some(items)),
-        (IngestStage::Storing, None, None),
+        IngestStage::WritingGraph,
+        IngestStage::Embedding { items },
+        IngestStage::Storing,
     ]);
-    expected
-        .extend((1..=items).map(|done| (IngestStage::ReadingConcepts, Some(done), Some(items))));
-    expected
-        .extend((1..=items).map(|done| (IngestStage::LinkingConcepts, Some(done), Some(items))));
-    assert_eq!(counted, expected);
+    expected.extend((1..=items).map(|done| IngestStage::ReadingConcepts { done, items }));
+    expected.extend((1..=items).map(|done| IngestStage::LinkingConcepts { done, items }));
+    assert_eq!(stages, expected);
+    let shares: Vec<f32> = stages
+        .iter()
+        .filter(|stage| {
+            matches!(
+                stage,
+                IngestStage::PreparingPages { .. } | IngestStage::Converting { .. }
+            )
+        })
+        .map(|stage| stage.share_done().expect("a page step has a share"))
+        .collect();
+    assert!(
+        shares.windows(2).all(|pair| pair[0] <= pair[1]),
+        "the share never falls from the first page step to the last: {shares:?}"
+    );
+    assert!(
+        shares.last().is_some_and(|last| (last - 1.0).abs() < 1e-6),
+        "the share is 1 when the last page is saved: {shares:?}"
+    );
     assert!(
         progress.windows(2).all(|pair| {
             let (before, after) = (&pair[0].spent, &pair[1].spent);
@@ -240,7 +259,12 @@ async fn a_checked_chapter_is_ingested_with_its_labels_and_a_second_start_finds_
 
     let (progress, again) = started(&cx, &wanted).await;
 
-    assert!(progress.is_empty(), "nothing is converted: {progress:?}");
+    let stages: Vec<IngestStage> = progress.iter().map(|progress| progress.stage).collect();
+    assert_eq!(
+        stages,
+        [IngestStage::CheckingStored],
+        "nothing is converted: {progress:?}"
+    );
     assert_eq!(
         again,
         Ok(IngestOutcome::AlreadyIngested {

@@ -37,27 +37,92 @@ pub struct Preflight {
     pub blockers: Vec<Failure>,
 }
 
+/// What an ingest is doing, with the counts of the stages that count.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum IngestStage {
-    /// Reading the PDF: its pages are cut out before the first one is converted.
-    PreparingPages,
-    Converting,
+    /// The stores are being asked whether the document is ingested already.
+    CheckingStored,
+    /// The PDF is being opened: what is saved is read, the key of the conversion service is
+    /// tried and the pages are counted.
+    OpeningPdf,
+    /// The pages are cut out one at a time, all before the first one is converted. `ready` of
+    /// all `pages` are saved or cut out, and an earlier run saved `saved_before` of them.
+    PreparingPages {
+        ready: u32,
+        saved_before: u32,
+        pages: u32,
+    },
+    /// `saved` of all `pages` are saved, by this run or by an earlier one.
+    Converting {
+        saved: u32,
+        pages: u32,
+    },
     WritingGraph,
-    Embedding,
+    Embedding {
+        items: u32,
+    },
     Storing,
-    ReadingConcepts,
-    LinkingConcepts,
+    /// `done` of all `items` are read.
+    ReadingConcepts {
+        done: u32,
+        items: u32,
+    },
+    /// `done` of all `items` are linked.
+    LinkingConcepts {
+        done: u32,
+        items: u32,
+    },
+}
+
+/// The share of a page's time that cutting it out takes; converting it takes the rest. It is an
+/// estimate from two measurements. Cutting a page of the sample chapter took 1.3 seconds on
+/// average. The paid calls of a page took 28 seconds on average over 32 saved pages, and four
+/// pages are converted at a time, so a page waits about 7 seconds. 1.3 of those 8.3 seconds is
+/// about 0.15.
+const CUT_SHARE_OF_A_PAGE: f32 = 0.15;
+
+impl IngestStage {
+    /// How much is done, from 0 to 1: of the work on the pages for the two page stages, of the
+    /// stage for the two concept stages, and `None` for a stage that does not count what it has
+    /// done.
+    ///
+    /// The cutting and the converting of the pages share one scale, so the share does not fall or
+    /// jump where one turns into the other: a page that is cut out but not yet saved counts as a
+    /// small share of a page, and a page that is saved counts as a whole page.
+    pub fn share_done(self) -> Option<f32> {
+        let (counts_as_done, total) = match self {
+            IngestStage::PreparingPages {
+                ready,
+                saved_before,
+                pages,
+            } => {
+                let cut_now = ready.saturating_sub(saved_before);
+                let counts_as_done = saved_before as f32 + CUT_SHARE_OF_A_PAGE * cut_now as f32;
+                (counts_as_done, pages)
+            }
+            IngestStage::Converting { saved, pages } => {
+                let cut_not_saved = pages.saturating_sub(saved);
+                let counts_as_done = saved as f32 + CUT_SHARE_OF_A_PAGE * cut_not_saved as f32;
+                (counts_as_done, pages)
+            }
+            IngestStage::ReadingConcepts { done, items }
+            | IngestStage::LinkingConcepts { done, items } => (done as f32, items),
+            IngestStage::CheckingStored
+            | IngestStage::OpeningPdf
+            | IngestStage::WritingGraph
+            | IngestStage::Embedding { .. }
+            | IngestStage::Storing => return None,
+        };
+        if total == 0 {
+            return None;
+        }
+        Some(counts_as_done / total as f32)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct IngestProgress {
     pub stage: IngestStage,
-    /// PreparingPages: `total` is the number of pages. Converting: pages saved of all pages.
-    /// Embedding: `total` is the number of items. ReadingConcepts and LinkingConcepts: items done
-    /// of all items. `None` where a stage has no count.
-    pub done: Option<u32>,
-    pub total: Option<u32>,
-    pub pages_failed: u32,
     /// What the run used so far.
     pub spent: Usage,
 }

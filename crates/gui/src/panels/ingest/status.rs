@@ -15,7 +15,7 @@ use crate::theme::{TextRole, color, space};
 use crate::widgets::{self, Button, Notice};
 
 const CHECKING: &str = "Checking the PDF";
-const READING: &str = "Reading the PDF";
+const CONNECTING: &str = "Connecting to the stores";
 const TRY_AGAIN: &str = "Try again";
 const COST: &str = "Checking is free. Starting is paid work: claude and Jev convert each page, Gemini embeds the items, and claude reads the concepts.";
 const KEEP_OPEN: &str = "Keep the app open until this is done. If it stops, start the same PDF again: pages that are converted are not paid for twice.";
@@ -120,46 +120,38 @@ fn checked_line(ui: &mut egui::Ui, preflight: &Preflight) {
     ui.label(TextRole::Body.rich(line));
 }
 
-fn stage_words(progress: Option<&IngestProgress>) -> String {
-    let Some(progress) = progress else {
-        return READING.to_owned();
+fn stage_words(stage: Option<IngestStage>) -> String {
+    let Some(stage) = stage else {
+        return CONNECTING.to_owned();
     };
-    let counted = |stage: &str| match (progress.done, progress.total) {
-        (Some(done), Some(total)) => format!("{stage} — {done} of {total}"),
-        _ => stage.to_owned(),
-    };
-    match progress.stage {
-        IngestStage::PreparingPages => READING.to_owned(),
-        IngestStage::Converting => match (progress.done, progress.total) {
-            (Some(done), Some(total)) => format!("Converting the pages — page {done} of {total}"),
-            _ => "Converting the pages".to_owned(),
-        },
+    let words = match stage {
+        IngestStage::CheckingStored => "Checking what is already stored".to_owned(),
+        IngestStage::OpeningPdf => "Opening the PDF".to_owned(),
+        IngestStage::PreparingPages { ready, pages, .. } => {
+            format!("Preparing the pages — {ready} of {pages} ready")
+        }
+        IngestStage::Converting { saved, pages } => {
+            format!("Converting the pages — {saved} of {pages} done")
+        }
         IngestStage::WritingGraph => "Writing the graph".to_owned(),
-        IngestStage::Embedding => match progress.total {
-            Some(total) => format!("Embedding {total} items"),
-            None => "Embedding the items".to_owned(),
-        },
+        IngestStage::Embedding { items } => format!("Embedding {items} items"),
         IngestStage::Storing => "Storing the items".to_owned(),
-        IngestStage::ReadingConcepts => counted("Reading the concepts"),
-        IngestStage::LinkingConcepts => counted("Linking the concepts"),
-    }
-}
-
-/// The share of a stage that is done, for the stages that count what they do.
-fn share_done(progress: Option<&IngestProgress>) -> Option<f32> {
-    let progress = progress?;
-    let is_counted = matches!(
-        progress.stage,
-        IngestStage::Converting | IngestStage::ReadingConcepts | IngestStage::LinkingConcepts
-    );
-    match (progress.done, progress.total) {
-        (Some(done), Some(total)) if is_counted && total > 0 => Some(done as f32 / total as f32),
-        _ => None,
+        IngestStage::ReadingConcepts { done, items } => {
+            format!("Reading the concepts — {done} of {items}")
+        }
+        IngestStage::LinkingConcepts { done, items } => {
+            format!("Linking the concepts — {done} of {items}")
+        }
+    };
+    match stage.share_done() {
+        Some(share) => format!("{words} · about {}%", (share * 100.0).round()),
+        None => words,
     }
 }
 
 fn running(ui: &mut egui::Ui, progress: Option<&IngestProgress>) {
-    let words = stage_words(progress);
+    let stage = progress.map(|progress| progress.stage);
+    let words = stage_words(stage);
     ui.horizontal(|ui| {
         ui.label(TextRole::BodyStrong.rich(&words));
         if let Some(progress) = progress {
@@ -169,7 +161,7 @@ fn running(ui: &mut egui::Ui, progress: Option<&IngestProgress>) {
         }
     });
     ui.add_space(space::XS);
-    match share_done(progress) {
+    match stage.and_then(IngestStage::share_done) {
         Some(share) => widgets::progress_bar(ui, &words, share),
         None => widgets::indeterminate_bar(ui, &words),
     };

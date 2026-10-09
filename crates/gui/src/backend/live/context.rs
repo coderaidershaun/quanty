@@ -27,8 +27,8 @@ pub trait Services: Send + Sync + 'static {
     fn graph(&self, config: &Config) -> impl Future<Output = Result<Self::Graph, Failure>> + Send;
 
     /// Converts the pages of the chapter that are not converted yet, and tells each page to
-    /// `on_page` as it ends. This is the part of an ingest that pays for a model call for every
-    /// page.
+    /// `on_page` as it is cut out and as it ends. This is the part of an ingest that pays for a
+    /// model call for every page.
     ///
     /// # Errors
     /// The errors of `ocr::convert_chapter_with_jev_key`.
@@ -165,7 +165,8 @@ impl<S: Services> LiveContext<S> {
     }
 
     /// Converts the pages of a chapter that are not converted yet, with the Jev key of the
-    /// settings, so no other code sees the key. Each page is told to `on_page` as it ends.
+    /// settings, so no other code sees the key. Each page is told to `on_page` as it is cut out
+    /// and as it ends.
     ///
     /// # Errors
     /// The errors of the conversion, such as a missing key or a page that fails.

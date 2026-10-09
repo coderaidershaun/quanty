@@ -89,10 +89,10 @@ pub struct ChapterPdf<'a, C, O> {
     /// The labels the media is made with when the graph does not have it yet.
     pub new_media: &'a MediaLabels,
     /// Called at most once, and only when the document is not ingested yet. Its second argument
-    /// hears each page as it ends.
+    /// hears the count of the pages, then each page as it is cut out and as it ends.
     pub convert: C,
     /// Hears each step of the run as it happens, with what the run used up to and with that step.
-    /// A PDF that is ingested already hears nothing.
+    /// A PDF that is ingested already hears only the check of the stores.
     pub on_step: O,
 }
 
@@ -146,8 +146,10 @@ impl fmt::Display for PdfOutcome {
 /// Hashes the PDF, and unless both stores already hold the whole document, converts the chapter
 /// with `pdf.convert` and ingests the converted folder with [`crate::ingest_chapter`].
 ///
-/// Each page and each later step is told to `pdf.on_step` as it happens, with what the run used
-/// so far: the pages converted so far, then the whole conversion and what the ingest used.
+/// Each step is told to `pdf.on_step` as it happens: the check of the stores first, the opening
+/// of the PDF just before the conversion, then each page and each later step. With each step
+/// comes what the run used so far: the pages converted so far, then the whole conversion and what
+/// the ingest used.
 ///
 /// Both stores are checked before the first page is converted, so a store that is down fails the
 /// run before a page is paid for. A second call on the same PDF converts, embeds, asks and
@@ -179,6 +181,7 @@ where
         convert,
         mut on_step,
     } = pdf;
+    on_step(IngestStep::CheckingStored, &UsageTally::default());
     let document = DocId::from_source_sha256(&job.source_sha256()?);
     if let Some(items) = already_ingested(document, stores).await? {
         return Ok(PdfOutcome::AlreadyIngested {
@@ -186,6 +189,7 @@ where
             items,
         });
     }
+    on_step(IngestStep::OpeningPdf, &UsageTally::default());
     let mut pages_so_far = UsageTally::default();
     let conversion = convert(job, &mut |page| {
         if let PageProgress::PageDone { calls, .. } = &page {

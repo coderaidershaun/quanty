@@ -155,7 +155,9 @@ fn card(ui: &mut egui::Ui, media: &Media, pencil: Pencil) -> bool {
     ui.add_space(space::SM);
     let title = media.title.as_deref().unwrap_or_default();
     let shown = Card::new().show(ui, |ui| {
-        let is_pressed = media_card::title_line(ui, title, media.category, pencil);
+        let is_pressed = media_card::title_line(ui, title, media.category, |ui| {
+            media_card::pencil(ui, title, pencil)
+        });
         media_card::labels_line(ui, media);
         is_pressed
     });
@@ -174,9 +176,11 @@ fn new_media(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
         MediaSave::Failed { media, failure } if typed_title == Some(&media.title) => Some(failure),
         _ => None,
     };
+    // SMELL: this copies a part of the rule by which the state takes a save of a media. The state
+    // also drops a save while an edit of a media is on its way, and this button stays on then.
     let save = if media_save.is_saving() {
         Save::Sent
-    } else if typed.is_some() {
+    } else if typed.is_some() && !cx.shared.library.is_deleting() {
         Save::On
     } else {
         Save::Off
@@ -238,7 +242,7 @@ fn edited_media(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     let refusal = refusal_of(&library.media_edit, &edit);
     ui.add_space(space::SM);
     let shown = Card::new().show(ui, |ui| {
-        media_card::title_line(ui, title, *category, Pencil::Hidden);
+        media_card::title_line(ui, title, *category, |_| {});
         let setup = FormSetup {
             id_salt: "ingest_media",
             purpose: Purpose::Edit,

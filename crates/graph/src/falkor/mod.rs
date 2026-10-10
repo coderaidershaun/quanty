@@ -147,6 +147,10 @@ impl GraphStore for FalkorGraph {
         documents::media(self).await
     }
 
+    async fn delete_media(&self, title: &str) -> Result<bool, GraphError> {
+        writes::delete_media(self, title).await
+    }
+
     async fn upsert_items(&self, document: DocId, items: &[ItemNode]) -> Result<(), GraphError> {
         writes::upsert_items(self, document, items).await
     }

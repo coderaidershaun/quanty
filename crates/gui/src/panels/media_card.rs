@@ -1,6 +1,7 @@
 //! What the Ingest and the Library pages draw alike for a media: its title line with the category
-//! badge and the pencil, the line of its authors and tags, and the form that saves a new media or
-//! changes a stored one. Each page keeps its own state and sends its own intents.
+//! badge and the buttons each page gives it, the pencil, the line of its authors and tags, and the
+//! form that saves a new media or changes a stored one. Each page keeps its own state and sends its
+//! own intents.
 
 use eframe::egui;
 
@@ -78,31 +79,37 @@ pub(super) enum Pencil {
     On,
 }
 
-/// The first line of the card of a media: its title, its category and, at the right end, its
-/// pencil. Returns true when the pencil was pressed.
-pub(super) fn title_line(
+/// The first line of the card of a media: its title, its category and, at the right end, the
+/// buttons that `add_buttons` draws, the rightmost first.
+pub(super) fn title_line<R>(
     ui: &mut egui::Ui,
     title: &str,
     category: Category,
-    pencil: Pencil,
-) -> bool {
+    add_buttons: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
     ui.horizontal(|ui| {
         ui.label(TextRole::BodyStrong.rich(title));
         ui.add(category_badge(category));
-        if pencil == Pencil::Hidden {
-            return false;
-        }
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let name = format!("Edit {title}");
-            let button = Button::secondary(EDIT)
-                .icon(Icon::EDIT)
-                .size(ControlSize::Small)
-                .accessible_name(&name);
-            ui.add_enabled(pencil == Pencil::On, button).clicked()
-        })
+        ui.with_layout(
+            egui::Layout::right_to_left(egui::Align::Center),
+            add_buttons,
+        )
         .inner
     })
     .inner
+}
+
+/// The pencil of a title line. Returns true when it was pressed.
+pub(super) fn pencil(ui: &mut egui::Ui, title: &str, pencil: Pencil) -> bool {
+    if pencil == Pencil::Hidden {
+        return false;
+    }
+    let name = format!("Edit {title}");
+    let button = Button::secondary(EDIT)
+        .icon(Icon::EDIT)
+        .size(ControlSize::Small)
+        .accessible_name(&name);
+    ui.add_enabled(pencil == Pencil::On, button).clicked()
 }
 
 fn category_badge(category: Category) -> Badge<'static> {

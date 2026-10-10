@@ -224,9 +224,17 @@ pub(super) enum Command {
         labels: GivenMediaLabels,
     },
 
-    /// Remove one document, with its items, from Qdrant and from the graph
+    /// Remove one document: its items from Qdrant and from the graph, its converted folder, and
+    /// the uploaded copy of its PDF. It asks no question
     DeleteDocument {
         /// The document id that an ingest prints, such as 5f3c2a1e-9b04-5d6e-8a17-2c4b7e90f1d3
         document_id: DocId,
+    },
+
+    /// Remove a whole media: every document of it, as delete-document does, and then the media
+    /// itself. It asks no question
+    DeleteMedia {
+        /// The title of the media, whatever its capitals
+        title: String,
     },
 }

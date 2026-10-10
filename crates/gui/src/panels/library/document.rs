@@ -2,12 +2,13 @@
 
 use eframe::egui;
 
-use super::{Form, Local, can_edit, tags_form};
+use super::{Form, Local, can_edit, delete, tags_form};
 use crate::contract::{Document, Intent};
 use crate::panels::PanelCx;
 use crate::panels::labels::TAGS;
+use crate::state::Busy;
 use crate::theme::{Icon, TextRole, Tone, color, space};
-use crate::widgets::{Badge, Button, Card, ControlSize};
+use crate::widgets::{Badge, Button, Card, ControlSize, Notice};
 
 const NOT_WHOLE: &str = "The ingest of this document did not finish, so a search may miss parts of it. Ingest it again to finish it.";
 const NO_TAGS: &str = "No tags";
@@ -41,6 +42,12 @@ pub(super) fn show(
                 }
             }
             _ => labels(ui, document),
+        }
+        // The failure is said above the buttons, so it is in view with the button that was
+        // pressed. The open form of the tags says a refused save itself.
+        if !is_edited && let Some(failure) = cx.shared.library.failures.get(&document.id) {
+            ui.add_space(space::SM);
+            Notice::error(&failure.hint).show(ui);
         }
         ui.add_space(space::SM);
         buttons(ui, document, is_edited, local, cx);
@@ -102,6 +109,14 @@ fn buttons(
             if ui.add_enabled(can_edit(cx.shared), edit_tags).clicked() {
                 local.form = Some(Form::Tags(tags_form::Draft::of(document)));
             }
+        }
+        let name = format!("Delete document {}", document.name().label());
+        let is_busy = matches!(
+            cx.shared.library.busy.get(&document.id),
+            Some(Busy::Deleting(_))
+        );
+        if delete::button(ui, &name, is_busy, cx.shared) {
+            local.question = Some(delete::Question::of_document(document));
         }
     });
 }

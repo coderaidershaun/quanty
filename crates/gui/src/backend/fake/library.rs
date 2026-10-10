@@ -6,8 +6,7 @@ use super::scenes::Library;
 use super::{CATALOGUE_WAIT, Fake};
 use crate::backend::Reply;
 use crate::contract::{
-    Catalogue, DocumentTagsEdit, Event, Failure, Media, MediaEdit, NewMedia, RequestId,
-    is_same_name,
+    Catalogue, DocId, DocumentTagsEdit, Event, Failure, Media, MediaEdit, NewMedia, RequestId,
 };
 
 pub(super) fn starting_catalogue(library: Library, samples: Catalogue) -> Catalogue {
@@ -80,12 +79,7 @@ impl Fake {
         let media = catalogue
             .media
             .iter_mut()
-            .find(|media| {
-                media
-                    .title
-                    .as_deref()
-                    .is_some_and(|title| is_same_name(title, &edit.title))
-            })
+            .find(|media| media.is_titled(&edit.title))
             .ok_or_else(|| {
                 Failure::internal(format!("the library has no media titled {}", edit.title))
             })?;
@@ -132,6 +126,55 @@ impl Fake {
         tags.extend(to_stored(&edit.add));
         tags.retain(|tag| !removed.contains(tag));
         document.tags = to_stored(&tags);
+        Ok(())
+    }
+
+    pub(super) async fn delete_document(&self, request: RequestId, doc: DocId, reply: &Reply) {
+        let result = self.after_wait(|| self.remove_document(doc)).await;
+        reply.send(Event::DocumentDeleted {
+            request,
+            doc,
+            result,
+        });
+    }
+
+    /// A titled media stays when its last document goes, and the group with no title goes with its
+    /// last document, both as in the live library. Only the catalogue in memory changes: the
+    /// folders of the sample documents belong to the repository, and no delete may touch them.
+    // SMELL: the ingestion crate keeps its own copy of this rule, and the fake may not name that
+    // crate, so a change to one must be made in both.
+    fn remove_document(&self, doc: DocId) -> Result<(), Failure> {
+        let mut catalogue = self.catalogue();
+        let media = catalogue
+            .media
+            .iter_mut()
+            .find(|media| media.documents.iter().any(|document| document.id == doc))
+            .ok_or_else(|| Failure::internal(format!("the library has no document {}", doc.0)))?;
+        media.documents.retain(|document| document.id != doc);
+        catalogue
+            .media
+            .retain(|media| media.title.is_some() || !media.documents.is_empty());
+        Ok(())
+    }
+
+    pub(super) async fn delete_media(&self, request: RequestId, title: &str, reply: &Reply) {
+        let result = self.after_wait(|| self.remove_media(title)).await;
+        reply.send(Event::MediaDeleted { request, result });
+    }
+
+    /// Every media of that title goes with its documents, whatever the capitals. Only the
+    /// catalogue in memory changes, as for a document.
+    // SMELL: the ingestion crate keeps its own copy of this rule, and the fake may not name that
+    // crate, so a change to one must be made in both.
+    fn remove_media(&self, title: &str) -> Result<(), Failure> {
+        let mut catalogue = self.catalogue();
+        let before = catalogue.media.len();
+        catalogue.media.retain(|media| !media.is_titled(title));
+        if catalogue.media.len() == before {
+            return Err(Failure::internal(format!(
+                "the library has no media titled {title}"
+            )));
+        }
         Ok(())
     }
 }

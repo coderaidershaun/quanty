@@ -9,11 +9,13 @@ pub mod testing;
 
 pub use content::{
     Catalogue, ChapterEntry, ChapterIndex, Cite, CiteKind, ContentError, DocumentName, FigureImage,
-    ImageIndex, ImageShows, MediaDocument, PageBox, PieceDetail, RelationshipKind, Symbol,
+    ImageEntry, ImageIndex, ImageShows, MediaDocument, PageBox, PieceDetail, RelationshipKind,
+    Symbol, saved_images,
 };
 pub use convert::{
-    ChapterJob, ConversionSummary, ConvertError, ConvertedImage, PageError, PageProgress,
-    PopplerError, convert_chapter, convert_chapter_with_jev_key, convert_image, pdf_page_count,
+    ChapterJob, ChapterLock, ConversionSummary, ConvertError, ConvertedImage, PageError,
+    PageProgress, PopplerError, convert_chapter, convert_chapter_with_jev_key, convert_image,
+    pdf_page_count, sha256_hex, try_lock_chapter,
 };
 pub use reader::{
     Chapter, ChapterPiece, FigurePicture, PieceId, PieceRelationship, ReadChapterError,

@@ -1,6 +1,6 @@
 //! Turns a chapter PDF, a converted chapter, or a picture that stands alone, into stored,
 //! searchable items and a graph of their concepts, and can relabel a stored media or document,
-//! or delete a stored document.
+//! or delete a stored document or a whole media.
 
 mod delete;
 pub mod health;
@@ -12,7 +12,9 @@ mod stores;
 #[cfg(feature = "testing")]
 pub mod testing;
 
-pub use delete::{DeleteError, DeleteSummary, delete_document};
+pub use delete::{
+    DeleteError, DocumentDeleteSummary, MediaDeleteSummary, delete_document, delete_media,
+};
 pub use ingest::{
     ASK_SCORE, ChapterFolder, ConceptError, ConceptExtractor, ConceptSummary, EXTRACTION_MODEL,
     IngestError, IngestStep, IngestSummary, Item, ItemCounts, LINK_SCORE, LoneImage, Models,

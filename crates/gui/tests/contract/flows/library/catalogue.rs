@@ -1,5 +1,6 @@
 //! The Library tab lists each media with its documents, copies the id of a document, opens it to
-//! read, and says what no sample shows.
+//! read, has no Delete for the whole group of documents with no media, and says what no sample
+//! shows.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -17,7 +18,7 @@ use gui::state::SourceTarget;
 use gui::testkit;
 use uuid::Uuid;
 
-use super::{Ingests, documents_of, open_switched};
+use super::{Ingests, delete_buttons, documents_of, open_switched};
 use crate::flows::recording::Seen;
 use crate::flows::{
     COMMAND, Window, click, copied_by, has, is_open_tab, node, press, says, shared,
@@ -88,6 +89,49 @@ fn dynamic_hedging() -> Catalogue {
             ],
         }],
     }
+}
+
+/// The book, and after it a picture that belongs to no media.
+fn book_and_a_picture_with_no_media() -> Catalogue {
+    let mut catalogue = dynamic_hedging();
+    catalogue.media.push(Media {
+        title: None,
+        documents: vec![Document {
+            id: DocId(Uuid::from_u128(9)),
+            title: "A picture on its own".to_owned(),
+            ingested_items: Some(1),
+            ..Document::default()
+        }],
+        ..Media::default()
+    });
+    catalogue
+}
+
+fn the_group_with_no_media_has_no_delete_but_each_of_its_documents_has(harness: &mut Window) {
+    assert!(says(harness, "No media"));
+    assert!(has(
+        harness,
+        Role::Button,
+        "Delete document A picture on its own"
+    ));
+    let catalogue = shared(harness).library.catalogue.ready().cloned();
+    let titled = catalogue
+        .expect("the catalogue is loaded")
+        .media
+        .iter()
+        .filter(|media| media.title.is_some())
+        .count();
+    let media_deletes = delete_buttons(harness)
+        .iter()
+        .filter(|button| {
+            let name = button.accesskit_node().label().unwrap_or_default();
+            name.starts_with("Delete media ")
+        })
+        .count();
+    assert_eq!(
+        media_deletes, titled,
+        "a titled media has a Delete and the group with no media has none"
+    );
 }
 
 fn the_page_says_which_chapter_is_not_whole(harness: &mut Window) {
@@ -244,6 +288,7 @@ fn the_library_lists_each_media_as_a_card_and_a_document_is_copied_and_read() {
 
 #[test]
 fn the_library_says_what_no_sample_shows() {
-    let mut harness = open_on(Listing(dynamic_hedging()), DEFAULT_WINDOW);
+    let mut harness = open_on(Listing(book_and_a_picture_with_no_media()), DEFAULT_WINDOW);
     the_page_says_which_chapter_is_not_whole(&mut harness);
+    the_group_with_no_media_has_no_delete_but_each_of_its_documents_has(&mut harness);
 }

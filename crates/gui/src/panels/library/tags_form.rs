@@ -71,7 +71,7 @@ pub(super) fn form(
     ui.add_space(space::SM);
     let mut is_cancelled = false;
     ui.horizontal(|ui| {
-        let can_save = !edit.is_empty() && !shared.ingest.is_running() && !is_sent;
+        let can_save = !edit.is_empty() && shared.can_set_document_tags() && !is_sent;
         let save = Button::primary(SAVE).loading(is_sent);
         if ui.add_enabled(can_save, save).clicked() {
             draft.step = SaveStep::Sent;

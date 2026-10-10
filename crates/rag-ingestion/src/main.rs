@@ -1,6 +1,6 @@
 //! The `rag-ingest` command: checks that the services are ready, ingests a converted chapter or a
 //! picture, converts and ingests a PDF, relabels a stored media or document, or deletes a
-//! document.
+//! document or a whole media.
 
 mod cli;
 mod progress;
@@ -18,8 +18,9 @@ use rag_core::{
 };
 use rag_ingestion::{
     ChapterFolder, ChapterPdf, ConceptExtractor, EXTRACTION_MODEL, IngestSummary, LoneImage,
-    MediaChange, Models, NamePdfError, Stores, TagChange, UnnamedPdf, delete_document, health,
-    ingest_chapter, ingest_image, ingest_pdf, relabel_document_tags, relabel_media,
+    MediaChange, Models, NamePdfError, Stores, TagChange, UnnamedPdf, delete_document,
+    delete_media, health, ingest_chapter, ingest_image, ingest_pdf, relabel_document_tags,
+    relabel_media,
 };
 use tracing::Level;
 use tracing_subscriber::filter::Targets;
@@ -79,9 +80,12 @@ async fn run(cli: Cli) -> Result<ExitCode> {
                 .await
                 .map(|()| ExitCode::SUCCESS)
         }
-        (Some(Command::DeleteDocument { document_id }), _) => {
-            delete(document_id).await.map(|()| ExitCode::SUCCESS)
-        }
+        (Some(Command::DeleteDocument { document_id }), _) => delete_stored_document(document_id)
+            .await
+            .map(|()| ExitCode::SUCCESS),
+        (Some(Command::DeleteMedia { title }), _) => delete_stored_media(&title)
+            .await
+            .map(|()| ExitCode::SUCCESS),
         (None, Some(path)) => ingest(path, &cli.given).await.map(|()| ExitCode::SUCCESS),
         (None, None) => {
             Cli::command()
@@ -315,12 +319,22 @@ async fn relabel_stored_media(title: &str, change: &MediaChange) -> Result<()> {
     Ok(())
 }
 
-async fn delete(document_id: DocId) -> Result<()> {
+async fn delete_stored_document(document_id: DocId) -> Result<()> {
     let config = Config::load().context("could not read the settings")?;
     let stores = connect_stores(&config).await?;
-    let summary = delete_document(document_id, &stores)
+    let summary = delete_document(document_id, &config.content_folder, &stores)
         .await
         .with_context(|| format!("could not delete the document {document_id}"))?;
+    println!("{summary}");
+    Ok(())
+}
+
+async fn delete_stored_media(title: &str) -> Result<()> {
+    let config = Config::load().context("could not read the settings")?;
+    let stores = connect_stores(&config).await?;
+    let summary = delete_media(title, &config.content_folder, &stores)
+        .await
+        .with_context(|| format!("could not delete the media {title:?}"))?;
     println!("{summary}");
     Ok(())
 }

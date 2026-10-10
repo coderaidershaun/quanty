@@ -50,8 +50,8 @@ enum Pace {
     Instant,
 }
 
-/// The catalogue is behind a lock because a saved or edited media and a change of tags change it,
-/// and a command is served by `&self`.
+/// The catalogue is behind a lock because every save, edit and delete changes it, and a command is
+/// served by `&self`.
 #[derive(Debug)]
 pub struct Fake {
     scene: &'static Scene,
@@ -372,18 +372,18 @@ impl Handler for Fake {
                 self.save_media(request, &media, &reply).await;
             }
             Command::EditMedia { request, edit } => self.edit_media(request, &edit, &reply).await,
+            Command::DeleteDocument { request, doc } => {
+                self.delete_document(request, doc, &reply).await;
+            }
+            Command::DeleteMedia { request, title } => {
+                self.delete_media(request, &title, &reply).await;
+            }
             Command::CheckHealth { request } => self.check_health(request, &reply),
             Command::Preflight { request, ingest } => {
                 self.preflight(request, &ingest, &reply).await;
             }
             Command::Ingest { request, ingest } => self.ingest(request, &ingest, &reply).await,
             Command::Cancel(_) => {}
-            other => {
-                let failure = Failure::not_built("this command of the fake backend");
-                for event in other.failed(&failure) {
-                    reply.send(event);
-                }
-            }
         }
     }
 }

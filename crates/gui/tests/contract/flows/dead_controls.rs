@@ -1,19 +1,20 @@
 //! No key and no control of the app leads to a part of it that is not built: not a page, not the
-//! help sheet, not a command whose backend only says it is not built.
+//! help sheet, not a command whose backend only says it is not built. A Delete control and the two
+//! delete commands are built, so they are pressed like any other control.
 
 use std::collections::{HashMap, HashSet};
 
 use eframe::egui;
-use eframe::egui::accesskit::{Action, Role};
-use egui_kittest::kittest::{By, NodeT as _, Queryable as _};
+use eframe::egui::accesskit::{Action, NodeId, Role};
+use egui_kittest::kittest::{AccessKitNode, By, NodeT as _, Queryable as _};
 use gui::app::layout::DEFAULT_WINDOW;
 use gui::backend::fake::{self, Fake};
 use gui::contract::{Chord, Command, Failure, Intent, KeyName, SHORTCUTS};
-use gui::state::Quit;
+use gui::state::{MediaDelete, Quit};
 use gui::testkit;
 
 use super::recording::{self, Seen};
-use super::{Window, failures, is_open_tab, press, shared};
+use super::{Window, failures, is_open_tab, node, press, shared};
 
 /// Names that no node of the app may have, because each is a part that is not built.
 const ABSENT_NAMES: [&str; 7] = [
@@ -102,16 +103,42 @@ fn assert_start_up_sent_only_its_own_commands(scene: &str, seen: &Seen) {
     );
 }
 
-/// The role and name of every enabled node that a click can press, with how many nodes before it
-/// have the same role and name.
-fn pressable(harness: &Window) -> Vec<(Role, String, usize)> {
-    let can_be_pressed = |node: &egui_kittest::kittest::AccessKitNode<'_>| {
+/// A control that a click can press.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct Control {
+    role: Role,
+    name: String,
+    /// How many pressable controls of this role and name come before it, as the click finds it.
+    place: usize,
+    /// True for a control of the sheet that is open over the page. The `Cancel` of a sheet and
+    /// the `Cancel` of a form are two controls, so each is pressed once. A row of an open list is
+    /// drawn over the page as a sheet is, so it is true for such a row too.
+    is_on_sheet: bool,
+}
+
+/// The child of the root that holds the node. A sheet is an area of its own under the root, so a
+/// control of the sheet ends at another node than a control of the page does.
+fn top_of(node: &AccessKitNode<'_>) -> NodeId {
+    let mut top = *node;
+    while let Some(parent) = top.parent() {
+        if parent.is_root() {
+            break;
+        }
+        top = parent;
+    }
+    top.locate().0
+}
+
+/// Every enabled node that a click can press.
+fn pressable(harness: &Window) -> Vec<Control> {
+    let can_be_pressed = |node: &AccessKitNode<'_>| {
         node.data().supports_action(Action::Click)
             && !node.is_disabled()
             && !node.is_hidden()
             && node.label().is_some()
             && node.bounding_box().is_some()
     };
+    let page = top_of(&node(harness, Role::Tab, "Ask").accesskit_node());
     let mut before: HashMap<(Role, String), usize> = HashMap::new();
     let mut found = Vec::new();
     for node in harness.query_all(By::new().predicate(can_be_pressed)) {
@@ -120,7 +147,12 @@ fn pressable(harness: &Window) -> Vec<(Role, String, usize)> {
             node.accesskit_node().label().unwrap_or_default(),
         );
         let count = before.entry((role, name.clone())).or_default();
-        found.push((role, name, *count));
+        found.push(Control {
+            role,
+            name,
+            place: *count,
+            is_on_sheet: top_of(&node.accesskit_node()) != page,
+        });
         *count += 1;
     }
     found
@@ -137,6 +169,25 @@ fn click_if_still_there(harness: &mut Window, role: Role, name: &str, place: usi
     testkit::settle(harness);
 }
 
+/// egui sets the layer of a sheet at the start of the next frame, so two frames run first.
+fn is_a_sheet_open(harness: &mut Window) -> bool {
+    harness.step();
+    harness.step();
+    harness
+        .ctx
+        .memory(|memory| memory.top_modal_layer().is_some())
+}
+
+/// A click on a control under a sheet lands on the sheet or on its backdrop, so while a sheet is
+/// open only its own controls are pressed. Escape closes what is left of it.
+fn close_the_sheet_with_escape(harness: &mut Window, scene: &str) {
+    press(harness, egui::Modifiers::NONE, egui::Key::Escape);
+    assert!(
+        !is_a_sheet_open(harness),
+        "`{scene}`: Escape did not close the sheet"
+    );
+}
+
 /// A tab is pressed only when nothing else on screen is left, so what a tab shows is pressed
 /// before the tab is left. The lists are left to `press_every_row_of_every_list`.
 ///
@@ -145,19 +196,31 @@ fn click_if_still_there(harness: &mut Window, role: Role, name: &str, place: usi
 /// would never be pressed if `Read` came first. The rule goes by name: a button that is renamed
 /// makes this test weaker and nothing fails.
 fn press_every_control(harness: &mut Window, scene: &str) {
-    let mut pressed: HashSet<(Role, String, usize)> = HashSet::new();
+    let mut pressed: HashSet<Control> = HashSet::new();
     loop {
+        let is_sheet_open = is_a_sheet_open(harness);
         let next = pressable(harness)
             .into_iter()
-            .filter(|control| control.0 != Role::ComboBox && !pressed.contains(control))
-            .min_by_key(|(role, name, _)| {
-                (*role == Role::Tab, *role == Role::Button && name == "Read")
+            .filter(|control| {
+                control.role != Role::ComboBox
+                    && !pressed.contains(control)
+                    && (control.is_on_sheet || !is_sheet_open)
+            })
+            .min_by_key(|control| {
+                (
+                    control.role == Role::Tab,
+                    control.role == Role::Button && control.name == "Read",
+                )
             });
-        let Some((role, name, place)) = next else {
-            return;
+        let Some(control) = next else {
+            if !is_sheet_open {
+                return;
+            }
+            close_the_sheet_with_escape(harness, scene);
+            continue;
         };
-        click_if_still_there(harness, role, &name, place);
-        pressed.insert((role, name, place));
+        click_if_still_there(harness, control.role, &control.name, control.place);
+        pressed.insert(control);
         assert!(
             pressed.len() <= MOST_CONTROLS,
             "`{scene}` keeps bringing new controls on screen: {pressed:?}"
@@ -168,7 +231,7 @@ fn press_every_control(harness: &mut Window, scene: &str) {
 fn rows_of_open_list(harness: &Window, closed: &HashSet<(Role, String)>) -> Vec<(Role, String)> {
     pressable(harness)
         .into_iter()
-        .map(|(role, name, _)| (role, name))
+        .map(|control| (control.role, control.name))
         .filter(|control| !closed.contains(control))
         .collect()
 }
@@ -182,12 +245,15 @@ fn press_every_row_of_every_list(harness: &mut Window) {
     testkit::settle(harness);
     let closed: HashSet<(Role, String)> = pressable(harness)
         .into_iter()
-        .map(|(role, name, _)| (role, name))
+        .map(|control| (control.role, control.name))
         .collect();
     let lists = pressable(harness)
         .into_iter()
-        .filter(|(role, ..)| *role == Role::ComboBox);
-    for (role, name, place) in lists.collect::<Vec<_>>() {
+        .filter(|control| control.role == Role::ComboBox);
+    for Control {
+        role, name, place, ..
+    } in lists.collect::<Vec<_>>()
+    {
         // A list that an earlier click left open is shut by this click, so a second click opens it.
         click_if_still_there(harness, role, &name, place);
         let mut rows = rows_of_open_list(harness, &closed);
@@ -252,13 +318,17 @@ fn assert_ingest_commands_follow_a_check(scene: &str, seen: &Seen) {
     }
 }
 
+/// Every failure that the library state holds: the last failed change of each document, and the
+/// last failed delete of a media.
+fn library_failures(shared: &gui::state::Shared) -> Vec<&Failure> {
+    let media = match &shared.library.media_delete {
+        MediaDelete::Failed { failure, .. } => Some(failure),
+        MediaDelete::Idle | MediaDelete::Deleting { .. } => None,
+    };
+    shared.library.failures.values().chain(media).collect()
+}
+
 fn assert_nothing_unbuilt_was_reached(harness: &Window, scene: &str, seen: &Seen) {
-    for command in seen.all() {
-        assert!(
-            !matches!(command, Command::DeleteDocument { .. }),
-            "`{scene}` sent {command:?}, a command of a part that is not built"
-        );
-    }
     assert_ingest_commands_follow_a_check(scene, seen);
     let shared = shared(harness);
     assert!(!shared.help_open, "`{scene}` opened the help sheet");
@@ -271,7 +341,11 @@ fn assert_nothing_unbuilt_was_reached(harness: &Window, scene: &str, seen: &Seen
                 gui::contract::ServiceState::Down(failure) => Some(failure),
                 _ => None,
             });
-    for failure in failures(shared).into_iter().chain(health_failures) {
+    let all_failures = failures(shared)
+        .into_iter()
+        .chain(library_failures(shared))
+        .chain(health_failures);
+    for failure in all_failures {
         assert_ne!(
             failure.hint, not_built,
             "`{scene}` shows a part that is not built"
@@ -298,12 +372,14 @@ fn assert_no_unbuilt_name_is_drawn(harness: &Window, scene: &str) {
             .is_none(),
         "`{scene}` says that something is not built"
     );
+    // Only the Library tab has a Delete control.
     assert!(
-        harness
-            .query_all_by_label_contains("Delete")
-            .next()
-            .is_none(),
-        "`{scene}` draws a Delete control"
+        is_open_tab(harness, "Library")
+            || harness
+                .query_all_by_label_contains("Delete")
+                .next()
+                .is_none(),
+        "`{scene}` draws a Delete control outside the Library tab"
     );
     for name in ABSENT_NAMES {
         assert!(
@@ -313,10 +389,34 @@ fn assert_no_unbuilt_name_is_drawn(harness: &Window, scene: &str) {
     }
 }
 
+/// Whether the library of the scene held a media of each of two titles with a document, when
+/// the scene opened. A delete of a document and a delete of a media can both be confirmed then.
+fn lists_two_media_with_a_document(harness: &Window) -> bool {
+    let catalogue = shared(harness).library.catalogue.ready();
+    catalogue.is_some_and(|catalogue| {
+        let with_a_document = catalogue
+            .media
+            .iter()
+            .filter(|media| media.title.is_some() && !media.documents.is_empty());
+        with_a_document.count() >= 2
+    })
+}
+
+/// Each sheet has its own confirm, and each control of a scene is pressed once, so a scene that
+/// can delete both ends with exactly one delete of each. That shows that the Delete controls were
+/// pressed and confirmed, and that no delete answered that it is not built.
+fn assert_each_delete_was_confirmed_once(scene: &str, seen: &Seen) {
+    let documents = seen.count(|command| matches!(command, Command::DeleteDocument { .. }));
+    let media = seen.count(|command| matches!(command, Command::DeleteMedia { .. }));
+    assert_eq!(documents, 1, "`{scene}` deleted {documents} documents");
+    assert_eq!(media, 1, "`{scene}` deleted {media} media");
+}
+
 fn every_key_and_control_of(scene: &str) {
     let (mut harness, seen) = recording::open(scene, DEFAULT_WINDOW);
     testkit::settle(&mut harness);
     assert_start_up_sent_only_its_own_commands(scene, &seen);
+    let can_delete_both = lists_two_media_with_a_document(&harness);
 
     for row in &SHORTCUTS {
         // A key that the box takes as text does not reach the shortcut, so the box is left
@@ -349,6 +449,9 @@ fn every_key_and_control_of(scene: &str) {
     }
     assert_nothing_unbuilt_was_reached(&harness, scene, &seen);
     assert_each_health_check_follows_an_ask(scene, &seen);
+    if can_delete_both {
+        assert_each_delete_was_confirmed_once(scene, &seen);
+    }
 }
 
 #[test]

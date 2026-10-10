@@ -1,5 +1,6 @@
 //! The work of a chapter run once pages are known to be left: tidy the folder, cut the missing
-//! pages out, convert them a few at a time, and mark the chapter finished last.
+//! pages out, convert them a few at a time, and mark the chapter finished last. It also holds
+//! the lock on a chapter folder, which a program that removes the folder takes too.
 
 use std::fs::{File, TryLockError};
 use std::path::Path;
@@ -33,7 +34,9 @@ pub(super) async fn run<S: PageServices>(
     let folder = &job.chapter_folder;
     let page_count = poppler::page_count(&job.chapter_pdf).await?;
     std::fs::create_dir_all(folder).map_err(write_error(folder))?;
-    let _chapter_lock = lock_chapter(folder)?;
+    let _chapter_lock = try_lock_chapter(folder)?.ok_or_else(|| ConvertError::ChapterBusy {
+        folder: folder.to_path_buf(),
+    })?;
     let mut index = ChapterIndex {
         format_version: FORMAT_VERSION,
         media_title: job.media_title.clone(),
@@ -67,10 +70,24 @@ pub(super) async fn run<S: PageServices>(
     )?)
 }
 
-/// The lock is held until the run ends, so a second run on the same chapter is refused instead of
-/// removing the first one's working folders. The system lets go of it when the process ends, so a
-/// run that was killed never leaves the chapter locked.
-fn lock_chapter(folder: &Path) -> Result<File, ConvertError> {
+/// A chapter folder that one run holds alone. No other run converts or removes the folder until
+/// this is dropped. The system lets go of it when the process ends.
+#[derive(Debug)]
+pub struct ChapterLock {
+    _file: File,
+}
+
+/// Takes the chapter folder for the caller alone, or gives `None` when a run holds it at this
+/// moment. The folder must be there. The lock is a file in the folder: it is made when it is
+/// missing, and it stays there after the lock is let go.
+///
+/// The lock is held until the value is dropped, so a second run on the same chapter is refused
+/// instead of removing the first one's working folders. The system lets go of it when the
+/// process ends, so a run that was killed never leaves the chapter locked.
+///
+/// # Errors
+/// [`ContentError::Write`] when the lock file cannot be made or locked.
+pub fn try_lock_chapter(folder: &Path) -> Result<Option<ChapterLock>, ContentError> {
     let path = folder.join(LOCK_FILE);
     let file = File::options()
         .create(true)
@@ -79,11 +96,9 @@ fn lock_chapter(folder: &Path) -> Result<File, ConvertError> {
         .open(&path)
         .map_err(write_error(&path))?;
     match file.try_lock() {
-        Ok(()) => Ok(file),
-        Err(TryLockError::WouldBlock) => Err(ConvertError::ChapterBusy {
-            folder: folder.to_path_buf(),
-        }),
-        Err(TryLockError::Error(source)) => Err(ContentError::Write { path, source }.into()),
+        Ok(()) => Ok(Some(ChapterLock { _file: file })),
+        Err(TryLockError::WouldBlock) => Ok(None),
+        Err(TryLockError::Error(source)) => Err(ContentError::Write { path, source }),
     }
 }
 

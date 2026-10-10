@@ -1,14 +1,15 @@
 //! Checks that the live backend lists stored documents with their chapters on disk, keeps a media
-//! saved before any document between starts, and writes new labels to both stores with no model
-//! asked.
+//! saved before any document between starts, writes new labels to both stores with no model asked,
+//! and deletes a document or a media from both stores and from the content folder.
 
 mod catalogue;
+mod delete;
 mod labels;
 
 use gui::backend::live::{LiveContext, Services};
 use gui::backend::{Handler, Reply};
 use gui::contract::{
-    Catalogue, Command, DocumentTagsEdit, Event, Failure, MediaEdit, NewMedia, RequestId,
+    Catalogue, Command, DocId, DocumentTagsEdit, Event, Failure, MediaEdit, NewMedia, RequestId,
 };
 
 const REQUEST: RequestId = RequestId(7);
@@ -61,6 +62,41 @@ async fn media_edited<S: Services>(cx: &LiveContext<S>, edit: &MediaEdit) -> Res
             result,
         } => result,
         other => panic!("expected an answer to the edit, for {REQUEST:?}: {other:#?}"),
+    }
+}
+
+async fn document_deleted<S: Services>(cx: &LiveContext<S>, doc: DocId) -> Result<(), Failure> {
+    let command = Command::DeleteDocument {
+        request: REQUEST,
+        doc,
+    };
+    match one_answer(cx, command).await {
+        Event::DocumentDeleted {
+            request: REQUEST,
+            doc: answered,
+            result,
+        } => {
+            assert_eq!(
+                answered, doc,
+                "the answer names the document that was deleted"
+            );
+            result
+        }
+        other => panic!("expected an answer to the delete, for {REQUEST:?}: {other:#?}"),
+    }
+}
+
+async fn media_deleted<S: Services>(cx: &LiveContext<S>, title: &str) -> Result<(), Failure> {
+    let command = Command::DeleteMedia {
+        request: REQUEST,
+        title: title.to_owned(),
+    };
+    match one_answer(cx, command).await {
+        Event::MediaDeleted {
+            request: REQUEST,
+            result,
+        } => result,
+        other => panic!("expected an answer to the delete, for {REQUEST:?}: {other:#?}"),
     }
 }
 

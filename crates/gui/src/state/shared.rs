@@ -89,6 +89,7 @@ impl Shared {
             Intent::DeleteDocument(doc) => self.delete_document(doc, effects),
             Intent::SaveMedia(media) => self.save_media(media, effects),
             Intent::EditMedia(edit) => self.edit_media(edit, effects),
+            Intent::DeleteMedia(title) => self.delete_media(title, effects),
             Intent::PickPdf => effects.push(Effect::PickFile),
             Intent::PdfPicked(path) => {
                 self.cues.picked_pdf = Some(path);
@@ -125,13 +126,16 @@ impl Shared {
                 doc,
                 result,
             } => self.document_tags_saved(request, doc, result, effects),
-            Event::Deleted {
+            Event::DocumentDeleted {
                 request,
                 doc,
                 result,
-            } => self.deleted(request, doc, result, effects),
+            } => self.document_deleted(request, doc, result, effects),
             Event::MediaSaved { request, result } => self.media_saved(request, result, effects),
             Event::MediaEdited { request, result } => self.media_edited(request, result, effects),
+            Event::MediaDeleted { request, result } => {
+                self.media_deleted(request, result, effects);
+            }
             Event::Preflight { request, result } => self.preflight_arrived(request, result),
             Event::IngestProgress { request, progress } => self.progress_arrived(request, progress),
             Event::IngestFinished { request, result } => {

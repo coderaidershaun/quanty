@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-pub use catalogue::{Catalogue, ChapterEntry};
+pub use catalogue::{Catalogue, ChapterEntry, ImageEntry, saved_images};
 pub use conversion::{
     CallRecord, CallStep, Checks, Conversion, MathCheck, PageCategories, Route, RouteReason,
     WholePageFigure, WordMatch,

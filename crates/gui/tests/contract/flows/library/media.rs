@@ -4,58 +4,26 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use eframe::egui;
 use eframe::egui::accesskit::{Role, Toggled};
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
-use gui::app::layout::DEFAULT_WINDOW;
 use gui::contract::{Category, Command, Media, MediaEdit};
 use gui::testkit;
 
-use super::{Ingests, REFUSED_HINT, open_switched, sent_media_edits};
+use super::{
+    Ingests, REFUSED_HINT, bring_into_view, click_on_the_card, open_switched, sent_media_edits,
+    view,
+};
 use crate::flows::recording::Seen;
-use crate::flows::{Window, click, field, has, is_enabled, node, panels, retype, shared};
+use crate::flows::{Window, click, field, has, is_enabled, node, retype, shared};
 
 /// The third card of the scene: a book by one author, with no media tags and two documents. Its
 /// form opens near the bottom of the page.
 const MEDIA: &str = "Quanty Sample Notes";
 const PENCIL: &str = "Edit Quanty Sample Notes";
 
-/// The frame of the page and the edge of its list cut off the last points of the page, so a
-/// control counts as in view only when it is this far inside the page.
-const VIEW_INSET: f32 = 32.0;
-
 /// A chip tells a screen reader that it is chosen as a toggle, not as a selection.
 fn is_toggled(harness: &Window, role: Role, name: &str) -> bool {
     node(harness, role, name).accesskit_node().toggled() == Some(Toggled::True)
-}
-
-fn view() -> egui::Rect {
-    panels(DEFAULT_WINDOW).page.shrink(VIEW_INSET)
-}
-
-/// egui keeps a node for a control that the list cuts off, and a click lands in the middle of the
-/// node, so the click would miss it. The wheel is turned until the whole control is in view.
-fn bring_into_view(harness: &mut Window, role: Role, name: &str) {
-    let view = view();
-    for _ in 0..40 {
-        if view.contains_rect(node(harness, role, name).rect()) {
-            return;
-        }
-        harness.hover_at(view.center());
-        harness.event(egui::Event::MouseWheel {
-            unit: egui::MouseWheelUnit::Point,
-            delta: egui::vec2(0.0, -240.0),
-            phase: egui::TouchPhase::Move,
-            modifiers: egui::Modifiers::NONE,
-        });
-        harness.run_ok();
-    }
-    panic!("`{name}` never came wholly into view");
-}
-
-fn click_on_the_card(harness: &mut Window, role: Role, name: &str) {
-    bring_into_view(harness, role, name);
-    click(harness, role, name);
 }
 
 fn retype_on_the_card(harness: &mut Window, name: &str, text: &str) {

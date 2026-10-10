@@ -18,6 +18,7 @@ const CHECKING: &str = "Checking the PDF";
 const CONNECTING: &str = "Connecting to the stores";
 const TRY_AGAIN: &str = "Try again";
 const COST: &str = "Checking is free. Starting is paid work: claude and Jev convert each page, Gemini embeds the items, and claude reads the concepts.";
+const START_OFF_WHILE_DELETING: &str = "A delete is on its way. Start when it is done.";
 const KEEP_OPEN: &str = "Keep the app open until this is done. If it stops, start the same PDF again: pages that are converted are not paid for twice.";
 
 /// `draft` is what the form holds now, made of its settled fields.
@@ -44,10 +45,15 @@ pub(super) fn show(
             // A box may still have the keyboard, so Start reads the boxes as typed. A typed change
             // that makes another request is not checked yet, and a start would run the old one.
             let can_start = local.draft_of(&local.typed).as_ref() == Ok(request);
-            if ui
-                .add_enabled(can_start, Button::primary("Start ingest"))
-                .clicked()
-            {
+            // A delete removes what a start would write, so the two never run together.
+            let is_deleting = cx.shared.library.is_deleting();
+            let start = ui.add_enabled(can_start && !is_deleting, Button::primary("Start ingest"));
+            let start = if is_deleting {
+                start.on_disabled_hover_text(START_OFF_WHILE_DELETING)
+            } else {
+                start
+            };
+            if start.clicked() {
                 cx.intents.push(Intent::StartIngest);
             }
             ui.add_space(space::SM);

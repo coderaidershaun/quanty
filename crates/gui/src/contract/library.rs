@@ -172,6 +172,16 @@ pub struct Media {
     pub documents: Vec<Document>,
 }
 
+impl Media {
+    /// Whether `title` names this media, whatever its capitals and the space at its ends. Never
+    /// true for the documents that belong to no media.
+    pub fn is_titled(&self, title: &str) -> bool {
+        self.title
+            .as_deref()
+            .is_some_and(|stored| is_same_name(stored, title))
+    }
+}
+
 /// A media as a person saves it, before any document of it is added. The panel sends a title that
 /// is not blank and has no space at its ends, and a backend still trims it, because the title of
 /// a stored media cannot change.
@@ -254,12 +264,7 @@ impl Catalogue {
 
     /// The media that `title` names, whatever its capitals and the space at its ends.
     pub fn media_titled(&self, title: &str) -> Option<&Media> {
-        self.media.iter().find(|media| {
-            media
-                .title
-                .as_deref()
-                .is_some_and(|stored| is_same_name(stored, title))
-        })
+        self.media.iter().find(|media| media.is_titled(title))
     }
 
     /// Puts the media in the order that every list shows them in: by title with no regard to
@@ -281,6 +286,15 @@ impl Catalogue {
 
     pub fn document(&self, id: DocId) -> Option<&Document> {
         self.documents().find(|document| document.id == id)
+    }
+
+    /// The documents of every media that `title` names. A delete goes by the same rule, so two
+    /// media whose titles differ only in capitals go together.
+    pub fn documents_of_media(&self, title: &str) -> impl Iterator<Item = &Document> {
+        self.media
+            .iter()
+            .filter(move |media| media.is_titled(title))
+            .flat_map(|media| media.documents.iter())
     }
 
     pub fn media_of(&self, id: DocId) -> Option<&Media> {

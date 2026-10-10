@@ -70,6 +70,11 @@ impl Shared {
     }
 
     pub(super) fn start_ingest(&mut self, effects: &mut Vec<Effect>) {
+        // The backend keeps a delete and an ingest apart only while the pages are converted, so no
+        // ingest starts while a delete is on its way.
+        if self.library.is_deleting() {
+            return;
+        }
         let IngestJob::Checked { request, preflight } = &self.ingest else {
             return;
         };

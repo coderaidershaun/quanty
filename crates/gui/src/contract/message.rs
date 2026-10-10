@@ -58,6 +58,8 @@ pub enum Intent {
     DeleteDocument(DocId),
     SaveMedia(NewMedia),
     EditMedia(MediaEdit),
+    /// The title of the media as the library has it.
+    DeleteMedia(String),
     /// The Ingest panel asks for the file dialog. It never opens one itself.
     PickPdf,
     /// The shell's answer to `PickPdf`.
@@ -105,6 +107,10 @@ pub enum Command {
         request: RequestId,
         edit: MediaEdit,
     },
+    DeleteMedia {
+        request: RequestId,
+        title: String,
+    },
     Preflight {
         request: RequestId,
         ingest: IngestRequest,
@@ -130,6 +136,7 @@ impl Command {
             | Command::DeleteDocument { request, .. }
             | Command::SaveMedia { request, .. }
             | Command::EditMedia { request, .. }
+            | Command::DeleteMedia { request, .. }
             | Command::Preflight { request, .. }
             | Command::Ingest { request, .. }
             | Command::CheckHealth { request } => *request,
@@ -176,7 +183,7 @@ impl Command {
                 doc: edit.doc,
                 result: Err(failure.clone()),
             }],
-            Command::DeleteDocument { request, doc } => vec![Event::Deleted {
+            Command::DeleteDocument { request, doc } => vec![Event::DocumentDeleted {
                 request: *request,
                 doc: *doc,
                 result: Err(failure.clone()),
@@ -186,6 +193,10 @@ impl Command {
                 result: Err(failure.clone()),
             }],
             Command::EditMedia { request, .. } => vec![Event::MediaEdited {
+                request: *request,
+                result: Err(failure.clone()),
+            }],
+            Command::DeleteMedia { request, .. } => vec![Event::MediaDeleted {
                 request: *request,
                 result: Err(failure.clone()),
             }],
@@ -241,7 +252,7 @@ pub enum Event {
         doc: DocId,
         result: Result<(), Failure>,
     },
-    Deleted {
+    DocumentDeleted {
         request: RequestId,
         doc: DocId,
         result: Result<(), Failure>,
@@ -251,6 +262,10 @@ pub enum Event {
         result: Result<(), Failure>,
     },
     MediaEdited {
+        request: RequestId,
+        result: Result<(), Failure>,
+    },
+    MediaDeleted {
         request: RequestId,
         result: Result<(), Failure>,
     },

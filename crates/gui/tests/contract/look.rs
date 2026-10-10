@@ -26,6 +26,8 @@ const START_INGEST: &str = "Start ingest";
 const MAXIMISE: &str = "Maximise";
 /// The pencil of the first media of the scene, whose form is on screen with no scroll.
 const FIRST_MEDIA_PENCIL: &str = "Edit Hawkes Processes in Finance";
+/// The Delete button of the same media, whose sheet is on screen with no scroll.
+const FIRST_MEDIA_DELETE: &str = "Delete media Hawkes Processes in Finance";
 /// The ingest of its scene stops for ever at page 3, so its bar rests there.
 const BAR_AT_PAGE_3: &str = "Converting the pages — 3 of 12 done · about 36%";
 const LIMIT: Duration = Duration::from_secs(5);
@@ -38,6 +40,7 @@ enum Start {
     AfterANewMediaIsTyped,
     AfterAClickOnTheLibraryTab,
     AfterAClickOnAMediaPencil,
+    AfterAClickOnAMediaDelete,
     AfterAClickOnMaximiseInTheConceptGraph,
 }
 
@@ -48,7 +51,7 @@ struct Row {
     start: Start,
 }
 
-const ROWS: [Row; 16] = [
+const ROWS: [Row; 17] = [
     Row {
         picture: "ask-idle",
         scene: "idle",
@@ -138,6 +141,12 @@ const ROWS: [Row; 16] = [
         scene: "black-scholes",
         window: DEFAULT_WINDOW,
         start: Start::AfterAClickOnAMediaPencil,
+    },
+    Row {
+        picture: "library-delete-media",
+        scene: "black-scholes",
+        window: DEFAULT_WINDOW,
+        start: Start::AfterAClickOnAMediaDelete,
     },
     Row {
         picture: "ask-graph-maximised",
@@ -251,6 +260,10 @@ impl Row {
             Start::AfterAClickOnAMediaPencil => {
                 click(&mut harness, Role::Tab, "Library");
                 click(&mut harness, Role::Button, FIRST_MEDIA_PENCIL);
+            }
+            Start::AfterAClickOnAMediaDelete => {
+                click(&mut harness, Role::Tab, "Library");
+                click(&mut harness, Role::Button, FIRST_MEDIA_DELETE);
             }
             Start::AfterAClickOnMaximiseInTheConceptGraph => {
                 maximise_the_concept_graph(&mut harness, self.window);

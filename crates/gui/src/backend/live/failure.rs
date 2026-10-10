@@ -285,7 +285,42 @@ fn delete(error: &DeleteError) -> Verdict {
     match error {
         DeleteError::Store(error) => store(error),
         DeleteError::Graph(error) => graph(error),
-        DeleteError::UnknownDocument { id, .. } => unknown_document(id),
+        DeleteError::Content(
+            ContentError::Read { path, .. }
+            | ContentError::Parse { path, .. }
+            | ContentError::Write { path, .. },
+        ) => {
+            let path = path.display();
+            let hint = format!(
+                "quanty could not read or change {path}, so the delete stopped there. Check that this path can be read and changed, then delete again."
+            );
+            Verdict::saying(Kind::Internal, hint)
+        }
+        DeleteError::Content(error) => content(error),
+        DeleteError::Remove { path, .. } => {
+            let path = path.display();
+            let hint = format!(
+                "quanty could not remove {path}. Check that it can be changed, or remove it by hand, then delete again."
+            );
+            Verdict::saying(Kind::Internal, hint)
+        }
+        DeleteError::Converting { folder } => {
+            let folder = folder.display();
+            let hint = format!(
+                "A document is being converted at this moment, in {folder}. Wait for that run to end, then delete again."
+            );
+            Verdict::saying(Kind::ChapterTaken, hint)
+        }
+        DeleteError::UnknownDocument { .. } => {
+            let hint = "The library no longer holds this document, so nothing was removed. The library is read again.";
+            Verdict::saying(Kind::SourceMissing, hint.to_owned())
+        }
+        DeleteError::UnknownMedia { title } => {
+            let hint = format!(
+                "The library no longer holds a media titled {title:?}, so nothing was removed. The library is read again."
+            );
+            Verdict::saying(Kind::SourceMissing, hint)
+        }
         #[allow(unreachable_patterns, reason = "every variant has a row today")]
         _ => Verdict::internal(),
     }
@@ -357,3 +392,69 @@ failures_from!(
     ReadChapterError => read_chapter,
     ConfigError => config,
 );
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+    use std::path::PathBuf;
+
+    use super::*;
+
+    #[test]
+    fn every_error_of_a_delete_says_what_a_person_can_do() {
+        let folder = PathBuf::from("/content/notes/chapter-1");
+        let id = rag_core::DocId::from_source_sha256("a made-up hash");
+        let rows = [
+            (
+                DeleteError::Converting {
+                    folder: folder.clone(),
+                },
+                Kind::ChapterTaken,
+                vec!["/content/notes/chapter-1", "delete again"],
+            ),
+            (
+                DeleteError::UnknownDocument {
+                    id,
+                    collection: "items".to_owned(),
+                    content_folder: folder.clone(),
+                },
+                Kind::SourceMissing,
+                vec!["read again"],
+            ),
+            (
+                DeleteError::UnknownMedia {
+                    title: "Quanty Notes".to_owned(),
+                },
+                Kind::SourceMissing,
+                vec!["\"Quanty Notes\"", "read again"],
+            ),
+            (
+                DeleteError::Content(ContentError::Read {
+                    path: folder.clone(),
+                    source: io::Error::other("no"),
+                }),
+                Kind::Internal,
+                vec!["/content/notes/chapter-1", "delete again"],
+            ),
+            (
+                DeleteError::Remove {
+                    path: folder,
+                    source: io::Error::other("no"),
+                },
+                Kind::Internal,
+                vec!["/content/notes/chapter-1", "delete again"],
+            ),
+        ];
+        for (error, kind, words) in rows {
+            let failure = Failure::from(error);
+            assert_eq!(failure.kind, kind, "{failure:?}");
+            for word in words {
+                assert!(
+                    failure.hint.contains(word),
+                    "`{word}` is not in {failure:?}"
+                );
+            }
+            assert_ne!(failure.hint, Kind::Internal.hint(), "{failure:?}");
+        }
+    }
+}

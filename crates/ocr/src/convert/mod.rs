@@ -26,6 +26,7 @@ use crate::content::{
 
 use services::{ClaudeError, LiveServices, PageServices, ServiceError};
 
+pub use chapter::{ChapterLock, try_lock_chapter};
 pub use checks::{PieceRef, ReplyFault};
 pub use image::{ConvertedImage, convert_image, convert_image_with};
 pub use page::PageError;
@@ -251,7 +252,9 @@ pub async fn pdf_page_count(pdf: &Path) -> Result<u32, PopplerError> {
     poppler::page_count(pdf).await
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
+/// The SHA-256 of `bytes` as lower-case hex: the text that `chapter.json` and `image.json` keep
+/// as `source-sha256`.
+pub fn sha256_hex(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()
         .map(|byte| format!("{byte:02x}"))

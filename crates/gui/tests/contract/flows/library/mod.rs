@@ -1,14 +1,19 @@
 //! The Library tab lists the stored media and their documents, copies the id of a document, opens
-//! it to read, changes its own tags and the labels of a media, and says what no sample shows.
+//! it to read, changes its own tags and the labels of a media, deletes a document or a media after
+//! asking, and says what no sample shows.
 
 mod catalogue;
+mod delete;
+mod delete_on_its_way;
 mod document_tags;
 mod media;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use eframe::egui;
 use eframe::egui::accesskit::Role;
+use egui_kittest::Node;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::DEFAULT_WINDOW;
 use gui::backend::fake::Fake;
@@ -17,9 +22,13 @@ use gui::contract::{Category, Command, Document, Failure, FailureKind, Intent, M
 use gui::testkit;
 
 use crate::flows::recording::{self, Seen};
-use crate::flows::{Window, is_enabled, node, says, shared};
+use crate::flows::{Window, click, is_enabled, node, panels, says, shared};
 
 const REFUSED_HINT: &str = "Start Qdrant at http://localhost:6334, then try again.";
+
+/// The frame of the page and the edge of its list cut off the last points of the page, so a
+/// control counts as in view only when it is this far inside the page.
+const VIEW_INSET: f32 = 32.0;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Ingests {
@@ -27,21 +36,24 @@ enum Ingests {
     NeverEnd,
 }
 
-/// Wraps the fake so that a test can make it refuse a save of tags or of the labels of a media,
-/// and make every ingest run for ever.
+/// Wraps the fake so that a test can make it refuse a save of tags or of the labels of a media and
+/// a delete of a document or of a media, and make every ingest run for ever.
 struct Switched<H> {
     inner: H,
-    refuses_saves: Arc<AtomicBool>,
+    refuses_changes: Arc<AtomicBool>,
     ingests: Ingests,
 }
 
 impl<H: Handler> Handler for Switched<H> {
     async fn serve(&self, command: Command, reply: Reply) {
         match command {
-            Command::SetDocumentTags { .. } | Command::EditMedia { .. }
-                if self.refuses_saves.load(Ordering::SeqCst) =>
+            Command::SetDocumentTags { .. }
+            | Command::EditMedia { .. }
+            | Command::DeleteDocument { .. }
+            | Command::DeleteMedia { .. }
+                if self.refuses_changes.load(Ordering::SeqCst) =>
             {
-                let failure = Failure::new(FailureKind::QdrantDown, "the test refuses the save")
+                let failure = Failure::new(FailureKind::QdrantDown, "the test refuses the change")
                     .with_hint(REFUSED_HINT);
                 for event in command.failed(&failure) {
                     reply.send(event);
@@ -53,16 +65,69 @@ impl<H: Handler> Handler for Switched<H> {
     }
 }
 
-fn open_switched(scene: &str, refuses_saves: &Arc<AtomicBool>, ingests: Ingests) -> (Window, Seen) {
-    let refuses_saves = Arc::clone(refuses_saves);
+fn open_switched(
+    scene: &str,
+    refuses_changes: &Arc<AtomicBool>,
+    ingests: Ingests,
+) -> (Window, Seen) {
+    let refuses_changes = Arc::clone(refuses_changes);
     let (mut harness, seen) =
         recording::open_with(scene, DEFAULT_WINDOW, move |fake: Fake| Switched {
             inner: fake,
-            refuses_saves,
+            refuses_changes,
             ingests,
         });
     testkit::settle(&mut harness);
     (harness, seen)
+}
+
+fn view() -> egui::Rect {
+    panels(DEFAULT_WINDOW).page.shrink(VIEW_INSET)
+}
+
+/// egui keeps a node for a control that the list cuts off, and a click lands in the middle of the
+/// node, so the click would miss it. The wheel is turned until the whole control is in view. It
+/// only turns down, so cards are pressed from the top of the page to the bottom.
+fn bring_into_view(harness: &mut Window, role: Role, name: &str) {
+    let view = view();
+    for _ in 0..40 {
+        if view.contains_rect(node(harness, role, name).rect()) {
+            return;
+        }
+        harness.hover_at(view.center());
+        harness.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -240.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run_ok();
+    }
+    panic!("`{name}` never came wholly into view");
+}
+
+fn click_on_the_card(harness: &mut Window, role: Role, name: &str) {
+    bring_into_view(harness, role, name);
+    click(harness, role, name);
+}
+
+/// Every button of a card that deletes: `Delete document …` and `Delete media …`.
+fn delete_buttons(harness: &Window) -> Vec<Node<'_>> {
+    harness
+        .query_all_by_role(Role::Button)
+        .filter(|button| {
+            let name = button.accesskit_node().label();
+            name.is_some_and(|name| name.starts_with("Delete "))
+        })
+        .collect()
+}
+
+/// The text of a button that is off shows once the pointer has rested on it, and not for the
+/// button that was clicked last, so a test hovers another one. The app is never at rest when this
+/// is used, so `run_ok` runs the four frames that the rest takes.
+fn hover_on(harness: &mut Window, role: Role, name: &str) {
+    node(harness, role, name).hover();
+    harness.run_ok();
 }
 
 fn documents_of(harness: &Window) -> Vec<Document> {
@@ -113,6 +178,17 @@ fn nothing_can_be_edited_while_an_ingest_runs() {
             "the pencil of `{title}` is off while an ingest runs"
         );
     }
+    let deletes = delete_buttons(&harness);
+    assert!(!deletes.is_empty());
+    for button in &deletes {
+        assert!(button.accesskit_node().is_disabled(), "{button:?} is off");
+    }
+    let first_delete = deletes[0].accesskit_node().label().unwrap_or_default();
+    hover_on(&mut harness, Role::Button, &first_delete);
+    assert!(says(
+        &harness,
+        "Nothing can be deleted while an ingest runs."
+    ));
     assert!(says(&harness, "An ingest is running"));
     testkit::save_png(&mut harness, "app-library-ingest-running");
 
@@ -127,4 +203,18 @@ fn nothing_can_be_edited_while_an_ingest_runs() {
         sent_media_edits(&seen).is_empty(),
         "an edit of a media is not sent while an ingest runs"
     );
+
+    let doc = documents_of(&harness)[0].id;
+    harness.state_mut().push(Intent::DeleteDocument(doc));
+    harness
+        .state_mut()
+        .push(Intent::DeleteMedia("Quanty Sample Notes".to_owned()));
+    harness.run_ok();
+    let deletes = seen.count(|command| {
+        matches!(
+            command,
+            Command::DeleteDocument { .. } | Command::DeleteMedia { .. }
+        )
+    });
+    assert_eq!(deletes, 0, "no delete is sent while an ingest runs");
 }

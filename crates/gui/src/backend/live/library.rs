@@ -1,6 +1,6 @@
 //! Lists the stored documents grouped into media, with the media saved before any document,
-//! saves a new media, changes the labels of a media and the own tags of a document. Deleting a
-//! document is not built yet.
+//! saves a new media, changes the labels of a media and the own tags of a document, and deletes a
+//! document or a whole media.
 
 use std::collections::HashMap;
 
@@ -71,17 +71,49 @@ async fn write_document_tags<S: Services>(
         .map_err(|error| cx.failure(error))
 }
 
-pub(super) async fn delete<S: Services>(
-    _cx: &LiveContext<S>,
+/// Sends exactly one answer, also when the document cannot be deleted.
+pub(super) async fn delete_document<S: Services>(
+    cx: &LiveContext<S>,
     request: RequestId,
     doc: DocId,
     reply: &Reply,
 ) {
-    reply.send(Event::Deleted {
+    let result = remove_document(cx, doc).await;
+    reply.send(Event::DocumentDeleted {
         request,
         doc,
-        result: Err(Failure::not_built("deleting a document")),
+        result,
     });
+}
+
+/// It makes no embedder and asks no model: the document goes from both stores and from the disk.
+async fn remove_document<S: Services>(cx: &LiveContext<S>, doc: DocId) -> Result<(), Failure> {
+    let stores = cx.stores().await?;
+    rag_ingestion::delete_document(doc.into(), &cx.config().content_folder, &stores)
+        .await
+        .map(|_| ())
+        .map_err(|error| cx.failure(error))
+}
+
+/// Sends exactly one answer, also when the media cannot be deleted.
+pub(super) async fn delete_media<S: Services>(
+    cx: &LiveContext<S>,
+    request: RequestId,
+    title: &str,
+    reply: &Reply,
+) {
+    let result = remove_media(cx, title).await;
+    reply.send(Event::MediaDeleted { request, result });
+}
+
+/// It makes no embedder and asks no model: the media goes with every document of it, from both
+/// stores and from the disk.
+async fn remove_media<S: Services>(cx: &LiveContext<S>, title: &str) -> Result<(), Failure> {
+    let stores = cx.stores().await?;
+    rag_ingestion::delete_media(title, &cx.config().content_folder, &stores)
+        .await
+        .map(|_| ())
+        .map_err(|error| cx.failure(error))
 }
 
 /// Sends exactly one answer, also when the media is refused or cannot be stored.

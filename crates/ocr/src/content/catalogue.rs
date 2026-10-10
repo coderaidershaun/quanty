@@ -1,8 +1,9 @@
-//! The documents saved under one content root: `<root>/<media folder>/<document folder>`.
+//! The documents saved under one content root, `<root>/<media folder>/<document folder>`, and the
+//! pictures that stand alone, `<root>/images/<folder>`.
 
 use std::path::{Path, PathBuf};
 
-use super::{CHAPTER_INDEX_FILE, ChapterIndex, ContentError};
+use super::{CHAPTER_INDEX_FILE, ChapterIndex, ContentError, IMAGES_FOLDER, ImageIndex};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChapterEntry {
@@ -47,6 +48,29 @@ impl Catalogue {
         });
         Ok(catalogue)
     }
+}
+
+/// A converted picture that stands alone: `<root>/images/<folder>`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImageEntry {
+    pub folder: PathBuf,
+    pub index: ImageIndex,
+}
+
+/// The converted pictures that stand alone under one content root, by folder. A root with no
+/// `images` folder holds none. A folder with no `image.json`, or with one that cannot be read, is
+/// left out.
+///
+/// # Errors
+/// [`ContentError::Read`] when the `images` folder is there and cannot be listed.
+pub fn saved_images(content_root: &Path) -> Result<Vec<ImageEntry>, ContentError> {
+    let mut pictures = Vec::new();
+    for folder in folders_in(&content_root.join(IMAGES_FOLDER))? {
+        if let Ok(index) = ImageIndex::read(&folder) {
+            pictures.push(ImageEntry { folder, index });
+        }
+    }
+    Ok(pictures)
 }
 
 /// The folders directly in `folder` by name, or none when `folder` is not there.

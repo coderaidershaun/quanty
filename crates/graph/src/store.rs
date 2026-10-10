@@ -162,6 +162,15 @@ pub trait GraphStore {
     ///   media
     fn media(&self) -> impl Future<Output = Result<Vec<MediaNode>, GraphError>> + Send;
 
+    /// Removes the media node with exactly this title, and says whether there was one. Titles are
+    /// compared as they are given: the caller decides whether two spellings name one media. The
+    /// documents that carry the title are not touched: a media has no edge.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a count
+    fn delete_media(&self, title: &str) -> impl Future<Output = Result<bool, GraphError>> + Send;
+
     /// Writes the items of a document: a node for each item, an edge `HAS_ITEM` from the
     /// document to each item, and an edge `NEXT` from each item to the one after it. Creates the
     /// document node when it is missing. Repeating it adds no node and no edge. An empty slice

@@ -205,9 +205,50 @@ An ingest never changes a stored media. When the library has no media of that ti
 cargo run --release -p rag-ingestion --bin rag-ingest -- delete-document <document id>
 ```
 
-Removes one document from both stores: its points from the Qdrant collection, and its `Document` node, its `Item` nodes and all their edges from the graph, the `MENTIONS` of its items among them. Other documents are left whole, and so is the `Media` node: a media whose last document is deleted stays in the library with its labels and no document. Concepts, their `RELATES_TO` edges, their points in the concepts collection and their aliases stay, because they belong to no document. The document id is the one that an ingest prints as `document id`, and the one that **Copy id** on the Library tab of the desktop app copies. The command prints how many points and nodes it removed, and refuses an id under which neither store holds anything, so an item id or a mistyped id removes nothing.
+Removes everything that quanty holds of one document:
 
-Run it again if it stopped half way: it removes what is left.
+- its points from the Qdrant collection;
+- its `Document` node, its `Item` nodes and all their edges from the graph, the `MENTIONS` of its items among them;
+- its converted folder, with its pages and pictures, from the folder that `CONTENT_DIR` names (`content` unless set);
+- the copy of its PDF under `<CONTENT_DIR>/_uploads`, when the MCP server saved one. The copy goes only when it is this document's PDF: it has the file name of the document's `source-file`, it is in the folder of the media, and its SHA-256 is the one in the document's `chapter.json`. A file with the same name and other bytes stays.
+
+A picture that stands alone goes with its folder under `images/`.
+
+What it never removes:
+
+- a PDF outside the content folder, such as the one given to `rag-ingest pdf` or picked in the desktop app;
+- a converted folder that is not under the folder that `CONTENT_DIR` names. The command finds the folders of a document by listing that folder, and never by a path that a store names;
+- a converted folder whose `chapter.json` cannot be read, because it is not provably this document's;
+- other documents, which stay whole;
+- the `Media` node and the folder of the media: a media whose last document is deleted stays in the library with its labels and no document;
+- concepts, their `RELATES_TO` edges, their points in the concepts collection and their aliases, because they belong to no document;
+- the answers that are kept about concepts, and the log of concept decisions.
+
+The converted pages go with the folder, so to ingest the same PDF again converts it again, which is paid work: see [Costs](#costs). The command itself costs nothing.
+
+The document id is the one that an ingest prints as `document id`, and the one that **Copy id** on the Library tab of the desktop app copies. The command asks no question. It prints the document id, how many points and nodes it removed, each converted folder it removed and each uploaded PDF it removed, or `none` when there was no such folder or file. It refuses an id under which neither store holds anything and the content folder holds no converted folder, so an item id or a mistyped id removes nothing.
+
+A document that is being converted at this moment, by `ocr`, `rag-ingest pdf`, the desktop app or the MCP server, is refused, and nothing of it is removed: the message says `the document is being converted in <folder> at this moment`. Run the command again when that conversion has ended. Only the conversion is checked: an ingest that has converted its pages and still stores the document is not seen, so wait for that ingest to end before you delete the document.
+
+The steps run in this order: the content folder is listed and each converted folder of the document is taken, the points go, the upload copy and then the converted folder go, and the nodes go last. So while anything of the document is left, the graph still lists it under its media. Run the command again if it stopped half way: it removes what is left, also when only the converted folder is left. One case is not found again: if the command is stopped while it removes a converted folder, a part of that folder can stay without its `chapter.json` (`image.json` for a picture). No delete finds it again, so remove what is left of that folder by hand before the same PDF is ingested again.
+
+## Deleting a media
+
+```bash
+cargo run --release -p rag-ingestion --bin rag-ingest -- delete-media "<title>"
+```
+
+Removes a whole media by its title. The title is matched whatever its capitals and the space at its ends.
+
+1. Every document that carries the title goes, in the order of their ids, as `delete-document` removes it: points, nodes, converted folder and uploaded PDF.
+2. The folder of the media under the content folder and its folder under `_uploads` go, each only when nothing is left in it. Two titles that differ only in punctuation, such as "Quanty Sample Notes" and "Quanty Sample-Notes", name one folder, so a folder that still holds a document of the other title stays. A hidden file, such as the `.DS_Store` that Finder makes, counts as something left, so the media folder then stays. A converted folder of the media that no stored document names is not found, and it stays, and then the media folder stays too.
+3. The `Media` node goes last.
+
+It works for a media that has no document yet, such as one saved before its first PDF, and for documents whose title no `Media` node carries. A title that no media and no document carries is refused, and nothing is removed. Everything that `delete-document` leaves stays here too: concepts, the answers that are kept, the log of concept decisions, and every media and document of another title.
+
+The command asks no question and costs nothing, but the converted pages go, so to ingest a PDF of the media again converts it again, which is paid work. It prints the title as it was given, how many documents it removed and the id of each, the points and the nodes removed from all of them, each converted folder and each uploaded PDF it removed, each media folder it removed, and whether the `Media` node was removed (`media removed from the graph: no` when documents carried a title that no media has). Each list of folders or PDFs says `none` when it is empty.
+
+A document that is being converted stops the command at that document, as it stops `delete-document`. The documents before it are gone, and the same command again goes on from there. This holds for any error: run the command again if it stopped half way. The exception of `delete-document` holds too: if the command is stopped while it removes a converted folder, a part of that folder can stay without its `chapter.json`, and you remove what is left of it by hand.
 
 ## Asking a question
 
@@ -286,9 +327,11 @@ The filters of the Ask bar are lists. **Media** offers "All media" and each medi
 
 `--fixture <scene>` runs the whole window on built-in data from `samples/content`, with no store, no model and no cost. `--fixture list` prints the scenes: each is one state of the screen, such as `black-scholes` (a full answer), `stores-down` or `first-run`.
 
-The **Library** tab shows each media as a card: its title, a badge for its category (Book, Paper or Other), its authors and its tags. A media that was saved and has no document yet says so. The documents that belong to no media, such as a picture that stands alone, are under "No media". The pencil **✎ Edit** at the right end of a card opens the form of the media in the card: three chips for the category, then **Authors** and **Tags**, each with commas between them. It has no title box, because the title names the media's folder and cannot change. **Save media** is on once something has changed. It writes the labels to the `Media` node, to every document of the media and to every point, the way `rag-ingest media` does, but it replaces every label, so the authors and the tags can also be emptied here. **Cancel** closes the form. A save that is refused keeps the form open and says why.
+The **Library** tab shows each media as a card: its title, a badge for its category (Book, Paper or Other), its authors and its tags. A media that was saved and has no document yet says so. The documents that belong to no media, such as a picture that stands alone, are under "No media". The pencil **✎ Edit** at the right end of a card opens the form of the media in the card: three chips for the category, then **Authors** and **Tags**, each with commas between them. It has no title box, because the title names the media's folder and cannot change. **Save media** is on once something has changed. It writes the labels to the `Media` node, to every document of the media and to every point, the way `rag-ingest media` does, but it replaces every label, so the authors and the tags can also be emptied here. **Cancel** closes the form. A save that is refused keeps the form open and says why. **Delete**, beside **✎ Edit**, deletes the media with every document of it. The group "No media" has no **Delete**: its documents are deleted one by one.
 
-In the card, each document shows its chapter, as "Chapter <number> · <name>", or its title; its pages and its items; and its own tags. A document whose ingest did not finish says that a search may miss parts of it. **Copy id** copies the document id. **Read** opens the document in the Source panel of Ask. **Edit tags** opens a box for its own tags, with commas between them, and **Save** writes them to both stores the way `rag-ingest tag` does. Every edit is free: no embedding and no model call. No edit can be made while an ingest runs, or while the save of a media is on its way.
+In the card, each document shows its chapter, as "Chapter <number> · <name>", or its title; its pages and its items; and its own tags. A document whose ingest did not finish says that a search may miss parts of it. **Copy id** copies the document id. **Read** opens the document in the Source panel of Ask. **Edit tags** opens a box for its own tags, with commas between them, and **Save** writes them to both stores the way `rag-ingest tag` does. **Delete** deletes the document. Every edit is free: no embedding and no model call. No edit and no delete can be made while an ingest runs, or while another change of the library is on its way, and a **Delete** that is off says why when the pointer rests on it.
+
+A sheet asks before any delete. It is titled "Delete the document <name>?" or "Delete the media <title>?", says what goes and that it cannot be undone, and offers **Delete document** or **Delete media**, and **Cancel**. `Esc` and a click beside the sheet are **Cancel**, and nothing is deleted. The delete does what `rag-ingest delete-document` and `rag-ingest delete-media` do. What goes: the passages, formulas, figures and tables of the document from the library, its converted pages from the disk, and the copy of its PDF that the MCP server saved under `content/_uploads`, when there is one. For a media, that goes for every document of it, and the media goes too, and the sheet says how many documents go with it. What stays: the PDF that you picked from your own disk, the concepts, and every other media and document. A media whose last document is deleted stays in the list, with no document. A document that is being converted at this moment is refused, and nothing of it is removed: wait for that run to end, and delete again. A delete that fails says why on its card, and the library is read again, because the documents of a media before the one that failed are already gone. **Delete** again finishes it. A check of a PDF on the Ingest tab is made again after a delete, because a delete changes what is converted and what is ingested. A delete costs nothing, but the same PDF ingested again is converted again, which is paid work.
 
 The **Ingest** tab is the **Add media** journey, in three steps:
 
@@ -296,7 +339,7 @@ The **Ingest** tab is the **Add media** journey, in three steps:
 2. The PDF. **Choose a PDF** opens a file dialog. The PDF of a book takes **Chapter number** and **Chapter name**, which are filled in from a file named `chapter-<number>-<name>.pdf` and else typed. The PDF of a paper or another media takes a **Title**, filled in with the title of the media. **Tags for this PDF** are its own tags; the tags of the media apply as well.
 3. The check and the ingest. The check runs by itself once a media and a PDF are chosen and the fields are filled, and again when one of them changes. It does not run on each key: a box is read once it no longer has the keyboard. While it runs, a bar moves. It is free: it counts the pages of the PDF, says how many are converted already, and shows a notice for what would stop a start, such as `claude` not signed in. **Start ingest** is paid work, the same as `rag-ingest pdf`. While the ingest runs, a bar shows the stage: "Connecting to the stores", "Checking what is already stored", "Opening the PDF", "Preparing the pages — 7 of 12 ready" while each page is cut out, and "Converting the pages — 3 of 12 done" once the models work; for the pages the words end with " · about N%", an estimate that runs from the first page cut out to the last page saved, with pages that an earlier run saved counted as done. Once pages are converted, the tokens and the cost so far are beside the words, such as `48k tokens · ≈ $0.42 so far`. The later stages are "Writing the graph", "Embedding N items", "Storing the items", "Reading the concepts — N of M" and "Linking the concepts — N of M" (the last two also end with " · about N%"). Keep the app open while it runs. If it stops, start the same PDF again and it carries on. At the end, a notice says what was ingested, the tokens of each model and the cost of the run, and **Add another PDF** clears the PDF and keeps the media chosen.
 
-Not built yet: the notices tray, the help sheet, the health check and the delete of a document. Delete one with `rag-ingest delete-document`.
+Not built yet: the notices tray, the help sheet and the health check.
 
 ## The MCP server
 

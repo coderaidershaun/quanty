@@ -27,13 +27,16 @@ impl<S: Services> Handler for LiveContext<S> {
                 library::set_document_tags(self, request, &edit, &reply).await;
             }
             Command::DeleteDocument { request, doc } => {
-                library::delete(self, request, doc, &reply).await;
+                library::delete_document(self, request, doc, &reply).await;
             }
             Command::SaveMedia { request, media } => {
                 library::save_media(self, request, &media, &reply).await;
             }
             Command::EditMedia { request, edit } => {
                 library::edit_media(self, request, &edit, &reply).await;
+            }
+            Command::DeleteMedia { request, title } => {
+                library::delete_media(self, request, &title, &reply).await;
             }
             Command::Preflight { request, ingest } => {
                 ingest::preflight(self, request, &ingest, &reply).await;

@@ -1,6 +1,7 @@
 //! The Library page: the stored media with their documents, and what a person can do with each
-//! media and each document.
+//! media and each document, with the sheet that asks before a delete.
 
+mod delete;
 mod document;
 mod media;
 mod media_form;
@@ -23,14 +24,17 @@ const FAILED: &str = "The library did not load";
 const TRY_AGAIN: &str = "Try again";
 const EMPTY: &str = "Your library is empty";
 const EMPTY_HINT: &str = "Add media on the Ingest tab.";
-const INGEST_RUNNING: &str = "An ingest is running. Media and tags can be edited when it is done.";
+const INGEST_RUNNING: &str = "An ingest is running. Media and tags can be edited, and documents and media deleted, when it is done.";
 const SAVE: &str = "Save";
 const CANCEL: &str = "Cancel";
 
-/// One form is open at a time, so opening a second one drops what was typed in the first.
+/// One form is open at a time, so opening a second one drops what was typed in the first. A delete
+/// closes the open form when it is confirmed, not when its sheet is cancelled: in an open form, a
+/// delete that failed would show as a refused save or not at all.
 #[derive(Debug, Default)]
 pub struct Local {
     form: Option<Form>,
+    question: Option<delete::Question>,
 }
 
 #[derive(Debug)]
@@ -60,9 +64,10 @@ fn reveal(ui: &egui::Ui, form_top: f32, should_reveal: &mut bool) {
 }
 
 /// A save on its way must not lose its form, and a draft must not be made from labels that a
-/// catalogue on its way is about to replace.
+/// catalogue on its way is about to replace. A delete on its way is a change too, and no other
+/// change or delete starts beside it.
 fn can_edit(shared: &Shared) -> bool {
-    shared.can_edit_media() && shared.library.busy.is_empty() && shared.library.pending.is_none()
+    shared.can_delete() && shared.library.pending.is_none()
 }
 
 /// Each form reads the state and not an event, so an answer that came while another tab was open
@@ -80,6 +85,7 @@ fn follow(form: &mut Option<Form>, library: &Library) {
 
 pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     follow(&mut local.form, &cx.shared.library);
+    delete::follow(&mut local.question, cx.shared);
     let page = ui.max_rect();
     let width = page.width().min(COLUMN_WIDTH);
     let column = egui::Rect::from_min_size(
@@ -118,6 +124,9 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
             }
         });
     });
+    if delete::sheet(ui.ctx(), &mut local.question, cx.intents) {
+        local.form = None;
+    }
 }
 
 fn nothing_listed(ui: &mut egui::Ui, catalogue: &Loadable<Catalogue>, intents: &mut Vec<Intent>) {

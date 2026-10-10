@@ -34,6 +34,13 @@ const UPDATE_MEDIA: &str = "\
 MERGE (m:Media {title: $title})
 SET m.category = $category, m.authors = $authors, m.tags = $tags";
 
+// The statement counts what it deletes itself, because the line of the reply that counts deleted
+// nodes is left out when there are none.
+const DELETE_MEDIA: &str = "\
+MATCH (m:Media {title: $title})
+DETACH DELETE m
+RETURN count(m)";
+
 const SET_INGESTED_ITEMS: &str = "MATCH (d:Document {id: $id}) SET d.ingested_items = $items";
 
 const SET_CHAPTER_FOLDER: &str = "MATCH (d:Document {id: $id}) SET d.chapter_folder = $folder";
@@ -145,6 +152,12 @@ fn media_parameters(media: &MediaNode) -> Vec<(&'static str, FalkorValue)> {
         ("authors", text_list(&media.labels.authors)),
         ("tags", tag_list(&media.labels.tags)),
     ]
+}
+
+pub(super) async fn delete_media(graph: &FalkorGraph, title: &str) -> Result<bool, GraphError> {
+    let parameters = vec![("title", FalkorValue::String(title.to_owned()))];
+    let removed = run_counted(graph, "delete the media", DELETE_MEDIA, parameters).await?;
+    Ok(removed > 0)
 }
 
 pub(super) async fn set_ingested_items(

@@ -1,9 +1,9 @@
-//! Writes edges whose nodes are missing, on a throwaway graph, because only a real FalkorDB shows
-//! which rows a statement drops.
+//! Writes edges whose nodes are missing and removes a media, on a throwaway graph, because only a
+//! real FalkorDB shows which rows a statement drops and what a removal takes with it.
 
 use graph::testing::{StoredMention, StoredRelation, stored_concept_graph};
-use graph::{GraphError, GraphStore, RelationKind};
-use rag_core::{DocId, ItemKind};
+use graph::{DocumentNode, GraphError, GraphStore, MediaNode, RelationKind};
+use rag_core::{DocId, DocumentLabels, ItemKind, MediaLabels};
 
 use crate::support::{concept, item, mention, relation, throwaway};
 
@@ -88,4 +88,41 @@ async fn a_mention_or_a_relation_whose_node_is_missing_is_reported_and_the_other
             item: stored_item.id.to_string(),
         }]
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local FalkorDB from docker compose and bills nothing; run with: cargo test -p graph --test integration -- --ignored writes::"]
+async fn delete_media_removes_the_media_of_exactly_that_title_and_says_whether_one_was_there() {
+    let (_throwaway, graph) = throwaway("delete-media").await;
+    let notes = MediaNode {
+        title: "Quanty Sample Notes".to_owned(),
+        labels: MediaLabels::default(),
+    };
+    let volatility = MediaNode {
+        title: "Option Volatility and Pricing".to_owned(),
+        labels: MediaLabels::default(),
+    };
+    let document = DocumentNode {
+        id: DocId::from_source_sha256("delete-media"),
+        title: "Chapter 1".to_owned(),
+        labels: DocumentLabels {
+            media: Some(notes.title.clone()),
+            ..DocumentLabels::default()
+        },
+    };
+    graph.add_media(&notes).await.unwrap();
+    graph.add_media(&volatility).await.unwrap();
+    graph.upsert_document(&document).await.unwrap();
+
+    assert!(!graph.delete_media("quanty sample notes").await.unwrap());
+    assert_eq!(
+        graph.media().await.unwrap(),
+        vec![volatility.clone(), notes.clone()]
+    );
+
+    assert!(graph.delete_media(&notes.title).await.unwrap());
+    assert_eq!(graph.media().await.unwrap(), vec![volatility]);
+    assert_eq!(graph.documents().await.unwrap(), vec![document]);
+
+    assert!(!graph.delete_media(&notes.title).await.unwrap());
 }

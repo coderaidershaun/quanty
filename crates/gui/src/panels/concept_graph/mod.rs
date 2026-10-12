@@ -21,7 +21,7 @@ use crate::theme::space;
 use crate::widgets::panel_frame;
 use canvas::{Canvas, Stage};
 use header::Areas;
-use scene::{Scene, SceneKey, Source};
+use scene::{Scene, SceneKey};
 use view::View;
 
 #[derive(Debug, Default)]
@@ -51,12 +51,6 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     });
 }
 
-struct Input<'a> {
-    graph: &'a ConceptGraph,
-    ask: &'a AskSession,
-    canvas: egui::Rect,
-}
-
 /// Returns false, with nothing drawn, when there is no graph that has concepts.
 fn show_graph(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) -> bool {
     let ask = &cx.shared.ask;
@@ -64,14 +58,7 @@ fn show_graph(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) -> boo
         return false;
     };
     let areas = Areas::with_legend(ui);
-    local.refresh(
-        ui,
-        &Input {
-            graph,
-            ask,
-            canvas: areas.canvas,
-        },
-    );
+    local.refresh(ui, graph, ask, areas.canvas);
     let Some(scene) = &local.scene else {
         return false;
     };
@@ -90,8 +77,13 @@ fn show_graph(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) -> boo
 }
 
 impl Local {
-    fn refresh(&mut self, ui: &egui::Ui, input: &Input<'_>) {
-        let Input { graph, ask, canvas } = *input;
+    fn refresh(
+        &mut self,
+        ui: &egui::Ui,
+        graph: &ConceptGraph,
+        ask: &AskSession,
+        canvas: egui::Rect,
+    ) {
         let key = SceneKey {
             generation: ask.generation,
             focus: ask.focused_concept,
@@ -102,7 +94,7 @@ impl Local {
             pixels_per_point: ui.pixels_per_point().to_bits(),
             graph_size: [graph.nodes.len(), graph.edges.len()],
         };
-        let change = Scene::refresh(&mut self.scene, ui, &Source { graph, key });
+        let change = Scene::refresh(&mut self.scene, ui, graph, key);
         let Some(scene) = &self.scene else {
             return;
         };

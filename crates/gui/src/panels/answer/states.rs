@@ -6,6 +6,7 @@ use eframe::egui;
 use super::pane::Pane;
 use super::phase::{Phase, Written};
 use crate::contract::{Failure, Loadable, NothingFound};
+use crate::panels::labels::detail;
 use crate::theme::{Icon, TextRole};
 use crate::widgets::{self, Placeholder};
 
@@ -95,10 +96,6 @@ fn failed(ui: &mut egui::Ui, title: &str, failure: &Failure) {
         .show(ui)
         .response
         .on_hover_ui(|ui| detail(ui, failure));
-}
-
-fn detail(ui: &mut egui::Ui, failure: &Failure) {
-    ui.label(TextRole::Small.rich(&failure.detail));
 }
 
 fn library_is_empty(pane: &Pane<'_, '_>) -> bool {

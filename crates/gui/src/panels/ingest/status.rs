@@ -9,14 +9,13 @@ use crate::contract::{
     Intent, Preflight,
 };
 use crate::panels::PanelCx;
-use crate::panels::labels::{cost_text, spent_text, tokens_by_model};
+use crate::panels::labels::{TRY_AGAIN, cost_text, detail, spent_text, tokens_by_model};
 use crate::state::IngestJob;
 use crate::theme::{TextRole, color, space};
 use crate::widgets::{self, Button, Notice};
 
 const CHECKING: &str = "Checking the PDF";
 const CONNECTING: &str = "Connecting to the stores";
-const TRY_AGAIN: &str = "Try again";
 const COST: &str = "Checking is free. Starting is paid work: claude and Jev convert each page, Gemini embeds the items, and claude reads the concepts.";
 const START_OFF_WHILE_DELETING: &str = "A delete is on its way. Start when it is done.";
 const KEEP_OPEN: &str = "Keep the app open until this is done. If it stops, start the same PDF again: pages that are converted are not paid for twice.";
@@ -94,10 +93,6 @@ fn try_again(ui: &mut egui::Ui, draft: &Result<IngestRequest, Missing>, intents:
     {
         intents.push(Intent::CheckIngest(request.clone()));
     }
-}
-
-fn detail(ui: &mut egui::Ui, failure: &Failure) {
-    ui.label(TextRole::Small.rich(&failure.detail));
 }
 
 fn checked_line(ui: &mut egui::Ui, preflight: &Preflight) {

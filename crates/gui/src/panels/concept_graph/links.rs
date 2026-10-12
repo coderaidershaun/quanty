@@ -59,24 +59,6 @@ impl Ends {
             (self.b, self.a)
         }
     }
-
-    /// `route` was drawn from the left end. Turn it to run from `a` to `b`.
-    fn running_from_a(&self, route: Route) -> Route {
-        if self.a_is_left() {
-            route
-        } else {
-            route.reversed()
-        }
-    }
-
-    /// `route` was drawn from the upper end. Turn it to run from `a` to `b`.
-    fn running_down_from_a(&self, route: Route) -> Route {
-        if self.a_is_upper() {
-            route
-        } else {
-            route.reversed()
-        }
-    }
 }
 
 impl Layout<'_> {
@@ -145,7 +127,7 @@ impl Layout<'_> {
                 band_centre
             };
             let spot = Rect::from_centre(point(mid_x, label_y), label);
-            return (ends.running_from_a(line), spot);
+            return (running_from_a(line, ends.a_is_left()), spot);
         }
         let from = point(left.centre().x + left.width() * ARC_FOOT, edge_y);
         let to = point(right.centre().x - right.width() * ARC_FOOT, edge_y);
@@ -155,13 +137,13 @@ impl Layout<'_> {
         let control = point((from.x + to.x) / 2.0, edge_y + inward * 2.0 * rise);
         let arc = Route::Arc(from, control, to);
         let spot = Rect::from_centre(point(control.x, band_centre), label);
-        (ends.running_from_a(arc), spot)
+        (running_from_a(arc, ends.a_is_left()), spot)
     }
 
     fn between_rows(&self, ends: &Ends) -> Route {
         let (upper, lower) = ends.upper_lower();
         let (from, to) = self.feet(upper, lower);
-        ends.running_down_from_a(Route::Line(from, to))
+        running_from_a(Route::Line(from, to), ends.a_is_upper())
     }
 
     /// Where a straight link leaves the upper node and reaches the lower one: each at the
@@ -186,7 +168,7 @@ impl Layout<'_> {
             .iter()
             .any(|node| node.inflate(DETOUR_CLEARANCE).cut_by(from, to))
         {
-            return ends.running_down_from_a(Route::Line(from, to));
+            return running_from_a(Route::Line(from, to), ends.a_is_upper());
         }
         let gap = self.metrics.gap;
         let plain_gaps = middle
@@ -224,7 +206,16 @@ impl Layout<'_> {
             point(gate, row_bottom + DETOUR_CLEARANCE),
             point(clamp_into(gate, lower, corner), lower.min.y),
         ]);
-        ends.running_down_from_a(bent)
+        running_from_a(bent, ends.a_is_upper())
+    }
+}
+
+/// An arrow to `b` goes on the end of a route, so a route drawn from `b` is turned round.
+fn running_from_a(route: Route, is_drawn_from_a: bool) -> Route {
+    if is_drawn_from_a {
+        route
+    } else {
+        route.reversed()
     }
 }
 

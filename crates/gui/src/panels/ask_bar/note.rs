@@ -5,6 +5,7 @@ use eframe::egui;
 
 use super::layout::slot;
 use crate::contract::{AskDraft, Failure, Intent, Loadable};
+use crate::panels::labels::TRY_AGAIN;
 use crate::state::Shared;
 use crate::theme::{TextRole, Tone, color};
 use crate::widgets::{self, Button, ControlSize};
@@ -13,7 +14,6 @@ const BLANK: &str = "Type a question to ask.";
 const LIBRARY_LOADING: &str = "Loading the library\u{2026}";
 const LIBRARY_EMPTY: &str = "Your library is empty. Add a PDF on the Ingest tab.";
 const LIBRARY_FAILED: &str = "The library did not load. ";
-const TRY_AGAIN: &str = "Try again";
 const SPINNER_LABEL: &str = "Library is loading";
 
 pub(super) fn refusal(draft: &AskDraft) -> Option<&'static str> {

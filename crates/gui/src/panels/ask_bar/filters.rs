@@ -206,14 +206,7 @@ fn pick_one(ui: &mut egui::Ui, pick: &Pick<'_>, value: &mut Option<String>) -> b
 /// Row 0 is "All documents" and means no filter. The list is off until a media gives it more
 /// rows.
 fn pick_document(ui: &mut egui::Ui, width: f32, list: &DocumentList, value: &mut Option<DocId>) {
-    let selected = match *value {
-        None => Some(0),
-        Some(current) => list
-            .ids
-            .iter()
-            .position(|&id| id == current)
-            .map(|place| place + 1),
-    };
+    let selected = place_of(&list.ids, *value);
     // A document that is not in the list, because the library did not load again, must not read
     // as "All documents" while the ask still asks that one document.
     let placeholder = if value.is_some() {
@@ -228,10 +221,7 @@ fn pick_document(ui: &mut egui::Ui, width: f32, list: &DocumentList, value: &mut
             .placeholder(placeholder)
             .show(ui);
         if let Some(index) = chosen {
-            *value = index
-                .checked_sub(1)
-                .and_then(|place| list.ids.get(place))
-                .copied();
+            *value = value_at(&list.ids, index);
         }
     });
 }
@@ -240,22 +230,29 @@ fn pick_document(ui: &mut egui::Ui, width: f32, list: &DocumentList, value: &mut
 fn pick_category(ui: &mut egui::Ui, width: f32, value: &mut Option<Category>) {
     let [book, paper, other] = Category::ALL.map(Category::label);
     let options = [ANY_CATEGORY, book, paper, other];
-    let selected = match *value {
-        None => Some(0),
-        Some(current) => Category::ALL
-            .iter()
-            .position(|&category| category == current)
-            .map(|place| place + 1),
-    };
+    let selected = place_of(&Category::ALL, *value);
     let chosen = Dropdown::new("Category", &options, width)
         .selected(selected)
         .show(ui);
     if let Some(index) = chosen {
-        *value = index
-            .checked_sub(1)
-            .and_then(|place| Category::ALL.get(place))
-            .copied();
+        *value = value_at(&Category::ALL, index);
     }
+}
+
+/// The row of `value` in a list whose row 0 means no filter and whose next rows follow `values`.
+fn place_of<T: Copy + PartialEq>(values: &[T], value: Option<T>) -> Option<usize> {
+    match value {
+        None => Some(0),
+        Some(current) => values
+            .iter()
+            .position(|&each| each == current)
+            .map(|place| place + 1),
+    }
+}
+
+/// The value on a chosen row of a list whose row 0 means no filter.
+fn value_at<T: Copy>(values: &[T], index: usize) -> Option<T> {
+    values.get(index.checked_sub(1)?).copied()
 }
 
 /// The kit has no list of which the person ticks any number of rows.

@@ -1,4 +1,5 @@
-//! What the app lends to a panel while it draws, and the one state each panel keeps for itself.
+//! What the app lends to a panel while it draws, the one state each panel keeps for itself, and
+//! the centred column that a page draws in.
 
 use eframe::egui;
 
@@ -9,7 +10,7 @@ use crate::contract::{Intent, Panel};
 use crate::media::Media;
 use crate::state::Shared;
 use crate::theme::{Icon, TextRole, color, radius};
-use crate::widgets::Button;
+use crate::widgets::{Button, panel_frame};
 
 /// The app applies the pushed `intents` after the frame.
 pub struct PanelCx<'a> {
@@ -44,6 +45,33 @@ pub struct Locals {
     pub library: library::Local,
     pub ingest: ingest::Local,
     pub notices: notices::Local,
+}
+
+/// A framed column in the middle of the room. `add` draws in it and gets the height inside it.
+pub(super) fn column(
+    ui: &mut egui::Ui,
+    id_salt: &str,
+    max_width: f32,
+    add: impl FnOnce(&mut egui::Ui, f32),
+) {
+    let page = ui.max_rect();
+    let width = page.width().min(max_width);
+    let column = egui::Rect::from_min_size(
+        egui::pos2(page.center().x - width / 2.0, page.top()),
+        egui::vec2(width, page.height()),
+    );
+    let frame = panel_frame();
+    let margin = frame.total_margin().sum();
+    let builder = egui::UiBuilder::new()
+        .id_salt(id_salt)
+        .max_rect(column)
+        .layout(egui::Layout::top_down(egui::Align::Min));
+    ui.scope_builder(builder, |ui| {
+        frame.show(ui, |ui| {
+            ui.set_width(column.width() - margin.x);
+            add(ui, column.height() - margin.y);
+        });
+    });
 }
 
 pub fn placeholder(ui: &mut egui::Ui, name: &str) {

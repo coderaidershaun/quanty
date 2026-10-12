@@ -4,13 +4,12 @@ use eframe::egui;
 
 use crate::contract::{Failure, FailureKind, Intent, Loadable};
 use crate::panels::PanelCx;
+use crate::panels::labels::TRY_AGAIN;
 use crate::theme::Icon;
 use crate::widgets::{Button, ControlSize, Placeholder, PlaceholderResponse};
 
 /// In a room lower than this a placeholder sits in a scroll area, so none of it is cut off.
 const MIN_ROOM: f32 = 200.0;
-
-const RETRY: &str = "Try again";
 
 pub(super) fn show(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
     match &cx.shared.source.page {
@@ -43,7 +42,7 @@ fn failed(ui: &mut egui::Ui, failure: &Failure, cx: &mut PanelCx<'_>) {
     };
     let placeholder = Placeholder::error(title).hint(&failure.hint);
     let is_retry_clicked = if ui.available_height() >= MIN_ROOM {
-        let shown = whole_area(ui, placeholder.action(RETRY));
+        let shown = whole_area(ui, placeholder.action(TRY_AGAIN));
         shown.response.on_hover_text(&failure.detail);
         shown.action_clicked
     } else {
@@ -66,7 +65,7 @@ fn retry_below_scrolling_text(
     detail: &str,
 ) -> bool {
     ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
-        let retry = Button::secondary(RETRY).size(ControlSize::Small);
+        let retry = Button::secondary(TRY_AGAIN).size(ControlSize::Small);
         let is_clicked = ui.add(retry).clicked();
         whole_area(ui, placeholder).response.on_hover_text(detail);
         is_clicked

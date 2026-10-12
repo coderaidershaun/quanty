@@ -205,12 +205,6 @@ pub(super) struct SceneKey {
     pub graph_size: [usize; 2],
 }
 
-#[derive(Debug, Clone, Copy)]
-pub(super) struct Source<'a> {
-    pub graph: &'a ConceptGraph,
-    pub key: SceneKey,
-}
-
 /// The words of the badge that counts what the picture leaves out, made when the scene is.
 #[derive(Debug)]
 pub(super) struct NotDrawn {
@@ -277,12 +271,17 @@ impl Picture<'_> {
 }
 
 impl Scene {
-    pub(super) fn refresh(slot: &mut Option<Scene>, ui: &egui::Ui, source: &Source<'_>) -> Refresh {
-        if slot.as_ref().is_some_and(|scene| scene.key == source.key) {
+    pub(super) fn refresh(
+        slot: &mut Option<Scene>,
+        ui: &egui::Ui,
+        graph: &ConceptGraph,
+        key: SceneKey,
+    ) -> Refresh {
+        if slot.as_ref().is_some_and(|scene| scene.key == key) {
             return Refresh::Unchanged;
         }
         let old = slot.take();
-        *slot = Scene::build(ui, source);
+        *slot = Scene::build(ui, graph, key);
         match (old, slot.as_ref()) {
             (_, None) => Refresh::Unchanged,
             (Some(old), Some(new))
@@ -296,8 +295,7 @@ impl Scene {
         }
     }
 
-    fn build(ui: &egui::Ui, source: &Source<'_>) -> Option<Scene> {
-        let Source { graph, key } = *source;
+    fn build(ui: &egui::Ui, graph: &ConceptGraph, key: SceneKey) -> Option<Scene> {
         let plan = plan(graph, key.focus)?;
         let canvas = Size {
             w: key.canvas[0] as f32,

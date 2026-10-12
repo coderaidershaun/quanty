@@ -1,20 +1,25 @@
 //! The authors box and the tags boxes of a form: their names, the caption over a box, and the
-//! lists to and from the text a person types; and the tokens and cost of a run.
+//! lists to and from the text a person types; the tokens and cost of a run; the words of a failure.
 
 use std::borrow::Borrow;
 
 use eframe::egui;
 
-use crate::contract::Usage;
+use crate::contract::{Failure, Usage};
 use crate::theme::{TextRole, space};
 
 pub(super) const AUTHORS: &str = "Authors";
 pub(super) const TAGS: &str = "Tags";
 pub(super) const LIST_PLACEHOLDER: &str = "Optional, with commas between them";
+pub(super) const TRY_AGAIN: &str = "Try again";
 
 pub(super) fn caption(ui: &mut egui::Ui, text: &str) {
     ui.add_space(space::SM);
     ui.label(TextRole::Label.rich(text));
+}
+
+pub(super) fn detail(ui: &mut egui::Ui, failure: &Failure) {
+    ui.label(TextRole::Small.rich(&failure.detail));
 }
 
 /// One rule for every list a person types, authors and tags alike: commas between the items,

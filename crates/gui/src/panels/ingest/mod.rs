@@ -14,9 +14,9 @@ use self::media::MediaChoice;
 use crate::contract::{Catalogue, Category, IngestRequest, Intent, Media, is_same_name};
 use crate::panels::PanelCx;
 use crate::panels::media_card::MediaFields;
+use crate::panels::seam::column;
 use crate::state::{IngestJob, MediaEditing, Shared};
 use crate::theme::{TextRole, space};
-use crate::widgets;
 
 /// The column is never wider than this, however wide the window.
 const COLUMN_WIDTH: f32 = 720.0;
@@ -272,39 +272,22 @@ fn request_of(job: &IngestJob) -> Option<&IngestRequest> {
 
 pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     local.follow(cx.shared);
-    let page = ui.max_rect();
-    let column = egui::Rect::from_min_size(
-        egui::pos2(
-            page.center().x - page.width().min(COLUMN_WIDTH) / 2.0,
-            page.top(),
-        ),
-        egui::vec2(page.width().min(COLUMN_WIDTH), page.height()),
-    );
-    let frame = widgets::panel_frame();
-    let margin = frame.total_margin().sum();
-    let builder = egui::UiBuilder::new()
-        .id_salt("ingest_column")
-        .max_rect(column)
-        .layout(egui::Layout::top_down(egui::Align::Min));
-    ui.scope_builder(builder, |ui| {
-        frame.show(ui, |ui| {
-            ui.set_width(column.width() - margin.x);
-            egui::ScrollArea::vertical()
-                .auto_shrink([false, true])
-                .max_height(column.height() - margin.y)
-                .show(ui, |ui| {
-                    ui.label(TextRole::Heading.rich("Add media"));
-                    ui.add_space(space::MD);
-                    ui.add_enabled_ui(!cx.shared.ingest.is_running(), |ui| {
-                        media::show(ui, local, cx);
-                        ui.add_space(space::LG);
-                        document::show(ui, local, cx.intents);
-                    });
+    column(ui, "ingest_column", COLUMN_WIDTH, |ui, height| {
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, true])
+            .max_height(height)
+            .show(ui, |ui| {
+                ui.label(TextRole::Heading.rich("Add media"));
+                ui.add_space(space::MD);
+                ui.add_enabled_ui(!cx.shared.ingest.is_running(), |ui| {
+                    media::show(ui, local, cx);
                     ui.add_space(space::LG);
-                    let draft = local.draft();
-                    local.ask_for_a_check(&draft, &cx.shared.ingest, cx.intents);
-                    status::show(ui, local, cx, &draft);
+                    document::show(ui, local, cx.intents);
                 });
-        });
+                ui.add_space(space::LG);
+                let draft = local.draft();
+                local.ask_for_a_check(&draft, &cx.shared.ingest, cx.intents);
+                status::show(ui, local, cx, &draft);
+            });
     });
 }

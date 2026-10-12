@@ -6,6 +6,7 @@ use super::states::whole_area;
 use super::tabs::SourceTab;
 use crate::contract::{ConceptId, Failure, Intent, Loadable, PageConcept};
 use crate::panels::PanelCx;
+use crate::panels::labels::TRY_AGAIN;
 use crate::theme::{Icon, Kind, TextRole};
 use crate::widgets::{Chip, Placeholder};
 
@@ -36,7 +37,7 @@ pub(super) fn show(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
 fn failed(ui: &mut egui::Ui, failure: &Failure, intents: &mut Vec<Intent>) {
     let placeholder = Placeholder::error("The concepts could not be read")
         .hint(&failure.hint)
-        .action("Try again");
+        .action(TRY_AGAIN);
     let shown = whole_area(ui, placeholder);
     shown.response.on_hover_text(&failure.detail);
     if shown.action_clicked {

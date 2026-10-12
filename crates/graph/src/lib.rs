@@ -2,8 +2,8 @@
 //! behind the cargo feature `testing`.
 
 mod contents;
+mod error;
 mod falkor;
-mod store;
 #[cfg(feature = "testing")]
 pub mod testing;
 
@@ -11,5 +11,5 @@ pub use contents::{
     ConceptAlias, ConceptNode, DocumentNode, DocumentRecord, ItemMentions, ItemNode, ItemsByKind,
     MediaNode, Mention, Relation, RelationKind, UnknownRelationKind,
 };
+pub use error::GraphError;
 pub use falkor::FalkorGraph;
-pub use store::{GraphError, GraphStore};

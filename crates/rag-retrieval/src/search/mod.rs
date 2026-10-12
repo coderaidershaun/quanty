@@ -7,7 +7,7 @@ mod rank;
 mod results;
 mod trace;
 
-use graph::{GraphError, GraphStore};
+use graph::{FalkorGraph, GraphError};
 use rag_core::{
     ConceptStore, DocId, EmbedError, Embedder, ItemFilter, ItemKind, ItemStore, LabelFilter,
     StoreError, UsageTally, question_usage,
@@ -50,14 +50,14 @@ pub enum SearchError {
     Graph(#[from] GraphError),
 }
 
-pub struct Retriever<E, G> {
+pub struct Retriever<E> {
     pub embedder: E,
     pub items: ItemStore,
     pub concepts: ConceptStore,
-    pub graph: G,
+    pub graph: FalkorGraph,
 }
 
-impl<E: Embedder, G: GraphStore> Retriever<E, G> {
+impl<E: Embedder> Retriever<E> {
     /// The items for the question, without the trace of [`Retriever::search_traced`].
     ///
     /// # Errors

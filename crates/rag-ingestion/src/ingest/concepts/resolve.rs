@@ -1,7 +1,7 @@
 //! Decides which stored concept an extracted concept belongs to: one with the same name or alias,
 //! else the nearest one by meaning, judged by its score or, in between, by what the model says.
 
-use graph::{ConceptAlias, ConceptNode, GraphStore};
+use graph::{ConceptAlias, ConceptNode};
 use rag_core::{
     ConceptHit, ConceptId, ConceptPoint, EmbedError, Embedder, Embedding, ItemId, Llm, LlmError,
     UsageTally, concept_input, embedding_usage,
@@ -74,15 +74,15 @@ enum Judgement {
     Stopped(LlmError),
 }
 
-pub(super) struct Resolver<'a, L, E, G> {
+pub(super) struct Resolver<'a, L, E> {
     pub extractor: &'a ConceptExtractor<L>,
     pub cache: &'a Cache,
     pub embedder: &'a E,
-    pub stores: &'a Stores<G>,
+    pub stores: &'a Stores,
     pub log: &'a DecisionLog,
 }
 
-impl<L: Llm, E: Embedder, G: GraphStore> Resolver<'_, L, E, G> {
+impl<L: Llm, E: Embedder> Resolver<'_, L, E> {
     // SMELL: finding a concept and creating it are two calls, so two ingests that run at the same
     // time can each create the same concept. No store here can find and create in one step.
     /// Links the concept that `item` named to the stored concept that is the same, or makes a new

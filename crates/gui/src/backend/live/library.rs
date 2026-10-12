@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use graph::{DocumentRecord, GraphStore, MediaNode};
+use graph::{DocumentRecord, MediaNode};
 use ocr::ChapterEntry;
 use ocr::content::{media_folder_name, own_title};
 use rag_ingestion::{MediaChange, Stores, TagChange, relabel_document_tags, relabel_media};
@@ -145,7 +145,7 @@ pub(super) async fn edit_media<S: Services>(
 /// The writes to both stores share this, so each connects and reports a failure the same way.
 async fn with_stores<S: Services, T, E: Into<Failure>>(
     cx: &LiveContext<S>,
-    write: impl AsyncFnOnce(&Stores<S::Graph>) -> Result<T, E>,
+    write: impl AsyncFnOnce(&Stores) -> Result<T, E>,
 ) -> Result<(), Failure> {
     let stores = cx.stores().await?;
     write(&stores)

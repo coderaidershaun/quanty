@@ -5,9 +5,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::iter::repeat_n;
 use std::path::Path;
 
-use graph::{
-    DocumentNode, DocumentRecord, GraphStore, ItemNode, ItemsByKind, MediaNode, RelationKind,
-};
+use graph::{DocumentNode, DocumentRecord, ItemNode, ItemsByKind, MediaNode, RelationKind};
 use rag_core::{Category, DocId, DocumentLabels, ItemKind, MediaLabels};
 
 use crate::support::{concept, item, mention, relation, tag, throwaway};

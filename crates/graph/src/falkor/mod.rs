@@ -8,8 +8,6 @@ mod indexes;
 mod records;
 mod writes;
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::time::Duration;
 
@@ -17,17 +15,15 @@ use falkordb::{
     AsyncGraph, FalkorAsyncClient, FalkorClientBuilder, FalkorConnectionInfo, FalkorDBError,
     FalkorValue, QueryResult, RowStream,
 };
-use rag_core::{ConceptId, Config, DocId, ItemId};
+use rag_core::Config;
 
-use crate::contents::{
-    ConceptAlias, ConceptNode, DocumentNode, DocumentRecord, ItemMentions, ItemNode, MediaNode,
-    Mention, Relation,
-};
-use crate::store::{GraphError, GraphStore};
+use crate::error::GraphError;
 
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// An open connection to FalkorDB, and the graph that the config names.
+///
+/// Every write can be repeated: a second call with the same values changes nothing.
 pub struct FalkorGraph {
     client: FalkorAsyncClient,
     graph: AsyncGraph,
@@ -108,137 +104,6 @@ impl FalkorGraph {
             action,
             source,
         })
-    }
-}
-
-impl GraphStore for FalkorGraph {
-    async fn upsert_document(&self, document: &DocumentNode) -> Result<(), GraphError> {
-        writes::upsert_document(self, document).await
-    }
-
-    async fn documents(&self) -> Result<Vec<DocumentNode>, GraphError> {
-        documents::documents(self).await
-    }
-
-    async fn document(&self, id: DocId) -> Result<Option<DocumentNode>, GraphError> {
-        documents::document(self, id).await
-    }
-
-    async fn document_records(&self) -> Result<Vec<DocumentRecord>, GraphError> {
-        records::document_records(self).await
-    }
-
-    async fn chapter_folders(
-        &self,
-        documents: &[DocId],
-    ) -> Result<HashMap<DocId, PathBuf>, GraphError> {
-        documents::chapter_folders(self, documents).await
-    }
-
-    async fn add_media(&self, media: &MediaNode) -> Result<(), GraphError> {
-        writes::add_media(self, media).await
-    }
-
-    async fn update_media(&self, media: &MediaNode) -> Result<(), GraphError> {
-        writes::update_media(self, media).await
-    }
-
-    async fn media(&self) -> Result<Vec<MediaNode>, GraphError> {
-        documents::media(self).await
-    }
-
-    async fn delete_media(&self, title: &str) -> Result<bool, GraphError> {
-        writes::delete_media(self, title).await
-    }
-
-    async fn upsert_items(&self, document: DocId, items: &[ItemNode]) -> Result<(), GraphError> {
-        writes::upsert_items(self, document, items).await
-    }
-
-    async fn set_ingested_items(
-        &self,
-        document: DocId,
-        items: Option<u64>,
-    ) -> Result<(), GraphError> {
-        writes::set_ingested_items(self, document, items).await
-    }
-
-    async fn ingested_items(&self, document: DocId) -> Result<Option<u64>, GraphError> {
-        documents::ingested_items(self, document).await
-    }
-
-    async fn set_chapter_folder(&self, document: DocId, folder: &Path) -> Result<(), GraphError> {
-        writes::set_chapter_folder(self, document, folder).await
-    }
-
-    async fn delete_document(&self, id: DocId) -> Result<u64, GraphError> {
-        writes::delete_document(self, id).await
-    }
-
-    async fn upsert_concept(&self, concept: &ConceptNode) -> Result<(), GraphError> {
-        writes::upsert_concept(self, concept).await
-    }
-
-    async fn add_mentions(&self, mentions: &[Mention]) -> Result<(), GraphError> {
-        writes::add_mentions(self, mentions).await
-    }
-
-    async fn add_relations(&self, relations: &[Relation]) -> Result<(), GraphError> {
-        writes::add_relations(self, relations).await
-    }
-
-    async fn add_alias(&self, alias: &ConceptAlias) -> Result<(), GraphError> {
-        writes::add_alias(self, alias).await
-    }
-
-    async fn find_concept_by_name(
-        &self,
-        normalised_name: &str,
-    ) -> Result<Option<ConceptNode>, GraphError> {
-        concepts::find_concept_by_name(self, normalised_name).await
-    }
-
-    async fn concept(&self, id: ConceptId) -> Result<Option<ConceptNode>, GraphError> {
-        concepts::concept(self, id).await
-    }
-
-    async fn concepts_for_items(&self, items: &[ItemId]) -> Result<Vec<ConceptNode>, GraphError> {
-        concepts::concepts_for_items(self, items).await
-    }
-
-    async fn items_for_concepts(
-        &self,
-        concepts: &[ConceptId],
-        limit: usize,
-    ) -> Result<Vec<ItemMentions>, GraphError> {
-        concepts::items_for_concepts(self, concepts, limit).await
-    }
-
-    async fn related_concepts(
-        &self,
-        concepts: &[ConceptId],
-    ) -> Result<Vec<ConceptNode>, GraphError> {
-        concepts::related_concepts(self, concepts).await
-    }
-
-    async fn concepts_on_page(
-        &self,
-        document: DocId,
-        page: u32,
-    ) -> Result<Vec<ConceptNode>, GraphError> {
-        concepts::concepts_on_page(self, document, page).await
-    }
-
-    async fn relations_among(&self, concepts: &[ConceptId]) -> Result<Vec<Relation>, GraphError> {
-        edges::relations_among(self, concepts).await
-    }
-
-    async fn mentions_between(
-        &self,
-        items: &[ItemId],
-        concepts: &[ConceptId],
-    ) -> Result<Vec<Mention>, GraphError> {
-        edges::mentions_between(self, items, concepts).await
     }
 }
 

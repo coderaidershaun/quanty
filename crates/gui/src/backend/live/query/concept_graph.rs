@@ -3,7 +3,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use graph::{GraphError, GraphStore, Mention, Relation, RelationKind};
+use graph::{FalkorGraph, GraphError, Mention, Relation, RelationKind};
 use rag_core::{ConceptId, ItemId};
 use rag_retrieval::SearchTrace;
 
@@ -83,8 +83,8 @@ fn item_candidate(result: &ResultItem) -> Option<ItemCandidate> {
 
 /// # Errors
 /// [`GraphError`] when the relations or the mentions cannot be read.
-pub(super) async fn read<G: GraphStore>(
-    graph: &G,
+pub(super) async fn read(
+    graph: &FalkorGraph,
     mut candidates: Candidates,
 ) -> Result<ConceptGraph, GraphError> {
     if candidates.seeds.is_empty() {

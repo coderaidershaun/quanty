@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use graph::{GraphStore, MediaNode};
+use graph::MediaNode;
 use gui::backend::live::{LiveContext, RealServices};
 use gui::contract::{
     Catalogue, Category, ChapterLabel, Document, FailureKind, ItemCounts, Media, NewMedia,

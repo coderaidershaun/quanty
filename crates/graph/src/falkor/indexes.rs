@@ -4,7 +4,7 @@
 use falkordb::FalkorValue;
 
 use super::{FalkorGraph, unreadable_reply};
-use crate::store::GraphError;
+use crate::error::GraphError;
 
 /// Each pair is a label and the property that statements find its nodes by. Media are few, so
 /// their title has none.

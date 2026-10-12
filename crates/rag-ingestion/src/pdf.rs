@@ -5,7 +5,7 @@
 use std::fmt;
 use std::path::Path;
 
-use graph::{GraphError, GraphStore};
+use graph::{FalkorGraph, GraphError};
 use ocr::content::parse_chapter_file_name;
 use ocr::{
     ChapterJob, ContentError, ConversionSummary, ConvertError, DocumentName, MediaDocument,
@@ -164,10 +164,10 @@ impl fmt::Display for PdfOutcome {
 ///   run and its number is in the error
 /// - [`PdfError::Graph`] and [`PdfError::Store`] when a store cannot say what it holds
 /// - [`PdfError::Ingest`] when the ingest fails
-pub async fn ingest_pdf<C, O, E: Embedder, L: Llm, G: GraphStore>(
+pub async fn ingest_pdf<C, O, E: Embedder, L: Llm>(
     pdf: ChapterPdf<'_, C, O>,
     models: &Models<E, L>,
-    stores: &Stores<G>,
+    stores: &Stores,
 ) -> Result<PdfOutcome, PdfError>
 where
     C: AsyncFnOnce(
@@ -227,7 +227,7 @@ impl UnnamedPdf<'_> {
     /// - [`NamePdfError::ReadMedia`] when the graph cannot list its media
     /// - [`NamePdfError::ChapterFileName`] when a book's PDF has no document title and is not
     ///   named as a chapter
-    pub async fn named<G: GraphStore>(&self, graph: &G) -> Result<NamedPdf, NamePdfError> {
+    pub async fn named(&self, graph: &FalkorGraph) -> Result<NamedPdf, NamePdfError> {
         let category = media_category(self.media_title, self.category, graph)
             .await
             .map_err(NamePdfError::ReadMedia)?;
@@ -281,9 +281,9 @@ impl UnnamedPdf<'_> {
 // SMELL: only the stores are asked, so a document whose converted folder was removed after the
 // ingest still counts as ingested, and the pictures its items name are gone. It stays because the
 // free check of the desktop app reads the same answer, and converting it again would be paid.
-pub async fn items_of_ingested_document<G: GraphStore>(
+pub async fn items_of_ingested_document(
     document: DocId,
-    stores: &Stores<G>,
+    stores: &Stores,
 ) -> Result<Option<u64>, PdfError> {
     let Some(marked) = stores.graph.ingested_items(document).await? else {
         return Ok(None);

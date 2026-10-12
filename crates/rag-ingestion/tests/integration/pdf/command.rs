@@ -4,7 +4,7 @@
 
 use std::ffi::OsStr;
 
-use graph::{GraphStore, MediaNode};
+use graph::MediaNode;
 use ocr::testing::sample_pdf;
 use rag_core::MediaLabels;
 

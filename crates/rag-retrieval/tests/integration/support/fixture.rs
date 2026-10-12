@@ -4,9 +4,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use graph::{
-    ConceptNode, DocumentNode, FalkorGraph, GraphStore, ItemNode, Mention, Relation, RelationKind,
-};
+use graph::{ConceptNode, DocumentNode, ItemNode, Mention, Relation, RelationKind};
 use rag_core::{
     ConceptId, ConceptPoint, DocId, DocumentLabels, ItemId, ItemKind, ItemPayload, ItemPoint,
     LabelFilter, Tag,
@@ -42,7 +40,7 @@ fn tag_set(tags: &[&str]) -> BTreeSet<Tag> {
 }
 
 pub async fn found_among(
-    retriever: &Retriever<StandInEmbedder, FalkorGraph>,
+    retriever: &Retriever<StandInEmbedder>,
     kind: Option<ItemKind>,
     wanted: &LabelFilter,
 ) -> SearchResults {
@@ -254,7 +252,7 @@ impl Fixture {
         });
     }
 
-    pub async fn store_in(&self, stores: &Stores<FalkorGraph>) {
+    pub async fn store_in(&self, stores: &Stores) {
         stores
             .items
             .ensure_collection()

@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use graph::{ConceptNode, FalkorGraph, GraphStore, Mention, Relation, RelationKind};
+use graph::{ConceptNode, FalkorGraph, Mention, Relation, RelationKind};
 use gui::backend::live::{LiveContext, RealServices, Services};
 use gui::contract::{DocId, Failure};
 use ocr::testing::{Scenario, StubServices};
@@ -34,7 +34,6 @@ pub struct StandInServices {
 impl Services for StandInServices {
     type Embedder = StandInEmbedder;
     type Llm = StandInLlm;
-    type Graph = FalkorGraph;
 
     fn embedder(&self, _config: &Config) -> Result<StandInEmbedder, Failure> {
         Ok((self.embedder)())
@@ -85,7 +84,6 @@ pub struct StandInsOnClosedPorts {
 impl Services for StandInsOnClosedPorts {
     type Embedder = StandInEmbedder;
     type Llm = StandInLlm;
-    type Graph = FalkorGraph;
 
     fn embedder(&self, _config: &Config) -> Result<StandInEmbedder, Failure> {
         Ok(StandInEmbedder::default())

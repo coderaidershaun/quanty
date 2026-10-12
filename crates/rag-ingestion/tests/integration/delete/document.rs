@@ -3,7 +3,6 @@
 //! from the stores and from disk and leaves the others alone. Concepts belong to no document, so
 //! they stay.
 
-use graph::GraphStore;
 use graph::testing::{GraphSize, size, stored_concept_graph, stored_document};
 use ocr::convert::convert_image_with;
 use ocr::try_lock_chapter;

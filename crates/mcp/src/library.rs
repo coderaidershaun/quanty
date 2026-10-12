@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use graph::{FalkorGraph, GraphError, GraphStore};
+use graph::{FalkorGraph, GraphError};
 use ocr::{
     Catalogue, ChapterEntry, ChapterPiece, ContentError, DocumentName, PieceDetail,
     ReadChapterError, read_chapter,

@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use graph::{GraphStore, MediaNode};
+use graph::MediaNode;
 use gui::backend::live::{LiveContext, RealServices, Services};
 use gui::contract::{
     Category, DocId, Document, DocumentTagsEdit, FailureKind, MediaEdit, NewMedia,

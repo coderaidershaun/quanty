@@ -5,7 +5,7 @@
 use std::collections::BTreeSet;
 use std::fmt;
 
-use graph::{GraphError, GraphStore, MediaNode};
+use graph::{FalkorGraph, GraphError, MediaNode};
 use rag_core::{Category, MediaLabels, Tag, author_list, is_same_name};
 
 use crate::labels::{RelabelError, tag_text};
@@ -75,10 +75,10 @@ impl fmt::Display for MediaRelabelled {
 /// # Errors
 /// - [`RelabelError::UnknownMedia`] when the graph holds no media of that title
 /// - [`RelabelError::Graph`] and [`RelabelError::Store`] when a store fails
-pub async fn relabel_media<G: GraphStore>(
+pub async fn relabel_media(
     title: &str,
     change: &MediaChange,
-    stores: &Stores<G>,
+    stores: &Stores,
 ) -> Result<MediaRelabelled, RelabelError> {
     let mut media =
         stored_media(title, &stores.graph)
@@ -119,10 +119,10 @@ pub async fn relabel_media<G: GraphStore>(
 ///
 /// # Errors
 /// [`GraphError`] when the graph cannot list its media.
-pub(crate) async fn media_category<G: GraphStore>(
+pub(crate) async fn media_category(
     title: &str,
     given: Option<Category>,
-    graph: &G,
+    graph: &FalkorGraph,
 ) -> Result<Category, GraphError> {
     Ok(match stored_media(title, graph).await? {
         Some(stored) => stored.labels.category,
@@ -132,9 +132,9 @@ pub(crate) async fn media_category<G: GraphStore>(
 
 /// The stored media of that title, or `media` itself after it is added to the graph. An ingest
 /// uses it, so it never changes a media that is stored.
-pub(crate) async fn stored_or_added<G: GraphStore>(
+pub(crate) async fn stored_or_added(
     media: MediaNode,
-    stores: &Stores<G>,
+    stores: &Stores,
 ) -> Result<MediaNode, GraphError> {
     if let Some(stored) = stored_media(&media.title, &stores.graph).await? {
         return Ok(stored);
@@ -144,10 +144,7 @@ pub(crate) async fn stored_or_added<G: GraphStore>(
 }
 
 /// The media whose title is the same as `title`, whatever the capitals and the space at the ends.
-async fn stored_media<G: GraphStore>(
-    title: &str,
-    graph: &G,
-) -> Result<Option<MediaNode>, GraphError> {
+async fn stored_media(title: &str, graph: &FalkorGraph) -> Result<Option<MediaNode>, GraphError> {
     let media = graph.media().await?;
     Ok(media
         .into_iter()

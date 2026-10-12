@@ -291,11 +291,10 @@ fn pick_several(ui: &mut egui::Ui, options: &[String], width: f32, chosen: &mut 
 }
 
 fn paint_caret(ui: &egui::Ui, rect: egui::Rect, _: &egui::style::WidgetVisuals, _: bool) {
-    ui.painter().text(
+    Icon::CARET_DOWN.paint(
+        ui.painter(),
         rect.center(),
-        egui::Align2::CENTER_CENTER,
-        Icon::CARET_DOWN.glyph(),
-        Icon::font(size::ICON_SM),
+        size::ICON_SM,
         color::TEXT_SECONDARY,
     );
 }

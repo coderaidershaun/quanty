@@ -9,7 +9,7 @@ use rag_core::ItemKind;
 use super::documents::{DOCUMENT_COLUMNS, count_or_null, document_from_row, text_or_null};
 use super::{FalkorGraph, read_rows};
 use crate::contents::{DocumentRecord, ItemsByKind};
-use crate::store::GraphError;
+use crate::error::GraphError;
 
 const RECORD_ROW: &str = "\
 a document with its mark, its folder and its items by kind (an id, a title, a media or null, a \
@@ -30,14 +30,24 @@ ORDER BY d.title, d.id"
     )
 }
 
-pub(super) async fn document_records(
-    graph: &FalkorGraph,
-) -> Result<Vec<DocumentRecord>, GraphError> {
-    let action = "read the documents with their marks, their folders and their items by kind";
-    let reply = graph
-        .run(action, &document_records_statement(), Vec::new())
-        .await?;
-    read_rows(graph, action, RECORD_ROW, reply, record_from_row)
+impl FalkorGraph {
+    /// Every document, each once, ordered by title and then by id, with its labels, the mark that
+    /// it is ingested whole, the folder it was ingested from and how many items of each kind it
+    /// has. A document with no items has zero of each kind. This read counts every item in the
+    /// graph, so [`FalkorGraph::documents`] is the read to use when the title and the labels are
+    /// enough, and [`FalkorGraph::chapter_folders`] when the folders are.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   document with its mark and its folder, or not a count of items of one kind
+    pub async fn document_records(&self) -> Result<Vec<DocumentRecord>, GraphError> {
+        let action = "read the documents with their marks, their folders and their items by kind";
+        let reply = self
+            .run(action, &document_records_statement(), Vec::new())
+            .await?;
+        read_rows(self, action, RECORD_ROW, reply, record_from_row)
+    }
 }
 
 fn count_of(items: &mut ItemsByKind, kind: ItemKind) -> &mut u64 {

@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use graph::{GraphStore, MediaNode};
+use graph::MediaNode;
 use ocr::{PieceDetail, read_chapter};
 use rag_core::{Category, DocumentLabels, MediaLabels, Tag};
 use rag_ingestion::{

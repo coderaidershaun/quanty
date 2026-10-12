@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 use std::fmt;
 
-use graph::{GraphError, GraphStore};
+use graph::GraphError;
 use rag_core::{DocId, DocumentLabels, StoreError, Tag};
 
 use crate::stores::Stores;
@@ -98,10 +98,10 @@ pub(crate) fn tag_text(tags: &BTreeSet<Tag>) -> String {
 /// # Errors
 /// - [`RelabelError::UnknownDocument`] when the graph holds no document with the id
 /// - [`RelabelError::Graph`] and [`RelabelError::Store`] when a store fails
-pub async fn relabel_document_tags<G: GraphStore>(
+pub async fn relabel_document_tags(
     id: DocId,
     change: &TagChange,
-    stores: &Stores<G>,
+    stores: &Stores,
 ) -> Result<Relabelled, RelabelError> {
     let mut node = stores
         .graph

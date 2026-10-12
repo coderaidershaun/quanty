@@ -1,7 +1,7 @@
 //! Runs `rag-ingest media` as a person would, against throwaway stores, to show that it can take
 //! every author and every tag away from a stored media.
 
-use graph::{GraphStore, MediaNode};
+use graph::MediaNode;
 use rag_core::{Category, MediaLabels};
 
 use crate::support::{RunRagIngest, ThrowawayStores};

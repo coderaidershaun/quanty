@@ -6,7 +6,7 @@ mod summary;
 
 use std::path::{Path, PathBuf};
 
-use graph::{GraphError, GraphStore, MediaNode};
+use graph::{GraphError, MediaNode};
 use ocr::ContentError;
 use rag_core::{DocId, StoreError, is_same_name};
 
@@ -95,10 +95,10 @@ pub enum DeleteError {
 ///   stops the job, so when Qdrant fails the graph is not asked.
 /// - [`DeleteError::UnknownDocument`] when neither store nor the content folder held anything of
 ///   the id
-pub async fn delete_document<G: GraphStore>(
+pub async fn delete_document(
     id: DocId,
     content_folder: &Path,
-    stores: &Stores<G>,
+    stores: &Stores,
 ) -> Result<DocumentDeleteSummary, DeleteError> {
     let summary = remove_document(id, content_folder, stores).await?;
     if summary.points_removed == 0
@@ -133,10 +133,10 @@ pub async fn delete_document<G: GraphStore>(
 ///   again after a failure.
 /// - [`DeleteError::Graph`] and [`DeleteError::Remove`] when the graph fails or a media folder
 ///   cannot be removed
-pub async fn delete_media<G: GraphStore>(
+pub async fn delete_media(
     title: &str,
     content_folder: &Path,
-    stores: &Stores<G>,
+    stores: &Stores,
 ) -> Result<MediaDeleteSummary, DeleteError> {
     let media_nodes: Vec<MediaNode> = stores
         .graph
@@ -180,10 +180,10 @@ pub async fn delete_media<G: GraphStore>(
 }
 
 /// The steps of a delete of one document, in the order that [`delete_document`] gives.
-async fn remove_document<G: GraphStore>(
+async fn remove_document(
     id: DocId,
     content_folder: &Path,
-    stores: &Stores<G>,
+    stores: &Stores,
 ) -> Result<DocumentDeleteSummary, DeleteError> {
     let files = DocumentFiles::find(id, content_folder)?;
     let points_removed = stores.items.delete_document(id).await?;

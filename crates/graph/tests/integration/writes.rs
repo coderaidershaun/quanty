@@ -2,7 +2,7 @@
 //! real FalkorDB shows which rows a statement drops and what a removal takes with it.
 
 use graph::testing::{StoredMention, StoredRelation, stored_concept_graph};
-use graph::{DocumentNode, GraphError, GraphStore, MediaNode, RelationKind};
+use graph::{DocumentNode, GraphError, MediaNode, RelationKind};
 use rag_core::{DocId, DocumentLabels, ItemKind, MediaLabels};
 
 use crate::support::{concept, item, mention, relation, throwaway};

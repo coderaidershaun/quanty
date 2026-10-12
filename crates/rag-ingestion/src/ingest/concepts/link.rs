@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use graph::{GraphError, GraphStore, Mention, Relation};
+use graph::{FalkorGraph, GraphError, Mention, Relation};
 use rag_core::{ConceptId, Embedder, Llm, LlmError, UsageTally};
 
 use super::ask::ItemAnswer;
@@ -35,8 +35,8 @@ struct ReplyRelations {
 ///   every other question too. What was linked before it stays.
 /// - Every error that [`Resolver::resolve`] returns
 /// - [`ConceptError::Graph`] when the graph cannot be read or written
-pub(super) async fn write<L: Llm, E: Embedder, G: GraphStore>(
-    resolver: &Resolver<'_, L, E, G>,
+pub(super) async fn write<L: Llm, E: Embedder>(
+    resolver: &Resolver<'_, L, E>,
     answers: &[ItemAnswer],
     items: usize,
     meter: &mut Meter<'_>,
@@ -78,8 +78,8 @@ pub(super) async fn write<L: Llm, E: Embedder, G: GraphStore>(
 ///
 /// # Errors
 /// Every error that [`Resolver::resolve`] returns.
-async fn resolve_concepts<L: Llm, E: Embedder, G: GraphStore>(
-    resolver: &Resolver<'_, L, E, G>,
+async fn resolve_concepts<L: Llm, E: Embedder>(
+    resolver: &Resolver<'_, L, E>,
     answer: &ItemAnswer,
     summary: &mut ConceptSummary,
     spent: &mut UsageTally,
@@ -128,8 +128,8 @@ async fn resolve_concepts<L: Llm, E: Embedder, G: GraphStore>(
     Ok(ReplyConcepts::Resolved { names, mentions })
 }
 
-async fn relations_of<G: GraphStore>(
-    graph: &G,
+async fn relations_of(
+    graph: &FalkorGraph,
     answer: &ItemAnswer,
     names: &HashMap<String, ConceptId>,
 ) -> Result<ReplyRelations, GraphError> {
@@ -155,8 +155,8 @@ async fn relations_of<G: GraphStore>(
     Ok(relations)
 }
 
-async fn concept_named<G: GraphStore>(
-    graph: &G,
+async fn concept_named(
+    graph: &FalkorGraph,
     names: &HashMap<String, ConceptId>,
     name: &str,
 ) -> Result<Option<ConceptId>, GraphError> {

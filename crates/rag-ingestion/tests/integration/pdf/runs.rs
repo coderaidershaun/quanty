@@ -4,8 +4,8 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
+use graph::MediaNode;
 use graph::testing::stored_document;
-use graph::{GraphStore, MediaNode};
 use ocr::testing::{Scenario, sample_pdf};
 use ocr::{ChapterJob, ConvertError, PageProgress, read_chapter};
 use rag_core::{Category, DocId, DocumentLabels, ItemKind, MediaLabels};

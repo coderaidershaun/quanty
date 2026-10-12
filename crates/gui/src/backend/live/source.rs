@@ -3,7 +3,6 @@
 
 use std::path::{Path, PathBuf};
 
-use graph::GraphStore;
 use ocr::content::{CHAPTER_INDEX_FILE, PAGE_IMAGE_FILE, PageIndex, own_title, page_folder_name};
 use ocr::{Chapter, ChapterPiece, ContentError, ImageShows, PieceDetail, ReadChapterError};
 

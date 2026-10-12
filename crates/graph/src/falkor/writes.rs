@@ -11,7 +11,7 @@ use super::{FalkorGraph, id_value, unreadable_reply};
 use crate::contents::{
     ConceptAlias, ConceptNode, DocumentNode, ItemNode, MediaNode, Mention, Relation,
 };
-use crate::store::GraphError;
+use crate::error::GraphError;
 
 /// Rows go in groups of this size, so that one statement stays quick also when the graph is
 /// large: the client waits only a short time for a reply.
@@ -101,35 +101,239 @@ RETURN count(r)";
 
 const COUNT_ROW: &str = "a count (one whole number that is not negative)";
 
-pub(super) async fn upsert_document(
-    graph: &FalkorGraph,
-    document: &DocumentNode,
-) -> Result<(), GraphError> {
-    let labels = &document.labels;
-    let parameters = vec![
-        ("id", id_value(document.id)),
-        ("title", text_value(&document.title)),
-        ("media", text_or_null(labels.media.as_deref())),
-        (
-            "category",
-            text_or_null(labels.category.map(|category| category.as_str())),
-        ),
-        ("authors", text_list(&labels.authors)),
-        ("media_tags", tag_list(&labels.media_tags)),
-        ("tags", tag_list(&labels.tags)),
-    ];
-    graph
-        .run("write the document", UPSERT_DOCUMENT, parameters)
+impl FalkorGraph {
+    /// Creates the document node, or updates its title and its labels: a label that `document`
+    /// does not have is taken away from the stored node. Repeating it changes nothing.
+    ///
+    /// # Errors
+    /// [`GraphError::Query`] when the store refuses or cannot be reached.
+    pub async fn upsert_document(&self, document: &DocumentNode) -> Result<(), GraphError> {
+        let labels = &document.labels;
+        let parameters = vec![
+            ("id", id_value(document.id)),
+            ("title", text_value(&document.title)),
+            ("media", text_or_null(labels.media.as_deref())),
+            (
+                "category",
+                text_or_null(labels.category.map(|category| category.as_str())),
+            ),
+            ("authors", text_list(&labels.authors)),
+            ("media_tags", tag_list(&labels.media_tags)),
+            ("tags", tag_list(&labels.tags)),
+        ];
+        self.run("write the document", UPSERT_DOCUMENT, parameters)
+            .await?;
+        Ok(())
+    }
+
+    /// Creates the media node. A media with exactly this title that is in the graph stays as it
+    /// is, with the labels it has, so an ingest never changes a stored media and repeating it
+    /// changes nothing. Titles are compared as they are given: the caller decides whether two
+    /// spellings name one media.
+    ///
+    /// # Errors
+    /// [`GraphError::Query`] when the store refuses or cannot be reached.
+    pub async fn add_media(&self, media: &MediaNode) -> Result<(), GraphError> {
+        write_media(self, "write the media", ADD_MEDIA, media).await
+    }
+
+    /// Creates the media node, or writes its category, its authors and its tags over the ones it
+    /// has. Titles are compared as they are given.
+    ///
+    /// # Errors
+    /// [`GraphError::Query`] when the store refuses or cannot be reached.
+    pub async fn update_media(&self, media: &MediaNode) -> Result<(), GraphError> {
+        write_media(self, "write the labels of the media", UPDATE_MEDIA, media).await
+    }
+
+    /// Removes the media node with exactly this title, and says whether there was one. Titles are
+    /// compared as they are given: the caller decides whether two spellings name one media. The
+    /// documents that carry the title are not touched: a media has no edge.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a count
+    pub async fn delete_media(&self, title: &str) -> Result<bool, GraphError> {
+        let parameters = vec![("title", text_value(title))];
+        let removed = run_counted(self, "delete the media", DELETE_MEDIA, parameters).await?;
+        Ok(removed > 0)
+    }
+
+    /// Records whether the document is ingested whole. `Some(items)` marks it, with the number of
+    /// its items. `None` takes the mark away. A document that is not in the graph is not created.
+    /// Repeating it changes nothing.
+    ///
+    /// # Errors
+    /// [`GraphError::Query`] when the store refuses or cannot be reached.
+    pub async fn set_ingested_items(
+        &self,
+        document: DocId,
+        items: Option<u64>,
+    ) -> Result<(), GraphError> {
+        // FalkorDB removes a property that is set to null.
+        let items = match items {
+            Some(count) => FalkorValue::I64(i64::try_from(count).unwrap_or(i64::MAX)),
+            None => FalkorValue::None,
+        };
+        let parameters = vec![("id", id_value(document)), ("items", items)];
+        self.run(
+            "record whether the document is ingested whole",
+            SET_INGESTED_ITEMS,
+            parameters,
+        )
         .await?;
-    Ok(())
-}
+        Ok(())
+    }
 
-pub(super) async fn add_media(graph: &FalkorGraph, media: &MediaNode) -> Result<(), GraphError> {
-    write_media(graph, "write the media", ADD_MEDIA, media).await
-}
+    /// Records the folder the document was ingested from. A document that is not in the graph is
+    /// not created. Repeating it changes nothing.
+    ///
+    /// # Errors
+    /// - [`GraphError::FolderNotUnicode`] when the path of the folder is not valid Unicode, which
+    ///   the graph cannot keep
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    pub async fn set_chapter_folder(
+        &self,
+        document: DocId,
+        folder: &Path,
+    ) -> Result<(), GraphError> {
+        let text = folder
+            .to_str()
+            .ok_or_else(|| GraphError::FolderNotUnicode {
+                folder: folder.to_path_buf(),
+            })?;
+        let parameters = vec![("id", id_value(document)), ("folder", text_value(text))];
+        self.run(
+            "record the folder the document was ingested from",
+            SET_CHAPTER_FOLDER,
+            parameters,
+        )
+        .await?;
+        Ok(())
+    }
 
-pub(super) async fn update_media(graph: &FalkorGraph, media: &MediaNode) -> Result<(), GraphError> {
-    write_media(graph, "write the labels of the media", UPDATE_MEDIA, media).await
+    /// Writes the items of a document: a node for each item, an edge `HAS_ITEM` from the
+    /// document to each item, and an edge `NEXT` from each item to the one after it. Creates the
+    /// document node when it is missing. Repeating it adds no node and no edge. An empty slice
+    /// makes no call.
+    ///
+    /// `items` must be every item of the document, in reading order, in one call. A second call
+    /// with the rest of the items does not join the two parts with a `NEXT` edge.
+    ///
+    /// # Errors
+    /// [`GraphError::Query`] when the store refuses or cannot be reached.
+    pub async fn upsert_items(
+        &self,
+        document: DocId,
+        items: &[ItemNode],
+    ) -> Result<(), GraphError> {
+        for group in items.chunks(ROWS_PER_STATEMENT) {
+            let rows = group.iter().map(item_row).collect();
+            let parameters = vec![
+                ("document", id_value(document)),
+                ("items", FalkorValue::Array(rows)),
+            ];
+            self.run("write the items", UPSERT_ITEMS, parameters)
+                .await?;
+        }
+        // The pairs come from the whole slice, so a pair that sits across two groups of nodes is
+        // not lost. The nodes are all written first, so every pair finds both of its ends.
+        let pairs: Vec<FalkorValue> = items
+            .windows(2)
+            .map(|pair| FalkorValue::Array(vec![id_value(pair[0].id), id_value(pair[1].id)]))
+            .collect();
+        for group in pairs.chunks(ROWS_PER_STATEMENT) {
+            let parameters = vec![("pairs", FalkorValue::Array(group.to_vec()))];
+            self.run("write the order of the items", LINK_NEXT, parameters)
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Removes the document node, its item nodes and every edge of those nodes, the `MENTIONS`
+    /// edges of the items among them. Concepts and their `RELATES_TO` edges stay: they belong to
+    /// no document. Returns how many nodes it removed. Zero means the graph has no such document,
+    /// which is not an error.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a count
+    pub async fn delete_document(&self, id: DocId) -> Result<u64, GraphError> {
+        let parameters = vec![("id", id_value(id))];
+        run_counted(self, "delete the document", DELETE_DOCUMENT, parameters).await
+    }
+
+    /// Creates the concept node with no aliases, or writes its name, normalised name and
+    /// definition again. It leaves the aliases of a stored concept as they are. Repeating it
+    /// changes nothing.
+    ///
+    /// # Errors
+    /// [`GraphError::Query`] when the store refuses or cannot be reached.
+    pub async fn upsert_concept(&self, concept: &ConceptNode) -> Result<(), GraphError> {
+        let parameters = vec![
+            ("id", id_value(concept.id)),
+            ("name", text_value(&concept.name)),
+            ("normalised_name", text_value(&concept.normalised_name)),
+            ("definition", text_value(&concept.definition)),
+        ];
+        self.run("write the concept", UPSERT_CONCEPT, parameters)
+            .await?;
+        Ok(())
+    }
+
+    /// Writes one `MENTIONS` edge from an item to a concept for each mention, with the wording.
+    /// An item mentions a concept once: a second mention of the same pair replaces the wording.
+    /// An empty slice makes no call.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::MissingNodes`] when the item or the concept of a mention is not in the
+    ///   graph. That mention is not written, and every other one is.
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a count
+    pub async fn add_mentions(&self, mentions: &[Mention]) -> Result<(), GraphError> {
+        let mut written = 0;
+        for group in mentions.chunks(ROWS_PER_STATEMENT) {
+            let rows = group.iter().map(mention_row).collect();
+            let parameters = vec![("mentions", FalkorValue::Array(rows))];
+            written += run_counted(self, "write the mentions", ADD_MENTIONS, parameters).await?;
+        }
+        all_written(self, "mentions", mentions.len(), written)
+    }
+
+    /// Writes one `RELATES_TO` edge for each relation. Two concepts have at most one edge of a
+    /// kind: it keeps the item that stated it first. An empty slice makes no call.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::MissingNodes`] when a concept of a relation is not in the graph. That
+    ///   relation is not written, and every other one is.
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a count
+    pub async fn add_relations(&self, relations: &[Relation]) -> Result<(), GraphError> {
+        let mut written = 0;
+        for group in relations.chunks(ROWS_PER_STATEMENT) {
+            let rows = group.iter().map(relation_row).collect();
+            let parameters = vec![("relations", FalkorValue::Array(rows))];
+            written += run_counted(self, "write the relations", ADD_RELATIONS, parameters).await?;
+        }
+        all_written(self, "relations", relations.len(), written)
+    }
+
+    /// Adds the name to the concept. A name is not added when the concept already has its
+    /// normalised form, as its name or as an alias, so repeating it changes nothing. A concept
+    /// that is not in the graph is not created.
+    ///
+    /// # Errors
+    /// [`GraphError::Query`] when the store refuses or cannot be reached.
+    pub async fn add_alias(&self, alias: &ConceptAlias) -> Result<(), GraphError> {
+        let parameters = vec![
+            ("id", id_value(alias.concept)),
+            ("name", text_value(&alias.name)),
+            ("normalised_name", text_value(&alias.normalised_name)),
+        ];
+        self.run("add an alias to the concept", ADD_ALIAS, parameters)
+            .await?;
+        Ok(())
+    }
 }
 
 /// Adding a media and changing its labels send the same four parameters.
@@ -147,131 +351,6 @@ async fn write_media(
     ];
     graph.run(action, statement, parameters).await?;
     Ok(())
-}
-
-pub(super) async fn delete_media(graph: &FalkorGraph, title: &str) -> Result<bool, GraphError> {
-    let parameters = vec![("title", text_value(title))];
-    let removed = run_counted(graph, "delete the media", DELETE_MEDIA, parameters).await?;
-    Ok(removed > 0)
-}
-
-pub(super) async fn set_ingested_items(
-    graph: &FalkorGraph,
-    document: DocId,
-    items: Option<u64>,
-) -> Result<(), GraphError> {
-    // FalkorDB removes a property that is set to null.
-    let items = match items {
-        Some(count) => FalkorValue::I64(i64::try_from(count).unwrap_or(i64::MAX)),
-        None => FalkorValue::None,
-    };
-    let parameters = vec![("id", id_value(document)), ("items", items)];
-    graph
-        .run(
-            "record whether the document is ingested whole",
-            SET_INGESTED_ITEMS,
-            parameters,
-        )
-        .await?;
-    Ok(())
-}
-
-pub(super) async fn set_chapter_folder(
-    graph: &FalkorGraph,
-    document: DocId,
-    folder: &Path,
-) -> Result<(), GraphError> {
-    let text = folder
-        .to_str()
-        .ok_or_else(|| GraphError::FolderNotUnicode {
-            folder: folder.to_path_buf(),
-        })?;
-    let parameters = vec![("id", id_value(document)), ("folder", text_value(text))];
-    graph
-        .run(
-            "record the folder the document was ingested from",
-            SET_CHAPTER_FOLDER,
-            parameters,
-        )
-        .await?;
-    Ok(())
-}
-
-pub(super) async fn upsert_items(
-    graph: &FalkorGraph,
-    document: DocId,
-    items: &[ItemNode],
-) -> Result<(), GraphError> {
-    for group in items.chunks(ROWS_PER_STATEMENT) {
-        let rows = group.iter().map(item_row).collect();
-        let parameters = vec![
-            ("document", id_value(document)),
-            ("items", FalkorValue::Array(rows)),
-        ];
-        graph
-            .run("write the items", UPSERT_ITEMS, parameters)
-            .await?;
-    }
-    // The pairs come from the whole slice, so a pair that sits across two groups of nodes is
-    // not lost. The nodes are all written first, so every pair finds both of its ends.
-    let pairs: Vec<FalkorValue> = items
-        .windows(2)
-        .map(|pair| FalkorValue::Array(vec![id_value(pair[0].id), id_value(pair[1].id)]))
-        .collect();
-    for group in pairs.chunks(ROWS_PER_STATEMENT) {
-        let parameters = vec![("pairs", FalkorValue::Array(group.to_vec()))];
-        graph
-            .run("write the order of the items", LINK_NEXT, parameters)
-            .await?;
-    }
-    Ok(())
-}
-
-pub(super) async fn delete_document(graph: &FalkorGraph, id: DocId) -> Result<u64, GraphError> {
-    let parameters = vec![("id", id_value(id))];
-    run_counted(graph, "delete the document", DELETE_DOCUMENT, parameters).await
-}
-
-pub(super) async fn upsert_concept(
-    graph: &FalkorGraph,
-    concept: &ConceptNode,
-) -> Result<(), GraphError> {
-    let parameters = vec![
-        ("id", id_value(concept.id)),
-        ("name", text_value(&concept.name)),
-        ("normalised_name", text_value(&concept.normalised_name)),
-        ("definition", text_value(&concept.definition)),
-    ];
-    graph
-        .run("write the concept", UPSERT_CONCEPT, parameters)
-        .await?;
-    Ok(())
-}
-
-pub(super) async fn add_mentions(
-    graph: &FalkorGraph,
-    mentions: &[Mention],
-) -> Result<(), GraphError> {
-    let mut written = 0;
-    for group in mentions.chunks(ROWS_PER_STATEMENT) {
-        let rows = group.iter().map(mention_row).collect();
-        let parameters = vec![("mentions", FalkorValue::Array(rows))];
-        written += run_counted(graph, "write the mentions", ADD_MENTIONS, parameters).await?;
-    }
-    all_written(graph, "mentions", mentions.len(), written)
-}
-
-pub(super) async fn add_relations(
-    graph: &FalkorGraph,
-    relations: &[Relation],
-) -> Result<(), GraphError> {
-    let mut written = 0;
-    for group in relations.chunks(ROWS_PER_STATEMENT) {
-        let rows = group.iter().map(relation_row).collect();
-        let parameters = vec![("relations", FalkorValue::Array(rows))];
-        written += run_counted(graph, "write the relations", ADD_RELATIONS, parameters).await?;
-    }
-    all_written(graph, "relations", relations.len(), written)
 }
 
 fn all_written(
@@ -302,18 +381,6 @@ async fn run_counted(
     let reply = graph.run(action, statement, parameters).await?;
     let rows: Vec<Vec<FalkorValue>> = reply.data.into_values_lossy().collect();
     count_from_rows(&rows).map_err(|found| unreadable_reply(graph, action, COUNT_ROW, found))
-}
-
-pub(super) async fn add_alias(graph: &FalkorGraph, alias: &ConceptAlias) -> Result<(), GraphError> {
-    let parameters = vec![
-        ("id", id_value(alias.concept)),
-        ("name", text_value(&alias.name)),
-        ("normalised_name", text_value(&alias.normalised_name)),
-    ];
-    graph
-        .run("add an alias to the concept", ADD_ALIAS, parameters)
-        .await?;
-    Ok(())
 }
 
 /// Most parameters of a write are text, and each one needs its own copy of that text.

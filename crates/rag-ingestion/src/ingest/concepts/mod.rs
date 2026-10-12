@@ -12,7 +12,7 @@ mod same_concept;
 
 use std::path::PathBuf;
 
-use graph::{GraphError, GraphStore};
+use graph::GraphError;
 use rag_core::{
     ConceptId, Config, EmbedError, Embedder, Embedding, ItemId, ItemKind, Llm, LlmError, StoreError,
 };
@@ -84,11 +84,11 @@ impl<L: Llm> ConceptExtractor<L> {
     /// - [`ConceptError::RelatedItems`] when the stored items cannot be searched
     /// - [`ConceptError::Embed`], [`ConceptError::ConceptStore`], [`ConceptError::Graph`] and
     ///   [`ConceptError::PointWithoutNode`] when a concept cannot be resolved
-    pub(super) async fn extract<E: Embedder, G: GraphStore>(
+    pub(super) async fn extract<E: Embedder>(
         &self,
         embedded: &EmbeddedItems<'_>,
         embedder: &E,
-        stores: &Stores<G>,
+        stores: &Stores,
         meter: &mut Meter<'_>,
     ) -> Result<ConceptSummary, ConceptError> {
         let cache = Cache::open(&self.cache_folder)?;

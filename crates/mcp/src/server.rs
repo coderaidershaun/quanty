@@ -1,11 +1,10 @@
 //! The MCP server: one thin tool for each thing an agent can do, and the one place that words a
 //! failure for the agent.
 
-use std::error::Error;
 use std::sync::Arc;
 
 use ocr::{ConvertError, PageError};
-use rag_core::Config;
+use rag_core::{Config, error_chain};
 use rag_ingestion::{ConceptError, IngestError, PdfError, health};
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::IntoCallToolResult;
@@ -82,14 +81,7 @@ impl ToolError {
     /// The text of the failure: the error and every cause under it on one line. A failure of a
     /// store or of an outside service points at the `health` tool.
     fn text(&self) -> String {
-        let mut messages = vec![self.to_string()];
-        let mut cause = self.source();
-        while let Some(next) = cause {
-            messages.push(next.to_string());
-            cause = next.source();
-        }
-        let mut text = messages
-            .join(": ")
+        let mut text = error_chain(self)
             .split_whitespace()
             .collect::<Vec<_>>()
             .join(" ");

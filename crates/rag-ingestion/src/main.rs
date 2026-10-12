@@ -96,7 +96,7 @@ async fn run(cli: Cli) -> Result<ExitCode> {
     }
 }
 
-async fn connect_stores(config: &Config) -> Result<Stores<FalkorGraph>> {
+async fn connect_stores(config: &Config) -> Result<Stores> {
     Ok(Stores {
         items: ItemStore::connect(config).context("could not set up the item store")?,
         graph: FalkorGraph::connect(config)
@@ -284,11 +284,7 @@ async fn tag(document: DocId, change: &TagChange) -> Result<()> {
     write_tags(document, change, &stores).await
 }
 
-async fn write_tags(
-    document: DocId,
-    change: &TagChange,
-    stores: &Stores<FalkorGraph>,
-) -> Result<()> {
+async fn write_tags(document: DocId, change: &TagChange, stores: &Stores) -> Result<()> {
     let labelled = relabel_document_tags(document, change, stores)
         .await
         .with_context(|| format!("could not tag the document {document}"))?;

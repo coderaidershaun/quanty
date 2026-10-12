@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use graph::{ConceptNode, GraphStore, ItemMentions};
+use graph::{ConceptNode, FalkorGraph, ItemMentions};
 use rag_core::{ConceptHit, ConceptId, ConceptStore, Embedding, ItemHit, ItemId};
 
 use super::results::Reason;
@@ -29,9 +29,9 @@ pub(super) struct Expansion {
 /// # Errors
 /// - [`SearchError::Concepts`] when the nearest concepts cannot be searched
 /// - [`SearchError::Graph`] when the graph cannot be read
-pub(super) async fn from_seeds<G: GraphStore>(
+pub(super) async fn from_seeds(
     concepts: &ConceptStore,
-    graph: &G,
+    graph: &FalkorGraph,
     vector: &Embedding,
     seeds: &[ItemHit],
 ) -> Result<Expansion, SearchError> {

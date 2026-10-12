@@ -188,7 +188,7 @@ pub(crate) async fn answer<S: Services>(
 async fn retriever<S: Services>(
     config: &Config,
     services: &S,
-) -> Result<Retriever<S::Embedder, FalkorGraph>, RetrievalError> {
+) -> Result<Retriever<S::Embedder>, RetrievalError> {
     let graph = FalkorGraph::connect(config).await?;
     Ok(Retriever {
         embedder: services.embedder(config)?,

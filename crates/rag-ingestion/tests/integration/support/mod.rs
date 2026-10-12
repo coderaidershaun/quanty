@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use graph::testing::{GraphSize, StoredDocument, StoredItem, size, stored_document};
-use graph::{FalkorGraph, GraphStore, MediaNode};
+use graph::{FalkorGraph, MediaNode};
 use qdrant_client::qdrant::ScrollPointsBuilder;
 use qdrant_client::qdrant::point_id::PointIdOptions;
 use qdrant_client::{Payload, Qdrant};

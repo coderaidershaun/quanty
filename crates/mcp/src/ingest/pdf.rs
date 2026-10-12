@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
-use graph::GraphStore;
+use graph::FalkorGraph;
 use ocr::ChapterJob;
 use ocr::content::media_folder_name;
 use rag_core::{Category, Config, MediaLabels, Tag, author_list};
@@ -161,9 +161,9 @@ impl CheckedPdf {
     /// - [`PdfIngestError::ChapterFileName`] when a book's PDF has no document title and is not
     ///   named as a chapter
     /// - [`PdfIngestError::DocumentTitle`] when the document title cannot name a folder
-    pub(super) async fn named<G: GraphStore>(
+    pub(super) async fn named(
         self,
-        graph: &G,
+        graph: &FalkorGraph,
         config: &Config,
     ) -> Result<ReadyPdf, PdfIngestError> {
         let unnamed = UnnamedPdf {

@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use graph::{ConceptNode, DocumentNode, GraphStore, ItemNode, Mention};
+use graph::{ConceptNode, DocumentNode, ItemNode, Mention};
 use gui::backend::fake::Fake;
 use gui::backend::live::source::{self, PageTarget};
 use gui::backend::live::{LiveContext, Services};

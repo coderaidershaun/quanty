@@ -11,7 +11,6 @@ use std::collections::BTreeMap;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use graph::FalkorGraph;
 use graph::testing::{
     GraphSize, StoredConceptGraph, StoredDocument, size, stored_concept_graph, stored_document,
 };
@@ -58,7 +57,7 @@ impl StandInPdf {
     async fn ingest<L: Llm>(
         &self,
         models: &Models<StandInEmbedder, L>,
-        stores: &Stores<FalkorGraph>,
+        stores: &Stores,
     ) -> Result<PdfOutcome, PdfError> {
         let pdf = ChapterPdf {
             job: &self.job,
@@ -104,11 +103,7 @@ struct Held {
     cached_answers: usize,
 }
 
-async fn held_by(
-    throwaway: &ThrowawayStores,
-    stores: &Stores<FalkorGraph>,
-    document: DocId,
-) -> Held {
+async fn held_by(throwaway: &ThrowawayStores, stores: &Stores, document: DocId) -> Held {
     let config = throwaway.config();
     Held {
         points: points_in(config).await.into_iter().collect(),

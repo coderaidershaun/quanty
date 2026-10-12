@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use graph::GraphStore;
+use graph::FalkorGraph;
 use rag_core::{DocId, LabelFilter};
 use rag_retrieval::{SearchError, SearchResults, TracedSearch};
 
@@ -120,8 +120,8 @@ async fn search<S: Services>(
 
 /// A reading that does not finish gives an empty list, which leaves every hit without facts.
 /// Neither that nor folders that cannot be read stop the ask, because the facts are optional.
-async fn pieces_on_disk<G: GraphStore>(
-    graph: &G,
+async fn pieces_on_disk(
+    graph: &FalkorGraph,
     results: &Arc<SearchResults>,
     content_folder: PathBuf,
 ) -> Vec<Option<PieceFacts>> {

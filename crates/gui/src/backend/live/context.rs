@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
-use graph::{FalkorGraph, GraphStore};
+use graph::FalkorGraph;
 use ocr::{ChapterJob, ConversionSummary, ConvertError, PageProgress};
 use rag_core::{ClaudeCli, ConceptStore, Config, Embedder, GeminiEmbedder, ItemStore, Llm};
 use rag_ingestion::{ConceptExtractor, EXTRACTION_MODEL, Models, Stores};
@@ -20,11 +20,10 @@ const CONNECT_LIMIT: Duration = Duration::from_secs(5);
 pub trait Services: Send + Sync + 'static {
     type Embedder: Embedder + Send + Sync + 'static;
     type Llm: Llm + Send + Sync + 'static;
-    type Graph: GraphStore + Send + Sync + 'static;
 
     fn embedder(&self, config: &Config) -> Result<Self::Embedder, Failure>;
     fn llm(&self, model: &str) -> Self::Llm;
-    fn graph(&self, config: &Config) -> impl Future<Output = Result<Self::Graph, Failure>> + Send;
+    fn graph(&self, config: &Config) -> impl Future<Output = Result<FalkorGraph, Failure>> + Send;
 
     /// Converts the pages of the chapter that are not converted yet, and tells each page to
     /// `on_page` as it is cut out and as it ends. This is the part of an ingest that pays for a
@@ -45,7 +44,6 @@ pub struct RealServices;
 impl Services for RealServices {
     type Embedder = GeminiEmbedder;
     type Llm = ClaudeCli;
-    type Graph = FalkorGraph;
 
     fn embedder(&self, config: &Config) -> Result<GeminiEmbedder, Failure> {
         Ok(GeminiEmbedder::from_config(config)?)
@@ -71,13 +69,13 @@ impl Services for RealServices {
 
 /// The retriever that a context keeps once the stores answered. Without this name clippy's
 /// `type_complexity` fails the field that holds it.
-pub type Kept<S> = Arc<Retriever<<S as Services>::Embedder, <S as Services>::Graph>>;
+pub type Kept<S> = Arc<Retriever<<S as Services>::Embedder>>;
 
 pub struct LiveContext<S: Services> {
     config: Config,
     services: S,
     retriever: tokio::sync::Mutex<Option<(u64, Kept<S>)>>,
-    graph: tokio::sync::Mutex<Option<(u64, Arc<S::Graph>)>>,
+    graph: tokio::sync::Mutex<Option<(u64, Arc<FalkorGraph>)>>,
     /// Goes up when a store fails. What was kept in an earlier era is dropped at its next use,
     /// so a store that comes back is connected again with nothing restarted.
     era: AtomicU64,
@@ -123,7 +121,7 @@ impl<S: Services> LiveContext<S> {
     ///
     /// # Errors
     /// A failure that says the graph store is not ready.
-    pub async fn graph(&self) -> Result<Arc<S::Graph>, Failure> {
+    pub async fn graph(&self) -> Result<Arc<FalkorGraph>, Failure> {
         let mut kept = self.graph.lock().await;
         let era = self.era.load(Ordering::Acquire);
         if let Some((built, graph)) = kept.as_ref()
@@ -136,7 +134,7 @@ impl<S: Services> LiveContext<S> {
         Ok(graph)
     }
 
-    async fn connect_graph(&self) -> Result<S::Graph, Failure> {
+    async fn connect_graph(&self) -> Result<FalkorGraph, Failure> {
         match tokio::time::timeout(CONNECT_LIMIT, self.services.graph(&self.config)).await {
             Ok(connected) => connected.map_err(|failure| self.failure(failure)),
             Err(_) => {
@@ -156,7 +154,7 @@ impl<S: Services> LiveContext<S> {
     ///
     /// # Errors
     /// A failure that says which store is not ready.
-    pub async fn stores(&self) -> Result<Stores<S::Graph>, Failure> {
+    pub async fn stores(&self) -> Result<Stores, Failure> {
         Ok(Stores {
             items: ItemStore::connect(&self.config).map_err(|error| self.failure(error))?,
             graph: self.connect_graph().await?,

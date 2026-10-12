@@ -6,7 +6,7 @@ use rag_core::{ConceptId, ItemId};
 
 use super::{FalkorGraph, id_list, read_rows};
 use crate::contents::{Mention, Relation};
-use crate::store::GraphError;
+use crate::error::GraphError;
 
 const RELATION_ROW: &str = "\
 a relation (the id of the concept it leaves, the id of the concept it reaches, a kind of relation \
@@ -25,31 +25,50 @@ WHERE i.id IN $items AND c.id IN $concepts
 RETURN i.id, c.id, m.wording
 ORDER BY i.id, c.id";
 
-pub(super) async fn relations_among(
-    graph: &FalkorGraph,
-    concepts: &[ConceptId],
-) -> Result<Vec<Relation>, GraphError> {
-    if concepts.is_empty() {
-        return Ok(Vec::new());
+impl FalkorGraph {
+    /// Every `RELATES_TO` edge that has both ends among these concepts, with its direction (from
+    /// the concept it leaves to the concept it reaches), its kind and the item that stated it. The
+    /// edges are ordered by the id of the concept they leave, then by the id of the concept they
+    /// reach, then by the name of their kind as the edge stores it. An empty slice makes no call.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   relation
+    pub async fn relations_among(
+        &self,
+        concepts: &[ConceptId],
+    ) -> Result<Vec<Relation>, GraphError> {
+        if concepts.is_empty() {
+            return Ok(Vec::new());
+        }
+        let action = "read the relations among the concepts";
+        let parameters = vec![("concepts", id_list(concepts))];
+        let reply = self.run(action, RELATIONS_AMONG, parameters).await?;
+        read_rows(self, action, RELATION_ROW, reply, relation_from_row)
     }
-    let action = "read the relations among the concepts";
-    let parameters = vec![("concepts", id_list(concepts))];
-    let reply = graph.run(action, RELATIONS_AMONG, parameters).await?;
-    read_rows(graph, action, RELATION_ROW, reply, relation_from_row)
-}
 
-pub(super) async fn mentions_between(
-    graph: &FalkorGraph,
-    items: &[ItemId],
-    concepts: &[ConceptId],
-) -> Result<Vec<Mention>, GraphError> {
-    if items.is_empty() || concepts.is_empty() {
-        return Ok(Vec::new());
+    /// Every `MENTIONS` edge from one of these items to one of these concepts, with its wording,
+    /// ordered by the id of the item and then by the id of the concept. An empty slice, for the
+    /// items or for the concepts, makes no call.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   mention
+    pub async fn mentions_between(
+        &self,
+        items: &[ItemId],
+        concepts: &[ConceptId],
+    ) -> Result<Vec<Mention>, GraphError> {
+        if items.is_empty() || concepts.is_empty() {
+            return Ok(Vec::new());
+        }
+        let action = "read the mentions of the concepts by the items";
+        let parameters = vec![("items", id_list(items)), ("concepts", id_list(concepts))];
+        let reply = self.run(action, MENTIONS_BETWEEN, parameters).await?;
+        read_rows(self, action, MENTION_ROW, reply, mention_from_row)
     }
-    let action = "read the mentions of the concepts by the items";
-    let parameters = vec![("items", id_list(items)), ("concepts", id_list(concepts))];
-    let reply = graph.run(action, MENTIONS_BETWEEN, parameters).await?;
-    read_rows(graph, action, MENTION_ROW, reply, mention_from_row)
 }
 
 fn relation_from_row(row: Vec<FalkorValue>) -> Result<Relation, String> {

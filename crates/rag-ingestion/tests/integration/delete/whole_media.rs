@@ -3,8 +3,8 @@
 
 use std::fs;
 
+use graph::MediaNode;
 use graph::testing::{GraphSize, size, stored_concept_graph, stored_document};
-use graph::{GraphStore, MediaNode};
 use ocr::ChapterIndex;
 use rag_core::MediaLabels;
 use rag_ingestion::{

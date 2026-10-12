@@ -6,7 +6,7 @@ use rag_core::{ConceptId, DocId, ItemId};
 
 use super::{FalkorGraph, id_list, id_value, read_rows};
 use crate::contents::{ConceptNode, ItemMentions};
-use crate::store::GraphError;
+use crate::error::GraphError;
 
 const CONCEPT_ROW: &str = "a concept (an id, a name, a normalised name and a definition)";
 const ITEM_ROW: &str =
@@ -51,26 +51,145 @@ WITH c, count(i) AS mentions
 RETURN c.id, c.name, c.normalised_name, c.definition
 ORDER BY mentions DESC, c.normalised_name";
 
-pub(super) async fn find_concept_by_name(
-    graph: &FalkorGraph,
-    normalised_name: &str,
-) -> Result<Option<ConceptNode>, GraphError> {
-    let parameters = vec![("name", FalkorValue::String(normalised_name.to_owned()))];
-    read_concept(
-        graph,
-        "look up a concept by its name",
-        FIND_CONCEPT,
-        parameters,
-    )
-    .await
-}
+impl FalkorGraph {
+    /// The concept that has exactly this text as its normalised name or as one of its normalised
+    /// aliases, or `None`. The text is compared as it is given, so a name that is not in its
+    /// normalised form finds nothing.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   concept
+    pub async fn find_concept_by_name(
+        &self,
+        normalised_name: &str,
+    ) -> Result<Option<ConceptNode>, GraphError> {
+        let parameters = vec![("name", FalkorValue::String(normalised_name.to_owned()))];
+        read_concept(
+            self,
+            "look up a concept by its name",
+            FIND_CONCEPT,
+            parameters,
+        )
+        .await
+    }
 
-pub(super) async fn concept(
-    graph: &FalkorGraph,
-    id: ConceptId,
-) -> Result<Option<ConceptNode>, GraphError> {
-    let parameters = vec![("id", id_value(id))];
-    read_concept(graph, "read a concept by its id", CONCEPT_BY_ID, parameters).await
+    /// The concept with this id, or `None`.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   concept
+    pub async fn concept(&self, id: ConceptId) -> Result<Option<ConceptNode>, GraphError> {
+        let parameters = vec![("id", id_value(id))];
+        read_concept(self, "read a concept by its id", CONCEPT_BY_ID, parameters).await
+    }
+
+    /// The concepts that at least one of the items mentions, each once. They are ordered by how
+    /// many of the items mention them, the most first, and then by normalised name. An empty
+    /// slice makes no call.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   concept
+    pub async fn concepts_for_items(
+        &self,
+        items: &[ItemId],
+    ) -> Result<Vec<ConceptNode>, GraphError> {
+        if items.is_empty() {
+            return Ok(Vec::new());
+        }
+        let parameters = vec![("items", id_list(items))];
+        read_concepts(
+            self,
+            "read the concepts that the items mention",
+            CONCEPTS_FOR_ITEMS,
+            parameters,
+        )
+        .await
+    }
+
+    /// The items that mention at least one of the concepts, each once. Each item comes with the
+    /// concepts it mentions among these. The items are ordered by how many of the concepts they
+    /// mention, the most first, and then by id, and at most `limit` of them come back. An empty
+    /// slice makes no call.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not an
+    ///   item with its concepts
+    pub async fn items_for_concepts(
+        &self,
+        concepts: &[ConceptId],
+        limit: usize,
+    ) -> Result<Vec<ItemMentions>, GraphError> {
+        if concepts.is_empty() {
+            return Ok(Vec::new());
+        }
+        let action = "read the items that mention the concepts";
+        let parameters = vec![
+            ("concepts", id_list(concepts)),
+            (
+                "limit",
+                FalkorValue::I64(i64::try_from(limit).unwrap_or(i64::MAX)),
+            ),
+        ];
+        let reply = self.run(action, ITEMS_FOR_CONCEPTS, parameters).await?;
+        read_rows(self, action, ITEM_ROW, reply, item_mentions_from_row)
+    }
+
+    /// The concepts that a `RELATES_TO` edge joins to one of these concepts, in either direction,
+    /// each once, by normalised name. A concept that is among the given ones is not in the
+    /// answer. An empty slice makes no call.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   concept
+    pub async fn related_concepts(
+        &self,
+        concepts: &[ConceptId],
+    ) -> Result<Vec<ConceptNode>, GraphError> {
+        if concepts.is_empty() {
+            return Ok(Vec::new());
+        }
+        let parameters = vec![("concepts", id_list(concepts))];
+        read_concepts(
+            self,
+            "read the concepts related to the concepts",
+            RELATED_CONCEPTS,
+            parameters,
+        )
+        .await
+    }
+
+    /// The concepts that the items on this page of this document mention, each once. They are
+    /// ordered by how many of those items mention them, the most first, and then by normalised
+    /// name. `page` is the position of the page in the chapter, counted from 1. A page with no
+    /// item, and a document that is not in the graph, give no concept.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   concept
+    pub async fn concepts_on_page(
+        &self,
+        document: DocId,
+        page: u32,
+    ) -> Result<Vec<ConceptNode>, GraphError> {
+        let parameters = vec![
+            ("document", id_value(document)),
+            ("page", FalkorValue::I64(i64::from(page))),
+        ];
+        read_concepts(
+            self,
+            "read the concepts that the items on a page mention",
+            CONCEPTS_ON_PAGE,
+            parameters,
+        )
+        .await
+    }
 }
 
 async fn read_concept(
@@ -91,78 +210,6 @@ async fn read_concepts(
 ) -> Result<Vec<ConceptNode>, GraphError> {
     let reply = graph.run(action, statement, parameters).await?;
     read_rows(graph, action, CONCEPT_ROW, reply, concept_from_row)
-}
-
-pub(super) async fn concepts_for_items(
-    graph: &FalkorGraph,
-    items: &[ItemId],
-) -> Result<Vec<ConceptNode>, GraphError> {
-    if items.is_empty() {
-        return Ok(Vec::new());
-    }
-    let parameters = vec![("items", id_list(items))];
-    read_concepts(
-        graph,
-        "read the concepts that the items mention",
-        CONCEPTS_FOR_ITEMS,
-        parameters,
-    )
-    .await
-}
-
-pub(super) async fn items_for_concepts(
-    graph: &FalkorGraph,
-    concepts: &[ConceptId],
-    limit: usize,
-) -> Result<Vec<ItemMentions>, GraphError> {
-    if concepts.is_empty() {
-        return Ok(Vec::new());
-    }
-    let action = "read the items that mention the concepts";
-    let parameters = vec![
-        ("concepts", id_list(concepts)),
-        (
-            "limit",
-            FalkorValue::I64(i64::try_from(limit).unwrap_or(i64::MAX)),
-        ),
-    ];
-    let reply = graph.run(action, ITEMS_FOR_CONCEPTS, parameters).await?;
-    read_rows(graph, action, ITEM_ROW, reply, item_mentions_from_row)
-}
-
-pub(super) async fn related_concepts(
-    graph: &FalkorGraph,
-    concepts: &[ConceptId],
-) -> Result<Vec<ConceptNode>, GraphError> {
-    if concepts.is_empty() {
-        return Ok(Vec::new());
-    }
-    let parameters = vec![("concepts", id_list(concepts))];
-    read_concepts(
-        graph,
-        "read the concepts related to the concepts",
-        RELATED_CONCEPTS,
-        parameters,
-    )
-    .await
-}
-
-pub(super) async fn concepts_on_page(
-    graph: &FalkorGraph,
-    document: DocId,
-    page: u32,
-) -> Result<Vec<ConceptNode>, GraphError> {
-    let parameters = vec![
-        ("document", id_value(document)),
-        ("page", FalkorValue::I64(i64::from(page))),
-    ];
-    read_concepts(
-        graph,
-        "read the concepts that the items on a page mention",
-        CONCEPTS_ON_PAGE,
-        parameters,
-    )
-    .await
 }
 
 fn concept_from_row(row: Vec<FalkorValue>) -> Result<ConceptNode, String> {

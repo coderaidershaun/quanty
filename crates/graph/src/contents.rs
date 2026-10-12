@@ -6,7 +6,7 @@ use std::str::FromStr;
 use rag_core::{ConceptId, DocId, DocumentLabels, ItemId, ItemKind, MediaLabels};
 
 #[cfg(doc)]
-use crate::store::GraphStore;
+use crate::FalkorGraph;
 
 /// A media a person saved, or that an ingest created. It has no edge: a document names its media
 /// in its own labels.
@@ -32,7 +32,7 @@ pub struct ItemNode {
     pub printed_page: Option<String>,
 }
 
-/// It belongs to no document. It starts with no aliases, and only [`GraphStore::add_alias`]
+/// It belongs to no document. It starts with no aliases, and only [`FalkorGraph::add_alias`]
 /// adds one.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ConceptNode {

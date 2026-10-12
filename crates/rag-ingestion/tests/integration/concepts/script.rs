@@ -94,7 +94,7 @@ pub(super) fn concept_inputs(embedder: &StandInEmbedder) -> Vec<DocumentInput> {
 
 pub(super) struct Scripted {
     pub throwaway: ThrowawayStores,
-    pub stores: Stores<graph::FalkorGraph>,
+    pub stores: Stores,
     pub items: Vec<Item>,
 }
 

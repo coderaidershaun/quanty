@@ -8,7 +8,6 @@
 
 use std::path::{Path, PathBuf};
 
-use graph::GraphStore;
 use gui::backend::live::{LiveContext, Services};
 use gui::contract::{DocId, FailureKind};
 use rag_ingestion::ingest_chapter;
@@ -33,7 +32,7 @@ async fn ingest_a_copy(
     chapter: &str,
     content: &Path,
     models: &rag_ingestion::Models<StandInEmbedder, StandInLlm>,
-    connected: &rag_ingestion::Stores<graph::FalkorGraph>,
+    connected: &rag_ingestion::Stores,
 ) -> Stored {
     let copy = content.join(chapter);
     support::copy_folder(&sample_chapter(chapter), &copy);

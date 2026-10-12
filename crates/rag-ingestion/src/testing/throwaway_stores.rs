@@ -70,7 +70,7 @@ impl ThrowawayStores {
         &self.config
     }
 
-    pub async fn connect(&self) -> Stores<FalkorGraph> {
+    pub async fn connect(&self) -> Stores {
         Stores {
             items: ItemStore::connect(&self.config).expect("the item store should open"),
             graph: FalkorGraph::connect(&self.config)

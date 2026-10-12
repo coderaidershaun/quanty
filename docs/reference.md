@@ -18,7 +18,7 @@ PDFs are turned into searchable items (text, LaTeX formulas and figures). An LLM
 | --- | --- |
 | `ocr` | PDF to text, LaTeX, figures and figure descriptions |
 | `rag-core` | Shared types, IDs, config, `Embedder` and `Llm` traits, Qdrant wrapper |
-| `graph` | `GraphStore` trait and FalkorDB implementation |
+| `graph` | FalkorDB graph store |
 | `rag-ingestion` | Chunking, embedding, concept extraction and resolution (`rag-ingest`) |
 | `rag-retrieval` | Vector search, graph expansion, ranking, answers with citations (`rag-query`) |
 | `gui` | The desktop app: a question, its answer with citations, the page each one stands on, the concept graph and the path of the search (`quanty`) |

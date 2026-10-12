@@ -11,22 +11,11 @@ use std::path::Path;
 use graph::GraphError;
 use ocr::convert::services::{ClaudeError, JevError, ServiceError};
 use ocr::{ContentError, ConvertError, PopplerError, ReadChapterError};
-use rag_core::{ClaudeCliError, ConfigError, EmbedError, LlmError, StoreError};
+use rag_core::{ClaudeCliError, ConfigError, EmbedError, LlmError, StoreError, error_chain};
 use rag_ingestion::{ConceptError, DeleteError, IngestError, PdfError, RelabelError};
 use rag_retrieval::{AnswerError, SearchError};
 
 use crate::contract::{Failure, FailureKind as Kind};
-
-fn chain(error: &dyn Error) -> String {
-    let mut text = error.to_string();
-    let mut cause = error.source();
-    while let Some(next) = cause {
-        text.push_str(": ");
-        text.push_str(&next.to_string());
-        cause = next.source();
-    }
-    text
-}
 
 /// With no hint the kind's standard one is used.
 struct Verdict {
@@ -54,7 +43,7 @@ impl Verdict {
     }
 
     fn failure(self, error: &dyn Error) -> Failure {
-        let failure = Failure::new(self.kind, chain(error));
+        let failure = Failure::new(self.kind, error_chain(error));
         match self.hint {
             Some(hint) => failure.with_hint(hint),
             None => failure,

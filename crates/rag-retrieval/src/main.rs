@@ -98,7 +98,7 @@ async fn run(cli: Cli) -> Result<ExitCode> {
     }
 }
 
-async fn retriever() -> Result<Retriever<GeminiEmbedder, FalkorGraph>> {
+async fn retriever() -> Result<Retriever<GeminiEmbedder>> {
     let config = Config::load().context("could not read the settings")?;
     // The graph is connected first, so a store that is down stops the command before anything is
     // embedded and billed.

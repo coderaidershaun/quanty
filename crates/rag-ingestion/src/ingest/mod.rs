@@ -8,7 +8,7 @@ mod summary;
 
 use std::path::{Path, PathBuf};
 
-use graph::{DocumentNode, GraphError, GraphStore, ItemNode, MediaNode};
+use graph::{DocumentNode, GraphError, ItemNode, MediaNode};
 use ocr::ReadChapterError;
 use rag_core::{
     DocumentInput, DocumentLabels, EmbedError, Embedder, Embedding, ItemPoint, ItemStore, Llm,
@@ -124,19 +124,19 @@ struct Document {
 /// - [`IngestError::Concepts`] when extraction stops, cannot compare two concepts, or cannot use
 ///   its cache folder, its decision log or a store. An item whose questions fail is not an error:
 ///   the summary names it.
-pub async fn ingest_chapter<E: Embedder, L: Llm, G: GraphStore>(
+pub async fn ingest_chapter<E: Embedder, L: Llm>(
     chapter: ChapterFolder<'_>,
     models: &Models<E, L>,
-    stores: &Stores<G>,
+    stores: &Stores,
 ) -> Result<IngestSummary, IngestError> {
     ingest_chapter_reporting(chapter, models, stores, &mut |_, _| {}).await
 }
 
 /// [`ingest_chapter`], telling each step to `on_step` as it happens.
-pub(crate) async fn ingest_chapter_reporting<E: Embedder, L: Llm, G: GraphStore>(
+pub(crate) async fn ingest_chapter_reporting<E: Embedder, L: Llm>(
     chapter: ChapterFolder<'_>,
     models: &Models<E, L>,
-    stores: &Stores<G>,
+    stores: &Stores,
     on_step: OnStep<'_>,
 ) -> Result<IngestSummary, IngestError> {
     // SMELL: the stored picture paths are absolute, so they stop working when the chapter folder is
@@ -171,10 +171,10 @@ pub(crate) async fn ingest_chapter_reporting<E: Embedder, L: Llm, G: GraphStore>
 ///
 /// # Errors
 /// The same as [`ingest_chapter`], except that there is no chapter to find or read.
-pub async fn ingest_image<E: Embedder, L: Llm, G: GraphStore>(
+pub async fn ingest_image<E: Embedder, L: Llm>(
     picture: &LoneImage<'_>,
     models: &Models<E, L>,
-    stores: &Stores<G>,
+    stores: &Stores,
 ) -> Result<IngestSummary, IngestError> {
     // SMELL: the stored picture path is absolute, so it stops working when the converted picture is
     // moved, until it is ingested again. Every program that shows a picture opens the stored path.
@@ -195,7 +195,7 @@ pub async fn ingest_image<E: Embedder, L: Llm, G: GraphStore>(
 impl Document {
     /// Gives the node and every item the labels of the media, the stored media of that title or
     /// else a new one that is added, and the own tags that the stored node already has.
-    async fn take_labels<G: GraphStore>(&mut self, stores: &Stores<G>) -> Result<(), GraphError> {
+    async fn take_labels(&mut self, stores: &Stores) -> Result<(), GraphError> {
         if let Some(media) = self.media.take() {
             let media = stored_or_added(media, stores).await?;
             self.node.labels.take_media(&media.title, &media.labels);
@@ -211,10 +211,10 @@ impl Document {
     }
 }
 
-async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
+async fn ingest_items<E: Embedder, L: Llm>(
     mut document: Document,
     models: &Models<E, L>,
-    stores: &Stores<G>,
+    stores: &Stores,
     on_step: OnStep<'_>,
 ) -> Result<IngestSummary, IngestError> {
     models
@@ -269,10 +269,10 @@ async fn ingest_items<E: Embedder, L: Llm, G: GraphStore>(
 /// An earlier run may have cut the document into other items or found other concepts in them, so
 /// its points go, then its nodes with their mentions and the mark that it is ingested whole. The
 /// points go first, so that no point is ever left without its node.
-async fn replace_earlier_run<G: GraphStore>(
+async fn replace_earlier_run(
     node: &DocumentNode,
     items: &[Item],
-    stores: &Stores<G>,
+    stores: &Stores,
 ) -> Result<(), IngestError> {
     stores.items.delete_document(node.id).await?;
     // SMELL: from here until the new node is written, the own tags are held by this run only, so a

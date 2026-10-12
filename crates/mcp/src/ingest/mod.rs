@@ -28,10 +28,11 @@ pub(crate) struct IngestPdfArgs {
     // only.
     #[serde(alias = "book")]
     media: String,
-    /// `book` (the default), `paper` or `other`. A book's PDF must be named
-    /// `chapter-<number>-<name>.pdf`; a paper or other PDF can have any name. Used only when the
-    /// library does not have this media yet: a stored media keeps its own category, which says
-    /// how the PDF is named.
+    /// `book` (the default), `paper` or `other`. A book's chapter must be named
+    /// `chapter-<number>-<name>.pdf`; a part of a book that is not a chapter takes
+    /// `document_title` and can have any name; a paper or other PDF can have any name. Used only
+    /// when the library does not have this media yet: a stored media keeps its own category,
+    /// which says how the PDF is named.
     category: Option<String>,
     /// The authors of the media. Used only when the library does not have this media yet.
     authors: Option<Vec<String>>,
@@ -40,19 +41,23 @@ pub(crate) struct IngestPdfArgs {
     tags: Option<Vec<String>>,
     /// Tags of this PDF only.
     document_tags: Option<Vec<String>>,
-    /// The title of this document, for a paper or other media. It defaults to the title of the
-    /// media. Not for a book, whose chapter is named by its file name. Whether the media is a
-    /// book is up to the library when it has this media already: a stored media keeps its own
-    /// category, which says how the PDF is named.
+    /// The title of this document. For a paper or other media it defaults to the title of the
+    /// media. For a book it names a part that is not a chapter, such as "Index" or "Glossary":
+    /// the document is stored as "<book>, <title>" and the file can have any name; leave it out
+    /// for a book's chapter, whose file is named `chapter-<number>-<name>.pdf`. Whether the
+    /// media is a book is up to the library when it has this media already: a stored media keeps
+    /// its own category, which says how the PDF is named.
     document_title: Option<String>,
-    /// The absolute path of the PDF on the machine the server runs on. A book's file must be
-    /// named `chapter-<number>-<name>.pdf`.
+    /// The absolute path of the PDF on the machine the server runs on. A book's chapter file
+    /// must be named `chapter-<number>-<name>.pdf`; a part that is not a chapter takes
+    /// `document_title` and any file name.
     path: Option<String>,
     /// The bytes of the PDF as standard base64, for a client that cannot reach the disk of the
     /// server. It goes with `file_name`.
     pdf_base64: Option<String>,
-    /// The name to save the bytes of `pdf_base64` under, with no folder in it; for a book it must
-    /// be `chapter-<number>-<name>.pdf`. Not for `path`.
+    /// The name to save the bytes of `pdf_base64` under, with no folder in it; for a book's
+    /// chapter it must be `chapter-<number>-<name>.pdf`, and a part that is not a chapter takes
+    /// `document_title` and any name. Not for `path`.
     file_name: Option<String>,
 }
 

@@ -101,10 +101,10 @@ impl Local {
         self.settled = self.typed.clone();
     }
 
-    /// A pick is not typing, so the chapter fields that it fills in are settled at once.
+    /// A pick is not typing, so the name fields that it fills in are settled at once.
     fn pick(&mut self, pdf: PathBuf) {
-        self.typed.take_chapter_of(&pdf);
-        self.settled.take_chapter_of(&pdf);
+        self.typed.take_name_of(&pdf);
+        self.settled.take_name_of(&pdf);
         self.pdf = Some(pdf);
         self.wants_check = true;
     }

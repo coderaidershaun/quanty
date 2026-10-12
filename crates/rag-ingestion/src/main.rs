@@ -8,7 +8,7 @@ mod progress;
 use std::path::Path;
 use std::process::ExitCode;
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use clap::{CommandFactory, Parser};
 use graph::FalkorGraph;
 use ocr::{ChapterJob, PageProgress};
@@ -253,18 +253,15 @@ fn naming_failure(error: NamePdfError, unnamed: &UnnamedPdf) -> anyhow::Error {
         NamePdfError::ReadMedia(source) => {
             anyhow::Error::new(source).context("could not read the media that the graph holds")
         }
-        NamePdfError::TitleForABook => anyhow!(
-            "the library has {media_title:?} in the category book, and a book's chapter is named by its file name; leave out --title"
-        ),
         NamePdfError::ChapterFileName(source) => {
             let fix = if flag == Some(Category::Book) {
                 format!(
-                    "{} cannot be ingested as a book chapter; rename it to chapter-<number>-<name>.pdf, or, when the library does not have {media_title:?} yet, give --paper or --other, whose pdf can have any name",
+                    "{} cannot be ingested as a book chapter; rename it to chapter-<number>-<name>.pdf, or give --title when it is a part of the book that is not a chapter, such as its index, or, when the library does not have {media_title:?} yet, give --paper or --other, whose pdf can have any name",
                     pdf.display()
                 )
             } else {
                 format!(
-                    "the library has {media_title:?} in the category book, so its pdf must be named chapter-<number>-<name>.pdf; rename {}",
+                    "the library has {media_title:?} in the category book, so its pdf must be named chapter-<number>-<name>.pdf; rename {}, or give --title when it is a part of the book that is not a chapter, such as its index",
                     pdf.display()
                 )
             };

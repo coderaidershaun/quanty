@@ -131,10 +131,21 @@ fn model(name: &str, input: u64, output: u64) -> ModelTokens {
     }
 }
 
+/// The title the ingest stores: a part of a book is stored under its book, as the live ingest
+/// stores it.
+// SMELL: the converter keeps its own copy of the rule that joins a book's title and a part's
+// title, and the fake may not name that crate, so a change to one must be made in both.
+fn stored_title(request: &IngestRequest) -> String {
+    match (request.category, &request.name) {
+        (Category::Book, DocumentName::Title(part)) => format!("{}, {}", request.media, part),
+        _ => document_title(&request.media, &request.name),
+    }
+}
+
 pub(in crate::backend::fake) fn report(request: &IngestRequest) -> IngestReport {
     IngestReport {
         doc: DocId(Uuid::from_u128(9)),
-        title: document_title(&request.media, &request.name),
+        title: stored_title(request),
         pages: PAGES,
         items: ITEM_COUNTS,
         concepts_created: 14,

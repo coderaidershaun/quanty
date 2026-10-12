@@ -162,8 +162,8 @@ impl CheckedPdf {
     ///
     /// # Errors
     /// - [`PdfIngestError::ReadMedia`] when the graph cannot list its media
-    /// - [`PdfIngestError::TitleForABook`] when a document title was given for a book's PDF
-    /// - [`PdfIngestError::ChapterFileName`] when a book's PDF is not named as a chapter
+    /// - [`PdfIngestError::ChapterFileName`] when a book's PDF has no document title and is not
+    ///   named as a chapter
     /// - [`PdfIngestError::DocumentTitle`] when the document title cannot name a folder
     pub(super) async fn named<G: GraphStore>(
         self,

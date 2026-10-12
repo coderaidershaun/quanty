@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use graph::GraphStore;
-use ocr::content::{CHAPTER_INDEX_FILE, PAGE_IMAGE_FILE, PageIndex, page_folder_name};
+use ocr::content::{CHAPTER_INDEX_FILE, PAGE_IMAGE_FILE, PageIndex, own_title, page_folder_name};
 use ocr::{Chapter, ChapterPiece, ContentError, ImageShows, PieceDetail, ReadChapterError};
 
 use super::chapters::chapters_on_disk;
@@ -138,9 +138,11 @@ fn page_from_disk(target: &PageTarget, content_folder: &Path) -> Result<PageView
     Ok(PageView {
         doc: target.doc,
         page: target.page,
-        media: Some(index.media_title),
         chapter: name.chapter_label(),
-        document_title: name.title().map(str::to_owned),
+        document_title: name
+            .title()
+            .map(|title| own_title(&index.media_title, title).to_owned()),
+        media: Some(index.media_title),
         page_count: index.page_count,
         printed_page,
         image: picture(&folder, target.page),

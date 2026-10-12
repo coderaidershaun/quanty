@@ -10,7 +10,7 @@ use std::path::Path;
 use ocr::{ChapterJob, MediaDocument};
 
 use crate::backend::live::{LiveContext, Services};
-use crate::contract::{Failure, FailureKind, IngestRequest};
+use crate::contract::{Category, DocumentName, Failure, FailureKind, IngestRequest};
 
 pub use preflight::preflight;
 pub use run::run;
@@ -19,14 +19,20 @@ const PDF_START: &[u8] = b"%PDF-";
 
 /// These checks cost nothing, and a check and a start share them. Nothing is written and no
 /// store is asked. The name of the document comes with the request as the person typed it, so
-/// the PDF may have any file name.
+/// the PDF may have any file name. A title typed for a book is a part of the book, which is
+/// stored under the book's title.
 fn chapter_job<S: Services>(
     cx: &LiveContext<S>,
     ingest: &IngestRequest,
 ) -> Result<ChapterJob, Failure> {
-    let document = MediaDocument {
-        media_title: ingest.media.clone(),
-        name: (&ingest.name).into(),
+    let document = match (ingest.category, &ingest.name) {
+        (Category::Book, DocumentName::Title(part)) => {
+            MediaDocument::book_part(&ingest.media, part)
+        }
+        _ => MediaDocument {
+            media_title: ingest.media.clone(),
+            name: (&ingest.name).into(),
+        },
     };
     let job = ChapterJob::new(document, &ingest.pdf, &cx.config().content_folder)
         .map_err(|error| cx.failure(error))?;

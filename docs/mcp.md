@@ -91,7 +91,7 @@ It also gives `unreadable_chapters`: one line for each converted document under 
 | `document_id` | Required. From a search result or `list_documents` |
 | `page` | Required. The `page` of a search result (from 1), not the printed number |
 
-Gives `document_id`, `media` (the title of its media), `chapter_number` and `chapter_name` (for a book's chapter), `document_title` (for a document with a title of its own, such as a paper's), `page`, `pages`, `printed_page`, `page_image` (the path of the picture of the whole page) and `pieces`: for each, `number`, `kind` (`heading`, `text`, `formula`, `figure`, `table` or `footnote`), `section` (the headings it sits under, outermost first), `label`, `content` and, for a figure, `picture`.
+Gives `document_id`, `media` (the title of its media), `chapter_number` and `chapter_name` (for a book's chapter), `document_title` (for a document with a title of its own, such as a paper's or a part of a book that is not a chapter; it gives the whole stored title, which for a part is "<book>, <part>"), `page`, `pages`, `printed_page`, `page_image` (the path of the picture of the whole page) and `pieces`: for each, `number`, `kind` (`heading`, `text`, `formula`, `figure`, `table` or `footnote`), `section` (the headings it sits under, outermost first), `label`, `content` and, for a figure, `picture`.
 
 ### `health`
 
@@ -112,7 +112,7 @@ See the next part.
 | `authors` | The authors of the media, in order. Used only when the library does not have this media yet |
 | `tags` | The tags of the media. Used only when the library does not have this media yet |
 | `document_tags` | The tags of this PDF only. They are added to the tags that the document has |
-| `document_title` | The title of the document, for a paper or another media. It defaults to the title of the media. Not for a book, whose chapter is named by its file name |
+| `document_title` | The title of the document. For a paper or another media it defaults to the title of the media. For a book it names a part that is not a chapter, such as "Index" or "Glossary": the document is stored as "<book>, <title>" and the file can have any name. Leave it out for a book's chapter, whose file is named `chapter-<number>-<name>.pdf` |
 
 An ingest never changes a stored media: to change its labels, use `rag-ingest media` or the Library tab of the desktop app. The media is found by its title whatever its capitals and the space at its ends.
 
@@ -125,11 +125,12 @@ The PDF is sent one of two ways. Give exactly one of them.
 
 Rules:
 
-- The media is a book when the library has it as a book, and a new media is a book when `category` is left out or is `book`. The PDF of a book is named `chapter-<number>-<name>.pdf`, such as `chapter-1-financial-contracts.pdf`: the chapter comes from the file name. A book's file with another name must be copied or renamed first, and a book takes no `document_title`.
+- The media is a book when the library has it as a book, and a new media is a book when `category` is left out or is `book`. The PDF of a book's chapter is named `chapter-<number>-<name>.pdf`, such as `chapter-1-financial-contracts.pdf`: the chapter comes from the file name. A book's file with another name and no `document_title` must be copied or renamed first, or sent with a `document_title`.
+- A part of a book that is not a chapter, such as its index, takes a `document_title` and can have any file name. It is stored as "<book>, <title>", such as "Option Volatility and Pricing, Index".
 - The PDF of a paper or another media can have any name.
 - It must be an existing file that starts with `%PDF-` and is at most 50 MiB.
 - An upload (`pdf_base64`) is saved under the content folder, in `_uploads/<media folder>/<file name>`, and never at a path that the caller chooses. A `file_name` with a folder in it is refused.
-- The converted pages are saved under the content folder, in `<media folder>/chapter-<number>/` for a book's chapter and in `<media folder>/<document title folder>/` for any other document. The folders are made from the titles: lower case, with one dash for each run of characters that are not letters or digits.
+- The converted pages are saved under the content folder, in `<media folder>/chapter-<number>/` for a book's chapter and in `<media folder>/<document title folder>/` for any other document, which for a part of a book is `<media folder>/<part title folder>/`, made from the title of the part alone. The folders are made from the titles: lower case, with one dash for each run of characters that are not letters or digits.
 
 The call does not wait for the whole ingest, which takes minutes. It answers once the paid work has begun, with a `job_id` and `state: "running"`. Then the agent asks `ingest_status` with that `job_id` every 20 to 30 seconds until `state` is not `running`. Both tools give the same report: `job_id`, `state`, `media` (the title of the media), `file` (the file name) and, by `state`:
 
@@ -159,7 +160,7 @@ A failure comes back as a tool error (`isError: true`) with a text that says wha
 | `read_page` for a document that is not found, when some converted documents cannot be read | The id, the content folder, "the document may be one of the chapters that cannot be read" with the file of each, and: call `list_documents` |
 | `read_page` for a page the document does not have | The page and how many pages there are |
 | `ingest_status` for an unknown `job_id` | Job ids are forgotten when the server restarts, and the server keeps only its last 100 jobs; send the PDF again |
-| A PDF that is refused: no file at the path, not a file, not a PDF, too big, a `file_name` with a folder in it, a book's file name that is not `chapter-<number>-<name>.pdf`, a `document_title` for a book | The reason and the fix |
+| A PDF that is refused: no file at the path, not a file, not a PDF, too big, a `file_name` with a folder in it, a book's file name that is not `chapter-<number>-<name>.pdf` and has no `document_title` | The reason and the fix |
 | A store that is down when the PDF is named, before the job starts | `could not connect to the graph`, or `could not read from the graph which media the library has`, with the address it names, and: call the `health` tool, and send the same PDF again |
 | An ingest is already running | Its `job_id`, and: ask `ingest_status`, and send this PDF when that job has ended |
 

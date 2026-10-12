@@ -142,7 +142,7 @@ fn the_same_save_goes_through_and_the_card_shows_the_new_labels(
     assert_eq!(after.category, Category::Other);
     assert_eq!(after.authors, ["Ann Writer", "Bo Writer"]);
     assert_eq!(after.tags, ["teaching"]);
-    assert_eq!(after.documents.len(), 2);
+    assert_eq!(after.documents.len(), 3);
     for (document, old) in after.documents.iter().zip(&before.documents) {
         assert_eq!(document.authors, ["Ann Writer", "Bo Writer"]);
         assert_eq!(document.media_tags, ["teaching"]);

@@ -60,7 +60,8 @@ impl Category {
 }
 
 /// How a document of a media is named: a chapter of a book, or a document with a title of its
-/// own. The order puts chapters first, by number, and then titled documents by title.
+/// own, such as a paper, a document of another media, or a part of a book that is not a chapter.
+/// The order puts chapters first, by number, and then titled documents by title.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum DocumentName {
     Chapter { number: u32, name: String },
@@ -80,12 +81,7 @@ impl DocumentName {
         let words: Vec<String> = words
             .split('-')
             .filter(|word| !word.is_empty())
-            .map(|word| {
-                let mut letters = word.chars();
-                letters.next().map_or_else(String::new, |first| {
-                    first.to_uppercase().chain(letters).collect()
-                })
-            })
+            .map(capitalise)
             .collect();
         if words.is_empty() {
             return None;
@@ -94,6 +90,22 @@ impl DocumentName {
             number: digits.parse().ok()?,
             name: words.join(" "),
         })
+    }
+
+    /// The words of a file name as a title, each with a capital first letter: "maths_appendix.pdf"
+    /// reads "Maths Appendix". A run of characters that are not letters or digits splits two
+    /// words.
+    pub fn title_from_file_name(file_name: &str) -> String {
+        let stem = std::path::Path::new(file_name)
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .unwrap_or(file_name);
+        let words: Vec<String> = stem
+            .split(|character: char| !character.is_alphanumeric())
+            .filter(|word| !word.is_empty())
+            .map(capitalise)
+            .collect();
+        words.join(" ")
     }
 
     /// "Chapter 3 · Greeks" for a chapter, and the title for a titled document.
@@ -124,11 +136,22 @@ impl DocumentName {
     }
 }
 
+fn capitalise(word: &str) -> String {
+    let mut letters = word.chars();
+    letters.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(letters).collect()
+    })
+}
+
 /// One stored document: a chapter, a document with a title of its own, or a picture that stands
 /// alone.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct Document {
     pub id: DocId,
+    /// The title the document is listed by. A chapter has its stored title, such as "<book>,
+    /// chapter 3: Greeks". A document with no chapter has its stored title without the media's
+    /// title and the comma after it, so a part of a book reads "Index". The stores and the ask
+    /// results keep the whole stored title.
     pub title: String,
     /// `None`: a titled document, a lone picture, or the chapter's folder is gone.
     pub chapter: Option<ChapterLabel>,

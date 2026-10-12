@@ -251,7 +251,7 @@ fn pressing_delete_opens_a_sheet_that_counts_the_documents_that_go(harness: &mut
         "the sheet names the media"
     );
     for words in [
-        "2 documents",
+        "3 documents",
         "passages, formulas, figures and tables of each",
         "converted pages of each",
         "cannot be undone",
@@ -272,7 +272,7 @@ fn the_confirm_sends_one_delete_and_the_media_goes_with_its_documents(
         .documents_of_media(NOTES)
         .map(|document| document.id)
         .collect();
-    assert_eq!(documents_of_the_media.len(), 2);
+    assert_eq!(documents_of_the_media.len(), 3);
     let loads = loads_of_the_catalogue(seen);
 
     click(harness, Role::Button, "Delete media");

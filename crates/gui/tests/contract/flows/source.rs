@@ -11,7 +11,10 @@ use gui::app::layout::DEFAULT_WINDOW;
 use gui::contract::{Category, DocId, Intent, Loadable, PieceKind};
 use gui::testkit;
 
-use super::{COMMAND, Window, click, click_in, has, is_enabled, node, panels, press, says, shared};
+use super::{
+    COMMAND, Window, are_stacked_in_order, click, click_in, has, is_enabled, node, panels, press,
+    says, shared,
+};
 
 const SOURCE_TITLE: &str = "Source in Context";
 const GRAPH_TITLE: &str = "Concept Graph";
@@ -165,6 +168,18 @@ fn a_chapter_with_no_page_pictures_shows_its_pieces(harness: &mut Window, doc: D
     open_the_media_list(harness);
     click(harness, Role::Button, &notes_media);
     click(harness, Role::ComboBox, "Document");
+    assert!(
+        are_stacked_in_order(
+            harness,
+            Role::Button,
+            &[
+                "Chapter 1 · Options Pricing Intuition",
+                "Chapter 2 · Black Scholes In Depth",
+                "Index",
+            ]
+        ),
+        "the Document list names the chapters first and then the index by its title"
+    );
     let chapter = shared(harness)
         .library
         .catalogue

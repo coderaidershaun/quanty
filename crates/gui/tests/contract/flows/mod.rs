@@ -52,6 +52,16 @@ fn says(harness: &Window, words: &str) -> bool {
     harness.query_all_by_label_contains(words).next().is_some()
 }
 
+/// Whether the nodes of that role and those names stand on the screen from the top down in the
+/// order given.
+fn are_stacked_in_order(harness: &Window, role: Role, names: &[&str]) -> bool {
+    let tops: Vec<f32> = names
+        .iter()
+        .map(|name| node(harness, role, name).rect().top())
+        .collect();
+    tops.is_sorted_by(|above, below| above < below)
+}
+
 fn click(harness: &mut Window, role: Role, name: &str) {
     node(harness, role, name).click();
     testkit::settle(harness);

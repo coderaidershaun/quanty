@@ -42,11 +42,6 @@ pub(crate) enum PdfIngestError {
     )]
     Tag(#[source] EmptyTag),
 
-    #[error(
-        "`document_title` is for a paper or other media, and this media is a book, whose chapter is named by its file name; leave `document_title` out, or, when the library does not have this media yet, give a `category` of paper or other; a media the library has keeps its own category"
-    )]
-    TitleForABook,
-
     #[error("`path` must be an absolute path, and {} is not", path.display())]
     NotAbsolute { path: PathBuf },
 
@@ -93,7 +88,7 @@ pub(crate) enum PdfIngestError {
     Media(#[source] ContentError),
 
     #[error(
-        "this media is a book, and the file name is not that of a book chapter; copy or rename the file to chapter-<number>-<name>.pdf, such as chapter-1-financial-contracts.pdf, or give such a `file_name` with `pdf_base64`, or, when the library does not have this media yet, give a `category` of paper or other, whose PDF can have any name; a media the library has keeps its own category"
+        "this media is a book, and the file name is not that of a book chapter; copy or rename the file to chapter-<number>-<name>.pdf, such as chapter-1-financial-contracts.pdf, or give such a `file_name` with `pdf_base64`, or give `document_title` when the PDF is a part of the book that is not a chapter, such as its index, or, when the library does not have this media yet, give a `category` of paper or other, whose PDF can have any name; a media the library has keeps its own category"
     )]
     ChapterFileName(#[source] ContentError),
 
@@ -161,7 +156,6 @@ impl From<NamePdfError> for PdfIngestError {
     fn from(error: NamePdfError) -> PdfIngestError {
         match error {
             NamePdfError::ReadMedia(source) => PdfIngestError::ReadMedia(source),
-            NamePdfError::TitleForABook => PdfIngestError::TitleForABook,
             NamePdfError::ChapterFileName(source) => PdfIngestError::ChapterFileName(source),
         }
     }

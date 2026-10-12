@@ -264,11 +264,12 @@ impl<S: Services> QuantyServer<S> {
     /// searched. It is PAID and slow: each page is read by `claude` and Jev, the items are
     /// embedded by Gemini and the concepts are found by `claude`, which takes minutes for a
     /// chapter. The call answers when that work has started, with a `job_id` for
-    /// `ingest_status`. A PDF that is already ingested costs nothing. A book's PDF must be named
-    /// `chapter-<number>-<name>.pdf`; a paper or other PDF can have any name. One ingest runs at
-    /// a time in this server, and the same PDF must not be sent through a second server, or beside
-    /// `rag-ingest pdf`, at the same time. Sending the same PDF again goes on from where a stopped
-    /// run ended.
+    /// `ingest_status`. A PDF that is already ingested costs nothing. A book's chapter must be
+    /// named `chapter-<number>-<name>.pdf`; a part of a book that is not a chapter, such as its
+    /// index, takes `document_title` and can have any file name; a paper or other PDF can have
+    /// any name. One ingest runs at a time in this server, and the same PDF must not be sent
+    /// through a second server, or beside `rag-ingest pdf`, at the same time. Sending the same
+    /// PDF again goes on from where a stopped run ended.
     #[tool(annotations(
         read_only_hint = false,
         destructive_hint = false,

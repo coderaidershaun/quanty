@@ -52,14 +52,17 @@ pub(super) struct GivenPdf {
     #[command(flatten)]
     pub(super) media: PdfMedia,
 
-    /// The title of this document, for a paper or another media. It defaults to the title of the
-    /// media
-    #[arg(long, conflicts_with = "book")]
+    /// The title of this document. For a paper or another media it defaults to the title of the
+    /// media. For a book it names a part that is not a chapter, such as its index, and the PDF
+    /// can then have any name
+    #[arg(long)]
     pub(super) title: Option<String>,
 
     // This help text is an attribute and not a doc comment, because rustdoc takes `<number>` for
     // an HTML tag that is never closed.
-    #[arg(help = "The PDF; a book chapter's PDF must be named chapter-<number>-<name>.pdf")]
+    #[arg(
+        help = "The PDF; a book chapter's PDF must be named chapter-<number>-<name>.pdf, and a part of a book that is not a chapter takes --title"
+    )]
     pub(super) pdf: PathBuf,
 
     #[command(flatten)]
@@ -162,7 +165,7 @@ pub(super) struct PdfMedia {
     #[arg(
         long,
         value_name = "TITLE",
-        help = "The title of the book the PDF is a chapter of. The PDF must be named chapter-<number>-<name>.pdf. A media the library already has keeps its own category"
+        help = "The title of the book the PDF belongs to. A chapter's PDF must be named chapter-<number>-<name>.pdf; a part that is not a chapter takes --title. A media the library already has keeps its own category"
     )]
     book: Option<String>,
 

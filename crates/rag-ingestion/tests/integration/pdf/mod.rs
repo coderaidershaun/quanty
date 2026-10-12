@@ -3,6 +3,7 @@
 //! stores are throwaway ones, and the content folder is a temporary one.
 
 mod command;
+mod naming;
 mod runs;
 mod summary;
 

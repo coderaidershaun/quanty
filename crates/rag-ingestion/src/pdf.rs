@@ -56,7 +56,9 @@ pub struct UnnamedPdf<'a> {
     pub media_title: &'a str,
     /// Makes a new media only: a media the library has keeps its own category.
     pub category: Option<Category>,
-    /// The document's own title, for a paper or another media. A blank one counts as not given.
+    /// The document's own title: for a paper or another media, instead of the media's title; for
+    /// a book, the title of a part that is not a chapter, such as its index. A blank one counts
+    /// as not given.
     pub document_title: Option<&'a str>,
     pub pdf: &'a Path,
 }
@@ -75,10 +77,9 @@ pub enum NamePdfError {
     #[error("could not read from the graph which media the library has")]
     ReadMedia(#[source] GraphError),
 
-    #[error("a book's chapter is named by its file name, so it takes no document title")]
-    TitleForABook,
-
-    #[error("the pdf of a book must be named chapter-<number>-<name>.pdf")]
+    #[error(
+        "the pdf of a book must be named chapter-<number>-<name>.pdf, or be given the title of a part of the book that is not a chapter"
+    )]
     ChapterFileName(#[source] ContentError),
 }
 
@@ -216,43 +217,55 @@ where
 }
 
 impl UnnamedPdf<'_> {
-    /// Names the document by the category of its media, which the graph is asked for. A book's
-    /// PDF must be named `chapter-<number>-<name>.pdf` and takes no document title. A paper or
-    /// another media takes the document's own title, or else the media's. It writes nothing.
+    /// Asks the graph for the category of the media, then names the document with
+    /// [`UnnamedPdf::named_by`]. It writes nothing.
     ///
     /// # Errors
     /// - [`NamePdfError::ReadMedia`] when the graph cannot list its media
-    /// - [`NamePdfError::TitleForABook`] when a document title was given for a book's PDF
-    /// - [`NamePdfError::ChapterFileName`] when a book's PDF is named in another way
+    /// - [`NamePdfError::ChapterFileName`] when a book's PDF has no document title and is not
+    ///   named as a chapter
     pub async fn named<G: GraphStore>(&self, graph: &G) -> Result<NamedPdf, NamePdfError> {
         let category = media_category(self.media_title, self.category, graph)
             .await
             .map_err(NamePdfError::ReadMedia)?;
+        self.named_by(category)
+    }
+
+    /// Names the document as a PDF of a media in `category`, the category the library has for
+    /// the media or else the one given; `self.category` is not read. It asks no store and writes
+    /// nothing. A book's PDF with a document title is a part of the book that is not a chapter,
+    /// and its file can have any name; without a title it must be named
+    /// `chapter-<number>-<name>.pdf`. A paper or another media takes the document's own title,
+    /// or else the media's.
+    ///
+    /// # Errors
+    /// [`NamePdfError::ChapterFileName`] when a book's PDF has no document title and is not
+    /// named as a chapter.
+    pub fn named_by(&self, category: Category) -> Result<NamedPdf, NamePdfError> {
         let document_title = self
             .document_title
             .map(str::trim)
             .filter(|title| !title.is_empty());
-        let name = match (category, document_title) {
-            (Category::Book, Some(_)) => return Err(NamePdfError::TitleForABook),
+        let document = match (category, document_title) {
+            (Category::Book, Some(part)) => MediaDocument::book_part(self.media_title, part),
             (Category::Book, None) => {
                 let file_name = self
                     .pdf
                     .file_name()
                     .map(|name| name.to_string_lossy().into_owned())
                     .unwrap_or_default();
-                parse_chapter_file_name(&file_name).map_err(NamePdfError::ChapterFileName)?
+                MediaDocument {
+                    media_title: self.media_title.to_owned(),
+                    name: parse_chapter_file_name(&file_name)
+                        .map_err(NamePdfError::ChapterFileName)?,
+                }
             }
-            (Category::Paper | Category::Other, title) => {
-                DocumentName::Title(title.unwrap_or(self.media_title).trim().to_owned())
-            }
-        };
-        Ok(NamedPdf {
-            category,
-            document: MediaDocument {
+            (Category::Paper | Category::Other, title) => MediaDocument {
                 media_title: self.media_title.to_owned(),
-                name,
+                name: DocumentName::Title(title.unwrap_or(self.media_title).trim().to_owned()),
             },
-        })
+        };
+        Ok(NamedPdf { category, document })
     }
 }
 

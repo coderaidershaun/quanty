@@ -21,7 +21,7 @@ use tokio::process::Command;
 
 use crate::content::{
     ChapterIndex, ContentError, DocumentName, FORMAT_VERSION, MediaDocument, PageIndex,
-    media_folder_name, page_folder_name,
+    page_folder_name,
 };
 
 use services::{ClaudeError, LiveServices, PageServices, ServiceError};
@@ -121,7 +121,8 @@ pub struct ChapterJob {
 
 impl ChapterJob {
     /// Works out the document's folder under `output_root`. Opens no file, and the name of the
-    /// document comes from `document`, never from the file's name.
+    /// document comes from `document`, never from the file's name. A titled document's folder
+    /// comes from its own title, without the media's title in front.
     ///
     /// # Errors
     /// [`ConvertError::Content`] when the media title or the document title has no letters or
@@ -135,9 +136,7 @@ impl ChapterJob {
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let chapter_folder = output_root
-            .join(media_folder_name(&document.media_title)?)
-            .join(document.name.folder_name()?);
+        let chapter_folder = output_root.join(document.folder()?);
         Ok(Self {
             media_title: document.media_title,
             name: document.name,

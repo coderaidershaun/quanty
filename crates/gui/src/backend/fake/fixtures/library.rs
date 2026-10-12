@@ -1,5 +1,5 @@
 //! The catalogue and the pages that are read from the committed sample chapters, built as the
-//! live backend builds them, and one paper that has no folder.
+//! live backend builds them, and one paper and one part of a book that have no folder.
 
 use std::path::{Path, PathBuf};
 
@@ -30,10 +30,13 @@ const OWN_TAGS: [&[&str]; CHAPTERS.len()] = [
     &["book", "volatility"],
 ];
 
+/// The sample book that also holds a part that is not a chapter.
+const NOTES: &str = "Quanty Sample Notes";
+
 /// The authors of the media of the sample chapters. Both are books with no media tags.
 const SAMPLE_AUTHORS: [(&str, &[&str]); 2] = [
     ("Option Volatility and Pricing", &[]),
-    ("Quanty Sample Notes", &["Quanty Team"]),
+    (NOTES, &["Quanty Team"]),
 ];
 
 /// The paper of the sample library, kept in code because it has no folder, so the source view
@@ -64,6 +67,28 @@ fn paper() -> Media {
         authors,
         tags,
         documents: vec![document],
+    }
+}
+
+/// The index of the sample notes, kept in code because it has no folder, so the source view
+/// cannot open it. It is listed by its own title, as the live backend lists a part of a book.
+fn index(authors: Vec<String>) -> Document {
+    Document {
+        id: DocId(Uuid::from_u128(5)),
+        title: "Index".to_owned(),
+        chapter: None,
+        authors,
+        media_tags: Vec::new(),
+        tags: Vec::new(),
+        pages: Some(6),
+        items: ItemCounts {
+            chunks: 9,
+            formulas: 0,
+            figures: 0,
+            tables: 0,
+        },
+        ingested_items: Some(9),
+        folder: None,
     }
 }
 
@@ -141,8 +166,18 @@ pub(in crate::backend::fake) fn catalogue(samples: &Path) -> Result<Catalogue, S
         let number = document.chapter.as_ref().map(|chapter| chapter.number);
         (media.to_lowercase(), number)
     });
+    let mut catalogue = Catalogue {
+        media: media_of(documents),
+    };
+    catalogue.sort_media();
+    Ok(catalogue)
+}
+
+/// The paper, then the books of the sorted chapters, each chapter under its media. The index of
+/// the notes goes after their chapters, which is the order the live backend gives.
+fn media_of(chapters: Vec<(String, Document)>) -> Vec<Media> {
     let mut media: Vec<Media> = vec![paper()];
-    for (title, document) in documents {
+    for (title, document) in chapters {
         match media.last_mut() {
             Some(group) if group.title.as_deref() == Some(title.as_str()) => {
                 group.documents.push(document);
@@ -156,9 +191,13 @@ pub(in crate::backend::fake) fn catalogue(samples: &Path) -> Result<Catalogue, S
             }),
         }
     }
-    let mut catalogue = Catalogue { media };
-    catalogue.sort_media();
-    Ok(catalogue)
+    if let Some(notes) = media
+        .iter_mut()
+        .find(|group| group.title.as_deref() == Some(NOTES))
+    {
+        notes.documents.push(index(notes.authors.clone()));
+    }
+    media
 }
 
 fn picture(path: PathBuf) -> Option<ImageRef> {

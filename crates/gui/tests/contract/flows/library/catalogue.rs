@@ -21,7 +21,8 @@ use uuid::Uuid;
 use super::{Ingests, delete_buttons, documents_of, open_switched};
 use crate::flows::recording::Seen;
 use crate::flows::{
-    COMMAND, Window, click, copied_by, has, is_open_tab, node, press, says, shared,
+    COMMAND, Window, are_stacked_in_order, click, copied_by, has, is_open_tab, node, press, says,
+    shared,
 };
 
 /// Lists one catalogue that the test wrote by hand and refuses every other command.
@@ -197,6 +198,18 @@ fn the_tab_opens_the_page_and_the_page_lists_the_media_and_their_documents(harne
             assert!(has(harness, Role::Label, tag), "the tag `{tag}` is said");
         }
     }
+    assert!(
+        are_stacked_in_order(
+            harness,
+            Role::Label,
+            &[
+                "Chapter 1 · Options Pricing Intuition",
+                "Chapter 2 · Black Scholes In Depth",
+                "Index",
+            ]
+        ),
+        "the notes list their chapters first and then their index"
+    );
     testkit::save_png(harness, "app-library-list");
 
     click(harness, Role::Tab, "Ask");

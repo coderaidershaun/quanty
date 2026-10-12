@@ -55,7 +55,7 @@ fn assert_scene(name: &str, shared: &Shared) {
     // With no seed the search stops at its first step, so no later step has a value.
     let stopped_at_the_first_step = trace.is_some_and(|trace| *trace == Default::default());
     let ok = match name {
-        "idle" | "gallery" => documents == Some(4) && ask.search == Loadable::Idle,
+        "idle" | "gallery" => documents == Some(5) && ask.search == Loadable::Idle,
         "first-run" | "empty-library" => documents == Some(0) && ask.search == Loadable::Idle,
         "black-scholes" => results == Some(9) && nodes > Some(0) && blocks > Some(0),
         "no-answer" => results == Some(9) && blocks == Some(0),

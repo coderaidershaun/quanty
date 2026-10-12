@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use graph::{DocumentRecord, GraphStore, MediaNode};
 use ocr::ChapterEntry;
-use ocr::content::media_folder_name;
+use ocr::content::{media_folder_name, own_title};
 use rag_ingestion::{MediaChange, TagChange, relabel_document_tags, relabel_media};
 
 use super::chapters::chapters_on_disk;
@@ -238,7 +238,8 @@ fn reading_order(document: &Document) -> (bool, Option<u32>, String, DocId) {
 }
 
 /// What the document on disk gives is left empty when it is not there, never made up. A
-/// document with a title of its own has no chapter.
+/// document with no chapter is listed by its title without the media's title in front, so a
+/// part of a book reads "Index".
 fn document_of(record: DocumentRecord, entry: Option<ChapterEntry>) -> Listed {
     let DocumentRecord {
         node,
@@ -254,9 +255,13 @@ fn document_of(record: DocumentRecord, entry: Option<ChapterEntry>) -> Listed {
         }
         None => (None, None, None),
     };
+    let title = match (&chapter, labels.media.as_deref()) {
+        (None, Some(media)) => own_title(media, &node.title).to_owned(),
+        _ => node.title,
+    };
     let document = Document {
         id: node.id.into(),
-        title: node.title,
+        title,
         chapter,
         authors: labels.authors,
         media_tags: labels.media_tags.iter().map(ToString::to_string).collect(),

@@ -66,7 +66,8 @@ pub enum ContentError {
 }
 
 /// How a document of a media is named: a chapter of a book, or a document with a title of its
-/// own. The order puts chapters first, by number, and then titled documents by title.
+/// own, such as a paper, a document of another media, or a part of a book that is not a chapter.
+/// The order puts chapters first, by number, and then titled documents by title.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum DocumentName {
@@ -74,29 +75,54 @@ pub enum DocumentName {
     Title(String),
 }
 
-impl DocumentName {
-    /// `chapter-<number>` for a chapter, and the title in lower case with dashes for a titled
-    /// document.
-    ///
-    /// # Errors
-    /// [`ContentError::EmptyDocumentFolderName`] for a title with no letters or digits.
-    pub fn folder_name(&self) -> Result<String, ContentError> {
-        match self {
-            DocumentName::Chapter { number, .. } => Ok(format!("chapter-{number}")),
-            DocumentName::Title(title) => {
-                slug(title).ok_or_else(|| ContentError::EmptyDocumentFolderName {
-                    title: title.clone(),
-                })
-            }
-        }
-    }
-}
-
 /// A document together with the title of the media it belongs to: what names its folder.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MediaDocument {
     pub media_title: String,
     pub name: DocumentName,
+}
+
+impl MediaDocument {
+    /// A part of a book that is not a chapter, such as its index. The stored title starts with
+    /// the book's, so the parts of two books that share a name stay apart.
+    pub fn book_part(media_title: &str, part_title: &str) -> MediaDocument {
+        MediaDocument {
+            media_title: media_title.to_owned(),
+            name: DocumentName::Title(format!("{}, {}", media_title.trim(), part_title.trim())),
+        }
+    }
+
+    /// `<media folder>/<document folder>`, where a chapter's folder is `chapter-<number>` and a
+    /// titled document's is its own title in lower case with dashes. The book is left out of a
+    /// part's title, so the index of a book is in `<media folder>/index`.
+    ///
+    /// # Errors
+    /// - [`ContentError::EmptyMediaFolderName`] for a media title with no letters or digits
+    /// - [`ContentError::EmptyDocumentFolderName`] for a title with no letters or digits
+    pub(crate) fn folder(&self) -> Result<PathBuf, ContentError> {
+        let media_folder = media_folder_name(&self.media_title)?;
+        let document_folder = match &self.name {
+            DocumentName::Chapter { number, .. } => format!("chapter-{number}"),
+            DocumentName::Title(title) => {
+                let own = own_title(&self.media_title, title);
+                slug(own).ok_or_else(|| ContentError::EmptyDocumentFolderName {
+                    title: own.to_owned(),
+                })?
+            }
+        };
+        Ok(Path::new(&media_folder).join(document_folder))
+    }
+}
+
+/// The title without `<media title>, ` in front, whatever the capitals of the media title. A
+/// title that does not start that way is given whole.
+pub fn own_title<'a>(media_title: &str, title: &'a str) -> &'a str {
+    let media = media_title.trim();
+    title
+        .split_at_checked(media.len())
+        .filter(|(start, _)| start.to_lowercase() == media.to_lowercase())
+        .and_then(|(_, rest)| rest.strip_prefix(", "))
+        .unwrap_or(title)
 }
 
 /// Reads the number and the name of a book chapter from `chapter-<number>-<name>.pdf`.

@@ -40,9 +40,29 @@ async fn the_command_names_a_pdf_by_the_category_that_the_library_has_for_its_me
         ),
         "{stderr}"
     );
+    assert!(stderr.contains("give --title"), "{stderr}");
     let media_folder = throwaway
         .config()
         .content_folder
         .join("hawkes-processes-in-finance");
     assert!(!media_folder.exists(), "nothing was converted");
+
+    // No file is at this path on purpose: the run stops at that check, before anything is
+    // converted or paid for, and it still shows that --book takes --title.
+    let absent = throwaway.temporary_folder().join("index.pdf");
+    let output = throwaway.rag_ingest_with_fake_keys([
+        OsStr::new("pdf"),
+        OsStr::new("--book"),
+        OsStr::new("Hawkes Processes in Finance"),
+        OsStr::new("--title"),
+        OsStr::new("Index"),
+        absent.as_os_str(),
+    ]);
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("is not there; give the pdf to ingest"),
+        "{stderr}"
+    );
 }

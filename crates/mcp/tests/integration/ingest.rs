@@ -143,6 +143,7 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
     let text = error_text(&call(&client, "ingest_pdf", as_a_book).await);
     assert!(text.contains("chapter-<number>-<name>.pdf"), "{text}");
     assert!(text.contains("rename"), "{text}");
+    assert!(text.contains("document_title"), "{text}");
 
     let first = call(&client, "ingest_pdf", sent.clone()).await;
 
@@ -206,6 +207,45 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
     assert!(
         again.get("usage").is_none() && again.get("cost_usd").is_none(),
         "a document that was already ingested used nothing: {again}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored ingest::"]
+async fn a_part_of_a_book_is_named_by_its_document_title_whatever_its_file_name() {
+    let (services, open_the_gate) = StandInServices::new().with_gate();
+    let (stores, server) = empty_library("mcp-ingest-part", services);
+    let client = connect(server).await;
+    let index = stores.temporary_folder().join("index.pdf");
+    std::fs::copy(sample_pdf(), &index).unwrap();
+
+    let first = call(
+        &client,
+        "ingest_pdf",
+        json!({
+            "media": "Option Volatility and Pricing",
+            "path": index,
+            "document_title": "Index",
+        }),
+    )
+    .await;
+
+    let started = structured(&first);
+    assert_eq!(started["state"], "running");
+    open_the_gate.send(()).unwrap();
+    let ended = report_when_ended(&client, started["job_id"].as_str().unwrap()).await;
+    assert_eq!(ended["state"], "done", "{ended}");
+    let documents = call(&client, "list_documents", json!({})).await;
+    let listed = &structured(&documents)["documents"];
+    assert_eq!(listed.as_array().unwrap().len(), 1, "{listed}");
+    assert_eq!(listed[0]["title"], "Option Volatility and Pricing, Index");
+    assert_eq!(listed[0]["category"], "book");
+    assert!(
+        stores
+            .config()
+            .content_folder
+            .join("option-volatility-and-pricing/index/chapter.json")
+            .is_file()
     );
 }
 

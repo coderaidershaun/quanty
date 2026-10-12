@@ -24,6 +24,40 @@ cargo run --release -p gui -- --fixture black-scholes
 
 `--fixture list` names the other scenes. People use the [desktop app](#run-the-desktop-app), agents use the [MCP server](#mcp), and there is a [command line](#command-line). All three read the same stores, so [set up once](#set-up-once) first.
 
+## Quickstart
+
+Three steps put the app in front of you with real stores. [Set up once](#set-up-once) lists what has to be installed first: Rust, Docker, Poppler and the `claude` CLI, signed in.
+
+1. **Make sure Docker is running.** Start Docker Desktop, then start the two stores in the quanty folder:
+
+   ```bash
+   docker compose up -d    # Qdrant on ports 6333 and 6334, FalkorDB on 6379, data under data/
+   docker compose ps       # both quanty-qdrant-1 and quanty-falkordb-1 say running
+   ```
+
+2. **Add the environment variables.** Copy the example and put your two keys in it:
+
+   ```bash
+   cp .env.example .env       # then put your keys in place of PLEASE_PROVIDE and ENTER
+   unset ANTHROPIC_API_KEY    # must not be set, so that claude bills your subscription, not the API
+   ```
+
+   `EMBEDDING_GEMINI_API_KEY` embeds every page and every question; `CONVERTER_JEV_API_KEY` is asked whether a page holds math when a PDF is converted.
+
+3. **Launch the app:**
+
+   ```bash
+   cargo run --release -p gui
+   ```
+
+   The window opens on **Ask**. Add your first PDF on the **Ingest** tab, or ingest the sample from the command line as [Set up once](#set-up-once) shows. When a store, a key or `claude` is not ready, the part of the window that needs it says which one and what to do.
+
+## Architecture
+
+![The architecture of quanty: the three front doors, the write path that ingests one PDF, the shared state in content/, FalkorDB and Qdrant, the read path that answers a question, the shared crates, the outside services and the cargo dependencies](docs/img/architecture.webp)
+
+*The whole system on one page: how a PDF becomes items, concepts and points, and how a question comes back as an answer with citations. What each crate is, and how a search works step by step, is in [docs/reference.md](docs/reference.md#how-it-works).*
+
 ## Set up once
 
 | You need | What it is for |

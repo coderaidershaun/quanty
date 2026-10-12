@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 use graph::{FalkorGraph, GraphError};
 use rag_core::{
     Category, ConceptStore, Config, EmbedError, EmptyTag, ItemKind, ItemStore, LabelFilter, Llm,
-    StoreError, Tag, UnknownCategory, UnknownItemKind,
+    StoreError, Tag, UnknownCategory, UnknownItemKind, WantedDocument,
 };
 use rag_retrieval::{ANSWER_MODEL, AnswerError, Retriever, SearchError};
 use schemars::JsonSchema;
@@ -26,6 +26,10 @@ pub(crate) struct QuestionArgs {
     question: String,
     /// Look only at items of this kind: `chunk` (running text), `formula`, `figure` or `table`.
     kind: Option<String>,
+    /// Look only at one document: its `title` or its `document_id` from `list_documents`. The
+    /// title is the whole stored title, such as "Option Volatility and Pricing, chapter 1: Sample
+    /// Pages", whatever its capitals.
+    document: Option<String>,
     /// Look only at documents of this media, such as a book, whatever its capitals.
     // An agent that still sends the older name `book` keeps its filter. The schema shows `media`
     // only.
@@ -119,6 +123,9 @@ impl QuestionArgs {
             question,
             kind,
             wanted: LabelFilter {
+                document: non_blank(self.document)
+                    .as_deref()
+                    .map(WantedDocument::from),
                 media: non_blank(self.media),
                 author: non_blank(self.author),
                 category,

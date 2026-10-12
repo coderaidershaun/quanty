@@ -259,14 +259,23 @@ async fn a_category_filter_finds_only_the_items_of_that_category() {
         StandInEmbedder::default,
     );
 
-    for (category, doc) in [(Category::Paper, paper), (Category::Book, book)] {
+    let of_category = |category| Filters {
+        category: Some(category),
+        ..Filters::default()
+    };
+    let of_the_paper = Filters {
+        document: Some(paper),
+        ..Filters::default()
+    };
+    for (filters, doc) in [
+        (of_category(Category::Paper), paper),
+        (of_category(Category::Book), book),
+        (of_the_paper, paper),
+    ] {
         let draft = AskDraft {
             question: QUESTION.to_owned(),
             mode: AskMode::ResultsOnly,
-            filters: Filters {
-                category: Some(category),
-                ..Filters::default()
-            },
+            filters: filters.clone(),
         };
 
         let events = ask(&cx, &draft).await;
@@ -279,11 +288,11 @@ async fn a_category_filter_finds_only_the_items_of_that_category() {
         };
         assert!(
             !search.results.is_empty(),
-            "the {category:?} filter finds items"
+            "the {filters:?} filter finds items"
         );
         assert!(
             search.results.iter().all(|result| result.doc == doc),
-            "the {category:?} filter keeps only the items of {doc:?}: {:#?}",
+            "the {filters:?} filter keeps only the items of {doc:?}: {:#?}",
             search.results
         );
         assert_eq!(search.trace.documents_searched, Some(1));

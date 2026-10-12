@@ -1,20 +1,49 @@
-//! The second row of the bar: the media, author, tags and category filters, and what each one
-//! offers.
+//! The second row of the bar: the media, document, author, tags and category filters, and what
+//! each one offers.
 
 use std::iter::once;
 
 use eframe::egui;
 
 use super::layout::{Rects, slot};
-use crate::contract::{Category, Filters};
+use crate::contract::{Category, DocId, Document, Filters};
 use crate::state::Library;
 use crate::theme::{Icon, color, size};
 use crate::widgets::Dropdown;
 
 const ALL_MEDIA: &str = "All media";
+const ALL_DOCUMENTS: &str = "All documents";
+const ONE_DOCUMENT: &str = "One document";
 const ALL_AUTHORS: &str = "All authors";
 const ALL_TAGS: &str = "All tags";
 const ANY_CATEGORY: &str = "Any category";
+
+/// What the Document list offers for one row of the media list.
+#[derive(Debug)]
+struct DocumentList {
+    /// "All documents" first, then each document of the media as the source picker names it, in
+    /// the catalogue's order, which is the reading order.
+    labels: Vec<String>,
+    /// The id of each document, in the order of `labels` after its first row.
+    ids: Vec<DocId>,
+}
+
+impl DocumentList {
+    fn of(documents: &[Document]) -> DocumentList {
+        DocumentList {
+            labels: once(ALL_DOCUMENTS.to_owned())
+                .chain(documents.iter().map(|document| document.name().label()))
+                .collect(),
+            ids: documents.iter().map(|document| document.id).collect(),
+        }
+    }
+}
+
+/// What the Document list offers before the lists are built.
+static NO_DOCUMENTS: DocumentList = DocumentList {
+    labels: Vec::new(),
+    ids: Vec::new(),
+};
 
 #[derive(Debug, Default)]
 pub(super) struct Choices {
@@ -27,6 +56,8 @@ pub(super) struct Choices {
     /// "All media" comes first, then each titled media that has a document, in catalogue order. A
     /// media with no document would be a filter that finds nothing.
     media: Vec<String>,
+    /// One list for each row of `media`. The row of "All media" holds only "All documents".
+    documents: Vec<DocumentList>,
     /// "All authors" comes first, then each author once, sorted.
     authors: Vec<String>,
     /// The list holds each tag once, sorted.
@@ -43,16 +74,18 @@ impl Choices {
         self.is_known = catalogue.is_some();
         self.has_documents =
             catalogue.is_some_and(|catalogue| catalogue.documents().next().is_some());
-        self.media = once(ALL_MEDIA)
-            .chain(
-                catalogue
-                    .into_iter()
-                    .flat_map(|catalogue| &catalogue.media)
-                    .filter(|media| !media.documents.is_empty())
-                    .filter_map(|media| media.title.as_deref()),
-            )
-            .map(str::to_owned)
-            .collect();
+        self.media = vec![ALL_MEDIA.to_owned()];
+        self.documents = vec![DocumentList::of(&[])];
+        let with_documents = catalogue
+            .into_iter()
+            .flat_map(|catalogue| &catalogue.media)
+            .filter(|media| !media.documents.is_empty());
+        for media in with_documents {
+            if let Some(title) = media.title.as_deref() {
+                self.media.push(title.to_owned());
+                self.documents.push(DocumentList::of(&media.documents));
+            }
+        }
         self.authors = once(ALL_AUTHORS)
             .chain(
                 catalogue
@@ -69,8 +102,16 @@ impl Choices {
         true
     }
 
-    /// A filter on a media, an author or a tag that is gone would find nothing and not say why.
-    /// Every category is always offered, so the category is kept.
+    /// The documents to offer while `media` is the chosen media, or none is.
+    fn documents_of(&self, media: Option<&str>) -> &DocumentList {
+        let row = media
+            .and_then(|media| self.media.iter().skip(1).position(|title| title == media))
+            .map_or(0, |place| place + 1);
+        self.documents.get(row).unwrap_or(&NO_DOCUMENTS)
+    }
+
+    /// A filter on a media, a document, an author or a tag that is gone would find nothing and
+    /// not say why. Every category is always offered, so the category is kept.
     pub(super) fn keep_known(&self, filters: &mut Filters) {
         if !self.is_known {
             return;
@@ -85,17 +126,28 @@ impl Choices {
             .author
             .take_if(|author| !is_offered(&self.authors, author));
         filters.tags.retain(|tag| self.tags.contains(tag));
+        let offered = &self.documents_of(filters.media.as_deref()).ids;
+        filters
+            .document
+            .take_if(|document| !offered.contains(document));
     }
 
     pub(super) fn show(&self, ui: &mut egui::Ui, rects: &Rects, filters: &mut Filters) {
-        slot(ui, "media", rects.media, |ui| {
+        let media_changed = slot(ui, "media", rects.media, |ui| {
             let pick = Pick {
                 label: "Media",
                 all: ALL_MEDIA,
                 options: &self.media,
                 width: rects.media.width(),
             };
-            pick_one(ui, &pick, &mut filters.media);
+            pick_one(ui, &pick, &mut filters.media)
+        });
+        if media_changed {
+            self.keep_known(filters);
+        }
+        slot(ui, "document", rects.document, |ui| {
+            let list = self.documents_of(filters.media.as_deref());
+            pick_document(ui, rects.document.width(), list, &mut filters.document);
         });
         slot(ui, "authors", rects.authors, |ui| {
             let pick = Pick {
@@ -125,7 +177,8 @@ struct Pick<'a> {
     width: f32,
 }
 
-fn pick_one(ui: &mut egui::Ui, pick: &Pick<'_>, value: &mut Option<String>) {
+/// Whether the person chose a row that differs from the value before.
+fn pick_one(ui: &mut egui::Ui, pick: &Pick<'_>, value: &mut Option<String>) -> bool {
     let selected = match value.as_deref() {
         None => Some(0),
         Some(current) => pick.options.iter().position(|option| option == current),
@@ -139,8 +192,46 @@ fn pick_one(ui: &mut egui::Ui, pick: &Pick<'_>, value: &mut Option<String>) {
             .selected(selected)
             .placeholder(shown)
             .show(ui);
+        let Some(index) = chosen else {
+            return false;
+        };
+        let picked = (index > 0).then(|| pick.options[index].clone());
+        let is_changed = picked != *value;
+        *value = picked;
+        is_changed
+    })
+    .inner
+}
+
+/// Row 0 is "All documents" and means no filter. The list is off until a media gives it more
+/// rows.
+fn pick_document(ui: &mut egui::Ui, width: f32, list: &DocumentList, value: &mut Option<DocId>) {
+    let selected = match *value {
+        None => Some(0),
+        Some(current) => list
+            .ids
+            .iter()
+            .position(|&id| id == current)
+            .map(|place| place + 1),
+    };
+    // A document that is not in the list, because the library did not load again, must not read
+    // as "All documents" while the ask still asks that one document.
+    let placeholder = if value.is_some() {
+        ONE_DOCUMENT
+    } else {
+        ALL_DOCUMENTS
+    };
+    ui.add_enabled_ui(list.labels.len() > 1, |ui| {
+        // The Source panel has a list named "Document", so this one has its own name.
+        let chosen = Dropdown::new("Document filter", &list.labels, width)
+            .selected(selected)
+            .placeholder(placeholder)
+            .show(ui);
         if let Some(index) = chosen {
-            *value = (index > 0).then(|| pick.options[index].clone());
+            *value = index
+                .checked_sub(1)
+                .and_then(|place| list.ids.get(place))
+                .copied();
         }
     });
 }

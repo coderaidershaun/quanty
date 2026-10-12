@@ -5,7 +5,9 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use graph::RelationKind;
-use rag_core::{Category, DocumentLabels, ItemId, ItemKind, LabelFilter, MediaLabels};
+use rag_core::{
+    Category, DocumentLabels, ItemId, ItemKind, LabelFilter, MediaLabels, WantedDocument,
+};
 use rag_ingestion::testing::ThrowawayStores;
 use rag_retrieval::{MAX_RESULTS_PER_DOCUMENT, RESULTS_PER_QUERY, Reason, Retriever};
 
@@ -240,6 +242,14 @@ async fn an_item_of_another_document_comes_back_through_a_shared_concept_and_the
     };
     let results = found_among(&retriever, None, &not_document_a).await;
     assert!(results.hits.is_empty(), "{results}");
+    // Without the filter c1 is reached only through the graph.
+    let of_document_c = LabelFilter {
+        document: Some(WantedDocument::from("document c")),
+        ..LabelFilter::default()
+    };
+    let results = found_among(&retriever, None, &of_document_c).await;
+    assert_eq!(texts_of(&results), ["c1"]);
+    assert_eq!(results.hits[0].reason, Reason::Nearest);
 }
 
 #[tokio::test(flavor = "multi_thread")]

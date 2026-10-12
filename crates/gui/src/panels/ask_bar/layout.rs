@@ -18,6 +18,7 @@ pub(super) struct Rects {
     pub(super) mode: egui::Rect,
     pub(super) ask: egui::Rect,
     pub(super) media: egui::Rect,
+    pub(super) document: egui::Rect,
     pub(super) authors: egui::Rect,
     pub(super) tags: egui::Rect,
     pub(super) category: egui::Rect,
@@ -53,7 +54,7 @@ pub(super) fn rects(content: egui::Rect) -> Rects {
             egui::vec2(PICKER_WIDTH, size::CONTROL_SM),
         )
     };
-    let tags = picker(2.0);
+    let tags = picker(3.0);
     let category = egui::Rect::from_min_size(
         egui::pos2(tags.right() + space::SM, second.top()),
         egui::vec2(CATEGORY_WIDTH, size::CONTROL_SM),
@@ -67,7 +68,8 @@ pub(super) fn rects(content: egui::Rect) -> Rects {
         mode,
         ask,
         media: picker(0.0),
-        authors: picker(1.0),
+        document: picker(1.0),
+        authors: picker(2.0),
         tags,
         category,
         note,

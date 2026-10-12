@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use graph::{ConceptNode, RelationKind};
-use rag_core::{ConceptId, ItemHit, LabelFilter};
+use rag_core::{ConceptId, ItemHit, LabelFilter, WantedDocument};
 use rag_ingestion::testing::ThrowawayStores;
 use rag_retrieval::{RESULTS_PER_QUERY, Reason, Retriever, SearchTrace};
 
@@ -135,6 +135,24 @@ async fn a_traced_search_gives_the_results_of_a_search_and_what_each_step_produc
         .await
         .unwrap();
     assert!(traced.results.hits.is_empty());
+    assert_eq!(
+        traced.trace,
+        SearchTrace {
+            documents_searched: Some(0),
+            ..SearchTrace::default()
+        }
+    );
+
+    let nobody_has = LabelFilter {
+        document: Some(WantedDocument::from("A Document That Nobody Has")),
+        ..LabelFilter::default()
+    };
+    let traced = retriever
+        .search_traced(QUESTION, None, &nobody_has)
+        .await
+        .unwrap();
+    assert!(traced.results.hits.is_empty());
+    assert_eq!(traced.results.to_string(), "no items found");
     assert_eq!(
         traced.trace,
         SearchTrace {

@@ -97,6 +97,28 @@ async fn search_gives_the_placed_item_first_and_explain_says_how_it_was_found() 
 
     let found = structured(&result);
     assert_eq!(found["results"], json!([]), "the library holds no paper");
+
+    let result = call(
+        &client,
+        "search",
+        json!({
+            "question": QUESTION,
+            "document": "quanty sample notes, chapter 1: options pricing intuition",
+            "explain": true,
+        }),
+    )
+    .await;
+
+    let found = structured(&result);
+    let results = found["results"].as_array().unwrap();
+    assert!(!results.is_empty(), "{found}");
+    assert!(
+        results.iter().all(|result| {
+            result["document"] == "Quanty Sample Notes, chapter 1: Options Pricing Intuition"
+        }),
+        "only items of that document"
+    );
+    assert_eq!(found["trace"]["documents_searched"], 1);
 }
 
 #[tokio::test(flavor = "multi_thread")]

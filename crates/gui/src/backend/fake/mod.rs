@@ -150,7 +150,7 @@ impl Fake {
         }
     }
 
-    /// How many documents of the library carry the labels, or `None` when no label was asked. A
+    /// How many documents of the library fit the filters, or `None` when no filter was asked. A
     /// document of no media has no category, so it fits no category that is asked for.
     // SMELL: the core crate keeps its own copy of this rule, and the fake may not name that crate,
     // so a change to one must be made in both.
@@ -161,7 +161,8 @@ impl Fake {
             .map(|tag| tag.trim().to_lowercase())
             .filter(|tag| !tag.is_empty())
             .collect();
-        if filters.media.is_none()
+        if filters.document.is_none()
+            && filters.media.is_none()
             && filters.author.is_none()
             && filters.category.is_none()
             && tags.is_empty()
@@ -179,6 +180,7 @@ impl Fake {
                     .map(move |document| (media, document))
             })
             .filter(|(media, document)| {
+                let document_fits = filters.document.is_none_or(|wanted| document.id == wanted);
                 let media_fits = filters.media.as_deref().is_none_or(|wanted| {
                     media
                         .title
@@ -197,7 +199,7 @@ impl Fake {
                 let tags_fit = tags
                     .iter()
                     .all(|tag| document.media_tags.contains(tag) || document.tags.contains(tag));
-                media_fits && author_fits && category_fits && tags_fit
+                document_fits && media_fits && author_fits && category_fits && tags_fit
             })
             .count();
         Some(count)

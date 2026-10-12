@@ -87,10 +87,11 @@ impl<E: Embedder, G: GraphStore> Retriever<E, G> {
     /// results are the seeds. With a `kind` only items of that kind are looked at, and step 6 is
     /// left out.
     ///
-    /// With a `wanted` filter only items of the documents whose labels fit every part of it are
-    /// looked at, in every step. A cited item is of the document of the result that cites it, so
-    /// that document fits the filter too. When no document fits it there are no results, and the
-    /// question is not embedded.
+    /// With a `wanted` filter only items of the documents that fit every part of it are looked at,
+    /// in every step: the document it names, by id or by stored title whatever its capitals, and
+    /// the labels. A cited item is of the document of the result that cites it, so that document
+    /// fits the filter too. When no document fits it there are no results, and the question is
+    /// not embedded.
     ///
     /// # Errors
     /// - [`SearchError::Embed`] when the question cannot be embedded
@@ -105,18 +106,18 @@ impl<E: Embedder, G: GraphStore> Retriever<E, G> {
         let documents = if wanted.is_empty() {
             None
         } else {
-            let carrying: Vec<DocId> = self
+            let fitting: Vec<DocId> = self
                 .graph
                 .documents()
                 .await?
                 .into_iter()
-                .filter(|node| node.labels.carries(wanted))
+                .filter(|node| wanted.fits(node.id, &node.title, &node.labels))
                 .map(|node| node.id)
                 .collect();
-            if carrying.is_empty() {
+            if fitting.is_empty() {
                 return Ok(nothing_found(Some(0), UsageTally::default()));
             }
-            Some(carrying)
+            Some(fitting)
         };
         let documents_searched = documents.as_ref().map(Vec::len);
         let filter = ItemFilter { kind, documents };

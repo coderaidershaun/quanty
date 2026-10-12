@@ -36,9 +36,10 @@ pub(crate) struct Documents {
 
 #[derive(Serialize, JsonSchema)]
 struct DocumentView {
-    /// Give it to `read_page`.
+    /// Give it to `read_page`, or as `document` to `search` and `answer`.
     document_id: String,
-    /// The title of the document: the media and the chapter, or a title of its own.
+    /// The whole stored title of the document: the media and its chapter or part, or a title of
+    /// its own. Give it as `document` to `search` and `answer` to ask this document alone.
     title: String,
     /// The title of the media the document belongs to. A picture that stands alone has none.
     #[serde(skip_serializing_if = "Option::is_none")]

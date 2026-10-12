@@ -8,7 +8,7 @@ use clap::{CommandFactory, Parser};
 use graph::FalkorGraph;
 use rag_core::{
     Category, ClaudeCli, ConceptStore, Config, GeminiEmbedder, ItemKind, ItemStore, LabelFilter,
-    Llm, Tag,
+    Llm, Tag, WantedDocument,
 };
 use rag_retrieval::{ANSWER_MODEL, Retriever, SearchResults, answer};
 use tracing_subscriber::filter::{LevelFilter, Targets};
@@ -25,6 +25,11 @@ struct Cli {
     #[arg(long)]
     kind: Option<ItemKind>,
 
+    /// Look only at items of one document: its whole stored title, whatever its capitals, such
+    /// as "Option Volatility and Pricing, chapter 1: Sample Pages", or its document id
+    #[arg(long, value_name = "TITLE OR ID")]
+    document: Option<String>,
+
     /// Look only at items of documents of this media, such as a book, whatever its capitals
     #[arg(long)]
     media: Option<String>,
@@ -39,8 +44,8 @@ struct Cli {
     category: Option<Category>,
 
     /// Look only at items of documents that have this tag, as a media tag or as a document's own
-    /// tag. Repeat it to ask for more tags: a document must match every one of the media, the
-    /// author, the category and the tags that are given
+    /// tag. Repeat it to ask for more tags: a document must match every one of the document, the
+    /// media, the author, the category and the tags that are given
     #[arg(long = "tag", value_name = "TAG")]
     tags: Vec<Tag>,
 
@@ -71,6 +76,7 @@ async fn main() -> ExitCode {
 
 async fn run(cli: Cli) -> Result<ExitCode> {
     let wanted = LabelFilter {
+        document: cli.document.as_deref().map(WantedDocument::from),
         media: cli.media,
         author: cli.author,
         category: cli.category,

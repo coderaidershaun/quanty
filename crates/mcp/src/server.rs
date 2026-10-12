@@ -206,7 +206,8 @@ impl<S: Services> QuantyServer<S> {
     /// Finds the stored items (text chunks, formulas, figures and tables) that are nearest to a
     /// question, with their document, page and the reason each was found. It embeds the question
     /// with the Gemini API, which is a small paid call. Give the `document_id` and `page` of a
-    /// result to `read_page` to read the page around it.
+    /// result to `read_page` to read the page around it. Give `document` (a `title` or
+    /// `document_id` from `list_documents`) to search one document only.
     #[tool(annotations(read_only_hint = true))]
     async fn search(
         &self,
@@ -234,7 +235,8 @@ impl<S: Services> QuantyServer<S> {
     }
 
     /// Lists every stored document with its media, category, authors, tags and chapter. Give the
-    /// `document_id` of one to `read_page`.
+    /// `document_id` of one to `read_page`, and its `title` or `document_id` as `document` to
+    /// `search` or `answer` to ask that document alone.
     #[tool(annotations(read_only_hint = true))]
     async fn list_documents(&self) -> Result<Json<Documents>, ToolError> {
         Ok(Json(library::list_documents(&self.shared.config).await?))

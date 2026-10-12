@@ -15,9 +15,11 @@ pub enum AskMode {
 
 /// A media or an author matches whatever its capitals, and an author matches any author of a
 /// document. Every tag must be a media tag or an own tag of the document, and a category must be
-/// the document's.
+/// the document's. A document is one stored document, by its id; the search then looks at that
+/// document alone, and every other filter must fit it too.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct Filters {
+    pub document: Option<DocId>,
     pub media: Option<String>,
     pub author: Option<String>,
     pub tags: Vec<String>,

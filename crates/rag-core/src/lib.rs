@@ -25,7 +25,7 @@ pub use item::{DocId, ItemId, ItemKind, ItemPayload, ParseDocIdError, UnknownIte
 pub use item_store::{ItemFilter, ItemHit, ItemPoint, ItemStore};
 pub use labels::{
     Category, DocumentLabels, EmptyTag, LabelFilter, MediaLabels, Tag, UnknownCategory,
-    author_list, is_same_name,
+    WantedDocument, author_list, is_same_name,
 };
 pub use llm::{Llm, LlmError, LlmReply, Question};
 pub use qdrant::StoreError;

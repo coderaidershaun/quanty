@@ -7,6 +7,8 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
+use crate::DocId;
+
 /// One free label of a media or of a document, such as "options". It is kept in lower case with
 /// no space at either end, so two spellings of a tag are one tag.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -161,9 +163,9 @@ impl DocumentLabels {
         self.media_tags = media.tags.clone();
     }
 
-    /// Whether these labels fit every part that `wanted` gives. A filter that gives nothing is
-    /// carried by all labels.
-    pub fn carries(&self, wanted: &LabelFilter) -> bool {
+    /// Whether these labels fit every label part that `wanted` gives; its document part is not
+    /// looked at. A filter that gives no label part is carried by all labels.
+    fn carries(&self, wanted: &LabelFilter) -> bool {
         let media_fits = wanted.media.as_deref().is_none_or(|media| {
             self.media
                 .as_deref()
@@ -184,9 +186,35 @@ impl DocumentLabels {
     }
 }
 
-/// What a search may ask of a document's labels. Each part that is given must fit.
+/// The one document that a search may be asked to look at alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WantedDocument {
+    Id(DocId),
+    /// Its whole stored title, whatever its capitals and the space at its ends, such as
+    /// "Option Volatility and Pricing, chapter 1: Sample Pages" or, for a part of a book,
+    /// "Option Volatility and Pricing, Index".
+    Title(String),
+}
+
+impl From<&str> for WantedDocument {
+    /// A text that is a document id names that id; any other text names a title.
+    fn from(text: &str) -> WantedDocument {
+        let text = text.trim();
+        match text.parse() {
+            Ok(id) => WantedDocument::Id(id),
+            Err(_) => WantedDocument::Title(text.to_owned()),
+        }
+    }
+}
+
+/// What a search may ask of a document: the document itself, and its labels. Each part that is
+/// given must fit.
+// SMELL: the name says labels, but the filter also names one document. A rename would touch
+// every crate that searches.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LabelFilter {
+    /// One document, by its id or its whole stored title.
+    pub document: Option<WantedDocument>,
     /// The title of the media, whatever its capitals.
     pub media: Option<String>,
     /// One author, whatever its capitals; it fits a document that has that author among others.
@@ -198,10 +226,20 @@ pub struct LabelFilter {
 
 impl LabelFilter {
     pub fn is_empty(&self) -> bool {
-        self.media.is_none()
+        self.document.is_none()
+            && self.media.is_none()
             && self.author.is_none()
             && self.category.is_none()
             && self.tags.is_empty()
+    }
+
+    /// Whether the document with this id, stored title and labels fits every part of the filter.
+    pub fn fits(&self, id: DocId, title: &str, labels: &DocumentLabels) -> bool {
+        let document_fits = self.document.as_ref().is_none_or(|wanted| match wanted {
+            WantedDocument::Id(wanted_id) => *wanted_id == id,
+            WantedDocument::Title(wanted_title) => is_same_name(title, wanted_title),
+        });
+        document_fits && labels.carries(self)
     }
 }
 
@@ -214,5 +252,49 @@ mod tests {
         assert_eq!(author_list([" B ", "", "A", "B"]), vec!["B", "A"]);
         assert_eq!(" Paper ".parse(), Ok(Category::Paper));
         assert!("journal".parse::<Category>().is_err());
+    }
+
+    #[test]
+    fn a_document_fits_by_its_id_or_its_whole_stored_title_and_the_labels_must_fit_too() {
+        let id = DocId::from_source_sha256("one");
+        let other_id = DocId::from_source_sha256("two");
+        let title = "Option Volatility & Pricing, Index";
+        let labels = DocumentLabels::default();
+        let fits = |text: &str| {
+            LabelFilter {
+                document: Some(WantedDocument::from(text)),
+                ..LabelFilter::default()
+            }
+            .fits(id, title, &labels)
+        };
+
+        assert_eq!(
+            WantedDocument::from(format!(" {id} ").as_str()),
+            WantedDocument::Id(id)
+        );
+        assert_eq!(
+            WantedDocument::from(" Some Title "),
+            WantedDocument::Title("Some Title".to_owned())
+        );
+        assert!(fits(" option volatility & pricing, INDEX "));
+        assert!(!fits("Option Volatility & Pricing"));
+        assert!(!fits("Index"));
+        assert!(fits(&id.to_string()));
+        assert!(!fits(&other_id.to_string()));
+
+        let with_a_tag_it_lacks = LabelFilter {
+            document: Some(WantedDocument::Id(id)),
+            tags: BTreeSet::from(["options".parse().unwrap()]),
+            ..LabelFilter::default()
+        };
+        assert!(!with_a_tag_it_lacks.fits(id, title, &labels));
+        assert!(LabelFilter::default().fits(id, title, &labels));
+        assert!(
+            !LabelFilter {
+                document: Some(WantedDocument::Id(id)),
+                ..LabelFilter::default()
+            }
+            .is_empty()
+        );
     }
 }

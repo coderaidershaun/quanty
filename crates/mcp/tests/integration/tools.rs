@@ -63,7 +63,9 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
     let expected: [(&str, &[&str], &[&str]); 7] = [
         (
             "answer",
-            &["author", "category", "kind", "media", "question", "tags"],
+            &[
+                "author", "category", "document", "kind", "media", "question", "tags",
+            ],
             &["question"],
         ),
         ("health", &[], &[]),
@@ -92,7 +94,8 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         (
             "search",
             &[
-                "author", "category", "explain", "kind", "limit", "media", "question", "tags",
+                "author", "category", "document", "explain", "kind", "limit", "media", "question",
+                "tags",
             ],
             &["question"],
         ),

@@ -6,11 +6,15 @@ use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::contract::{AnswerBlock, Category, Command, Filters};
+use gui::contract::{AnswerBlock, Category, Command, DocId, Filters};
 use gui::testkit;
+use uuid::Uuid;
 
 use super::recording::{self, Seen};
-use super::{Window, click, click_in, copied_by, has, is_open_tab, node, panels, press, shared};
+use super::{
+    Window, are_stacked_in_order, click, click_in, copied_by, has, is_enabled, is_open_tab, node,
+    panels, press, shared,
+};
 
 fn question_box(harness: &Window) -> Option<String> {
     node(harness, Role::TextInput, "Question").value()
@@ -162,23 +166,80 @@ fn the_filters_offer_the_library_and_an_ask_sends_them(harness: &mut Window, see
     click(harness, Role::Button, "Paper");
 
     click(harness, Role::Button, "Ask");
-    let sent = seen
-        .all()
-        .into_iter()
-        .rev()
-        .find_map(|command| match command {
-            Command::Ask { ask, .. } => Some(ask.filters),
-            _ => None,
-        });
     assert_eq!(
-        sent,
+        filters_of_the_last_ask(seen),
         Some(Filters {
+            document: None,
             media: Some(title),
             author: Some(author),
             tags: vec![media_tag],
             category: Some(Category::Paper),
         }),
         "the ask sends the filters that were chosen"
+    );
+}
+
+fn filters_of_the_last_ask(seen: &Seen) -> Option<Filters> {
+    seen.all()
+        .into_iter()
+        .rev()
+        .find_map(|command| match command {
+            Command::Ask { ask, .. } => Some(ask.filters),
+            _ => None,
+        })
+}
+
+#[test]
+fn the_document_filter_offers_the_documents_of_the_chosen_media_and_an_ask_searches_one() {
+    let (mut harness, seen) = recording::open("black-scholes", DEFAULT_WINDOW);
+    testkit::settle(&mut harness);
+    let bar = panels(DEFAULT_WINDOW).ask_bar;
+    assert!(
+        !is_enabled(&harness, Role::ComboBox, "Document filter"),
+        "no media is chosen, so there is no list of documents to offer"
+    );
+
+    click_in(&mut harness, Role::ComboBox, "Media", bar);
+    click(&mut harness, Role::Button, "Quanty Sample Notes");
+    click_in(&mut harness, Role::ComboBox, "Document filter", bar);
+    let rows = [
+        "All documents",
+        "Chapter 1 · Options Pricing Intuition",
+        "Chapter 2 · Black Scholes In Depth",
+        "Index",
+    ];
+    for row in rows {
+        assert!(has(&harness, Role::Button, row), "`{row}` is a row");
+    }
+    assert!(
+        are_stacked_in_order(&harness, Role::Button, &rows),
+        "chapters by number, then the other documents"
+    );
+    click(&mut harness, Role::Button, "Index");
+    click(&mut harness, Role::Button, "Ask");
+
+    assert_eq!(
+        filters_of_the_last_ask(&seen),
+        Some(Filters {
+            media: Some("Quanty Sample Notes".to_owned()),
+            document: Some(DocId(Uuid::from_u128(5))),
+            ..Filters::default()
+        })
+    );
+    let searched = shared(&harness)
+        .ask
+        .search
+        .ready()
+        .map(|reply| reply.trace.documents_searched);
+    assert_eq!(searched, Some(Some(1)), "the index alone was searched");
+
+    click_in(&mut harness, Role::ComboBox, "Media", bar);
+    click(&mut harness, Role::Button, "Option Volatility and Pricing");
+    click(&mut harness, Role::Button, "Ask");
+    assert_eq!(
+        filters_of_the_last_ask(&seen).map(|filters| filters.document),
+        Some(None),
+        "another media clears the document"
     );
 }
 

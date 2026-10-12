@@ -5,7 +5,7 @@
 use std::collections::BTreeSet;
 
 use graph::MediaNode;
-use rag_core::{LabelFilter, MediaLabels, Tag, UsageTally, author_list};
+use rag_core::{LabelFilter, MediaLabels, Tag, UsageTally, WantedDocument, author_list};
 use rag_ingestion::{MediaChange, TagChange};
 use uuid::Uuid;
 
@@ -131,6 +131,7 @@ fn tags(texts: &[String]) -> impl Iterator<Item = Tag> {
 impl From<&Filters> for LabelFilter {
     fn from(filters: &Filters) -> LabelFilter {
         LabelFilter {
+            document: filters.document.map(|id| WantedDocument::Id(id.into())),
             media: filters.media.clone(),
             author: filters.author.clone(),
             category: filters.category.map(Into::into),

@@ -58,6 +58,7 @@ First calls to try, in this order:
 | --- | --- |
 | `question` | Required. The question, in plain words |
 | `kind` | `chunk`, `formula`, `figure` or `table` |
+| `document` | Only one document: its `title` or its `document_id` from `list_documents`. The title is the whole stored title, whatever the capitals. A title or an id that no stored document has gives no results |
 | `media` | Only documents of this media, whatever the capitals. The older name `book` is understood too |
 | `author` | Only documents by this author, whatever the capitals. It matches any author of a document |
 | `category` | Only documents of this category: `book`, `paper` or `other` |
@@ -69,7 +70,7 @@ Gives `results`, best first. Each result has `number`, `document_id`, `document`
 
 ### `answer`
 
-The arguments `question`, `kind`, `media`, `author`, `category` and `tags` of `search`. Gives `answered` (false when nothing was found, and then Claude is not asked, or when what was found does not answer the question), `title`, `claims` (each with `heading`, `text` and the `sources` it rests on, by number), `sources` (each item that a claim names, once: `number` and the fields of a search result without `score` and `reason`) and `follow_ups`. The sign-in of `claude` and `ANTHROPIC_API_KEY` are checked before the search, which costs nothing, so nothing is embedded when `claude` cannot answer. An agent that can write its own answer should call `search`.
+The arguments `question`, `kind`, `document`, `media`, `author`, `category` and `tags` of `search`. Gives `answered` (false when nothing was found, and then Claude is not asked, or when what was found does not answer the question), `title`, `claims` (each with `heading`, `text` and the `sources` it rests on, by number), `sources` (each item that a claim names, once: `number` and the fields of a search result without `score` and `reason`) and `follow_ups`. The sign-in of `claude` and `ANTHROPIC_API_KEY` are checked before the search, which costs nothing, so nothing is embedded when `claude` cannot answer. An agent that can write its own answer should call `search`.
 
 `search` and `answer` also give what the call used. `usage` has one entry for each model: `model`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens` and `estimated` (true for the embedding, whose count is worked out from the length of the text). `cost_usd` is about what the call cost in US dollars at the prices of the API, or `null` when a model has no price; the table and its date are under [Costs](reference.md#costs). `search` uses the embedding alone. `answer` adds the model that wrote it, and when nothing was found it gives what the search used.
 
@@ -80,7 +81,7 @@ The arguments `question`, `kind`, `media`, `author`, `category` and `tags` of `s
 
 ### `list_documents`
 
-No arguments. Gives `documents`, sorted by title: `document_id`, `title`, `media` and `category` (left out for a picture that stands alone, which belongs to no media), `authors`, `media_tags` (the tags of the media), `tags` (the document's own tags) and, when the converted document is under the content folder, `pages`, with `chapter_number` and `chapter_name` for a book's chapter.
+No arguments. Gives `documents`, sorted by title: `document_id`, `title` (the whole stored title), `media` and `category` (left out for a picture that stands alone, which belongs to no media), `authors`, `media_tags` (the tags of the media), `tags` (the document's own tags) and, when the converted document is under the content folder, `pages`, with `chapter_number` and `chapter_name` for a book's chapter. Give the `title` or the `document_id` of one as `document` to `search` or `answer` to ask that document alone.
 
 It also gives `unreadable_chapters`: one line for each converted document under the content folder whose `chapter.json` cannot be read, with the file that is at fault. The list is always there, and it is empty when every one can be read. Such a document shows no `chapter_number`, `chapter_name` or `pages`, and `read_page` cannot read it.
 

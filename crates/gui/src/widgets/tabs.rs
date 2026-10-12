@@ -1,8 +1,6 @@
 //! The strip of tabs along the top of a window or of a panel.
 
-use eframe::egui::{
-    self, Align2, Color32, WidgetInfo, WidgetType, accesskit::Role, text::LayoutJob,
-};
+use eframe::egui::{self, Color32, WidgetInfo, WidgetType, accesskit::Role, text::LayoutJob};
 
 use super::look::{Look, focus_ring};
 use crate::theme::{Icon, TextRole, Tone, color, hairline, radius, size, space, stroke};
@@ -144,11 +142,10 @@ impl<'a> TabStrip<'a> {
             let painter = ui.painter();
             let mut x = rect.left();
             if let Some(icon) = tab.icon {
-                painter.text(
+                icon.paint(
+                    painter,
                     egui::pos2(x + icon_size / 2.0, rect.center().y),
-                    Align2::CENTER_CENTER,
-                    icon.glyph(),
-                    Icon::font(icon_size),
+                    icon_size,
                     tint,
                 );
                 x += icon_room;

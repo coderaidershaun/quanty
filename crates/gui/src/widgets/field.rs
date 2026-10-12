@@ -103,11 +103,10 @@ impl<'a> TextInput<'a> {
                 |ui| {
                     if let Some(icon) = self.leading {
                         let (_, rect) = ui.allocate_space(egui::Vec2::splat(size::ICON_MD));
-                        ui.painter().text(
+                        icon.paint(
+                            ui.painter(),
                             rect.center(),
-                            egui::Align2::CENTER_CENTER,
-                            icon.glyph(),
-                            Icon::font(size::ICON_MD),
+                            size::ICON_MD,
                             color::TEXT_SECONDARY,
                         );
                     }
@@ -224,11 +223,10 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
                     .width(self.width)
                     .truncate()
                     .icon(|ui, rect, _visuals, _is_open| {
-                        ui.painter().text(
+                        Icon::CARET_DOWN.paint(
+                            ui.painter(),
                             rect.center(),
-                            egui::Align2::CENTER_CENTER,
-                            Icon::CARET_DOWN.glyph(),
-                            Icon::font(size::ICON_SM),
+                            size::ICON_SM,
                             color::TEXT_SECONDARY,
                         );
                     })

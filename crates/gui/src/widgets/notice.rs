@@ -2,7 +2,7 @@
 //! failed.
 
 use eframe::egui::{
-    self, Align, Align2, Layout, Response, Stroke, WidgetInfo, WidgetType, text::LayoutJob, vec2,
+    self, Align, Layout, Response, Stroke, WidgetInfo, WidgetType, text::LayoutJob, vec2,
 };
 
 use super::{Button, ControlSize, spinner};
@@ -79,13 +79,8 @@ impl<'a> Notice<'a> {
                 ui.set_width(ui.available_width());
                 ui.horizontal_top(|ui| {
                     let (_, icon_rect) = ui.allocate_space(egui::Vec2::splat(size::ICON_LG));
-                    ui.painter().text(
-                        icon_rect.center(),
-                        Align2::CENTER_CENTER,
-                        self.icon.glyph(),
-                        Icon::font(size::ICON_LG),
-                        swatch.text,
-                    );
+                    self.icon
+                        .paint(ui.painter(), icon_rect.center(), size::ICON_LG, swatch.text);
                     let after = if self.is_dismissable {
                         size::CONTROL_SM + ui.spacing().item_spacing.x
                     } else {
@@ -302,13 +297,7 @@ fn wrapped_label(ui: &mut egui::Ui, text: egui::RichText, width: f32) {
 
 fn paint_big_icon(ui: &mut egui::Ui, icon: Icon, tint: egui::Color32) {
     let (_, rect) = ui.allocate_space(egui::Vec2::splat(PLACEHOLDER_ICON));
-    ui.painter().text(
-        rect.center(),
-        Align2::CENTER_CENTER,
-        icon.glyph(),
-        Icon::font(PLACEHOLDER_ICON),
-        tint,
-    );
+    icon.paint(ui.painter(), rect.center(), PLACEHOLDER_ICON, tint);
 }
 
 fn text_height(ui: &egui::Ui, role: TextRole, text: &str, width: f32) -> f32 {

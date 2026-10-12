@@ -75,11 +75,10 @@ fn failed(
     if room.y < Placeholder::MIN_HEIGHT {
         // A box this small has no room for the Retry button. The failure stays until a caller
         // forgets it, or the picture is shown in a bigger box and Retry is clicked there.
-        ui.painter().text(
+        Icon::BROKEN_IMAGE.paint(
+            ui.painter(),
             rect.center(),
-            egui::Align2::CENTER_CENTER,
-            Icon::BROKEN_IMAGE.glyph(),
-            Icon::font(size::ICON_LG),
+            size::ICON_LG,
             color::TEXT_MUTED,
         );
         response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, title));

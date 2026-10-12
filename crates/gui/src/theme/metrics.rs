@@ -15,7 +15,6 @@ pub mod space {
     pub const MD: f32 = 12.0;
     pub const LG: f32 = 16.0;
     pub const XL: f32 = 24.0;
-    pub const XXL: f32 = 32.0;
 }
 
 /// Points.

@@ -32,7 +32,7 @@ impl Media {
         Media {
             images: images::Images::new(ctx, offload),
             math: math::Math::new(ctx, offload),
-            text: rich_text::Layouts::new(),
+            text: rich_text::Layouts::default(),
         }
     }
 

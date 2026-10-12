@@ -3,8 +3,7 @@
 use std::sync::Arc;
 
 use eframe::egui::{
-    self, Align2, Color32, Galley, Rect, Response, Sense, Stroke, StrokeKind, WidgetInfo,
-    WidgetType, vec2,
+    self, Color32, Galley, Rect, Response, Sense, Stroke, StrokeKind, WidgetInfo, WidgetType, vec2,
 };
 
 use super::ControlSize;
@@ -133,9 +132,9 @@ impl<'a> Button<'a> {
         self
     }
 
-    /// Draws the button as if the pointer or the keyboard were on it.
-    pub(super) fn preview(mut self, look: Look) -> Self {
-        self.forced = Some(look);
+    /// Draws the button as if the pointer or the keyboard were on it, unless `look` is `None`.
+    pub(super) fn preview(mut self, look: Option<Look>) -> Self {
+        self.forced = look;
         self
     }
 
@@ -231,13 +230,7 @@ impl<'a> Button<'a> {
                 let spot = Rect::from_center_size(centre, egui::Vec2::splat(icon_size));
                 paint_spinner(ui, spot, colours.text);
             } else if let Some(icon) = self.icon {
-                painter.text(
-                    centre,
-                    Align2::CENTER_CENTER,
-                    icon.glyph(),
-                    Icon::font(icon_size),
-                    colours.text,
-                );
+                icon.paint(painter, centre, icon_size, colours.text);
             }
             x += icon_width + gap;
         }

@@ -28,10 +28,7 @@ pub(super) fn buttons(ui: &mut egui::Ui, state: &mut State) {
             ("Ask pressed", Some(Look::PRESSED)),
             ("Ask focused", Some(Look::FOCUSED)),
         ] {
-            let mut button = Button::primary(label).icon(Icon::SEARCH);
-            if let Some(look) = look {
-                button = button.preview(look);
-            }
+            let button = Button::primary(label).icon(Icon::SEARCH).preview(look);
             used(state, &ui.add(button), "Button::primary");
         }
         used(
@@ -48,10 +45,7 @@ pub(super) fn buttons(ui: &mut egui::Ui, state: &mut State) {
             ("Secondary hovered", Some(Look::HOVERED)),
             ("Secondary pressed", Some(Look::PRESSED)),
         ] {
-            let mut button = Button::secondary(label).icon(Icon::RETRY);
-            if let Some(look) = look {
-                button = button.preview(look);
-            }
+            let button = Button::secondary(label).icon(Icon::RETRY).preview(look);
             used(state, &ui.add(button), "Button::secondary");
         }
         let chosen = ui.add(Button::secondary("Secondary selected").selected(true));
@@ -59,14 +53,11 @@ pub(super) fn buttons(ui: &mut egui::Ui, state: &mut State) {
         let disabled = ui.add_enabled(false, Button::secondary("Secondary disabled"));
         used(state, &disabled, "Button::secondary");
         for (label, look) in [("Ghost", None), ("Ghost hovered", Some(Look::HOVERED))] {
-            let mut button = Button::ghost(label);
-            if let Some(look) = look {
-                button = button.preview(look);
-            }
+            let button = Button::ghost(label).preview(look);
             used(state, &ui.add(button), "Button::ghost");
         }
         used(state, &ui.add(Button::danger("Delete")), "Button::danger");
-        let hovered = Button::danger("Delete hovered").preview(Look::HOVERED);
+        let hovered = Button::danger("Delete hovered").preview(Some(Look::HOVERED));
         used(state, &ui.add(hovered), "Button::danger");
     });
     ui.horizontal_wrapped(|ui| {
@@ -75,7 +66,7 @@ pub(super) fn buttons(ui: &mut egui::Ui, state: &mut State) {
             &ui.add(Button::icon_only(Icon::COPY, "Copy")),
             "Button::icon_only",
         );
-        let hovered = Button::icon_only(Icon::SHARE, "Share").preview(Look::HOVERED);
+        let hovered = Button::icon_only(Icon::SHARE, "Share").preview(Some(Look::HOVERED));
         used(state, &ui.add(hovered), "Button::icon_only");
         let chosen = Button::icon_only(Icon::GRAPH, "Graph").selected(true);
         used(state, &ui.add(chosen), "Button::icon_only");

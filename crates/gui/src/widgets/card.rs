@@ -1,7 +1,7 @@
 //! The raised card that holds one result, one document or one step.
 
 use eframe::egui::{
-    self, Align, Align2, Response, Sense, Stroke, StrokeKind, WidgetInfo, WidgetType, pos2, vec2,
+    self, Align, Response, Sense, Stroke, StrokeKind, WidgetInfo, WidgetType, pos2, vec2,
 };
 
 use super::Button;
@@ -64,10 +64,10 @@ impl<'a> Card<'a> {
         self
     }
 
-    /// Draws the card as if the pointer or the keyboard were on it. Only a clickable card has a
-    /// look to show.
-    pub(super) fn preview(mut self, look: Look) -> Self {
-        self.forced = Some(look);
+    /// Draws the card as if the pointer or the keyboard were on it, unless `look` is `None`.
+    /// Only a clickable card has a look to show.
+    pub(super) fn preview(mut self, look: Option<Look>) -> Self {
+        self.forced = look;
         self
     }
 
@@ -170,13 +170,8 @@ fn paint_tag(ui: &mut egui::Ui, kind: Kind, text: &str) {
         egui::Vec2::splat(TAG_BOX),
     );
     painter.rect_filled(tag_box, radius::SM, swatch.solid);
-    painter.text(
-        tag_box.center(),
-        Align2::CENTER_CENTER,
-        kind.icon().glyph(),
-        Icon::font(TAG_GLYPH),
-        swatch.on_solid,
-    );
+    kind.icon()
+        .paint(painter, tag_box.center(), TAG_GLYPH, swatch.on_solid);
     let left = tag_box.right() + space::SM;
     painter.galley(
         pos2(left, rect.center().y - galley.size().y / 2.0),

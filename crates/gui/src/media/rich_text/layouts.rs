@@ -73,10 +73,6 @@ pub struct Layouts {
 }
 
 impl Layouts {
-    pub fn new() -> Layouts {
-        Layouts::default()
-    }
-
     /// Call this once per frame, before any panel draws.
     pub fn poll(&mut self, _ctx: &egui::Context) {
         self.polls += 1;

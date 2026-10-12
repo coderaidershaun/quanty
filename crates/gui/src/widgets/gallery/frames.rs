@@ -47,10 +47,10 @@ pub(super) fn cards(ui: &mut egui::Ui, state: &mut State) {
         ui.horizontal_top(|ui| {
             for (label, look, is_selected) in pair {
                 column(ui, width, 0.0, |ui| {
-                    let mut card = Card::new().clickable(label).selected(is_selected);
-                    if let Some(look) = look {
-                        card = card.preview(look);
-                    }
+                    let card = Card::new()
+                        .clickable(label)
+                        .selected(is_selected)
+                        .preview(look);
                     let shown = card.show(ui, |ui| {
                         ui.label(TextRole::BodyStrong.rich(label));
                         ui.label(TextRole::Small.rich("The whole card is a button."));

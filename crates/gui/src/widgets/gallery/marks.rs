@@ -30,10 +30,9 @@ fn citation_chips(ui: &mut egui::Ui, state: &mut State) {
             (4, Some(Look::FOCUSED), false),
             (12, None, false),
         ] {
-            let mut chip = CitationChip::new(number).selected(is_selected);
-            if let Some(look) = look {
-                chip = chip.preview(look);
-            }
+            let chip = CitationChip::new(number)
+                .selected(is_selected)
+                .preview(look);
             used(state, &ui.add(chip), "CitationChip");
         }
     });

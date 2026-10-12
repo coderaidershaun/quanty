@@ -1,6 +1,6 @@
 //! The icons of the app: one name for each glyph of the icon font.
 
-use eframe::egui::{self, FontId};
+use eframe::egui::{self, Align2, Color32, FontId, Painter, Pos2};
 
 use super::color;
 use super::fonts::ICONS;
@@ -67,17 +67,23 @@ icons! {
 }
 
 impl Icon {
-    /// An icon that has no name here, from its constant in `egui_phosphor::regular`.
-    pub const fn from_phosphor(glyph: &'static str) -> Self {
-        Icon(glyph)
-    }
-
     pub const fn glyph(self) -> &'static str {
         self.0
     }
 
     pub fn font(size: f32) -> FontId {
         FontId::new(size, ICONS.clone())
+    }
+
+    /// Paints the glyph centred on a point, so every widget draws an icon the same way.
+    pub fn paint(self, painter: &Painter, centre: Pos2, size: f32, tint: Color32) {
+        painter.text(
+            centre,
+            Align2::CENTER_CENTER,
+            self.0,
+            Icon::font(size),
+            tint,
+        );
     }
 
     pub fn rich(self, size: f32) -> egui::RichText {

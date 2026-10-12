@@ -31,18 +31,14 @@ impl CitationChip {
         self
     }
 
-    /// Draws the chip as if the pointer or the keyboard were on it.
-    pub(super) const fn preview(mut self, look: Look) -> Self {
-        self.forced = Some(look);
+    /// Draws the chip as if the pointer or the keyboard were on it, unless `look` is `None`.
+    pub(super) const fn preview(mut self, look: Option<Look>) -> Self {
+        self.forced = look;
         self
     }
 
     /// The room the chip needs, to reserve in a flow of text.
-    pub fn size(self, ui: &egui::Ui) -> egui::Vec2 {
-        self.measure(ui)
-    }
-
-    fn measure(&self, ui: &egui::Ui) -> egui::Vec2 {
+    pub fn size(&self, ui: &egui::Ui) -> egui::Vec2 {
         let text = TextRole::Micro.galley(ui, &self.number.to_string(), color::TEXT);
         egui::vec2(
             size::CITATION.max(text.size().x + 2.0 * space::XS),
@@ -97,7 +93,7 @@ impl CitationChip {
 
 impl egui::Widget for CitationChip {
     fn ui(self, ui: &mut egui::Ui) -> Response {
-        let (rect, response) = ui.allocate_exact_size(self.measure(ui), egui::Sense::click());
+        let (rect, response) = ui.allocate_exact_size(self.size(ui), egui::Sense::click());
         self.name_and_paint(ui, rect, response)
     }
 }
@@ -193,13 +189,8 @@ impl<'a> Chip<'a> {
             let swatch = kind.tone().swatch();
             let centre = pos2(rect.left() + space::XS + CHIP_BADGE / 2.0, rect.center().y);
             painter.circle_filled(centre, CHIP_BADGE / 2.0, swatch.solid);
-            painter.text(
-                centre,
-                Align2::CENTER_CENTER,
-                kind.icon().glyph(),
-                Icon::font(CHIP_GLYPH),
-                swatch.on_solid,
-            );
+            kind.icon()
+                .paint(painter, centre, CHIP_GLYPH, swatch.on_solid);
         }
     }
 }
@@ -284,11 +275,10 @@ impl egui::Widget for Badge<'_> {
             );
             let mut x = rect.left() + space::SM;
             if let Some(icon) = self.icon {
-                painter.text(
+                icon.paint(
+                    painter,
                     pos2(x + size::ICON_SM / 2.0, rect.center().y),
-                    Align2::CENTER_CENTER,
-                    icon.glyph(),
-                    Icon::font(size::ICON_SM),
+                    size::ICON_SM,
                     swatch.text,
                 );
                 x += icon_room;

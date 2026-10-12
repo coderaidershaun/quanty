@@ -2,6 +2,7 @@
 //! what a graph holds. The product cannot read or remove a whole graph, so it is behind a feature.
 
 use std::collections::BTreeSet;
+use std::fmt::Display;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use falkordb::{FalkorClientBuilder, FalkorConnectionInfo, FalkorValue};
@@ -10,6 +11,31 @@ use rag_core::{Config, DocId};
 use crate::falkor::FalkorGraph;
 
 const THROWAWAY_PREFIX: &str = "test-graph-";
+
+/// A name that no other test or run uses: the test name, the process id and the time.
+pub fn unique_name(test_name: &str) -> String {
+    let nanoseconds = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("the clock should be after 1970")
+        .as_nanos();
+    format!("{test_name}-{}-{nanoseconds}", std::process::id())
+}
+
+/// Runs `remove` on its own thread, so that a panic inside it ends that thread and not the
+/// caller: a panic in a drop while a failed test unwinds stops the whole test run. A drop cannot
+/// return an error, so a failure is only printed, with `what` naming the resource and `pronoun`
+/// standing for it in the message.
+pub fn remove_on_thread<E: Display + Send + 'static>(
+    what: &str,
+    pronoun: &str,
+    remove: impl FnOnce() -> Result<(), E> + Send + 'static,
+) {
+    match std::thread::spawn(remove).join() {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => eprintln!("could not remove {what}: {error:#}"),
+        Err(_) => eprintln!("could not remove {what}: the thread that removes {pronoun} panicked"),
+    }
+}
 
 /// The name of a graph that no one else uses. The graph is deleted when this is dropped, so it
 /// goes away also when the test fails. It can only name and remove a graph that starts with the
@@ -22,15 +48,8 @@ pub struct ThrowawayGraph {
 
 impl ThrowawayGraph {
     pub fn new(config: &Config, test_name: &str) -> Self {
-        let nanoseconds = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("the clock should be after 1970")
-            .as_nanos();
         Self {
-            name: format!(
-                "{THROWAWAY_PREFIX}{test_name}-{}-{nanoseconds}",
-                std::process::id()
-            ),
+            name: format!("{THROWAWAY_PREFIX}{}", unique_name(test_name)),
             url: config.falkordb_url.clone(),
         }
     }
@@ -47,34 +66,22 @@ impl Drop for ThrowawayGraph {
         }
         let name = self.name.clone();
         let url = self.url.clone();
-        // On its own thread, so that a panic inside the client ends that thread and not this
-        // drop: a panic in a drop while a failed test unwinds stops the whole test run. The
-        // blocking client needs no runtime.
-        let removed = std::thread::spawn(move || -> Result<(), falkordb::FalkorDBError> {
-            let client = FalkorClientBuilder::new()
-                .with_connection_info(FalkorConnectionInfo::try_from(url.as_str())?)
-                .build()?;
-            // A graph that no query reached is not in the list, and asking the store to delete it
-            // would be an error.
-            if client.list_graphs()?.contains(&name) {
-                client.select_graph(&name).delete()?;
-            }
-            Ok(())
-        })
-        .join();
-        match removed {
-            Ok(Ok(())) => {}
-            Ok(Err(error)) => {
-                eprintln!(
-                    "could not remove the throwaway graph {}: {error}",
-                    self.name
-                );
-            }
-            Err(_) => eprintln!(
-                "could not remove the throwaway graph {}: the thread that removes it panicked",
-                self.name
-            ),
-        }
+        // The blocking client needs no runtime.
+        remove_on_thread(
+            &format!("the throwaway graph {}", self.name),
+            "it",
+            move || -> Result<(), falkordb::FalkorDBError> {
+                let client = FalkorClientBuilder::new()
+                    .with_connection_info(FalkorConnectionInfo::try_from(url.as_str())?)
+                    .build()?;
+                // A graph that no query reached is not in the list, and asking the store to
+                // delete it would be an error.
+                if client.list_graphs()?.contains(&name) {
+                    client.select_graph(&name).delete()?;
+                }
+                Ok(())
+            },
+        );
     }
 }
 
@@ -136,23 +143,23 @@ pub struct StoredConceptGraph {
 /// The document with this id and its items in reading order, or `None` when the graph has no
 /// such document.
 pub async fn stored_document(graph: &FalkorGraph, id: DocId) -> Option<StoredDocument> {
-    let id = id.to_string();
-    let titles = read(
+    let parameters = vec![("id", FalkorValue::String(id.to_string()))];
+    let titles = rows_of(
         graph,
         "MATCH (d:Document {id: $id}) RETURN d.title AS title",
-        &id,
+        parameters.clone(),
     )
     .await;
     let title_row = titles.into_iter().next()?;
     let title = text(title_row.into_iter().next().expect("a row has a title"));
-    let rows = read(
+    let rows = rows_of(
         graph,
         "MATCH (d:Document {id: $id})-[:HAS_ITEM]->(first:Item)
          WHERE indegree(first, 'NEXT') = 0
          MATCH path = (first)-[:NEXT*0..]->(i:Item)<-[:HAS_ITEM]-(d)
          RETURN i.id AS id, i.kind AS kind, i.page AS page, i.printed_page AS printed_page
          ORDER BY length(path)",
-        &id,
+        parameters,
     )
     .await;
     let items = rows
@@ -279,11 +286,6 @@ async fn stored_relations(graph: &FalkorGraph) -> Vec<StoredRelation> {
             }
         })
         .collect()
-}
-
-async fn read(graph: &FalkorGraph, statement: &str, id: &str) -> Vec<Vec<FalkorValue>> {
-    let parameters = vec![("id", FalkorValue::String(id.to_owned()))];
-    rows_of(graph, statement, parameters).await
 }
 
 async fn read_all(graph: &FalkorGraph, statement: &str) -> Vec<Vec<FalkorValue>> {

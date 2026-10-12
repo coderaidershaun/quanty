@@ -4,7 +4,7 @@
 use falkordb::FalkorValue;
 use rag_core::{ConceptId, ItemId};
 
-use super::{FalkorGraph, id_list, unreadable_reply};
+use super::{FalkorGraph, id_list, read_rows};
 use crate::contents::{Mention, Relation};
 use crate::store::GraphError;
 
@@ -35,12 +35,7 @@ pub(super) async fn relations_among(
     let action = "read the relations among the concepts";
     let parameters = vec![("concepts", id_list(concepts))];
     let reply = graph.run(action, RELATIONS_AMONG, parameters).await?;
-    reply
-        .data
-        .into_values_lossy()
-        .map(relation_from_row)
-        .collect::<Result<_, _>>()
-        .map_err(|found| unreadable_reply(graph, action, RELATION_ROW, found))
+    read_rows(graph, action, RELATION_ROW, reply, relation_from_row)
 }
 
 pub(super) async fn mentions_between(
@@ -54,12 +49,7 @@ pub(super) async fn mentions_between(
     let action = "read the mentions of the concepts by the items";
     let parameters = vec![("items", id_list(items)), ("concepts", id_list(concepts))];
     let reply = graph.run(action, MENTIONS_BETWEEN, parameters).await?;
-    reply
-        .data
-        .into_values_lossy()
-        .map(mention_from_row)
-        .collect::<Result<_, _>>()
-        .map_err(|found| unreadable_reply(graph, action, MENTION_ROW, found))
+    read_rows(graph, action, MENTION_ROW, reply, mention_from_row)
 }
 
 fn relation_from_row(row: Vec<FalkorValue>) -> Result<Relation, String> {

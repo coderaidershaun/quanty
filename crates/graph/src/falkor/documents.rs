@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use falkordb::FalkorValue;
 use rag_core::{Category, DocId, DocumentLabels, MediaLabels, Tag};
 
-use super::{FalkorGraph, id_list, id_value, unreadable_reply};
+use super::{FalkorGraph, id_list, id_value, read_rows, unreadable_reply};
 use crate::contents::{DocumentNode, MediaNode};
 use crate::store::GraphError;
 
@@ -64,12 +64,7 @@ pub(super) async fn documents(graph: &FalkorGraph) -> Result<Vec<DocumentNode>, 
     let reply = graph
         .run(action, &documents_statement(), Vec::new())
         .await?;
-    reply
-        .data
-        .into_values_lossy()
-        .map(document_from_row)
-        .collect::<Result<_, _>>()
-        .map_err(|found| unreadable_reply(graph, action, DOCUMENT_ROW, found))
+    read_rows(graph, action, DOCUMENT_ROW, reply, document_from_row)
 }
 
 pub(super) async fn document(
@@ -91,12 +86,7 @@ pub(super) async fn document(
 pub(super) async fn media(graph: &FalkorGraph) -> Result<Vec<MediaNode>, GraphError> {
     let action = "read the media";
     let reply = graph.run(action, MEDIA, Vec::new()).await?;
-    reply
-        .data
-        .into_values_lossy()
-        .map(media_from_row)
-        .collect::<Result<_, _>>()
-        .map_err(|found| unreadable_reply(graph, action, MEDIA_ROW, found))
+    read_rows(graph, action, MEDIA_ROW, reply, media_from_row)
 }
 
 pub(super) async fn ingested_items(
@@ -123,12 +113,7 @@ pub(super) async fn chapter_folders(
     let action = "read the folders the documents were ingested from";
     let parameters = vec![("documents", id_list(documents))];
     let reply = graph.run(action, CHAPTER_FOLDERS, parameters).await?;
-    reply
-        .data
-        .into_values_lossy()
-        .map(folder_from_row)
-        .collect::<Result<_, _>>()
-        .map_err(|found| unreadable_reply(graph, action, FOLDER_ROW, found))
+    read_rows(graph, action, FOLDER_ROW, reply, folder_from_row)
 }
 
 pub(super) fn document_from_row(row: Vec<FalkorValue>) -> Result<DocumentNode, String> {
@@ -186,10 +171,21 @@ fn category_from(text: &str) -> Result<Category, String> {
     text.parse().map_err(|_| format!("{text:?}"))
 }
 
-fn text_or_null(value: FalkorValue) -> Result<Option<String>, String> {
+pub(super) fn text_or_null(value: FalkorValue) -> Result<Option<String>, String> {
     match value {
         FalkorValue::None => Ok(None),
         FalkorValue::String(text) => Ok(Some(text)),
+        other => Err(format!("{other:?}")),
+    }
+}
+
+/// The graph stores a count as a signed number or null, so a negative count is an error.
+pub(super) fn count_or_null(value: FalkorValue) -> Result<Option<u64>, String> {
+    match value {
+        FalkorValue::None => Ok(None),
+        FalkorValue::I64(count) => u64::try_from(count)
+            .map(Some)
+            .map_err(|_| count.to_string()),
         other => Err(format!("{other:?}")),
     }
 }
@@ -226,10 +222,7 @@ fn tag_set(value: FalkorValue) -> Result<BTreeSet<Tag>, String> {
 fn ingested_items_from_row(row: Vec<FalkorValue>) -> Result<Option<u64>, String> {
     let row = <[FalkorValue; 1]>::try_from(row).map_err(|row| format!("{row:?}"))?;
     match row {
-        [FalkorValue::None] => Ok(None),
-        [FalkorValue::I64(count)] => u64::try_from(count)
-            .map(Some)
-            .map_err(|_| count.to_string()),
+        [value @ (FalkorValue::None | FalkorValue::I64(_))] => count_or_null(value),
         other => Err(format!("{other:?}")),
     }
 }

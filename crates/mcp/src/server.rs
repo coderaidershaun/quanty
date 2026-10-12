@@ -25,7 +25,7 @@ use crate::retrieval::{
 use crate::services::Services;
 
 /// The size a PDF may have unless the caller sets another limit: 50 MiB.
-pub const DEFAULT_MAX_PDF_BYTES: u64 = 50 * 1024 * 1024;
+const DEFAULT_MAX_PDF_BYTES: u64 = 50 * 1024 * 1024;
 
 /// Room in a request for everything but the base64 text of the PDF: 1 MiB.
 const REQUEST_EXTRA_BYTES: u64 = 1024 * 1024;
@@ -169,10 +169,6 @@ impl IntoCallToolResult for ToolError {
     }
 }
 
-fn job_error_text(error: PdfIngestError) -> String {
-    ToolError::Ingest(error).text()
-}
-
 impl<S: Services> QuantyServer<S> {
     /// A server over the stores that `config` names, with the services of `services` and the
     /// default limit on the size of a PDF.
@@ -281,7 +277,8 @@ impl<S: Services> QuantyServer<S> {
         &self,
         Parameters(args): Parameters<IngestPdfArgs>,
     ) -> Result<Json<IngestReport>, ToolError> {
-        Ok(Json(self.shared.ingest.start(args, job_error_text).await?))
+        let error_text = |error| ToolError::Ingest(error).text();
+        Ok(Json(self.shared.ingest.start(args, error_text).await?))
     }
 
     /// Says how an ingest job is going, or how it ended. Ask again every 20 to 30 seconds until

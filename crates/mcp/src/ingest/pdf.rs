@@ -17,6 +17,7 @@ use rag_core::{Category, Config, MediaLabels, Tag, author_list};
 use rag_ingestion::{TagChange, UnnamedPdf};
 
 use super::{IngestPdfArgs, PdfIngestError};
+use crate::args::{non_blank, parse_tags};
 
 const PDF_START: &[u8] = b"%PDF-";
 
@@ -57,13 +58,6 @@ pub(super) struct Upload {
     pub(super) save_to: PathBuf,
 }
 
-/// The ways to send the PDF, as the agent gave them, with the blank ones left out.
-struct GivenSource {
-    path: Option<String>,
-    pdf_base64: Option<String>,
-    file_name: Option<String>,
-}
-
 /// The PDF of the one way it was sent.
 struct Source {
     pdf_path: PathBuf,
@@ -91,18 +85,20 @@ pub(super) fn check(
         .map_err(PdfIngestError::Category)?;
     // The media is checked here, so that the checks below can fail for the document only.
     let media_folder = media_folder_name(&media).map_err(PdfIngestError::Media)?;
-    let media_tags = tags_of(args.tags)?.into_iter().collect();
+    let media_tags = parse_tags(args.tags).map_err(PdfIngestError::Tag)?;
     let document_tags = TagChange {
-        add: tags_of(args.document_tags)?,
+        add: parse_tags(args.document_tags).map_err(PdfIngestError::Tag)?,
         remove: Vec::new(),
     };
-    let given = GivenSource {
-        path: non_blank(args.path),
+    let source = checked_source(
+        non_blank(args.path),
         // The base64 text can be megabytes long, so it is not trimmed or copied here.
-        pdf_base64: args.pdf_base64.filter(|text| !text.trim().is_empty()),
-        file_name: non_blank(args.file_name),
-    };
-    let source = given.checked(config, &media_folder, max_pdf_bytes)?;
+        args.pdf_base64.filter(|text| !text.trim().is_empty()),
+        non_blank(args.file_name),
+        config,
+        &media_folder,
+        max_pdf_bytes,
+    )?;
     Ok(CheckedPdf {
         pdf_path: source.pdf_path,
         media,
@@ -116,42 +112,42 @@ pub(super) fn check(
     })
 }
 
-impl GivenSource {
-    /// Exactly one way must be given. A PDF sent as base64 is read here, and saved later.
-    fn checked(
-        self,
-        config: &Config,
-        media_folder: &str,
-        max_pdf_bytes: u64,
-    ) -> Result<Source, PdfIngestError> {
-        match (self.path, self.pdf_base64) {
-            (None, None) => Err(PdfIngestError::NoSource),
-            (Some(_), Some(_)) => Err(PdfIngestError::TwoSources),
-            (Some(path), None) => {
-                if self.file_name.is_some() {
-                    return Err(PdfIngestError::FileNameWithPath);
-                }
-                let pdf_path = path_of_a_pdf(&path, max_pdf_bytes)?;
-                let file_name = pdf_path
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                Ok(Source {
-                    pdf_path,
-                    file_name,
-                    upload: None,
-                })
+/// Exactly one way must be given. A PDF sent as base64 is read here, and saved later.
+fn checked_source(
+    path: Option<String>,
+    pdf_base64: Option<String>,
+    file_name: Option<String>,
+    config: &Config,
+    media_folder: &str,
+    max_pdf_bytes: u64,
+) -> Result<Source, PdfIngestError> {
+    match (path, pdf_base64) {
+        (None, None) => Err(PdfIngestError::NoSource),
+        (Some(_), Some(_)) => Err(PdfIngestError::TwoSources),
+        (Some(path), None) => {
+            if file_name.is_some() {
+                return Err(PdfIngestError::FileNameWithPath);
             }
-            (None, Some(text)) => {
-                let file_name = self.file_name.ok_or(PdfIngestError::MissingFileName)?;
-                let save_to = upload_path(config, media_folder, &file_name)?;
-                let bytes = decoded_pdf(&text, max_pdf_bytes)?;
-                Ok(Source {
-                    pdf_path: save_to.clone(),
-                    file_name,
-                    upload: Some(Upload { bytes, save_to }),
-                })
-            }
+            let pdf_path = path_of_a_pdf(&path, max_pdf_bytes)?;
+            let file_name = pdf_path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            Ok(Source {
+                pdf_path,
+                file_name,
+                upload: None,
+            })
+        }
+        (None, Some(text)) => {
+            let file_name = file_name.ok_or(PdfIngestError::MissingFileName)?;
+            let save_to = upload_path(config, media_folder, &file_name)?;
+            let bytes = decoded_pdf(&text, max_pdf_bytes)?;
+            Ok(Source {
+                pdf_path: save_to.clone(),
+                file_name,
+                upload: Some(Upload { bytes, save_to }),
+            })
         }
     }
 }
@@ -192,15 +188,6 @@ impl CheckedPdf {
             document_tags: self.document_tags,
         })
     }
-}
-
-fn tags_of(texts: Option<Vec<String>>) -> Result<Vec<Tag>, PdfIngestError> {
-    texts
-        .unwrap_or_default()
-        .iter()
-        .map(|tag| tag.parse::<Tag>())
-        .collect::<Result<_, _>>()
-        .map_err(PdfIngestError::Tag)
 }
 
 fn path_of_a_pdf(path: &str, max_pdf_bytes: u64) -> Result<PathBuf, PdfIngestError> {
@@ -272,9 +259,4 @@ fn decoded_pdf(text: &str, max_pdf_bytes: u64) -> Result<Vec<u8>, PdfIngestError
         return Err(PdfIngestError::UploadNotAPdf);
     }
     Ok(bytes)
-}
-
-fn non_blank(text: Option<String>) -> Option<String> {
-    text.map(|text| text.trim().to_owned())
-        .filter(|text| !text.is_empty())
 }

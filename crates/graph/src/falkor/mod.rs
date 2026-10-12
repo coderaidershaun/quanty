@@ -262,6 +262,22 @@ fn unreadable_reply(
     }
 }
 
+/// The reads of many rows share this, so that each reports a row it cannot read in the same way.
+fn read_rows<T, C: FromIterator<T>>(
+    graph: &FalkorGraph,
+    action: &'static str,
+    expected: &'static str,
+    reply: QueryResult<RowStream>,
+    from_row: impl FnMut(Vec<FalkorValue>) -> Result<T, String>,
+) -> Result<C, GraphError> {
+    reply
+        .data
+        .into_values_lossy()
+        .map(from_row)
+        .collect::<Result<_, _>>()
+        .map_err(|found| unreadable_reply(graph, action, expected, found))
+}
+
 fn id_list(ids: &[impl ToString + Copy]) -> FalkorValue {
     FalkorValue::Array(ids.iter().copied().map(id_value).collect())
 }

@@ -2,10 +2,9 @@
 //! collections of the local Qdrant, a graph of the local FalkorDB, and a temporary folder.
 
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use graph::FalkorGraph;
-use graph::testing::ThrowawayGraph;
+use graph::testing::{ThrowawayGraph, remove_on_thread, unique_name};
 use qdrant_client::Qdrant;
 use rag_core::{ConceptStore, Config, ItemStore, Llm};
 use tempfile::TempDir;
@@ -30,11 +29,7 @@ pub struct ThrowawayStores {
 
 impl ThrowawayStores {
     pub fn new(test_name: &str) -> Self {
-        let nanoseconds = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("the clock should be after 1970")
-            .as_nanos();
-        let stamp = format!("{test_name}-{}-{nanoseconds}", std::process::id());
+        let stamp = unique_name(test_name);
         let settings = Config::load().expect("the settings should load");
         let graph = ThrowawayGraph::new(&settings, test_name);
         let temporary = tempfile::tempdir().expect("a temporary folder should be made");
@@ -186,31 +181,25 @@ impl Drop for ThrowawayStores {
         let names = collections.join(", ");
         // A new thread with its own runtime, because a drop cannot wait inside the runtime of
         // the test.
-        let removed = std::thread::spawn(move || -> anyhow::Result<()> {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()?;
-            runtime.block_on(async {
-                let client = Qdrant::from_url(&url).skip_compatibility_check().build()?;
-                let mut result = Ok(());
-                for collection in &collections {
-                    if let Err(error) = client.delete_collection(collection.as_str()).await {
-                        result = Err(error);
+        remove_on_thread(
+            &format!("the throwaway collections {names}"),
+            "them",
+            move || -> anyhow::Result<()> {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()?;
+                runtime.block_on(async {
+                    let client = Qdrant::from_url(&url).skip_compatibility_check().build()?;
+                    let mut result = Ok(());
+                    for collection in &collections {
+                        if let Err(error) = client.delete_collection(collection.as_str()).await {
+                            result = Err(error);
+                        }
                     }
-                }
-                Ok(result?)
-            })
-        })
-        .join();
-        match removed {
-            Ok(Ok(())) => {}
-            Ok(Err(error)) => {
-                eprintln!("could not remove the throwaway collections {names}: {error:#}");
-            }
-            Err(_) => eprintln!(
-                "could not remove the throwaway collections {names}: the thread that removes them panicked"
-            ),
-        }
+                    Ok(result?)
+                })
+            },
+        );
     }
 }
 

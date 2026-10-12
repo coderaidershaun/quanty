@@ -4,17 +4,16 @@
 mod found;
 mod written;
 
-use std::collections::BTreeSet;
-
 use graph::{FalkorGraph, GraphError};
 use rag_core::{
     Category, ConceptStore, Config, EmbedError, EmptyTag, ItemKind, ItemStore, LabelFilter, Llm,
-    StoreError, Tag, UnknownCategory, UnknownItemKind, WantedDocument,
+    StoreError, UnknownCategory, UnknownItemKind, WantedDocument,
 };
 use rag_retrieval::{ANSWER_MODEL, AnswerError, Retriever, SearchError};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
+use crate::args::{non_blank, parse_tags};
 use crate::services::Services;
 pub(crate) use found::SearchResult;
 pub(crate) use written::AnswerResult;
@@ -112,13 +111,7 @@ impl QuestionArgs {
             .map(|category| category.parse::<Category>())
             .transpose()
             .map_err(RetrievalError::Category)?;
-        let tags = self
-            .tags
-            .unwrap_or_default()
-            .iter()
-            .map(|tag| tag.parse::<Tag>())
-            .collect::<Result<BTreeSet<_>, _>>()
-            .map_err(RetrievalError::Tag)?;
+        let tags = parse_tags(self.tags).map_err(RetrievalError::Tag)?;
         Ok(Asked {
             question,
             kind,
@@ -133,12 +126,6 @@ impl QuestionArgs {
             },
         })
     }
-}
-
-/// The text with no space at either end, or `None` when nothing is left.
-fn non_blank(text: Option<String>) -> Option<String> {
-    text.map(|text| text.trim().to_owned())
-        .filter(|text| !text.is_empty())
 }
 
 /// Finds the items for the question.

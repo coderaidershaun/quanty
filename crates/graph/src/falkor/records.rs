@@ -6,8 +6,8 @@ use std::path::PathBuf;
 use falkordb::FalkorValue;
 use rag_core::ItemKind;
 
-use super::documents::{DOCUMENT_COLUMNS, document_from_row};
-use super::{FalkorGraph, unreadable_reply};
+use super::documents::{DOCUMENT_COLUMNS, count_or_null, document_from_row, text_or_null};
+use super::{FalkorGraph, read_rows};
 use crate::contents::{DocumentRecord, ItemsByKind};
 use crate::store::GraphError;
 
@@ -37,12 +37,7 @@ pub(super) async fn document_records(
     let reply = graph
         .run(action, &document_records_statement(), Vec::new())
         .await?;
-    reply
-        .data
-        .into_values_lossy()
-        .map(record_from_row)
-        .collect::<Result<_, _>>()
-        .map_err(|found| unreadable_reply(graph, action, RECORD_ROW, found))
+    read_rows(graph, action, RECORD_ROW, reply, record_from_row)
 }
 
 fn count_of(items: &mut ItemsByKind, kind: ItemKind) -> &mut u64 {
@@ -69,16 +64,8 @@ fn record_from_row(row: Vec<FalkorValue>) -> Result<DocumentRecord, String> {
         items_by_kind,
     ] = row;
     let node = document_from_row(vec![id, title, media, category, authors, media_tags, tags])?;
-    let ingested_items = match mark {
-        FalkorValue::None => None,
-        FalkorValue::I64(count) => Some(u64::try_from(count).map_err(|_| count.to_string())?),
-        other => return Err(format!("{other:?}")),
-    };
-    let chapter_folder = match folder {
-        FalkorValue::None => None,
-        FalkorValue::String(text) => Some(PathBuf::from(text)),
-        other => return Err(format!("{other:?}")),
-    };
+    let ingested_items = count_or_null(mark)?;
+    let chapter_folder = text_or_null(folder)?.map(PathBuf::from);
     let FalkorValue::Array(pairs) = items_by_kind else {
         return Err(format!("{items_by_kind:?}"));
     };

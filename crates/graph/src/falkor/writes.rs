@@ -108,7 +108,7 @@ pub(super) async fn upsert_document(
     let labels = &document.labels;
     let parameters = vec![
         ("id", id_value(document.id)),
-        ("title", FalkorValue::String(document.title.clone())),
+        ("title", text_value(&document.title)),
         ("media", text_or_null(labels.media.as_deref())),
         (
             "category",
@@ -125,37 +125,32 @@ pub(super) async fn upsert_document(
 }
 
 pub(super) async fn add_media(graph: &FalkorGraph, media: &MediaNode) -> Result<(), GraphError> {
-    graph
-        .run("write the media", ADD_MEDIA, media_parameters(media))
-        .await?;
-    Ok(())
+    write_media(graph, "write the media", ADD_MEDIA, media).await
 }
 
 pub(super) async fn update_media(graph: &FalkorGraph, media: &MediaNode) -> Result<(), GraphError> {
-    graph
-        .run(
-            "write the labels of the media",
-            UPDATE_MEDIA,
-            media_parameters(media),
-        )
-        .await?;
+    write_media(graph, "write the labels of the media", UPDATE_MEDIA, media).await
+}
+
+/// Adding a media and changing its labels send the same four parameters.
+async fn write_media(
+    graph: &FalkorGraph,
+    action: &'static str,
+    statement: &str,
+    media: &MediaNode,
+) -> Result<(), GraphError> {
+    let parameters = vec![
+        ("title", text_value(&media.title)),
+        ("category", text_value(media.labels.category.as_str())),
+        ("authors", text_list(&media.labels.authors)),
+        ("tags", tag_list(&media.labels.tags)),
+    ];
+    graph.run(action, statement, parameters).await?;
     Ok(())
 }
 
-fn media_parameters(media: &MediaNode) -> Vec<(&'static str, FalkorValue)> {
-    vec![
-        ("title", FalkorValue::String(media.title.clone())),
-        (
-            "category",
-            FalkorValue::String(media.labels.category.as_str().to_owned()),
-        ),
-        ("authors", text_list(&media.labels.authors)),
-        ("tags", tag_list(&media.labels.tags)),
-    ]
-}
-
 pub(super) async fn delete_media(graph: &FalkorGraph, title: &str) -> Result<bool, GraphError> {
-    let parameters = vec![("title", FalkorValue::String(title.to_owned()))];
+    let parameters = vec![("title", text_value(title))];
     let removed = run_counted(graph, "delete the media", DELETE_MEDIA, parameters).await?;
     Ok(removed > 0)
 }
@@ -191,10 +186,7 @@ pub(super) async fn set_chapter_folder(
         .ok_or_else(|| GraphError::FolderNotUnicode {
             folder: folder.to_path_buf(),
         })?;
-    let parameters = vec![
-        ("id", id_value(document)),
-        ("folder", FalkorValue::String(text.to_owned())),
-    ];
+    let parameters = vec![("id", id_value(document)), ("folder", text_value(text))];
     graph
         .run(
             "record the folder the document was ingested from",
@@ -246,15 +238,9 @@ pub(super) async fn upsert_concept(
 ) -> Result<(), GraphError> {
     let parameters = vec![
         ("id", id_value(concept.id)),
-        ("name", FalkorValue::String(concept.name.clone())),
-        (
-            "normalised_name",
-            FalkorValue::String(concept.normalised_name.clone()),
-        ),
-        (
-            "definition",
-            FalkorValue::String(concept.definition.clone()),
-        ),
+        ("name", text_value(&concept.name)),
+        ("normalised_name", text_value(&concept.normalised_name)),
+        ("definition", text_value(&concept.definition)),
     ];
     graph
         .run("write the concept", UPSERT_CONCEPT, parameters)
@@ -321,11 +307,8 @@ async fn run_counted(
 pub(super) async fn add_alias(graph: &FalkorGraph, alias: &ConceptAlias) -> Result<(), GraphError> {
     let parameters = vec![
         ("id", id_value(alias.concept)),
-        ("name", FalkorValue::String(alias.name.clone())),
-        (
-            "normalised_name",
-            FalkorValue::String(alias.normalised_name.clone()),
-        ),
+        ("name", text_value(&alias.name)),
+        ("normalised_name", text_value(&alias.normalised_name)),
     ];
     graph
         .run("add an alias to the concept", ADD_ALIAS, parameters)
@@ -333,11 +316,13 @@ pub(super) async fn add_alias(graph: &FalkorGraph, alias: &ConceptAlias) -> Resu
     Ok(())
 }
 
+/// Most parameters of a write are text, and each one needs its own copy of that text.
+fn text_value(text: &str) -> FalkorValue {
+    FalkorValue::String(text.to_owned())
+}
+
 fn text_or_null(text: Option<&str>) -> FalkorValue {
-    match text {
-        Some(text) => FalkorValue::String(text.to_owned()),
-        None => FalkorValue::None,
-    }
+    text.map_or(FalkorValue::None, text_value)
 }
 
 fn text_list(texts: &[String]) -> FalkorValue {
@@ -355,10 +340,7 @@ fn tag_list(tags: &BTreeSet<Tag>) -> FalkorValue {
 fn item_row(item: &ItemNode) -> FalkorValue {
     FalkorValue::Map(HashMap::from([
         ("id".to_owned(), id_value(item.id)),
-        (
-            "kind".to_owned(),
-            FalkorValue::String(item.kind.as_str().to_owned()),
-        ),
+        ("kind".to_owned(), text_value(item.kind.as_str())),
         ("page".to_owned(), FalkorValue::I64(i64::from(item.page))),
         (
             "printed_page".to_owned(),
@@ -371,10 +353,7 @@ fn mention_row(mention: &Mention) -> FalkorValue {
     FalkorValue::Map(HashMap::from([
         ("item".to_owned(), id_value(mention.item)),
         ("concept".to_owned(), id_value(mention.concept)),
-        (
-            "wording".to_owned(),
-            FalkorValue::String(mention.wording.clone()),
-        ),
+        ("wording".to_owned(), text_value(&mention.wording)),
     ]))
 }
 
@@ -392,10 +371,7 @@ fn relation_row(relation: &Relation) -> FalkorValue {
     FalkorValue::Map(HashMap::from([
         ("from".to_owned(), id_value(relation.from)),
         ("to".to_owned(), id_value(relation.to)),
-        (
-            "type".to_owned(),
-            FalkorValue::String(relation.kind.as_str().to_owned()),
-        ),
+        ("type".to_owned(), text_value(relation.kind.as_str())),
         ("item".to_owned(), id_value(relation.item)),
     ]))
 }

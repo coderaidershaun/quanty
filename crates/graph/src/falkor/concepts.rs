@@ -4,7 +4,7 @@
 use falkordb::FalkorValue;
 use rag_core::{ConceptId, DocId, ItemId};
 
-use super::{FalkorGraph, id_list, id_value, unreadable_reply};
+use super::{FalkorGraph, id_list, id_value, read_rows};
 use crate::contents::{ConceptNode, ItemMentions};
 use crate::store::GraphError;
 
@@ -90,12 +90,7 @@ async fn read_concepts(
     parameters: Vec<(&'static str, FalkorValue)>,
 ) -> Result<Vec<ConceptNode>, GraphError> {
     let reply = graph.run(action, statement, parameters).await?;
-    reply
-        .data
-        .into_values_lossy()
-        .map(concept_from_row)
-        .collect::<Result<_, _>>()
-        .map_err(|found| unreadable_reply(graph, action, CONCEPT_ROW, found))
+    read_rows(graph, action, CONCEPT_ROW, reply, concept_from_row)
 }
 
 pub(super) async fn concepts_for_items(
@@ -132,12 +127,7 @@ pub(super) async fn items_for_concepts(
         ),
     ];
     let reply = graph.run(action, ITEMS_FOR_CONCEPTS, parameters).await?;
-    reply
-        .data
-        .into_values_lossy()
-        .map(item_mentions_from_row)
-        .collect::<Result<_, _>>()
-        .map_err(|found| unreadable_reply(graph, action, ITEM_ROW, found))
+    read_rows(graph, action, ITEM_ROW, reply, item_mentions_from_row)
 }
 
 pub(super) async fn related_concepts(

@@ -39,17 +39,10 @@ pub(super) async fn copy_page(page_file: &Path) -> Result<Answer<CopiedPage>, Cl
 /// It makes one attempt and does not retry.
 ///
 /// `page_file` is a one-page PDF or an image of a page. `correction` says why the last reply was
-/// rejected, for a second try; it has no closing full stop.
-pub async fn transcribe_page(
-    page_file: &Path,
-    correction: Option<&str>,
-) -> Result<Answer<TranscribedPage>, ClaudeError> {
-    transcribe_page_with_picture(page_file, None, correction).await
-}
-
-/// Like [`transcribe_page`], and the model also reads `picture`, a sharper image of the same
-/// page. The PDF's text layer anchors letters and indices; the picture shows bold weight and
-/// small subscripts. `picture` must sit in the same folder as `page_file`.
+/// rejected, for a second try; it has no closing full stop. The model also reads `picture`, when
+/// there is one, a sharper image of the same page. The PDF's text layer anchors letters and
+/// indices; the picture shows bold weight and small subscripts. `picture` must sit in the same
+/// folder as `page_file`.
 pub(super) async fn transcribe_page_with_picture(
     page_file: &Path,
     picture: Option<&Path>,

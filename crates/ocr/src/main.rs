@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
-use ocr::content::parse_chapter_file_name;
+use ocr::content::{file_name_text, parse_chapter_file_name};
 use ocr::{ChapterJob, MediaDocument, convert_chapter};
 
 const USAGE: &str =
@@ -57,11 +57,7 @@ async fn run(arguments: Arguments) -> Result<()> {
         Err(error) if error.not_found() => {}
         Err(error) => return Err(error).context("could not read the .env file"),
     }
-    let file_name = arguments
-        .chapter_pdf
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
+    let file_name = file_name_text(&arguments.chapter_pdf);
     let document = MediaDocument {
         media_title: arguments.book_title,
         name: parse_chapter_file_name(&file_name).context("could not start the conversion")?,

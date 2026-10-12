@@ -12,6 +12,7 @@ use super::route::{CopyOutcome, judge_copy, route_reasons};
 use super::save::write_page;
 use super::services::{CallUsage, MathPlacement, PageServices, PageSource, ServiceError};
 use super::summary::CallTally;
+use super::write_error;
 use crate::content::{
     CallRecord, CallStep, Checks, ContentError, Conversion, MathCheck, PageCategories,
     REJECTED_REPLY_FILE, Route, RouteReason, page_folder_name, partial_page_folder_name,
@@ -226,13 +227,9 @@ impl<S: PageServices> PageRun<'_, S> {
         }
 
         let saved_reply = self.partial_folder.join(REJECTED_REPLY_FILE);
-        let save_error = |source| ContentError::Write {
-            path: saved_reply.clone(),
-            source,
-        };
-        let text =
-            serde_json::to_string_pretty(&second).map_err(|error| save_error(error.into()))?;
-        std::fs::write(&saved_reply, format!("{text}\n")).map_err(save_error)?;
+        let text = serde_json::to_string_pretty(&second)
+            .map_err(|error| write_error(&saved_reply)(error.into()))?;
+        std::fs::write(&saved_reply, format!("{text}\n")).map_err(write_error(&saved_reply))?;
         Err(PageError::ReplyRejected {
             fault: second_fault,
             saved_reply,
@@ -309,10 +306,7 @@ fn finish_folder(
     partial_folder: &Path,
     chapter_folder: &Path,
 ) -> Result<(), ContentError> {
-    std::fs::remove_file(&source.image).map_err(|error| ContentError::Write {
-        path: source.image.clone(),
-        source: error,
-    })?;
+    std::fs::remove_file(&source.image).map_err(write_error(&source.image))?;
     let done_folder = chapter_folder.join(page_folder_name(source.position));
     std::fs::rename(partial_folder, &done_folder).map_err(|source| ContentError::Write {
         path: done_folder,

@@ -118,18 +118,19 @@ pub(super) async fn cut_page(
     Ok(())
 }
 
-/// The text layer of a one-page PDF, exactly as the tool prints it.
-pub(super) async fn text_layer(page_pdf: &Path) -> Result<String, PopplerError> {
-    let output = run(
+/// Both ways of reading a page's text run the same command and differ only in `mode`.
+async fn pdftotext(page_pdf: &Path, mode: &str) -> Result<Output, PopplerError> {
+    run(
         "pdftotext",
         page_pdf,
-        &[
-            "-layout".as_ref(),
-            tool_path(page_pdf).as_os_str(),
-            "-".as_ref(),
-        ],
+        &[mode.as_ref(), tool_path(page_pdf).as_os_str(), "-".as_ref()],
     )
-    .await?;
+    .await
+}
+
+/// The text layer of a one-page PDF, exactly as the tool prints it.
+pub(super) async fn text_layer(page_pdf: &Path) -> Result<String, PopplerError> {
+    let output = pdftotext(page_pdf, "-layout").await?;
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
@@ -149,16 +150,7 @@ pub(super) struct PageText {
 }
 
 pub(super) async fn text_lines(page_pdf: &Path) -> Result<PageText, PopplerError> {
-    let output = run(
-        "pdftotext",
-        page_pdf,
-        &[
-            "-bbox-layout".as_ref(),
-            tool_path(page_pdf).as_os_str(),
-            "-".as_ref(),
-        ],
-    )
-    .await?;
+    let output = pdftotext(page_pdf, "-bbox-layout").await?;
     parse_page_text(&String::from_utf8_lossy(&output.stdout), page_pdf)
 }
 

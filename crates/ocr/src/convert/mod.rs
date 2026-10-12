@@ -21,7 +21,7 @@ use tokio::process::Command;
 
 use crate::content::{
     ChapterIndex, ContentError, DocumentName, FORMAT_VERSION, MediaDocument, PageIndex,
-    page_folder_name,
+    file_name_text, page_folder_name,
 };
 
 use services::{ClaudeError, LiveServices, PageServices, ServiceError};
@@ -132,16 +132,12 @@ impl ChapterJob {
         chapter_pdf: &Path,
         output_root: &Path,
     ) -> Result<Self, ConvertError> {
-        let source_file_name = chapter_pdf
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
         let chapter_folder = output_root.join(document.folder()?);
         Ok(Self {
             media_title: document.media_title,
             name: document.name,
             chapter_pdf: chapter_pdf.to_path_buf(),
-            source_file_name,
+            source_file_name: file_name_text(chapter_pdf),
             chapter_folder,
         })
     }

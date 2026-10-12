@@ -10,7 +10,7 @@ use super::save::figure_file;
 use super::services::{Answer, ImageServices, LiveImageServices};
 use super::{CallTally, ConvertError, sha256_hex, write_error};
 use crate::content::{
-    CallStep, ContentError, FORMAT_VERSION, IMAGE_EXPLANATION_FILE, ImageIndex,
+    CallStep, ContentError, FORMAT_VERSION, IMAGE_EXPLANATION_FILE, ImageIndex, file_name_text,
     image_copy_file_name, image_folder,
 };
 
@@ -87,7 +87,7 @@ pub async fn convert_image_with<S: ImageServices>(
         .map_err(write_error(&explanation_file))?;
     let index = ImageIndex {
         format_version: FORMAT_VERSION,
-        source_file: file_name_of(picture),
+        source_file: file_name_text(picture),
         source_sha256,
         picture: copy_name,
         label: figure.label,
@@ -229,11 +229,4 @@ fn canonical(folder: &Path) -> Result<PathBuf, ContentError> {
         path: folder.to_path_buf(),
         source,
     })
-}
-
-fn file_name_of(picture: &Path) -> String {
-    picture
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default()
 }

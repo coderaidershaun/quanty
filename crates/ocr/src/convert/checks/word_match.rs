@@ -10,16 +10,8 @@ use crate::convert::reply::{TranscribedPage, TranscribedPiece};
 pub(crate) fn words(text: &str) -> Vec<String> {
     remove_invisible(text)
         .to_lowercase()
-        .chars()
-        .map(|character| {
-            if character.is_alphanumeric() {
-                character
-            } else {
-                ' '
-            }
-        })
-        .collect::<String>()
-        .split_whitespace()
+        .split(|character: char| !character.is_alphanumeric())
+        .filter(|word| !word.is_empty())
         .map(str::to_owned)
         .collect()
 }

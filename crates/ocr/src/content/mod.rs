@@ -125,6 +125,13 @@ pub fn own_title<'a>(media_title: &str, title: &'a str) -> &'a str {
         .unwrap_or(title)
 }
 
+/// The file name at the end of `path` as text, or empty text when there is none.
+pub fn file_name_text(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
 /// Reads the number and the name of a book chapter from `chapter-<number>-<name>.pdf`.
 ///
 /// # Errors

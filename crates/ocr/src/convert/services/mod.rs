@@ -19,7 +19,6 @@ use transcribe::{copy_page, transcribe_page_with_picture};
 pub use categorise::categorise_page;
 pub use claude::{Answer, CallUsage, ClaudeError};
 pub use jev::{Jev, JevError, MathPlacement};
-pub use transcribe::transcribe_page;
 
 pub(super) use claude::api_key_is_set;
 pub(super) use jev::JEV_API_KEY_VARIABLE;
@@ -174,6 +173,6 @@ impl ImageServices for LiveImageServices {
         picture: &Path,
         correction: Option<&str>,
     ) -> Result<Answer<TranscribedPage>, ServiceError> {
-        Ok(with_retries(|| transcribe_page(picture, correction)).await?)
+        Ok(with_retries(|| transcribe_page_with_picture(picture, None, correction)).await?)
     }
 }

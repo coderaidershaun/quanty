@@ -94,10 +94,9 @@ pub(super) fn result_items(hits: &[SearchHit], facts: Vec<Option<PieceFacts>>) -
         .enumerate()
         .map(|(index, (hit, facts))| {
             let payload = &hit.item.payload;
-            let (piece, caption, name) = match facts {
-                Some(facts) => (Some(facts.piece), facts.caption, facts.name),
-                None => (None, None, None),
-            };
+            let (piece, caption, name) = facts.map_or((None, None, None), |facts| {
+                (Some(facts.piece), facts.caption, facts.name)
+            });
             ResultItem {
                 number: index + 1,
                 id: hit.item.id.into(),

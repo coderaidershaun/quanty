@@ -427,7 +427,16 @@ fn every_key_and_control_of(scene: &str) {
         {
             press(&mut harness, egui::Modifiers::NONE, egui::Key::Escape);
         }
+        let tab = shared(&harness).tab;
         press(&mut harness, modifiers_of(row.chord), key_of(row.chord.key));
+        if matches!(row.intent, Intent::RecheckHealth | Intent::ToggleHelp) {
+            assert_eq!(
+                shared(&harness).tab,
+                tab,
+                "`{scene}`: {} left the tab",
+                row.chord
+            );
+        }
     }
     assert_nothing_unbuilt_was_reached(&harness, scene, &seen);
     assert!(

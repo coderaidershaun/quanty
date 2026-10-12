@@ -292,7 +292,6 @@ async fn a_checked_chapter_is_ingested_with_its_labels_and_a_second_start_finds_
         Ok(IngestOutcome::AlreadyIngested {
             doc: report.doc,
             items,
-            pages_to_check: None,
         })
     );
     assert_eq!(pages.calls(), calls_so_far, "no page was converted again");

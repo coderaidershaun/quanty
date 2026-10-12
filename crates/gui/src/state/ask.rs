@@ -222,19 +222,13 @@ impl Shared {
         if self.ask.request != Some(request) || !self.ask.graph.is_loading() {
             return;
         }
-        if let Err(failure) = &result {
-            self.mark_down(failure);
-        }
-        self.ask.graph = result.into();
+        self.ask.graph = self.settled(result);
     }
 
     pub(super) fn answer_arrived(&mut self, request: RequestId, result: Result<Answer, Failure>) {
         if self.ask.request != Some(request) || !self.ask.answer.is_loading() {
             return;
         }
-        if let Err(failure) = &result {
-            self.mark_down(failure);
-        }
-        self.ask.answer = result.into();
+        self.ask.answer = self.settled(result);
     }
 }

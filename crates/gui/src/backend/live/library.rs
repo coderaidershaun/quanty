@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use graph::{DocumentRecord, GraphStore, MediaNode};
 use ocr::ChapterEntry;
 use ocr::content::{media_folder_name, own_title};
-use rag_ingestion::{MediaChange, TagChange, relabel_document_tags, relabel_media};
+use rag_ingestion::{MediaChange, Stores, TagChange, relabel_document_tags, relabel_media};
 
 use super::chapters::chapters_on_disk;
 use super::{LiveContext, Services};
@@ -45,13 +45,17 @@ async fn read_catalogue<S: Services>(cx: &LiveContext<S>) -> Result<Catalogue, F
 }
 
 /// Sends exactly one answer, also when the tags cannot be written.
+/// It makes no embedder and asks no model: only the tags are written, in both stores.
 pub(super) async fn set_document_tags<S: Services>(
     cx: &LiveContext<S>,
     request: RequestId,
     edit: &DocumentTagsEdit,
     reply: &Reply,
 ) {
-    let result = write_document_tags(cx, edit).await;
+    let result = with_stores(cx, async |stores| {
+        relabel_document_tags(edit.doc.into(), &TagChange::from(edit), stores).await
+    })
+    .await;
     reply.send(Event::DocumentTagsSaved {
         request,
         doc: edit.doc,
@@ -59,26 +63,18 @@ pub(super) async fn set_document_tags<S: Services>(
     });
 }
 
-/// It makes no embedder and asks no model: only the tags are written, in both stores.
-async fn write_document_tags<S: Services>(
-    cx: &LiveContext<S>,
-    edit: &DocumentTagsEdit,
-) -> Result<(), Failure> {
-    let stores = cx.stores().await?;
-    relabel_document_tags(edit.doc.into(), &TagChange::from(edit), &stores)
-        .await
-        .map(|_| ())
-        .map_err(|error| cx.failure(error))
-}
-
 /// Sends exactly one answer, also when the document cannot be deleted.
+/// It makes no embedder and asks no model: the document goes from both stores and from the disk.
 pub(super) async fn delete_document<S: Services>(
     cx: &LiveContext<S>,
     request: RequestId,
     doc: DocId,
     reply: &Reply,
 ) {
-    let result = remove_document(cx, doc).await;
+    let result = with_stores(cx, async |stores| {
+        rag_ingestion::delete_document(doc.into(), &cx.config().content_folder, stores).await
+    })
+    .await;
     reply.send(Event::DocumentDeleted {
         request,
         doc,
@@ -86,34 +82,20 @@ pub(super) async fn delete_document<S: Services>(
     });
 }
 
-/// It makes no embedder and asks no model: the document goes from both stores and from the disk.
-async fn remove_document<S: Services>(cx: &LiveContext<S>, doc: DocId) -> Result<(), Failure> {
-    let stores = cx.stores().await?;
-    rag_ingestion::delete_document(doc.into(), &cx.config().content_folder, &stores)
-        .await
-        .map(|_| ())
-        .map_err(|error| cx.failure(error))
-}
-
 /// Sends exactly one answer, also when the media cannot be deleted.
+/// It makes no embedder and asks no model: the media goes with every document of it, from both
+/// stores and from the disk.
 pub(super) async fn delete_media<S: Services>(
     cx: &LiveContext<S>,
     request: RequestId,
     title: &str,
     reply: &Reply,
 ) {
-    let result = remove_media(cx, title).await;
+    let result = with_stores(cx, async |stores| {
+        rag_ingestion::delete_media(title, &cx.config().content_folder, stores).await
+    })
+    .await;
     reply.send(Event::MediaDeleted { request, result });
-}
-
-/// It makes no embedder and asks no model: the media goes with every document of it, from both
-/// stores and from the disk.
-async fn remove_media<S: Services>(cx: &LiveContext<S>, title: &str) -> Result<(), Failure> {
-    let stores = cx.stores().await?;
-    rag_ingestion::delete_media(title, &cx.config().content_folder, &stores)
-        .await
-        .map(|_| ())
-        .map_err(|error| cx.failure(error))
 }
 
 /// Sends exactly one answer, also when the media is refused or cannot be stored.
@@ -145,21 +127,28 @@ async fn store_media<S: Services>(cx: &LiveContext<S>, media: &NewMedia) -> Resu
 }
 
 /// Sends exactly one answer, also when the media is unknown or a store fails.
+/// It makes no embedder and asks no model: the media and every document of it are relabelled, in
+/// both stores.
 pub(super) async fn edit_media<S: Services>(
     cx: &LiveContext<S>,
     request: RequestId,
     edit: &MediaEdit,
     reply: &Reply,
 ) {
-    let result = write_media(cx, edit).await;
+    let result = with_stores(cx, async |stores| {
+        relabel_media(&edit.title, &MediaChange::from(edit), stores).await
+    })
+    .await;
     reply.send(Event::MediaEdited { request, result });
 }
 
-/// It makes no embedder and asks no model: the media and every document of it are relabelled, in
-/// both stores.
-async fn write_media<S: Services>(cx: &LiveContext<S>, edit: &MediaEdit) -> Result<(), Failure> {
+/// The writes to both stores share this, so each connects and reports a failure the same way.
+async fn with_stores<S: Services, T, E: Into<Failure>>(
+    cx: &LiveContext<S>,
+    write: impl AsyncFnOnce(&Stores<S::Graph>) -> Result<T, E>,
+) -> Result<(), Failure> {
     let stores = cx.stores().await?;
-    relabel_media(&edit.title, &MediaChange::from(edit), &stores)
+    write(&stores)
         .await
         .map(|_| ())
         .map_err(|error| cx.failure(error))

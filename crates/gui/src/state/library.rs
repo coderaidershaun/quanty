@@ -221,10 +221,7 @@ impl Shared {
         if self.library.pending != Some(request) {
             return;
         }
-        if let Err(failure) = &result {
-            self.mark_down(failure);
-        }
-        self.library.catalogue = result.into();
+        self.library.catalogue = self.settled(result);
         self.library.revision += 1;
         self.library.pending = None;
     }

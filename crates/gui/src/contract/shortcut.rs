@@ -91,110 +91,43 @@ const fn plain(key: KeyName) -> Chord {
     }
 }
 
+/// Lets the table below give each shortcut on one line.
+const fn row(
+    chord: Chord,
+    when: When,
+    repeats: bool,
+    intent: Intent,
+    help: &'static str,
+) -> Shortcut {
+    Shortcut {
+        chord,
+        when,
+        repeats,
+        intent,
+        help,
+    }
+}
+
 /// Read from the top, so the most specific row comes first.
+// A table reads best with one row on each line.
+#[rustfmt::skip]
 pub static SHORTCUTS: [Shortcut; 14] = [
-    Shortcut {
-        chord: Chord {
-            command: true,
-            shift: true,
-            key: KeyName::S,
-        },
-        when: When::Always,
-        repeats: false,
-        intent: Intent::ShareAnswer,
-        help: "Copy the answer with its citations",
-    },
-    Shortcut {
-        chord: command(KeyName::Num1),
-        when: When::Always,
-        repeats: false,
-        intent: Intent::OpenTab(Tab::Ask),
-        help: "Go to Ask",
-    },
-    Shortcut {
-        chord: command(KeyName::Num2),
-        when: When::Always,
-        repeats: false,
-        intent: Intent::OpenTab(Tab::Library),
-        help: "Go to Library",
-    },
-    Shortcut {
-        chord: command(KeyName::Num3),
-        when: When::Always,
-        repeats: false,
-        intent: Intent::OpenTab(Tab::Ingest),
-        help: "Go to Ingest",
-    },
-    Shortcut {
-        chord: command(KeyName::K),
-        when: When::Always,
-        repeats: false,
-        intent: Intent::FocusAskBar,
-        help: "Write a question",
-    },
-    Shortcut {
-        chord: command(KeyName::Period),
-        when: When::Always,
-        repeats: false,
-        intent: Intent::CancelAsk,
-        help: "Stop the search or the answer",
-    },
-    Shortcut {
-        chord: command(KeyName::CloseBracket),
-        when: When::Always,
-        repeats: true,
-        intent: Intent::TurnPage(1),
-        help: "Next page of the source",
-    },
-    Shortcut {
-        chord: command(KeyName::OpenBracket),
-        when: When::Always,
-        repeats: true,
-        intent: Intent::TurnPage(-1),
-        help: "Previous page of the source",
-    },
-    Shortcut {
-        chord: command(KeyName::R),
-        when: When::Always,
-        repeats: false,
-        intent: Intent::RecheckHealth,
-        help: "Check the services again",
-    },
-    Shortcut {
-        chord: command(KeyName::Slash),
-        when: When::Always,
-        repeats: false,
-        intent: Intent::ToggleHelp,
-        help: "Show or hide the shortcuts",
-    },
-    Shortcut {
-        chord: plain(KeyName::Slash),
-        when: When::NotTyping,
-        repeats: false,
-        intent: Intent::FocusAskBar,
-        help: "Write a question",
-    },
-    Shortcut {
-        chord: plain(KeyName::Escape),
-        when: When::NotTyping,
-        repeats: false,
-        intent: Intent::StopOrRestore,
-        help: "Stop the search or the answer, or put a maximised panel back",
-    },
-    Shortcut {
-        chord: plain(KeyName::J),
-        when: When::NotTyping,
-        repeats: true,
-        intent: Intent::StepResult(1),
-        help: "Next result",
-    },
-    Shortcut {
-        chord: plain(KeyName::K),
-        when: When::NotTyping,
-        repeats: true,
-        intent: Intent::StepResult(-1),
-        help: "Previous result",
-    },
+    row(Chord { command: true, shift: true, key: KeyName::S }, When::Always, false, Intent::ShareAnswer,
+        "Copy the answer with its citations"),
+    row(command(KeyName::Num1), When::Always, false, Intent::OpenTab(Tab::Ask), "Go to Ask"),
+    row(command(KeyName::Num2), When::Always, false, Intent::OpenTab(Tab::Library), "Go to Library"),
+    row(command(KeyName::Num3), When::Always, false, Intent::OpenTab(Tab::Ingest), "Go to Ingest"),
+    row(command(KeyName::K), When::Always, false, Intent::FocusAskBar, "Write a question"),
+    row(command(KeyName::Period), When::Always, false, Intent::CancelAsk, "Stop the search or the answer"),
+    row(command(KeyName::CloseBracket), When::Always, true, Intent::TurnPage(1), "Next page of the source"),
+    row(command(KeyName::OpenBracket), When::Always, true, Intent::TurnPage(-1), "Previous page of the source"),
+    row(command(KeyName::R), When::Always, false, Intent::RecheckHealth, "Check the services again"),
+    row(command(KeyName::Slash), When::Always, false, Intent::ToggleHelp, "Show or hide the shortcuts"),
+    row(plain(KeyName::Slash), When::NotTyping, false, Intent::FocusAskBar, "Write a question"),
+    row(plain(KeyName::Escape), When::NotTyping, false, Intent::StopOrRestore,
+        "Stop the search or the answer, or put a maximised panel back"),
+    row(plain(KeyName::J), When::NotTyping, true, Intent::StepResult(1), "Next result"),
+    row(plain(KeyName::K), When::NotTyping, true, Intent::StepResult(-1), "Previous result"),
 ];
 
 /// Keys that a panel handles itself, for the help sheet only: the key, and what it does.

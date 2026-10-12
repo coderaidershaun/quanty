@@ -6,7 +6,6 @@ mod context;
 mod convert;
 mod dispatch;
 mod failure;
-pub mod health;
 pub mod ingest;
 mod library;
 pub mod query;

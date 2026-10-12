@@ -5,8 +5,8 @@ use std::path::PathBuf;
 
 use super::{AskSession, Health, IngestJob, Library, SourceNav};
 use crate::contract::{
-    Command, Effect, Event, Intent, Notice, NoticeId, NoticeKind, Panel, RequestId, StartupFacts,
-    Tab,
+    Command, Effect, Event, Failure, Intent, Loadable, Notice, NoticeId, NoticeKind, Panel,
+    RequestId, StartupFacts, Tab,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -167,7 +167,7 @@ impl Shared {
         kind: NoticeKind,
         title: String,
         detail: String,
-        failure: Option<crate::contract::Failure>,
+        failure: Option<Failure>,
     ) {
         self.next_notice += 1;
         self.notices.insert(
@@ -181,6 +181,14 @@ impl Shared {
                 read: false,
             },
         );
+    }
+
+    /// A failure also marks its service down, so a failed panel and the health display agree.
+    pub(super) fn settled<T>(&mut self, result: Result<T, Failure>) -> Loadable<T> {
+        if let Err(failure) = &result {
+            self.mark_down(failure);
+        }
+        result.into()
     }
 
     /// A tab that a person opens has every panel in its place. A result or a document that is

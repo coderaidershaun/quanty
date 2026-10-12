@@ -3,9 +3,9 @@
 
 use super::context::{LiveContext, Services};
 use super::source::PageTarget;
-use super::{health, ingest, library, query, source};
+use super::{ingest, library, query, source};
 use crate::backend::{Handler, Reply};
-use crate::contract::Command;
+use crate::contract::{Command, RequestId, unknown_health};
 
 impl<S: Services> Handler for LiveContext<S> {
     async fn serve(&self, command: Command, reply: Reply) {
@@ -44,10 +44,17 @@ impl<S: Services> Handler for LiveContext<S> {
             Command::Ingest { request, ingest } => {
                 ingest::run(self, request, &ingest, &reply).await;
             }
-            Command::CheckHealth { request } => {
-                health::check_health(self, request, &reply).await;
-            }
+            Command::CheckHealth { request } => check_health(request, &reply),
             Command::Cancel(_) => {}
         }
+    }
+}
+
+/// Not built yet. It says "not known" and not "down": while the app believes a store is down it
+/// checks again after every search that works, and a check that always said "down" would keep it
+/// checking for ever.
+fn check_health(request: RequestId, reply: &Reply) {
+    for event in unknown_health(request) {
+        reply.send(event);
     }
 }

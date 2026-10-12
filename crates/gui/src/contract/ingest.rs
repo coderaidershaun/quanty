@@ -150,12 +150,10 @@ pub struct IngestReport {
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum IngestOutcome {
     /// Nothing was converted, embedded or asked, but own tags that were given have still been
-    /// written. `pages_to_check` is `None` when the chapter's folder is gone, so they are not
-    /// known.
+    /// written.
     AlreadyIngested {
         doc: DocId,
         items: u64,
-        pages_to_check: Option<Vec<PageToCheck>>,
     },
     Ingested(IngestReport),
     Cancelled,

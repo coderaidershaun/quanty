@@ -208,17 +208,19 @@ impl Command {
                 request: *request,
                 result: Err(failure.clone()),
             }],
-            Command::CheckHealth { request } => Service::ALL
-                .into_iter()
-                .map(|service| Event::Health {
-                    request: *request,
-                    service,
-                    state: ServiceState::Unknown,
-                })
-                .collect(),
+            Command::CheckHealth { request } => unknown_health(*request).collect(),
             Command::Cancel(_) => Vec::new(),
         }
     }
+}
+
+/// Every health check that learnt nothing about the services gives this answer.
+pub fn unknown_health(request: RequestId) -> impl Iterator<Item = Event> {
+    Service::ALL.into_iter().map(move |service| Event::Health {
+        request,
+        service,
+        state: ServiceState::Unknown,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]

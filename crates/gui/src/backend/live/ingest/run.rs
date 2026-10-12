@@ -167,7 +167,6 @@ fn report(outcome: PdfOutcome) -> IngestOutcome {
         PdfOutcome::AlreadyIngested { doc_id, items } => IngestOutcome::AlreadyIngested {
             doc: doc_id.into(),
             items,
-            pages_to_check: None,
         },
         PdfOutcome::Ingested(summary) => IngestOutcome::Ingested(ingested(*summary)),
     }

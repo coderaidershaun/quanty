@@ -6,9 +6,7 @@ pub mod sample;
 
 use std::path::PathBuf;
 
-use crate::contract::{
-    Answer, AskDraft, ConceptGraph, Event, Intent, SearchReply, Service, ServiceState,
-};
+use crate::contract::{Answer, AskDraft, ConceptGraph, Event, Intent, SearchReply};
 use crate::state::Shared;
 
 pub use harness::{Host, app, app_at, app_on, panel, run_until, save_png, settle, settle_within};
@@ -48,30 +46,6 @@ pub fn answered(reply: SearchReply, graph: ConceptGraph, answer: Answer) -> Shar
         request,
         result: Ok(answer),
     });
-    shared
-}
-
-pub fn with_health(mut shared: Shared, service: Service, state: ServiceState) -> Shared {
-    shared.apply_intent(Intent::RecheckHealth, &mut Vec::new());
-    let request = shared
-        .health
-        .pending
-        .expect("a check was started by RecheckHealth");
-    for each in Service::ALL {
-        let state = if each == service {
-            state.clone()
-        } else {
-            ServiceState::Up {
-                detail: "ready".to_owned(),
-            }
-        };
-        let event = Event::Health {
-            request,
-            service: each,
-            state,
-        };
-        shared.apply_event(event, &mut Vec::new());
-    }
     shared
 }
 

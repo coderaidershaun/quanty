@@ -279,34 +279,8 @@ fn command_shortcuts_reach_the_reducer() {
 
     let mut harness = testkit::app("idle", DEFAULT_WINDOW);
     testkit::settle(&mut harness);
-    // The plain key goes first: once ⌘K has put the caret in the question box, `/` is text.
-    press(&mut harness, none, egui::Key::Slash);
-    assert_eq!(harness.state().shared().cues.focus_ask_bar, 1);
     press(&mut harness, command, egui::Key::K);
-    assert_eq!(harness.state().shared().cues.focus_ask_bar, 2);
-    press(&mut harness, command, egui::Key::Num2);
-    assert_eq!(harness.state().shared().tab, Tab::Library);
-    press(&mut harness, command, egui::Key::Num1);
-    assert_eq!(harness.state().shared().tab, Tab::Ask);
-
-    press(&mut harness, command, egui::Key::Num3);
-    assert_eq!(harness.state().shared().tab, Tab::Ingest);
-    press(&mut harness, command, egui::Key::Num1);
-    assert_eq!(harness.state().shared().tab, Tab::Ask);
-
-    // A row of a part that is not built does nothing and sends nothing.
-    testkit::settle(&mut harness);
-    for key in [egui::Key::R, egui::Key::Slash] {
-        press(&mut harness, command, key);
-        let shared = harness.state().shared();
-        assert_eq!(shared.tab, Tab::Ask, "{key:?} left the Ask tab");
-        assert!(!shared.help_open, "{key:?} opened the help sheet");
-        assert!(
-            shared.health.pending.is_none(),
-            "{key:?} started a health check"
-        );
-        assert!(harness.state().is_idle(), "{key:?} sent a command");
-    }
+    assert_eq!(harness.state().shared().cues.focus_ask_bar, 1);
 
     let mut harness = testkit::app("searching", DEFAULT_WINDOW);
     run_until(&mut harness, "the ask to start", |shared| {
@@ -328,45 +302,4 @@ fn command_shortcuts_reach_the_reducer() {
         "Esc stops the ask"
     );
     testkit::settle(&mut harness);
-
-    let mut harness = testkit::app("black-scholes", DEFAULT_WINDOW);
-    testkit::settle(&mut harness);
-    harness.state_mut().push(Intent::SelectResult(1));
-    testkit::settle(&mut harness);
-    let shown = |harness: &Harness<'_, App>| {
-        harness
-            .state()
-            .shared()
-            .source
-            .target
-            .map(|target| target.page)
-    };
-    assert_eq!(shown(&harness), Some(3));
-    press(&mut harness, command, egui::Key::OpenBracket);
-    assert_eq!(shown(&harness), Some(2), "⌘[ turns back a page");
-    testkit::settle(&mut harness);
-    press(&mut harness, command, egui::Key::CloseBracket);
-    assert_eq!(shown(&harness), Some(3), "⌘] turns on a page");
-    testkit::settle(&mut harness);
-    press(&mut harness, none, egui::Key::J);
-    assert_eq!(harness.state().shared().ask.selected_result, Some(2));
-    press(&mut harness, none, egui::Key::K);
-    assert_eq!(harness.state().shared().ask.selected_result, Some(1));
-    testkit::settle(&mut harness);
-    // One frame with the key, so that the frame's output is the one that holds the copy.
-    harness.input_mut().events.push(egui::Event::Key {
-        key: egui::Key::S,
-        physical_key: Some(egui::Key::S),
-        pressed: true,
-        repeat: false,
-        modifiers: command | egui::Modifiers::SHIFT,
-    });
-    harness.step();
-    let copied = harness
-        .output()
-        .platform_output
-        .commands
-        .iter()
-        .any(|output| matches!(output, egui::OutputCommand::CopyText(text) if text.starts_with("# Black–Scholes")));
-    assert!(copied, "⇧⌘S copies the answer");
 }

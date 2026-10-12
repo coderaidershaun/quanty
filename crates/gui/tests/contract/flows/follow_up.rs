@@ -269,6 +269,16 @@ fn copies_reach_the_clipboard(harness: &mut Window) {
         });
     });
     assert_eq!(texts, [markdown], "⇧⌘S copies the same");
+    let title = shared(harness)
+        .ask
+        .answer
+        .ready()
+        .and_then(|answer| answer.title.clone())
+        .expect("the answer has a title");
+    assert!(
+        texts[0].starts_with(&format!("# {title}\n")),
+        "⇧⌘S copies the answer with its title as the first line"
+    );
 
     let first_formula = shared(harness)
         .ask

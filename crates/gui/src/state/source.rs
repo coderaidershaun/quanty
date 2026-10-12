@@ -105,10 +105,7 @@ impl Shared {
         if self.source.pending != Some(request) {
             return;
         }
-        if let Err(failure) = &result {
-            self.mark_down(failure);
-        }
-        self.source.page = result.into();
+        self.source.page = self.settled(result);
     }
 
     pub(super) fn page_concepts_arrived(
@@ -119,10 +116,7 @@ impl Shared {
         if self.source.pending != Some(request) {
             return;
         }
-        if let Err(failure) = &result {
-            self.mark_down(failure);
-        }
-        self.source.concepts = result.into();
+        self.source.concepts = self.settled(result);
         self.source.pending = None;
     }
 

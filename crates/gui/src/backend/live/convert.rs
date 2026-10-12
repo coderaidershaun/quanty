@@ -7,56 +7,45 @@ use std::collections::BTreeSet;
 use graph::MediaNode;
 use rag_core::{LabelFilter, MediaLabels, Tag, UsageTally, WantedDocument, author_list};
 use rag_ingestion::{MediaChange, TagChange};
-use uuid::Uuid;
 
 use crate::contract::{
     Category, ConceptId, DocId, DocumentName, DocumentTagsEdit, Filters, ItemId, ItemKind,
     MediaEdit, ModelTokens, NewMedia, Usage,
 };
 
-fn uuid_of(text: &str) -> Uuid {
-    Uuid::parse_str(text).expect("a backend id prints as a UUID")
-}
-
 impl From<rag_core::DocId> for DocId {
     fn from(id: rag_core::DocId) -> DocId {
-        DocId(uuid_of(&id.to_string()))
+        DocId(id.0)
     }
 }
 
 impl From<DocId> for rag_core::DocId {
     fn from(id: DocId) -> rag_core::DocId {
-        id.0.to_string()
-            .parse()
-            .expect("the text of a UUID is a document id")
+        rag_core::DocId(id.0)
     }
 }
 
 impl From<rag_core::ItemId> for ItemId {
     fn from(id: rag_core::ItemId) -> ItemId {
-        ItemId(uuid_of(&id.to_string()))
+        ItemId(id.0)
     }
 }
 
 impl From<ItemId> for rag_core::ItemId {
     fn from(id: ItemId) -> rag_core::ItemId {
-        id.0.to_string()
-            .parse()
-            .expect("the text of a UUID is an item id")
+        rag_core::ItemId(id.0)
     }
 }
 
 impl From<rag_core::ConceptId> for ConceptId {
     fn from(id: rag_core::ConceptId) -> ConceptId {
-        ConceptId(uuid_of(&id.to_string()))
+        ConceptId(id.0)
     }
 }
 
 impl From<ConceptId> for rag_core::ConceptId {
     fn from(id: ConceptId) -> rag_core::ConceptId {
-        id.0.to_string()
-            .parse()
-            .expect("the text of a UUID is a concept id")
+        rag_core::ConceptId(id.0)
     }
 }
 

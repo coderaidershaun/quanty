@@ -133,24 +133,16 @@ impl Config {
         let setting = |name: &str| {
             non_blank(environment(name)).or_else(|| non_blank(dotenv.get(name).cloned()))
         };
+        let or = |name: &str, default: &str| setting(name).unwrap_or_else(|| default.to_owned());
         Ok(Config {
-            qdrant_url: setting(QDRANT_URL).unwrap_or_else(|| DEFAULT_QDRANT_URL.to_owned()),
-            falkordb_url: setting(FALKORDB_URL).unwrap_or_else(|| DEFAULT_FALKORDB_URL.to_owned()),
-            falkordb_graph: setting(FALKORDB_GRAPH)
-                .unwrap_or_else(|| DEFAULT_FALKORDB_GRAPH.to_owned()),
-            items_collection: setting(QDRANT_ITEMS_COLLECTION)
-                .unwrap_or_else(|| DEFAULT_ITEMS_COLLECTION.to_owned()),
-            concepts_collection: setting(QDRANT_CONCEPTS_COLLECTION)
-                .unwrap_or_else(|| DEFAULT_CONCEPTS_COLLECTION.to_owned()),
-            concept_cache_folder: setting(CONCEPT_CACHE_DIR)
-                .unwrap_or_else(|| DEFAULT_CONCEPT_CACHE_FOLDER.to_owned())
-                .into(),
-            concept_decision_log: setting(CONCEPT_DECISION_LOG)
-                .unwrap_or_else(|| DEFAULT_CONCEPT_DECISION_LOG.to_owned())
-                .into(),
-            content_folder: setting(CONTENT_DIR)
-                .unwrap_or_else(|| DEFAULT_CONTENT_FOLDER.to_owned())
-                .into(),
+            qdrant_url: or(QDRANT_URL, DEFAULT_QDRANT_URL),
+            falkordb_url: or(FALKORDB_URL, DEFAULT_FALKORDB_URL),
+            falkordb_graph: or(FALKORDB_GRAPH, DEFAULT_FALKORDB_GRAPH),
+            items_collection: or(QDRANT_ITEMS_COLLECTION, DEFAULT_ITEMS_COLLECTION),
+            concepts_collection: or(QDRANT_CONCEPTS_COLLECTION, DEFAULT_CONCEPTS_COLLECTION),
+            concept_cache_folder: or(CONCEPT_CACHE_DIR, DEFAULT_CONCEPT_CACHE_FOLDER).into(),
+            concept_decision_log: or(CONCEPT_DECISION_LOG, DEFAULT_CONCEPT_DECISION_LOG).into(),
+            content_folder: or(CONTENT_DIR, DEFAULT_CONTENT_FOLDER).into(),
             gemini_api_key: setting(GEMINI_API_KEY).map(ApiKey::new),
             jev_api_key: setting(JEV_API_KEY).map(ApiKey::new),
         })

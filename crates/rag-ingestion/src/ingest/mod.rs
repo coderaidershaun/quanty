@@ -26,7 +26,6 @@ pub(crate) use summary::{Meter, OnStep, write_usage};
 use concepts::EmbeddedItems;
 use items::{document_id, document_title};
 
-use crate::labels::stored_node;
 use crate::media::stored_or_added;
 use crate::stores::Stores;
 
@@ -202,7 +201,7 @@ impl Document {
             self.node.labels.take_media(&media.title, &media.labels);
         }
         // An ingest never removes an own tag that was set after an earlier one.
-        if let Some(stored) = stored_node(self.node.id, stores).await? {
+        if let Some(stored) = stores.graph.document(self.node.id).await? {
             self.node.labels.tags = stored.labels.tags;
         }
         for item in &mut self.items {

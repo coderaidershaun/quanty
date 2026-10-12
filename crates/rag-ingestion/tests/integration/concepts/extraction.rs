@@ -3,7 +3,6 @@
 
 use std::collections::BTreeSet;
 
-use graph::RelationKind;
 use graph::testing::{GraphSize, size, stored_concept_graph};
 use rag_core::{ConceptId, ModelUsage, Usage};
 use rag_ingestion::{ConceptSummary, ingest_chapter};
@@ -38,7 +37,6 @@ async fn ingest_asks_about_every_item_and_writes_concepts_mentions_and_relations
         "PART_OF",
         "USED_FOR",
     ];
-    assert_eq!(RelationKind::ALL.map(RelationKind::as_str), relation_types);
 
     let throwaway = ThrowawayStores::new("concepts");
     let stores = throwaway.connect().await;

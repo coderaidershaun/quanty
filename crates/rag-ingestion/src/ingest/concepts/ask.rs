@@ -201,7 +201,7 @@ impl<L: Llm> ConceptExtractor<L> {
                     });
                 }
                 Err(error) => {
-                    reason = chain_of(&error);
+                    reason = rag_core::error_chain(&error);
                     continue;
                 }
             };
@@ -215,7 +215,7 @@ impl<L: Llm> ConceptExtractor<L> {
                         outcome: Outcome::Asked(answer),
                     });
                 }
-                Err(error) => reason = chain_of(&error),
+                Err(error) => reason = rag_core::error_chain(&error),
             }
         }
         Ok(Reading {
@@ -224,17 +224,6 @@ impl<L: Llm> ConceptExtractor<L> {
             outcome: Outcome::Failed(reason),
         })
     }
-}
-
-fn chain_of(error: &dyn Error) -> String {
-    let mut text = error.to_string();
-    let mut source = error.source();
-    while let Some(cause) = source {
-        text.push_str(": ");
-        text.push_str(&cause.to_string());
-        source = cause.source();
-    }
-    text
 }
 
 /// The related material for an item that is alone in its document: the passages of the nearest

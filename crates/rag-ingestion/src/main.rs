@@ -183,7 +183,11 @@ async fn ingest(path: &Path, given: &GivenPath) -> Result<()> {
         }
     };
     println!("{summary}");
-    write_document_tags(summary.doc_id, &given.document.change(), &stores).await
+    let change = given.document.change();
+    if !change.is_empty() {
+        write_tags(summary.doc_id, &change, &stores).await?;
+    }
+    Ok(())
 }
 
 async fn convert_and_ingest(given: &GivenPdf) -> Result<()> {
@@ -237,7 +241,11 @@ async fn convert_and_ingest(given: &GivenPdf) -> Result<()> {
     .await
     .with_context(|| format!("could not ingest {}", pdf.display()))?;
     println!("{outcome}");
-    write_document_tags(outcome.doc_id(), &given.document.change(), &stores).await
+    let change = given.document.change();
+    if !change.is_empty() {
+        write_tags(outcome.doc_id(), &change, &stores).await?;
+    }
+    Ok(())
 }
 
 /// Only a book refuses a name, so a refusal says "the library has" when the flag was not
@@ -268,19 +276,6 @@ fn naming_failure(error: NamePdfError, unnamed: &UnnamedPdf) -> anyhow::Error {
             anyhow::Error::new(source).context(fix)
         }
     }
-}
-
-/// Own tags come after the ingest, so a run that stops in the ingest tags nothing, and the same
-/// command again finishes both.
-async fn write_document_tags(
-    document: DocId,
-    change: &TagChange,
-    stores: &Stores<FalkorGraph>,
-) -> Result<()> {
-    if change.is_empty() {
-        return Ok(());
-    }
-    write_tags(document, change, stores).await
 }
 
 async fn tag(document: DocId, change: &TagChange) -> Result<()> {

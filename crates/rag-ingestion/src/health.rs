@@ -6,7 +6,7 @@ use std::fmt;
 use std::time::Duration;
 
 use graph::{FalkorGraph, GraphError};
-use rag_core::{ClaudeCliError, Config, ItemStore, StoreError, check_signed_in};
+use rag_core::{ClaudeCliError, Config, ItemStore, StoreError, check_signed_in, error_chain};
 
 const STORE_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -123,14 +123,7 @@ async fn within_store_timeout(
 }
 
 fn one_line_chain(error: &dyn Error) -> String {
-    let mut messages = vec![error.to_string()];
-    let mut cause = error.source();
-    while let Some(next) = cause {
-        messages.push(next.to_string());
-        cause = next.source();
-    }
-    messages
-        .join(": ")
+    error_chain(error)
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")

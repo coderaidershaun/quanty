@@ -17,7 +17,7 @@ const DOCUMENT_NAMESPACE: Uuid = Uuid::from_u128(0x73ca4e6a_716f_46fb_bc79_7c63f
 /// same document.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct DocId(Uuid);
+pub struct DocId(pub Uuid);
 
 impl DocId {
     /// The hash is used as given: it is already a SHA-256, so it is not hashed again.
@@ -59,7 +59,7 @@ pub struct ParseDocIdError {
 /// One stored thing. An item has this one identifier in every store that holds it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct ItemId(Uuid);
+pub struct ItemId(pub Uuid);
 
 impl ItemId {
     /// `position` is the item's index in the document's items in reading order, from 0.
@@ -85,6 +85,7 @@ impl FromStr for ItemId {
 
 /// Declares an enum together with `ALL`, the list of its kinds. Both are written from the one
 /// list of names, so a kind cannot be in the enum and missing from `ALL`.
+#[macro_export]
 macro_rules! enum_with_all {
     (
         $(#[$attribute:meta])*

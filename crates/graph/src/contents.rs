@@ -70,24 +70,7 @@ pub struct Mention {
     pub wording: String,
 }
 
-/// The enum and `ALL` are written from the one list of names, so a kind cannot be in the enum and
-/// missing from `ALL`.
-macro_rules! enum_with_all {
-    (
-        $(#[$attribute:meta])*
-        pub enum $name:ident { $($kind:ident),+ $(,)? }
-    ) => {
-        $(#[$attribute])*
-        pub enum $name { $($kind),+ }
-
-        impl $name {
-            /// Every kind, in the order of the enum.
-            pub const ALL: [$name; [$($name::$kind),+].len()] = [$($name::$kind),+];
-        }
-    };
-}
-
-enum_with_all! {
+rag_core::enum_with_all! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub enum RelationKind {
         DerivedFrom,

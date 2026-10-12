@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct ConceptId(Uuid);
+pub struct ConceptId(pub Uuid);
 
 impl ConceptId {
     /// A new identifier that no other concept has.

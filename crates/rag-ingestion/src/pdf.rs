@@ -184,7 +184,10 @@ where
     } = pdf;
     on_step(IngestStep::CheckingStored, &UsageTally::default());
     let document = DocId::from_source_sha256(&job.source_sha256()?);
-    if let Some(items) = already_ingested(document, stores).await? {
+    // The collection is made before the check, so that the run fails before a page is paid for
+    // while Qdrant is down, and so that a collection that was removed counts as holding no points.
+    stores.items.ensure_collection().await?;
+    if let Some(items) = items_of_ingested_document(document, stores).await? {
         return Ok(PdfOutcome::AlreadyIngested {
             doc_id: document,
             items,
@@ -267,17 +270,6 @@ impl UnnamedPdf<'_> {
         };
         Ok(NamedPdf { category, document })
     }
-}
-
-/// [`items_of_ingested_document`], with the collection made first: that fails while Qdrant is
-/// down, before a page is paid for, and a collection that was removed then counts as holding no
-/// point.
-async fn already_ingested<G: GraphStore>(
-    document: DocId,
-    stores: &Stores<G>,
-) -> Result<Option<u64>, PdfError> {
-    stores.items.ensure_collection().await?;
-    items_of_ingested_document(document, stores).await
 }
 
 /// The number of items the document was ingested whole with, when the graph says so and the

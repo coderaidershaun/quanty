@@ -6,6 +6,7 @@ mod concept;
 mod concept_store;
 mod config;
 mod embedder;
+mod error_chain;
 mod item;
 mod item_store;
 mod labels;
@@ -21,6 +22,7 @@ pub use embedder::{
     DocumentInput, EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, EmbedError, Embedder, Embedding,
     GeminiEmbedder, embedding_usage, question_usage,
 };
+pub use error_chain::error_chain;
 pub use item::{DocId, ItemId, ItemKind, ItemPayload, ParseDocIdError, UnknownItemKind};
 pub use item_store::{ItemFilter, ItemHit, ItemPoint, ItemStore};
 pub use labels::{

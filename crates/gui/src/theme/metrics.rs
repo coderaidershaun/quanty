@@ -21,7 +21,6 @@ pub mod space {
 pub mod radius {
     pub const SM: f32 = 2.0;
     pub const MD: f32 = 3.0;
-    pub const LG: f32 = 3.0;
     pub const XL: f32 = 4.0;
 }
 

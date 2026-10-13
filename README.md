@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/img/ask-screen.png" width="880" alt="The Ask screen of the quanty desktop app: a question, its answer with citations, the source page, the concept graph, the retrieval path and follow-up questions">
+  <img src="docs/img/ask-screen.png" width="880" alt="The Ask screen of the quanty desktop app: a question, its answer with citations, the source panel, the concept graph, the retrieval path and follow-up questions">
   <br>
   <sub>The desktop app on its built-in <code>black-scholes</code> fixture: sample data, no store, no model, no cost.</sub>
 </p>

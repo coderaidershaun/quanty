@@ -41,8 +41,8 @@ pub(super) struct TextLook {
     /// Points of room added after every letter.
     pub(super) letter_spacing: f32,
     pub(super) paragraph_gap: f32,
-    /// Room before a citation numeral, and between two numerals. The numeral has room of its own
-    /// around it, which already keeps it from the word before it.
+    /// Room before a citation numeral, and between two numerals. The numeral has room of its own,
+    /// so a small gap is enough to keep the box of a selected numeral off a full stop before it.
     pub(super) cite_gap: f32,
     /// Room between a footnote mark and its note.
     pub(super) small_gap: f32,
@@ -83,7 +83,7 @@ pub(super) fn text_look(role: TextRole) -> TextLook {
         line_height: role.line_height(),
         math_size: role.math_size(),
         paragraph_gap: space::MD,
-        cite_gap: 0.0,
+        cite_gap: 1.0,
         small_gap: space::XS,
         list_gap: space::SM,
         align: Align::Min,

@@ -3,7 +3,7 @@
 use eframe::egui::{self, Color32, WidgetInfo, WidgetType, accesskit::Role, text::LayoutJob};
 
 use super::look::{Look, focus_ring};
-use crate::theme::{Icon, TextRole, Tone, color, hairline, radius, size, space, stroke};
+use crate::theme::{TextRole, color, hairline, radius, size, space, stroke};
 
 /// The label alone is the accessible name, and a test or a screen reader reads the count as the
 /// value of the tab.
@@ -11,29 +11,15 @@ use crate::theme::{Icon, TextRole, Tone, color, hairline, radius, size, space, s
 pub struct Tab<'a> {
     pub label: &'a str,
     pub count: Option<usize>,
-    pub icon: Option<Icon>,
 }
 
 impl<'a> Tab<'a> {
     pub const fn new(label: &'a str) -> Self {
-        Tab {
-            label,
-            count: None,
-            icon: None,
-        }
+        Tab { label, count: None }
     }
 
     pub const fn count(mut self, count: usize) -> Self {
         self.count = Some(count);
-        self
-    }
-
-    /// Nothing is painted for the icon. It stays so that a caller that names one still builds.
-    // SMELL: the icon is stored and never painted, so a caller that marks a tab with one, such as
-    // a warning on a tab that failed to load, shows nothing. Remove the field once no caller
-    // sets it, or give that caller another way to show the state.
-    pub const fn icon(mut self, icon: Icon) -> Self {
-        self.icon = Some(icon);
         self
     }
 }
@@ -53,14 +39,6 @@ impl<'a> TabStrip<'a> {
             is_compact: false,
             forced: None,
         }
-    }
-
-    /// The active tab is drawn in ink whatever the tone, so this changes nothing. It stays so
-    /// that a caller that names a tone still builds.
-    // SMELL: a builder that takes a value and ignores it misleads the caller. Remove it once no
-    // caller names a tone.
-    pub fn tone(self, _tone: Tone) -> Self {
-        self
     }
 
     pub fn compact(mut self) -> Self {

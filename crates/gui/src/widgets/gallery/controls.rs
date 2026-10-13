@@ -56,9 +56,14 @@ pub(super) fn buttons(ui: &mut egui::Ui, state: &mut State) {
             let button = Button::ghost(label).preview(look);
             used(state, &ui.add(button), "Button::ghost");
         }
-        used(state, &ui.add(Button::danger("Delete")), "Button::danger");
-        let hovered = Button::danger("Delete hovered").preview(Some(Look::HOVERED));
-        used(state, &ui.add(hovered), "Button::danger");
+        for (label, look) in [
+            ("Delete", None),
+            ("Delete hovered", Some(Look::HOVERED)),
+            ("Delete pressed", Some(Look::PRESSED)),
+        ] {
+            let button = Button::danger(label).preview(look);
+            used(state, &ui.add(button), "Button::danger");
+        }
     });
     ui.horizontal_wrapped(|ui| {
         used(

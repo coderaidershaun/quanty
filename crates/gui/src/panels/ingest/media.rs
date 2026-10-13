@@ -82,11 +82,15 @@ fn row_of(title: &str, category: Category) -> String {
 }
 
 pub(super) fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
-    caption(ui, MEDIA);
     let catalogue = &cx.shared.library.catalogue;
     let offers = catalogue.ready().map(offers).unwrap_or_default();
-    if offers.is_empty() {
-        ui.label(TextRole::Small.rich(why_no_media_is_offered(catalogue)));
+    // The form for a new media starts with its own captions, so the caption of the list and the
+    // note under it are left out.
+    if !matches!(local.media, MediaChoice::New(_)) {
+        caption(ui, MEDIA);
+        if offers.is_empty() {
+            ui.label(TextRole::Small.rich(why_no_media_is_offered(catalogue)));
+        }
     }
     match &local.media {
         MediaChoice::New(_) => new_media(ui, local, cx),

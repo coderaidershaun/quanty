@@ -96,7 +96,7 @@ impl<'a> Confirm<'a> {
                 if ui.add(confirm).clicked() {
                     choice = Some(Choice::Confirmed);
                 }
-                if ui.add(Button::ghost(self.cancel_label)).clicked() {
+                if ui.add(Button::secondary(self.cancel_label)).clicked() {
                     choice = Some(Choice::Cancelled);
                 }
             });

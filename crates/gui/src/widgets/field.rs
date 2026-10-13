@@ -344,7 +344,7 @@ impl<'a> Stepper<'a> {
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 let side = STEPPER_SIZE.height();
-                let text_width = TextRole::Label.galley(ui, self.text, color::TEXT).size().x;
+                let text_width = TextRole::Body.galley(ui, self.text, color::TEXT).size().x;
                 let middle = egui::vec2(text_width.max(STEPPER_TEXT_WIDTH), side);
                 let whole = egui::vec2(side + middle.x + side, side);
                 // A row takes the direction of the layout around it, so in a right-to-left
@@ -375,7 +375,7 @@ impl<'a> Stepper<'a> {
                 // A label in a column wraps at the width it is given, and the room may be
                 // rounded to a hair less than the text.
                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-                ui.label(TextRole::Label.rich(self.text))
+                ui.label(TextRole::Body.rich(self.text))
             },
         );
         let (label, is_enabled) = self.next;

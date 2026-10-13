@@ -1,5 +1,8 @@
 //! The colours, sizes, text styles, fonts and icons that every panel draws with, and the style
-//! that makes stock egui widgets match them.
+//! that makes stock egui widgets match them. Together they make the app look like paper and ink:
+//! a pale desk, sheets of paper, a darker well under the scanned page, Literata for what is read,
+//! Source Sans 3 for controls, and the rubric red only for the thread from a citation to its
+//! source.
 
 mod fonts;
 mod icons;

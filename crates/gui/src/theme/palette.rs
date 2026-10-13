@@ -31,7 +31,7 @@ pub mod color {
     pub const SELECTION: Color32 = Color32::from_rgb(0xC6, 0xDD, 0xE8);
     pub const SCRIM: Color32 = Color32::from_rgba_unmultiplied_const(0x1C, 0x1B, 0x1A, 0x59);
     pub const PAGE_HIGHLIGHT: Color32 =
-        Color32::from_rgba_unmultiplied_const(0xAF, 0x30, 0x29, 0x24);
+        Color32::from_rgba_unmultiplied_const(0xAF, 0x30, 0x29, 0x14);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

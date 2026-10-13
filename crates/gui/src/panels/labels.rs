@@ -60,12 +60,17 @@ pub(super) fn tokens_text(tokens: u64) -> String {
     }
 }
 
-/// "48k tokens · ≈ $0.42", or the tokens alone when a model has no price.
+/// What a run used, in words: "12k tokens, about $0.03", "12 tokens, under $0.01", or the tokens
+/// alone ("12k tokens") for a model that has no price.
 pub(super) fn spent_text(usage: &Usage) -> String {
     let tokens = format!("{} tokens", tokens_text(usage.tokens()));
-    match usage.cost_usd {
-        Some(_) => format!("{tokens} · {}", cost_text(usage.cost_usd)),
-        None => tokens,
+    if usage.cost_usd.is_none() {
+        return tokens;
+    }
+    let cost = cost_text(usage.cost_usd);
+    match cost.strip_prefix("≈ ") {
+        Some(price) => format!("{tokens}, about {price}"),
+        None => format!("{tokens}, {cost}"),
     }
 }
 

@@ -232,7 +232,7 @@ fn a_run_shows_its_page_and_its_cost() {
         .numeric_value()
         .expect("a bar that counts");
     assert!((share - (3.0 + CUT * 9.0) / 12.0).abs() < 1e-6, "{share}");
-    assert!(says(&harness, "48k tokens · ≈ $0.42 so far"));
+    assert!(says(&harness, "48k tokens, about $0.42 so far"));
     assert!(
         !is_enabled(&harness, Role::Button, "Choose a PDF"),
         "the form is off while an ingest runs"
@@ -273,7 +273,7 @@ struct Shown {
 }
 
 fn every_stage() -> [Shown; 12] {
-    let spent = Some("192k tokens · ≈ $1.68 so far");
+    let spent = Some("192k tokens, about $1.68 so far");
     let shown = |progress, words, share, cost| Shown {
         progress,
         words,
@@ -343,7 +343,7 @@ fn every_stage() -> [Shown; 12] {
             )),
             "Converting the pages — 3 of 12 done, about 36%",
             Some((3.0 + CUT * 9.0) / 12.0),
-            Some("48k tokens · ≈ $0.42 so far"),
+            Some("48k tokens, about $0.42 so far"),
         ),
         shown(
             Some(progress(IngestStage::WritingGraph, 12)),

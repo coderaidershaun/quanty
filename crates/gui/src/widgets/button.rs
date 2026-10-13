@@ -1,5 +1,5 @@
-//! The button in its five looks: a block of ink, an outline, plain text, an outline in the red of
-//! danger, and a small square with an icon.
+//! The button in its five looks: a block of ink, an outline, plain text, red text that is
+//! outlined only while the pointer is on it, and a small square with an icon.
 
 use std::sync::Arc;
 
@@ -13,8 +13,6 @@ use super::progress::paint_spinner;
 use crate::theme::{Icon, TextRole, Tone, color, radius, space, stroke};
 
 const MIN_WIDTH_PER_HEIGHT: f32 = 2.4;
-/// How far a pressed danger button moves from its wash toward its edge colour.
-const DANGER_PRESSED_SHARE: f32 = 0.3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Variant {
@@ -82,7 +80,8 @@ impl<'a> Button<'a> {
         Button::with_variant(label, Variant::Danger)
     }
 
-    /// The width under which no button with a label is drawn, so a slot this wide always fits one.
+    /// The least width of a primary, secondary or danger button with a label, which is the whole
+    /// width of one whose label is short. A ghost button has no least width.
     pub const fn least_width(size: ControlSize) -> f32 {
         MIN_WIDTH_PER_HEIGHT * size.height()
     }
@@ -147,6 +146,28 @@ impl<'a> Button<'a> {
         self.icon.is_some() || self.is_loading
     }
 
+    fn width_for_text(&self, text_width: f32, height: f32) -> f32 {
+        // A primary, secondary or danger button with no icon draws its spinner in its wide
+        // padding, so it keeps its width while it loads and nothing beside it moves. The padding
+        // of a ghost button is too narrow for a spinner, so it makes room for one as for an icon.
+        let (padding, least_width, keeps_icon_room) = match self.variant {
+            Variant::Ghost => (space::SM, 0.0, self.has_icon_room()),
+            _ => (
+                space::LG,
+                MIN_WIDTH_PER_HEIGHT * height,
+                self.icon.is_some(),
+            ),
+        };
+        let icon_room = if keeps_icon_room {
+            self.size.icon() + space::SM
+        } else {
+            0.0
+        };
+        (text_width + icon_room + 2.0 * padding)
+            .max(least_width)
+            .max(self.min_width)
+    }
+
     fn colours(&self, look: Look) -> Colours {
         let quiet_fill = if look.pressed {
             color::WELL_DEEP
@@ -169,16 +190,16 @@ impl<'a> Button<'a> {
             },
             Variant::Danger => {
                 let danger = Tone::Danger.swatch();
-                let fill = if look.pressed {
-                    danger.wash.lerp_to_gamma(danger.edge, DANGER_PRESSED_SHARE)
+                let (fill, edge) = if look.pressed {
+                    (danger.wash, Stroke::new(stroke::BORDER, danger.solid))
                 } else if look.hovered {
-                    danger.wash
+                    (danger.wash, Stroke::new(stroke::BORDER, danger.edge))
                 } else {
-                    Color32::TRANSPARENT
+                    (Color32::TRANSPARENT, Stroke::NONE)
                 };
                 Colours {
                     fill,
-                    edge: Stroke::new(stroke::BORDER, danger.edge),
+                    edge,
                     text: danger.text,
                 }
             }
@@ -258,18 +279,7 @@ impl egui::Widget for Button<'_> {
             .then(|| TextRole::Label.galley(ui, self.label, color::TEXT));
         let width = match &text {
             None => height,
-            Some(galley) => {
-                // The spinner of a button with no icon fits in the padding, so the button is as
-                // wide while it loads as at rest, and nothing beside it moves.
-                let icon_room = if self.icon.is_some() {
-                    self.size.icon() + space::SM
-                } else {
-                    0.0
-                };
-                (galley.size().x + icon_room + 2.0 * space::LG)
-                    .max(MIN_WIDTH_PER_HEIGHT * height)
-                    .max(self.min_width)
-            }
+            Some(galley) => self.width_for_text(galley.size().x, height),
         };
         let sense = if self.is_loading {
             Sense::hover()

@@ -74,6 +74,7 @@ fn plain_chips(ui: &mut egui::Ui, state: &mut State) {
             &ui.add(Chip::plain("Selected follow-up").selected(true)),
             "Chip::plain",
         );
+        ui.add(Chip::stamp("Volatility"));
     });
 }
 

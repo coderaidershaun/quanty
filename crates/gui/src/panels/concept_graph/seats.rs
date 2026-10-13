@@ -7,7 +7,7 @@ use super::plan::{BOTTOM, MIDDLE, Plan, TOP};
 /// What the picture is made of, in points.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct Metrics {
-    pub pill_height: f32,
+    pub node_height: f32,
     /// This is the room between two nodes of a row.
     pub gap: f32,
     /// This is the room on each side of a label that sits between the centre and the node
@@ -41,13 +41,13 @@ pub(super) struct Rows {
 
 impl Rows {
     fn new(canvas_height: f32, metrics: &Metrics) -> Rows {
-        let pills = 3.0 * metrics.pill_height;
-        let band = ((canvas_height - pills - 2.0 * metrics.margin) / 2.0)
+        let rows_height = 3.0 * metrics.node_height;
+        let band = ((canvas_height - rows_height - 2.0 * metrics.margin) / 2.0)
             .clamp(metrics.band_min, metrics.band_max);
-        let needed = pills + 2.0 * band + 2.0 * metrics.margin;
+        let needed = rows_height + 2.0 * band + 2.0 * metrics.margin;
         let height = canvas_height.max(needed);
-        let first = (height - pills - 2.0 * band) / 2.0;
-        let pitch = metrics.pill_height + band;
+        let first = (height - rows_height - 2.0 * band) / 2.0;
+        let pitch = metrics.node_height + band;
         Rows {
             top: [first, first + pitch, first + 2.0 * pitch],
             band,
@@ -97,17 +97,17 @@ impl<'a> Layout<'a> {
         layout
     }
 
-    fn pill(&self, place: usize, left: f32) -> Rect {
+    fn node_rect(&self, place: usize, left: f32) -> Rect {
         let size = Size {
             w: self.sizes.nodes[place],
-            h: self.metrics.pill_height,
+            h: self.metrics.node_height,
         };
         Rect::from_min_size(point(left, self.rows.top[self.row_of[place]]), size)
     }
 
     fn seat_nodes(&self) -> Vec<Rect> {
         let mut nodes = vec![Rect::default(); self.plan.nodes.len()];
-        nodes[0] = self.pill(0, -self.sizes.nodes[0] / 2.0);
+        nodes[0] = self.node_rect(0, -self.sizes.nodes[0] / 2.0);
         for side in [Side::Right, Side::Left] {
             self.seat_middle(&mut nodes, side);
         }
@@ -147,7 +147,7 @@ impl<'a> Layout<'a> {
                 Side::Right => edge + gap,
                 Side::Left => edge - gap - width,
             };
-            nodes[place] = self.pill(place, left);
+            nodes[place] = self.node_rect(place, left);
             edge += direction * (gap + width);
         }
     }
@@ -159,7 +159,7 @@ impl<'a> Layout<'a> {
         let total = widths + self.metrics.gap * seats.len().saturating_sub(1) as f32;
         let mut left = -total / 2.0;
         for place in seats {
-            nodes[*place] = self.pill(*place, left);
+            nodes[*place] = self.node_rect(*place, left);
             left += self.sizes.nodes[*place] + self.metrics.gap;
         }
     }

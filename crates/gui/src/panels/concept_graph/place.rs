@@ -5,10 +5,10 @@ use super::geometry::{Point, Rect, Route, point};
 use super::plan::Plan;
 use super::seats::{Layout, Metrics, Sizes};
 
-/// The space kept clear between two labels that show at rest. Do not raise it above 5.75: in a
-/// panel of the default size a label over a short link and a label in the band above it stand
-/// that far apart, and with more clearance one of the two would not show.
-const LABEL_CLEARANCE: f32 = 4.0;
+/// The space kept clear between two labels that show at rest. Do not raise it above 2.5. In the
+/// smallest window a label over a short link stands 2.5 points from the label in the band above
+/// it, and with more clearance one of the two would not show.
+const LABEL_CLEARANCE: f32 = 2.0;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct LabelPlace {

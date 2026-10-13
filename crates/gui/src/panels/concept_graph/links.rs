@@ -87,7 +87,7 @@ impl Layout<'_> {
     }
 
     fn band_middle(&self, upper_row: usize) -> f32 {
-        self.rows.top[upper_row] + self.metrics.pill_height + self.rows.band / 2.0
+        self.rows.top[upper_row] + self.metrics.node_height + self.rows.band / 2.0
     }
 
     /// Every route stays inside a band or a gap, so it never crosses a node.

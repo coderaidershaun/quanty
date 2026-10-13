@@ -3,7 +3,7 @@
 
 use crate::contract::{Failure, Loadable, NothingFound, RetrievalTrace};
 use crate::state::AskSession;
-use crate::theme::{Icon, Kind, Tone};
+use crate::theme::Icon;
 
 pub(super) const TITLE: &str = "Retrieval Path";
 pub(super) const SEARCHING: &str = "Searching";
@@ -41,9 +41,8 @@ pub(super) fn body(ask: &AskSession) -> Body<'_> {
 pub(super) struct Step {
     pub(super) title: &'static str,
     pub(super) line: String,
-    pub(super) badge: Option<String>,
+    pub(super) count: Option<String>,
     pub(super) progress: Progress,
-    pub(super) tone: Tone,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,7 +57,7 @@ pub(super) fn waiting() -> Vec<Step> {
         .map(|row| {
             row.step(Outcome {
                 progress: Progress::Waiting,
-                badge: None,
+                count: None,
                 line: None,
             })
         })
@@ -84,7 +83,7 @@ const NOT_REACHED: &str = "Not reached";
 
 fn nearest(trace: &RetrievalTrace) -> Outcome {
     let items = counted(trace.nearest, "item", "items");
-    let (badge, line) = match (trace.nearest, trace.documents_searched) {
+    let (count, line) = match (trace.nearest, trace.documents_searched) {
         (0, _) => match trace.why_nothing_was_found() {
             NothingFound::NoDocumentHasTheLabels => (
                 counted(0, "document", "documents"),
@@ -108,7 +107,7 @@ fn nearest(trace: &RetrievalTrace) -> Outcome {
     };
     Outcome {
         progress: Progress::Taken,
-        badge: Some(badge),
+        count: Some(count),
         line,
     }
 }
@@ -124,7 +123,7 @@ fn concepts(trace: &RetrievalTrace) -> Outcome {
     };
     Outcome {
         progress: Progress::Taken,
-        badge: Some(counted(names.len(), "concept", "concepts")),
+        count: Some(counted(names.len(), "concept", "concepts")),
         line: Some(line),
     }
 }
@@ -133,7 +132,7 @@ fn hop(trace: &RetrievalTrace) -> Outcome {
     if trace.related_concepts.is_none() && trace.candidates.is_none() {
         return Outcome::not_reached();
     }
-    let badge = trace
+    let count = trace
         .candidates
         .map(|candidates| added(candidates.saturating_sub(trace.nearest)));
     let line = trace.related_concepts.as_deref().map(|names| {
@@ -145,7 +144,7 @@ fn hop(trace: &RetrievalTrace) -> Outcome {
     });
     Outcome {
         progress: Progress::Taken,
-        badge,
+        count,
         line,
     }
 }
@@ -162,7 +161,7 @@ fn ranked(trace: &RetrievalTrace) -> Outcome {
     };
     Outcome {
         progress: Progress::Taken,
-        badge: trace.kept.map(|kept| format!("{kept} kept")),
+        count: trace.kept.map(|kept| format!("{kept} kept")),
         line,
     }
 }
@@ -204,7 +203,7 @@ fn cited(trace: &RetrievalTrace) -> Outcome {
     };
     Outcome {
         progress: Progress::Taken,
-        badge: Some(added(labels.len())),
+        count: Some(added(labels.len())),
         line: Some(line),
     }
 }
@@ -232,41 +231,35 @@ fn listed(names: &[String]) -> String {
 struct Row {
     title: &'static str,
     about: &'static str,
-    tone: Tone,
 }
 
 const ROWS: [Row; 5] = [
     Row {
         title: "Nearest items",
         about: "The stored items closest in meaning to the question.",
-        tone: Tone::Indigo,
     },
     Row {
         title: "Concepts matched",
         about: "Concepts near the question or mentioned in those items.",
-        tone: Kind::Concept.tone(),
     },
     Row {
         title: "One hop in the graph",
         about: "Related concepts, and the items that mention any concept.",
-        tone: Kind::RelatedConcept.tone(),
     },
     Row {
         title: "Ranked and capped",
         about: "One ranking of all candidates, then a cap per document.",
-        tone: Tone::Indigo,
     },
     Row {
         title: "Cited items",
         about: "Figures, tables and equations that a result cites.",
-        tone: Kind::Figure.tone(),
     },
 ];
 
 /// A line of `None` leaves the row's own about line.
 struct Outcome {
     progress: Progress,
-    badge: Option<String>,
+    count: Option<String>,
     line: Option<String>,
 }
 
@@ -274,7 +267,7 @@ impl Outcome {
     fn not_reached() -> Self {
         Outcome {
             progress: Progress::NotReached,
-            badge: Some(NOT_REACHED.to_owned()),
+            count: Some(NOT_REACHED.to_owned()),
             line: None,
         }
     }
@@ -285,9 +278,8 @@ impl Row {
         Step {
             title: self.title,
             line: outcome.line.unwrap_or_else(|| self.about.to_owned()),
-            badge: outcome.badge,
+            count: outcome.count,
             progress: outcome.progress,
-            tone: self.tone,
         }
     }
 }

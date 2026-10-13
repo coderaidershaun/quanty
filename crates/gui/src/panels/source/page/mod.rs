@@ -126,10 +126,7 @@ fn room_for_bar(body: egui::Rect) -> (egui::Rect, egui::Rect) {
 /// The bar is drawn first, so what it asks for shows in the frame that it is pressed in.
 fn draw(ui: &mut egui::Ui, state: &mut State, shown: &Shown<'_>) {
     let (area, bar) = room_for_bar(ui.available_rect_before_wrap());
-    let viewport = Viewport {
-        rect: area,
-        picture: shown.picture.size(),
-    };
+    let viewport = Viewport::new(area, shown.picture.size());
     let action = row::show_at(ui, bar, |ui| {
         zoom_bar::show(ui, state.view.zoom, &mut state.percent)
     });

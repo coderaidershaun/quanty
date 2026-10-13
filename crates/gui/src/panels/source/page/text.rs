@@ -32,7 +32,7 @@ fn list_of_pieces(ui: &mut egui::Ui, cx: &mut TabCx<'_>) {
                     .target_piece
                     .is_some_and(|target| target.number == piece.number);
                 let fill = if is_marked {
-                    Tone::Indigo.swatch().wash
+                    Tone::Rubric.swatch().wash
                 } else {
                     egui::Color32::TRANSPARENT
                 };

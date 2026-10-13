@@ -5,6 +5,7 @@ use eframe::egui;
 
 use super::tabs::TabCx;
 use crate::contract::{Intent, PagePiece, PieceKind};
+use crate::media::Media;
 use crate::media::images;
 use crate::media::math::{self, MathRef};
 use crate::media::rich_text::{self, Clicked, RichText};
@@ -35,14 +36,12 @@ pub(super) fn body(ui: &mut egui::Ui, piece: &PagePiece, cx: &mut TabCx<'_>) {
             } else {
                 TextRole::BodyStrong
             };
-            after_marker(ui, piece.label.as_deref(), |ui| {
-                rich_text::show(ui, media, &words(role))
-            })
+            after_marker(ui, media, piece.label.as_deref(), &words(role))
         }
         PieceKind::Text => rich_text::show(ui, media, &words(TextRole::Body)),
-        PieceKind::Footnote => after_marker(ui, piece.label.as_deref(), |ui| {
-            rich_text::show(ui, media, &words(TextRole::Small))
-        }),
+        PieceKind::Footnote => {
+            after_marker(ui, media, piece.label.as_deref(), &words(TextRole::Small))
+        }
         PieceKind::Formula => {
             math::show(ui, media, &MathRef::block(&piece.text));
             note(ui, piece.name.as_deref());
@@ -77,29 +76,32 @@ fn forward(clicked: Option<Clicked>, intents: &mut Vec<Intent>) {
     }
 }
 
+/// The words after their marker, such as a heading number or a footnote mark. The marker is set
+/// in the same role as the words so that it reads in the same face.
 fn after_marker(
     ui: &mut egui::Ui,
+    media: &mut Media,
     marker: Option<&str>,
-    add_text: impl FnOnce(&mut egui::Ui) -> Option<Clicked>,
+    words: &RichText<'_>,
 ) -> Option<Clicked> {
     ui.horizontal_top(|ui| {
         if let Some(marker) = marker {
-            ui.label(TextRole::Label.rich(marker).color(color::TEXT_SECONDARY));
+            ui.label(words.role.rich(marker).color(color::TEXT_SECONDARY));
         }
-        add_text(ui)
+        rich_text::show(ui, media, words)
     })
     .inner
 }
 
 fn note(ui: &mut egui::Ui, line: Option<&str>) {
     if let Some(line) = line {
-        ui.label(TextRole::Small.rich(line));
+        ui.label(TextRole::Caption.rich(line));
     }
 }
 
 /// The figure fits in the view together with its card around it and its caption under it.
 fn figure_room(ui: &egui::Ui) -> egui::Vec2 {
-    let caption = ui.spacing().item_spacing.y + TextRole::Small.line_height();
+    let caption = ui.spacing().item_spacing.y + TextRole::Caption.line_height();
     let around = Card::height_around_content(ui) + caption;
     let height = (ui.clip_rect().height() - around).clamp(MIN_FIGURE_HEIGHT, MAX_FIGURE_HEIGHT);
     egui::vec2(ui.available_width(), height)

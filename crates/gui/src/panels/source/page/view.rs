@@ -6,6 +6,8 @@ use eframe::egui::{Pos2, Rect, Vec2, pos2, vec2};
 use crate::contract::PageBox;
 use crate::theme::space;
 
+/// The well shows this far round a page that fits the width.
+const GUTTER: f32 = space::MD;
 pub(super) const MIN_ZOOM: f32 = 0.5;
 pub(super) const MAX_ZOOM: f32 = 4.0;
 /// The stops of the minus and plus buttons. 1.0 is fit to width.
@@ -13,8 +15,8 @@ const ZOOM_STOPS: [f32; 13] = [
     0.5, 0.67, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0,
 ];
 
-/// `zoom` 1.0 fits the page to the viewport's width. `pan` is how far the viewport's top-left
-/// corner is from the page's, in points.
+/// `zoom` 1.0 fits the page to the width of the viewport's room. `pan` is how far the room's
+/// top-left corner is from the page's, in points.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct View {
     pub zoom: f32,
@@ -60,23 +62,38 @@ pub(super) fn box_rect(page: Rect, cut: PageBox) -> Rect {
     Rect::from_two_pos(at(cut.left, cut.top), at(cut.right, cut.bottom))
 }
 
-/// The rectangle of the screen the page is shown in, and the picture's own size in pixels.
+/// The room that the page is laid out in, and the picture's own size in pixels.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct Viewport {
-    pub rect: Rect,
-    pub picture: Vec2,
+    room: Rect,
+    picture: Vec2,
 }
 
 impl Viewport {
+    /// The room is `area` less a gutter all round, so that the well shows round a page that
+    /// fits. An axis too short for both gutters gets none.
+    pub(super) fn new(area: Rect, picture: Vec2) -> Self {
+        let gutter = |length: f32| if length > 2.0 * GUTTER { GUTTER } else { 0.0 };
+        let sides = vec2(gutter(area.width()), gutter(area.height()));
+        Viewport {
+            room: area.shrink2(sides),
+            picture,
+        }
+    }
+
+    pub(super) fn room(&self) -> Rect {
+        self.room
+    }
+
     /// The page's size on screen, in points.
     fn page_size(&self, zoom: f32) -> Vec2 {
-        let width = self.rect.width() * zoom;
+        let width = self.room.width() * zoom;
         vec2(width, width * self.picture.y / self.picture.x)
     }
 
     pub(super) fn clamp(&self, view: View) -> View {
         let zoom = view.zoom.clamp(MIN_ZOOM, MAX_ZOOM);
-        let most = (self.page_size(zoom) - self.rect.size()).max(Vec2::ZERO);
+        let most = (self.page_size(zoom) - self.room.size()).max(Vec2::ZERO);
         View {
             zoom,
             pan: view.pan.clamp(Vec2::ZERO, most),
@@ -86,7 +103,7 @@ impl Viewport {
     pub(super) fn page_rect(&self, view: View) -> Rect {
         let view = self.clamp(view);
         let page = self.page_size(view.zoom);
-        Rect::from_min_size(self.rect.min + self.centring(page) - view.pan, page)
+        Rect::from_min_size(self.room.min + self.centring(page) - view.pan, page)
     }
 
     /// Changes the zoom and keeps the point of the page under `anchor` where it is.
@@ -95,7 +112,7 @@ impl Viewport {
         let before = self.page_rect(view);
         let share = (anchor - before.min) / before.size();
         let page = self.page_size(zoom);
-        let pan = self.rect.min + self.centring(page) + share * page - anchor;
+        let pan = self.room.min + self.centring(page) + share * page - anchor;
         self.clamp(View { zoom, pan })
     }
 
@@ -105,7 +122,7 @@ impl Viewport {
         let view = self.clamp(view);
         let page = self.page_size(view.zoom);
         let target = box_rect(Rect::from_min_size(Pos2::ZERO, page), cut);
-        if Rect::from_min_size(view.pan.to_pos2(), self.rect.size()).contains_rect(target) {
+        if Rect::from_min_size(view.pan.to_pos2(), self.room.size()).contains_rect(target) {
             return view;
         }
         let along = |from: f32, length: f32, room: f32| {
@@ -116,8 +133,8 @@ impl Viewport {
             }
         };
         let pan = vec2(
-            along(target.left(), target.width(), self.rect.width()),
-            along(target.top(), target.height(), self.rect.height()),
+            along(target.left(), target.width(), self.room.width()),
+            along(target.top(), target.height(), self.room.height()),
         );
         self.clamp(View {
             zoom: view.zoom,
@@ -126,6 +143,6 @@ impl Viewport {
     }
 
     fn centring(&self, page: Vec2) -> Vec2 {
-        ((self.rect.size() - page) * 0.5).max(Vec2::ZERO)
+        ((self.room.size() - page) * 0.5).max(Vec2::ZERO)
     }
 }

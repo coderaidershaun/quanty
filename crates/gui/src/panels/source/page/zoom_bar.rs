@@ -23,7 +23,7 @@ impl ZoomAction {
             ZoomAction::To(zoom) => zoom,
             ZoomAction::Fit => 1.0,
         };
-        viewport.zoom_about(view, viewport.rect.center(), zoom)
+        viewport.zoom_about(view, viewport.room().center(), zoom)
     }
 }
 

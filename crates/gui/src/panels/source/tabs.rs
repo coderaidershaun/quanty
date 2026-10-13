@@ -3,10 +3,10 @@
 
 use eframe::egui;
 
-use crate::contract::{DocId, Intent, Loadable, PagePiece, PageView, PieceKind};
+use crate::contract::{DocId, Intent, PagePiece, PageView, PieceKind};
 use crate::media::Media;
 use crate::state::SourceNav;
-use crate::theme::Icon;
+use crate::theme::{Icon, Tone, size, space};
 use crate::widgets::{Tab, TabStrip};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -132,17 +132,43 @@ pub(super) fn tab_list(nav: &SourceNav, index: &PieceIndex) -> [Tab<'static>; 5]
             SourceTab::Concepts => nav.concepts.ready().map(Vec::len),
             SourceTab::Cards(tab) => has_page.then(|| index.of(tab).len()),
         };
-        let has_failed = tab == SourceTab::Concepts && matches!(nav.concepts, Loadable::Failed(_));
         Tab {
-            label: tab.label(),
             count,
-            icon: has_failed.then_some(Icon::WARNING),
+            ..Tab::new(tab.label())
         }
     })
 }
 
-/// Draws the strip and returns the tab the person chose, never the active one.
-pub(super) fn strip(ui: &mut egui::Ui, tabs: &[Tab<'_>], active: SourceTab) -> Option<SourceTab> {
-    let chosen = TabStrip::new(tabs, active.place()).compact().show(ui)?;
-    SourceTab::ALL.get(chosen).copied()
+/// Draws the strip and returns the tab the person chose, never the active one. A warning about
+/// the concepts stands just after the last tab, which is Concepts, and shows its text on hover.
+pub(super) fn strip(
+    ui: &mut egui::Ui,
+    tabs: &[Tab<'_>],
+    active: SourceTab,
+    concepts_warning: Option<&str>,
+) -> Option<SourceTab> {
+    // SMELL: the warning is placed by the size of the whole strip, so it counts on Concepts being
+    // the last tab and on the strip's row being only as wide as its tabs. If the strip ever fills
+    // its row, the warning lands at the far right. The tab strip should let a tab carry a warning.
+    let drawn = ui.scope(|ui| TabStrip::new(tabs, active.place()).compact().show(ui));
+    if let Some(warning) = concepts_warning {
+        warn_after(ui, drawn.response.rect, warning);
+    }
+    SourceTab::ALL.get(drawn.inner?).copied()
+}
+
+// SMELL: the warning is a painted glyph with no name of its own, so a screen reader does not
+// announce it. A person who uses one learns that the concepts failed only on the Concepts tab.
+fn warn_after(ui: &mut egui::Ui, strip: egui::Rect, warning: &str) {
+    let glyph = egui::Rect::from_center_size(
+        egui::pos2(
+            strip.right() + space::XS + size::GLYPH / 2.0,
+            strip.center().y,
+        ),
+        egui::Vec2::splat(size::GLYPH),
+    );
+    let ink = Tone::Danger.swatch().text;
+    Icon::WARNING.paint(ui.painter(), glyph.center(), size::GLYPH, ink);
+    ui.interact(glyph, ui.id().with("concepts failed"), egui::Sense::hover())
+        .on_hover_text(warning);
 }

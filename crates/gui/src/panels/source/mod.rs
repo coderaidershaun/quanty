@@ -44,8 +44,12 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
         header::show(ui, &mut local.header, cx);
         let is_anything_open = !matches!(shared.source.page, Loadable::Idle);
         let list = tabs::tab_list(&shared.source, &local.index);
+        let has_failed_concepts = matches!(shared.source.concepts, Loadable::Failed(_));
+        let concepts_warning = has_failed_concepts.then_some(concepts::FAILED_TITLE);
         let chosen = ui
-            .add_enabled_ui(is_anything_open, |ui| tabs::strip(ui, &list, local.tab))
+            .add_enabled_ui(is_anything_open, |ui| {
+                tabs::strip(ui, &list, local.tab, concepts_warning)
+            })
             .inner;
         if let Some(tab) = chosen {
             local.tab = tab;

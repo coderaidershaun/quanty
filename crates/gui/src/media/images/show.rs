@@ -52,7 +52,7 @@ fn ready(ui: &mut egui::Ui, picture: Picture, alt: &str, room: egui::Vec2) -> eg
 
 fn waiting(ui: &mut egui::Ui, alt: &str, room: egui::Vec2) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(room, egui::Sense::click());
-    ui.painter().rect_filled(rect, radius::MD, color::WELL);
+    ui.painter().rect_filled(rect, radius::SM, color::WELL);
     let middle = egui::Layout::centered_and_justified(egui::Direction::TopDown);
     let mut inside = ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(middle));
     spinner(&mut inside, &format!("Loading picture: {alt}"));
@@ -71,7 +71,7 @@ fn failed(
         ImageFailure::Unreadable => "Picture cannot be read",
     };
     let (rect, response) = ui.allocate_exact_size(room, egui::Sense::click());
-    ui.painter().rect_filled(rect, radius::MD, color::WELL);
+    ui.painter().rect_filled(rect, radius::SM, color::WELL);
     if room.y < Placeholder::MIN_HEIGHT {
         // A box this small has no room for the Retry button. The failure stays until a caller
         // forgets it, or the picture is shown in a bigger box and Retry is clicked there.

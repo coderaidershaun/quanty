@@ -10,7 +10,7 @@ use super::view::{self, View, Viewport, ZoomStep};
 use super::zoom_bar::ZoomAction;
 use crate::contract::PageBox;
 use crate::media::images::Picture;
-use crate::theme::{Tone, color, radius, stroke};
+use crate::theme::{Tone, color, radius, shadow, stroke};
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Figure<'a> {
@@ -33,10 +33,7 @@ pub(super) fn show(ui: &mut egui::Ui, view: &mut View, shown: &Shown<'_>) {
         let name = format!("Picture of page {}", shown.page_number);
         WidgetInfo::labeled(WidgetType::Image, true, name)
     });
-    let viewport = Viewport {
-        rect: area,
-        picture: shown.picture.size(),
-    };
+    let viewport = Viewport::new(area, shown.picture.size());
     if response.dragged() {
         view.pan -= response.drag_delta();
     }
@@ -48,7 +45,8 @@ pub(super) fn show(ui: &mut egui::Ui, view: &mut View, shown: &Shown<'_>) {
     }
     *view = viewport.clamp(*view);
     let page = viewport.page_rect(*view);
-    if page.width() > area.width() || page.height() > area.height() {
+    let room = viewport.room();
+    if page.width() > room.width() || page.height() > room.height() {
         let cursor = if response.dragged() {
             CursorIcon::Grabbing
         } else {
@@ -58,15 +56,16 @@ pub(super) fn show(ui: &mut egui::Ui, view: &mut View, shown: &Shown<'_>) {
     }
 
     let painter = ui.painter_at(area);
-    painter.rect_filled(area, CornerRadius::ZERO, color::DESK);
+    painter.rect_filled(area, radius::SM, color::WELL);
+    painter.add(shadow::SHEET.as_shape(page, CornerRadius::ZERO));
     painter.rect_filled(page, CornerRadius::ZERO, color::PAGE);
     shown.picture.paint(&painter, page, Color32::WHITE);
     if let Some(figure) = shown.figure {
         let seen = view::box_rect(page, figure.cut).intersect(area);
         if seen.is_positive() {
-            painter.rect_filled(seen, radius::SM, color::PAGE_HIGHLIGHT);
-            let outline = Stroke::new(stroke::UNDERLINE, Tone::Indigo.swatch().solid);
-            painter.rect_stroke(seen, radius::SM, outline, StrokeKind::Inside);
+            painter.rect_filled(seen, CornerRadius::ZERO, color::PAGE_HIGHLIGHT);
+            let outline = Stroke::new(stroke::EDGE, Tone::Rubric.swatch().solid);
+            painter.rect_stroke(seen, CornerRadius::ZERO, outline, StrokeKind::Inside);
             let mark = ui.interact(seen, response.id.with("highlight"), Sense::hover());
             mark.widget_info(|| {
                 let name = format!("{} on the page", figure.name);
@@ -93,7 +92,7 @@ fn take_input(ui: &egui::Ui, viewport: &Viewport, view: &mut View) {
         ui.input_mut(|input| input.smooth_scroll_delta = Vec2::ZERO);
     }
     if pinch != 1.0 {
-        let anchor = pointer.unwrap_or(viewport.rect.center());
+        let anchor = pointer.unwrap_or(viewport.room().center());
         *view = viewport.zoom_about(*view, anchor, view.zoom * pinch);
     }
     if let Some(action) = key_zoom(ui) {

@@ -10,6 +10,8 @@ use crate::panels::labels::TRY_AGAIN;
 use crate::theme::{Icon, Kind, TextRole};
 use crate::widgets::{Chip, Placeholder};
 
+pub(super) const FAILED_TITLE: &str = "The concepts could not be read";
+
 pub(super) fn show(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
     let shared = cx.shared;
     match &shared.source.concepts {
@@ -35,7 +37,7 @@ pub(super) fn show(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
 }
 
 fn failed(ui: &mut egui::Ui, failure: &Failure, intents: &mut Vec<Intent>) {
-    let placeholder = Placeholder::error("The concepts could not be read")
+    let placeholder = Placeholder::error(FAILED_TITLE)
         .hint(&failure.hint)
         .action(TRY_AGAIN);
     let shown = whole_area(ui, placeholder);

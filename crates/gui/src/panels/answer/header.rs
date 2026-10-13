@@ -6,7 +6,7 @@ use eframe::egui;
 use super::pane::{Copied, Pane};
 use super::phase::{AnswerTab, Phase, Written};
 use crate::contract::Usage;
-use crate::panels::labels::spent_text;
+use crate::panels::labels::{cost_text, tokens_text};
 use crate::theme::{self, Icon, TextRole, color, size, space};
 use crate::widgets::{self, ControlSize, TabStrip};
 
@@ -85,12 +85,29 @@ fn share(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>) {
     }
 }
 
-/// What the ask used, in small muted words left of Share. It is left out when it would reach the
-/// tabs, as it does in a narrow pane, so it never covers one.
+/// What the ask used, in small words left of Share. It is left out when it would reach the tabs,
+/// as it does in a narrow pane, so it never covers one.
 fn spent_label(ui: &mut egui::Ui, usage: &Usage, tabs_end: f32) {
-    let galley = TextRole::Small.galley(ui, &spent_text(usage), color::TEXT_MUTED);
+    let small = TextRole::Small;
+    let galley = small.galley(ui, &spent_words(usage), small.color());
     let room = ui.available_rect_before_wrap().right() - tabs_end - space::SM;
     if galley.size().x <= room {
         ui.add(egui::Label::new(galley).selectable(false));
+    }
+}
+
+/// "12k tokens, about $0.03", "12 tokens, under $0.01", or the tokens alone for a model that
+/// has no price.
+// SMELL: this reads the words that `cost_text` writes and puts "about" in place of its "≈ ", so
+// a change to how `cost_text` words a cost must be made here too.
+fn spent_words(usage: &Usage) -> String {
+    let tokens = format!("{} tokens", tokens_text(usage.tokens()));
+    if usage.cost_usd.is_none() {
+        return tokens;
+    }
+    let cost = cost_text(usage.cost_usd);
+    match cost.strip_prefix("≈ ") {
+        Some(price) => format!("{tokens}, about {price}"),
+        None => format!("{tokens}, {cost}"),
     }
 }

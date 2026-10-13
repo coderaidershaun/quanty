@@ -128,14 +128,18 @@ enum Wheel {
     Up,
 }
 
-/// A row or a chip that is off screen has no node, so the wheel is turned until it is drawn.
+/// A row or a chip that is off screen has no node, so the wheel is turned until a node of that
+/// name is wholly inside `over`.
 fn scroll_to(harness: &mut Window, over: egui::Rect, wheel: Wheel, role: Role, name: &str) {
     let delta = match wheel {
         Wheel::Down => -240.0,
         Wheel::Up => 240.0,
     };
     for _ in 0..40 {
-        if has(harness, role, name) {
+        if harness
+            .query_all_by_role_and_label(role, name)
+            .any(|node| over.contains_rect(node.rect()))
+        {
             return;
         }
         harness.hover_at(over.center());

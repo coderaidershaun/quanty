@@ -251,7 +251,7 @@ fn add_chips(ui: &Ui, cites: &[usize], look: &TextLook, lines: &mut [MeasuredLin
     }
     if let Some(last) = line.atoms.last_mut() {
         last.is_glued = true;
-        last.gap = look.small_gap;
+        last.gap = look.cite_gap;
     }
     for &number in cites {
         let size = CitationChip::new(number).size(ui);
@@ -260,7 +260,7 @@ fn add_chips(ui: &Ui, cites: &[usize], look: &TextLook, lines: &mut [MeasuredLin
             width: size.x,
             ascent: size.y / 2.0,
             descent: size.y / 2.0,
-            gap: look.small_gap,
+            gap: look.cite_gap,
             is_glued: false,
         });
     }

@@ -10,9 +10,11 @@ use super::atom::{Measured, Seen};
 use super::flow::{Flow, break_lines};
 use super::measure::{WaitFor, alone_width, measure};
 use super::paint;
-use super::parse::Span;
+use super::parse::{Parsed, Span, SpanStyle};
 use super::parse_table::{ColumnAlign, ParsedTable};
-use super::style::{TableLook, TextLook, header_look, rule, table_look, text_look};
+use super::style::{
+    TableLook, TextLook, header_look, header_rule, heavy_rule, table_look, text_look,
+};
 use crate::media::content_salt;
 use crate::media::math::{Math, MathRef, MathState};
 use crate::theme::TextRole;
@@ -172,8 +174,9 @@ fn measure_rows(
     } else {
         WaitFor::OwnFormulas
     };
-    let header = std::iter::once((&table.header, true));
-    let body = table.rows.iter().map(|row| (row, false));
+    let capitals: Vec<Parsed> = table.header.iter().map(in_capitals).collect();
+    let header = std::iter::once((capitals.as_slice(), true));
+    let body = table.rows.iter().map(|row| (row.as_slice(), false));
     let rows = header
         .chain(body)
         .map(|(cells, is_header)| MeasuredRow {
@@ -185,6 +188,20 @@ fn measure_rows(
         })
         .collect();
     (rows, is_waiting)
+}
+
+/// The cell with its words in capitals, as the header of a table is set. Code, formulas and
+/// footnote marks stay as they are, and so does the name a screen reader gives the cell.
+fn in_capitals(cell: &Parsed) -> Parsed {
+    let mut capitals = cell.clone();
+    for span in capitals.lines.iter_mut().flat_map(|line| &mut line.spans) {
+        if let Span::Text { text, style } = span
+            && *style != SpanStyle::Code
+        {
+            *text = text.to_uppercase();
+        }
+    }
+    capitals
 }
 
 fn row_align(align: ColumnAlign) -> Align {
@@ -352,22 +369,21 @@ pub(super) fn show(
     paint::copy_is_chosen(&response, "Copy table").then(|| Clicked::CopyText(markdown.to_owned()))
 }
 
+/// A table is ruled as a printed one is: a heavy line along the top and the bottom, and one
+/// line under the header. The heavy lines are drawn inside the table, so they are not clipped.
 fn draw(painter: &Painter, layout: &TableLayout, origin: Pos2, math: &mut Math) {
-    let look = table_look();
     let view = painter.clip_rect().translate(-origin.to_vec2());
-    for (index, row) in layout.rows.iter().enumerate() {
-        if !row.is_seen(view) {
-            continue;
-        }
-        let rect =
-            Rect::from_min_size(origin + vec2(0.0, row.top), vec2(layout.size.x, row.height));
-        if row.is_header {
-            painter.rect_filled(rect, 0.0, look.header_fill);
-        } else if index > 0 {
-            painter.line_segment([rect.left_top(), rect.right_top()], rule(painter));
-        }
+    for row in layout.rows.iter().filter(|row| row.is_seen(view)) {
         for cell in &row.cells {
             paint::draw(painter, &cell.flow, origin + cell.offset, math);
         }
+    }
+    let (left, right) = (origin.x, origin.x + layout.size.x);
+    let heavy = heavy_rule();
+    let inset = heavy.width / 2.0;
+    painter.hline(left..=right, origin.y + inset, heavy);
+    painter.hline(left..=right, origin.y + layout.size.y - inset, heavy);
+    if let Some(first_body_row) = layout.rows.iter().find(|row| !row.is_header) {
+        painter.hline(left..=right, origin.y + first_body_row.top, header_rule());
     }
 }

@@ -82,7 +82,11 @@ fn a_panel_words_a_cost_as_the_core_crate_does() {
             answer::show(ui, &mut local, cx);
         });
         harness.run();
-        let worded = format!("12 tokens · {}", rag_core::cost_text(Some(cost)));
+        let cost_words = rag_core::cost_text(Some(cost));
+        let worded = match cost_words.strip_prefix("≈ ") {
+            Some(price) => format!("12 tokens, about {price}"),
+            None => format!("12 tokens, {cost_words}"),
+        };
         assert!(
             harness.query_by_label(&worded).is_some(),
             "the answer header should say {worded:?}"

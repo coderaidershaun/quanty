@@ -1,5 +1,5 @@
 //! The question that the sheet asks before a document or a media is deleted, the words it says,
-//! and the Delete button of a card.
+//! and the Delete button of each.
 
 use eframe::egui;
 
@@ -128,11 +128,11 @@ pub(super) fn sheet(
     }
 }
 
-/// The Delete button of a card, named after what it deletes. It shows that its own delete is on
-/// its way, and it is off, with the reason on hover, while no delete can start. Returns true when
-/// it was pressed.
+/// The Delete button of a media or a document, named after what it deletes. It shows that its own
+/// delete is on its way, and it is off, with the reason on hover, while no delete can start.
+/// Returns true when it was pressed.
 pub(super) fn button(ui: &mut egui::Ui, name: &str, is_busy: bool, shared: &Shared) -> bool {
-    let button = Button::secondary(DELETE)
+    let button = Button::danger(DELETE)
         .icon(Icon::DELETE)
         .size(ControlSize::Small)
         .accessible_name(name)

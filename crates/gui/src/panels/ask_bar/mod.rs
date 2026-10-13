@@ -42,7 +42,10 @@ impl Local {
 
 pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     local.follow(cx.shared);
-    layout::card().show(ui, |ui| {
+    // The bar has no frame of its own, because the top line of a frame on the desk would sit just
+    // under the line of the top bar.
+    let margins = egui::Frame::NONE.inner_margin(layout::MARGIN);
+    margins.show(ui, |ui| {
         let room = egui::vec2(ui.available_width(), layout::CONTENT_HEIGHT);
         let (content, _) = ui.allocate_exact_size(room, egui::Sense::hover());
         let rects = layout::rects(content);

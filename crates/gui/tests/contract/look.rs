@@ -29,7 +29,7 @@ const FIRST_MEDIA_PENCIL: &str = "Edit Hawkes Processes in Finance";
 /// The Delete button of the same media, whose sheet is on screen with no scroll.
 const FIRST_MEDIA_DELETE: &str = "Delete media Hawkes Processes in Finance";
 /// The ingest of its scene stops for ever at page 3, so its bar rests there.
-const BAR_AT_PAGE_3: &str = "Converting the pages — 3 of 12 done · about 36%";
+const BAR_AT_PAGE_3: &str = "Converting the pages — 3 of 12 done, about 36%";
 const LIMIT: Duration = Duration::from_secs(5);
 
 enum Start {

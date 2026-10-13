@@ -8,7 +8,7 @@ use crate::panels::PanelCx;
 use crate::panels::labels::TAGS;
 use crate::state::Busy;
 use crate::theme::{Icon, TextRole, Tone, color, space};
-use crate::widgets::{Badge, Button, Card, ControlSize, Notice};
+use crate::widgets::{self, Button, Chip, ControlSize, Notice};
 
 const NOT_WHOLE: &str = "The ingest of this document did not finish, so a search may miss parts of it. Ingest it again to finish it.";
 const NO_TAGS: &str = "No tags";
@@ -17,6 +17,13 @@ const READ: &str = "Read";
 const EDIT_TAGS: &str = "Edit tags";
 const READ_DISABLED: &str = "The document's folder was not found, so its pages cannot be shown.";
 
+/// The top is narrower than the other sides because the first line of text brings its own room
+/// above its letters, so the gap under the line between documents looks as wide as the gap above.
+const MARGIN: egui::Margin = egui::Margin {
+    top: space::XS as i8,
+    ..egui::Margin::same(space::MD as i8)
+};
+
 pub(super) fn show(
     ui: &mut egui::Ui,
     document: &Document,
@@ -24,7 +31,8 @@ pub(super) fn show(
     cx: &mut PanelCx<'_>,
 ) {
     let is_edited = matches!(&local.form, Some(Form::Tags(draft)) if draft.doc == document.id);
-    Card::new().show(ui, |ui| {
+    widgets::separator(ui);
+    egui::Frame::NONE.inner_margin(MARGIN).show(ui, |ui| {
         ui.label(TextRole::BodyStrong.rich(document.name().label()));
         ui.label(TextRole::Small.rich(facts(document)));
         if document.ingested_items.is_none() {
@@ -56,8 +64,8 @@ pub(super) fn show(
 
 fn facts(document: &Document) -> String {
     match document.pages {
-        Some(1) => format!("1 page · {}", document.items),
-        Some(pages) => format!("{pages} pages · {}", document.items),
+        Some(1) => format!("1 page, {}", document.items),
+        Some(pages) => format!("{pages} pages, {}", document.items),
         None => document.items.to_string(),
     }
 }
@@ -70,7 +78,7 @@ fn labels(ui: &mut egui::Ui, document: &Document) {
             ui.label(TextRole::Body.rich(NO_TAGS).color(color::TEXT_MUTED));
         }
         for tag in &document.tags {
-            ui.add(Badge::new(tag));
+            ui.add(Chip::stamp(tag));
         }
     });
 }
@@ -83,13 +91,13 @@ fn buttons(
     cx: &mut PanelCx<'_>,
 ) {
     ui.horizontal(|ui| {
-        let copy = Button::secondary(COPY_ID)
+        let copy = Button::ghost(COPY_ID)
             .icon(Icon::COPY)
             .size(ControlSize::Small);
         if ui.add(copy).clicked() {
             cx.intents.push(Intent::CopyText(document.id.0.to_string()));
         }
-        let read = Button::secondary(READ)
+        let read = Button::ghost(READ)
             .icon(Icon::OPEN)
             .size(ControlSize::Small);
         let read = ui
@@ -103,7 +111,7 @@ fn buttons(
             });
         }
         if !is_edited {
-            let edit_tags = Button::secondary(EDIT_TAGS)
+            let edit_tags = Button::ghost(EDIT_TAGS)
                 .icon(Icon::EDIT)
                 .size(ControlSize::Small);
             if ui.add_enabled(can_edit(cx.shared), edit_tags).clicked() {

@@ -228,7 +228,7 @@ fn every_titled_media_has_one_delete_button_and_the_ingest_card_has_none(harness
 
     click(harness, Role::Tab, "Ingest");
     click(harness, Role::ComboBox, "Media");
-    click(harness, Role::Button, "Quanty Sample Notes · Book");
+    click(harness, Role::Button, "Quanty Sample Notes (Book)");
     assert!(
         has(harness, Role::Button, "Edit Quanty Sample Notes"),
         "the card of the chosen media is shown"

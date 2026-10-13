@@ -100,7 +100,7 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
             // where the list ends.
             ui.set_min_height(ui.available_height());
         }
-        ui.label(TextRole::Heading.rich(TITLE));
+        ui.label(TextRole::Title.rich(TITLE));
         if shared.ingest.is_running() {
             ui.label(TextRole::Small.rich(INGEST_RUNNING));
         }

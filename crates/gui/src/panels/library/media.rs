@@ -1,5 +1,5 @@
 //! One media of the library as a card: its title, category, authors and tags, the pencil that
-//! opens its form, its Delete button, and the cards of its documents.
+//! opens its form, its Delete button, and its documents, each set off by a line.
 
 use eframe::egui;
 
@@ -41,10 +41,7 @@ pub(super) fn show(ui: &mut egui::Ui, media: &Media, local: &mut Local, cx: &mut
         if media.documents.is_empty() {
             ui.label(TextRole::Small.rich(NO_DOCUMENT).color(color::TEXT_MUTED));
         }
-        for (index, listed) in media.documents.iter().enumerate() {
-            if index > 0 {
-                ui.add_space(space::SM);
-            }
+        for listed in &media.documents {
             document::show(ui, listed, local, cx);
         }
     });

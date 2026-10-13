@@ -27,7 +27,7 @@ fn pick(harness: &mut Window, file: &str) {
 fn a_pdf_is_checked_by_itself_and_a_book_waits_for_its_chapter() {
     let (mut harness, seen) = open("idle", DEFAULT_WINDOW);
     click(&mut harness, Role::Tab, "Ingest");
-    choose_in_the_media_list(&mut harness, &format!("{BOOK} · Book"));
+    choose_in_the_media_list(&mut harness, &format!("{BOOK} (Book)"));
     assert_eq!(
         seen.count(is_preflight),
         0,

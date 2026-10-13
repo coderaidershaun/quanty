@@ -37,7 +37,7 @@ fn open_the_form_of_a_new_media(harness: &mut Window) {
     click(harness, Role::Button, "Add new media…");
 }
 
-/// A row of the list reads "Title · Category".
+/// A row of the list reads "Title (Category)".
 fn choose_in_the_media_list(harness: &mut Window, row: &str) {
     click(harness, Role::ComboBox, "Media");
     click(harness, Role::Button, row);

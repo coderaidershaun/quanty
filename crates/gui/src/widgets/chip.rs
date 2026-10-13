@@ -91,6 +91,7 @@ pub struct Chip<'a> {
     label: &'a str,
     kind: Option<Kind>,
     is_selected: bool,
+    is_stamp: bool,
     max_width: f32,
     forced: Option<Look>,
 }
@@ -98,11 +99,8 @@ pub struct Chip<'a> {
 impl<'a> Chip<'a> {
     pub fn kind(kind: Kind, label: &'a str) -> Self {
         Chip {
-            label,
             kind: Some(kind),
-            is_selected: false,
-            max_width: f32::INFINITY,
-            forced: None,
+            ..Chip::plain(label)
         }
     }
 
@@ -111,13 +109,25 @@ impl<'a> Chip<'a> {
             label,
             kind: None,
             is_selected: false,
+            is_stamp: false,
             max_width: f32::INFINITY,
             forced: None,
         }
     }
 
+    /// A word that only labels, such as a tag. It looks like a plain chip at rest, but it cannot
+    /// be clicked or focused, it does not change under the pointer, and a screen reader reads it
+    /// as text.
+    pub fn stamp(label: &'a str) -> Self {
+        Chip {
+            is_stamp: true,
+            ..Chip::plain(label)
+        }
+    }
+
+    /// A stamp ignores it, because a word that only labels is never chosen.
     pub fn selected(mut self, is_selected: bool) -> Self {
-        self.is_selected = is_selected;
+        self.is_selected = is_selected && !self.is_stamp;
         self
     }
 
@@ -185,13 +195,27 @@ impl egui::Widget for Chip<'_> {
         job.break_on_newline = false;
         let galley = ui.painter().layout_job(job);
         let side = egui::vec2(before + badge + galley.size().x + after, size::CHIP);
-        let (rect, response) = ui.allocate_exact_size(side, egui::Sense::click());
+        let sense = if self.is_stamp {
+            egui::Sense::hover()
+        } else {
+            egui::Sense::click()
+        };
+        let (rect, response) = ui.allocate_exact_size(side, sense);
         response.widget_info(|| {
             let is_enabled = ui.is_enabled();
-            WidgetInfo::selected(WidgetType::Button, is_enabled, self.is_selected, self.label)
+            if self.is_stamp {
+                WidgetInfo::labeled(WidgetType::Label, is_enabled, self.label)
+            } else {
+                WidgetInfo::selected(WidgetType::Button, is_enabled, self.is_selected, self.label)
+            }
         });
         if ui.is_rect_visible(rect) {
-            self.paint(ui, rect, self.forced.unwrap_or_else(|| Look::of(&response)));
+            let look = if self.is_stamp {
+                Look::default()
+            } else {
+                self.forced.unwrap_or_else(|| Look::of(&response))
+            };
+            self.paint(ui, rect, look);
             let top = rect.center().y - galley.size().y / 2.0;
             let left = rect.left() + before + badge;
             ui.painter().galley(pos2(left, top), galley.clone(), ink);

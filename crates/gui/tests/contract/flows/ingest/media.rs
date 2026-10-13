@@ -54,7 +54,7 @@ fn edited_media(seen: &Seen) -> Vec<MediaEdit> {
 
 const PLACEHOLDER_OF_THE_MEDIA_LIST: &str = "Choose a media";
 const SAVED_PAPER: &str = "Rough Volatility";
-const ROW_OF_THE_SAVED_PAPER: &str = "Rough Volatility · Paper";
+const ROW_OF_THE_SAVED_PAPER: &str = "Rough Volatility (Paper)";
 const ITS_AUTHORS: &str = "A. Author, B. Author";
 
 fn cancel_clears_the_form_of_a_new_media_and_sends_nothing(harness: &mut Window, seen: &Seen) {
@@ -133,7 +133,7 @@ fn a_new_paper_is_typed_and_saved_with_no_pdf(harness: &mut Window, seen: &Seen)
 }
 
 fn the_saved_media_shows_its_labels_each_time_it_is_chosen(harness: &mut Window) {
-    choose_in_the_media_list(harness, "Quanty Sample Notes · Book");
+    choose_in_the_media_list(harness, "Quanty Sample Notes (Book)");
     assert!(says(harness, "Quanty Team"));
     assert!(has(harness, Role::Label, "Book"));
     assert!(!says(harness, ITS_AUTHORS));

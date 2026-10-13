@@ -4,9 +4,14 @@
 use eframe::egui;
 
 use crate::theme::{size, space, stroke};
-use crate::widgets::{self, Button, ControlSize};
+use crate::widgets::{Button, ControlSize};
 
 pub(super) const CONTENT_HEIGHT: f32 = size::CONTROL_LG + space::SM + size::CONTROL_SM;
+/// The sides are as wide as the outline and margin of a sheet, so the controls line up with the
+/// content of the sheets below. With `CONTENT_HEIGHT` between them, the top and bottom fill exactly
+/// the height the window gives the bar.
+pub(super) const MARGIN: egui::Margin =
+    egui::Margin::symmetric((space::LG + stroke::BORDER) as i8, space::MD as i8);
 const ASK_WIDTH: f32 = Button::least_width(ControlSize::Large);
 const PICKER_WIDTH: f32 = 4.5 * size::CONTROL_LG;
 /// The category list holds short words, so its slot is narrower and leaves the note more room.
@@ -74,15 +79,6 @@ pub(super) fn rects(content: egui::Rect) -> Rects {
         category,
         note,
     }
-}
-
-/// The border is taken off the vertical margin, so the card is exactly `CONTENT_HEIGHT` plus
-/// twice `space::MD` high, which is the height the window gives the bar.
-pub(super) fn card() -> widgets::PanelFrame {
-    widgets::panel_frame(widgets::Surface::Sheet).inner_margin(egui::Margin::symmetric(
-        space::LG as i8,
-        (space::MD - stroke::BORDER) as i8,
-    ))
 }
 
 /// The slot is not clipped, because the kit paints focus rings outside a control.

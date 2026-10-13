@@ -7,7 +7,7 @@ use eframe::egui;
 
 use super::labels::{AUTHORS, LIST_PLACEHOLDER, TAGS, caption, list_of, text_of};
 use crate::contract::{Category, Failure, Media, MediaEdit, NewMedia};
-use crate::theme::{Icon, TextRole, Tone, color, space};
+use crate::theme::{Icon, TextRole, Tone, space};
 use crate::widgets::{Badge, Button, Chip, ControlSize, Notice, TextInput};
 
 pub(super) const NO_MEDIA: &str = "No media";
@@ -129,10 +129,10 @@ pub(super) fn labels_line(ui: &mut egui::Ui, media: &Media) {
     ui.horizontal_wrapped(|ui| {
         if !media.authors.is_empty() {
             let authors = media.authors.join(", ");
-            ui.label(TextRole::Small.rich(authors).color(color::TEXT_SECONDARY));
+            ui.label(TextRole::Caption.rich(authors));
         }
         for tag in &media.tags {
-            ui.add(Badge::new(tag));
+            ui.add(Chip::stamp(tag));
         }
     });
 }

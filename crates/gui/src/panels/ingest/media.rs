@@ -78,7 +78,7 @@ fn place_of_chosen(media: &MediaChoice, offers: &[&Media]) -> Option<usize> {
 }
 
 fn row_of(title: &str, category: Category) -> String {
-    format!("{title} · {}", category.label())
+    format!("{title} ({})", category.label())
 }
 
 pub(super) fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {

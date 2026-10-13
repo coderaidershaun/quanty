@@ -145,7 +145,7 @@ fn stage_words(stage: Option<IngestStage>) -> String {
         }
     };
     match stage.share_done() {
-        Some(share) => format!("{words} · about {}%", (share * 100.0).round()),
+        Some(share) => format!("{words}, about {}%", (share * 100.0).round()),
         None => words,
     }
 }

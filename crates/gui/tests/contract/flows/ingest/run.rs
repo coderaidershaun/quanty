@@ -22,7 +22,7 @@ use super::{is_ingest, is_preflight, last_checked, open, place_of};
 use crate::flows::recording;
 use crate::flows::{COMMAND, click, field, has, is_enabled, node, press, says, shared, type_into};
 
-const CHOSEN_BOOK: &str = "Option Volatility and Pricing · Book";
+const CHOSEN_BOOK: &str = "Option Volatility and Pricing (Book)";
 /// The share of a page that the bar counts as done once the page is cut out but not yet saved.
 const CUT: f64 = 0.15;
 
@@ -225,7 +225,7 @@ fn a_run_shows_its_page_and_its_cost() {
     run_until(&mut harness, "page 3", |shared| is_at_page(shared, 3));
     harness.run_ok();
 
-    let words = "Converting the pages — 3 of 12 done · about 36%";
+    let words = "Converting the pages — 3 of 12 done, about 36%";
     let bar = node(&harness, Role::ProgressIndicator, words);
     let share = bar
         .accesskit_node()
@@ -303,7 +303,7 @@ fn every_stage() -> [Shown; 12] {
                 },
                 0,
             )),
-            "Preparing the pages — 7 of 12 ready · about 9%",
+            "Preparing the pages — 7 of 12 ready, about 9%",
             Some(CUT * 7.0 / 12.0),
             None,
         ),
@@ -317,7 +317,7 @@ fn every_stage() -> [Shown; 12] {
                 },
                 0,
             )),
-            "Preparing the pages — 7 of 12 ready · about 37%",
+            "Preparing the pages — 7 of 12 ready, about 37%",
             Some((4.0 + CUT * 3.0) / 12.0),
             None,
         ),
@@ -329,7 +329,7 @@ fn every_stage() -> [Shown; 12] {
                 },
                 0,
             )),
-            "Converting the pages — 0 of 12 done · about 15%",
+            "Converting the pages — 0 of 12 done, about 15%",
             Some(CUT),
             None,
         ),
@@ -341,7 +341,7 @@ fn every_stage() -> [Shown; 12] {
                 },
                 3,
             )),
-            "Converting the pages — 3 of 12 done · about 36%",
+            "Converting the pages — 3 of 12 done, about 36%",
             Some((3.0 + CUT * 9.0) / 12.0),
             Some("48k tokens · ≈ $0.42 so far"),
         ),
@@ -371,7 +371,7 @@ fn every_stage() -> [Shown; 12] {
                 },
                 12,
             )),
-            "Reading the concepts — 40 of 120 · about 33%",
+            "Reading the concepts — 40 of 120, about 33%",
             Some(40.0 / 120.0),
             spent,
         ),
@@ -383,7 +383,7 @@ fn every_stage() -> [Shown; 12] {
                 },
                 12,
             )),
-            "Linking the concepts — 10 of 120 · about 8%",
+            "Linking the concepts — 10 of 120, about 8%",
             Some(10.0 / 120.0),
             spent,
         ),

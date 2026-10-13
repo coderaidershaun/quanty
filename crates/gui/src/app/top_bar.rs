@@ -6,7 +6,7 @@ use super::layout;
 use super::region::region;
 use crate::contract::{self, Intent};
 use crate::panels::PanelCx;
-use crate::theme::Icon;
+use crate::theme::{color, hairline};
 use crate::widgets::{self, TabStrip};
 
 fn label(tab: contract::Tab) -> &'static str {
@@ -17,16 +17,13 @@ fn label(tab: contract::Tab) -> &'static str {
     }
 }
 
-fn icon(tab: contract::Tab) -> Icon {
-    match tab {
-        contract::Tab::Ask => Icon::SEARCH,
-        contract::Tab::Library => Icon::LIBRARY,
-        contract::Tab::Ingest => Icon::INGEST,
-    }
-}
-
 pub(super) fn draw(ui: &mut egui::Ui, bar: egui::Rect, cx: &mut PanelCx<'_>) {
     let places = layout::top_bar(bar);
+    // The line runs across the whole window at the foot of the tab row, not of the bar, so the mark
+    // of the open tab sits on it. It is drawn first, so that mark covers it.
+    let painter = ui.painter();
+    let line = hairline(painter, color::HAIRLINE);
+    painter.hline(bar.x_range(), places.tabs.bottom() - line.width / 2.0, line);
     region(ui, "logo", places.logo, |ui| {
         widgets::logo(ui);
     });
@@ -36,7 +33,7 @@ pub(super) fn draw(ui: &mut egui::Ui, bar: egui::Rect, cx: &mut PanelCx<'_>) {
 fn tabs(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
     let tabs: Vec<widgets::Tab<'_>> = contract::Tab::ALL
         .iter()
-        .map(|tab| widgets::Tab::new(label(*tab)).icon(icon(*tab)))
+        .map(|tab| widgets::Tab::new(label(*tab)))
         .collect();
     let active = contract::Tab::ALL
         .iter()

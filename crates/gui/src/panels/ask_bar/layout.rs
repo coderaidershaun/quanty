@@ -78,14 +78,14 @@ pub(super) fn rects(content: egui::Rect) -> Rects {
 
 /// The border is taken off the vertical margin, so the card is exactly `CONTENT_HEIGHT` plus
 /// twice `space::MD` high, which is the height the window gives the bar.
-pub(super) fn card() -> egui::Frame {
-    widgets::panel_frame().inner_margin(egui::Margin::symmetric(
+pub(super) fn card() -> widgets::PanelFrame {
+    widgets::panel_frame(widgets::Surface::Sheet).inner_margin(egui::Margin::symmetric(
         space::LG as i8,
         (space::MD - stroke::BORDER) as i8,
     ))
 }
 
-/// The slot is not clipped, because the kit paints focus rings and glows outside a control.
+/// The slot is not clipped, because the kit paints focus rings outside a control.
 pub(super) fn slot<R>(
     ui: &mut egui::Ui,
     name: &str,

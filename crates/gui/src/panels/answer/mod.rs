@@ -50,11 +50,13 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
         cx,
     };
     let margin = egui::Margin::symmetric(space::LG as i8, space::XS as i8);
-    widgets::panel_frame().inner_margin(margin).show(ui, |ui| {
-        ui.set_min_size(ui.available_size());
-        header::show(ui, &mut pane);
-        body(ui, &mut pane);
-    });
+    widgets::panel_frame(widgets::Surface::Sheet)
+        .inner_margin(margin)
+        .show(ui, |ui| {
+            ui.set_min_size(ui.available_size());
+            header::show(ui, &mut pane);
+            body(ui, &mut pane);
+        });
 }
 
 fn body(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>) {

@@ -89,8 +89,8 @@ fn stored_text_is_read_as_the_pipeline_writes_it() {
     assert!(
         sections_with(&shapes, "delta")
             .iter()
-            .any(|(_, format)| format.italics),
-        "an emphasis is slanted"
+            .any(|(_, format)| format.font_id == TextRole::Body.italic_font()),
+        "an emphasis is in the italic font"
     );
     assert!(
         sections_with(&shapes, "strong")
@@ -101,8 +101,8 @@ fn stored_text_is_read_as_the_pipeline_writes_it() {
     assert!(
         sections_with(&shapes, "both")
             .iter()
-            .any(|(_, format)| format.italics && format.font_id == strong),
-        "three stars are both slanted and strong"
+            .any(|(_, format)| format.font_id == TextRole::Body.strong_italic_font()),
+        "three stars are in the strong italic font"
     );
     assert!(
         sections_with(&shapes, "code")

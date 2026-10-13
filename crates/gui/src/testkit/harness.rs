@@ -38,7 +38,7 @@ impl eframe::App for Host {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let window = ui.max_rect();
-        ui.painter().rect_filled(window, 0.0, color::CANVAS);
+        ui.painter().rect_filled(window, 0.0, color::DESK);
         let gutter = egui::Vec2::splat(theme::space::LG);
         let rect = egui::Rect::from_min_size(window.min + gutter, self.panel_size);
         let builder = egui::UiBuilder::new()

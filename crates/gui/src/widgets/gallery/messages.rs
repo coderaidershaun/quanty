@@ -1,13 +1,14 @@
-//! What the app says to a person while it works, each in every state: notices, the card of an area
-//! that is empty, loading or failed, progress, and the sheet that asks before a change.
+//! What the app says to a person while it works, each in every state: notices, the message that
+//! fills an area that is empty, loading or failed, progress, and the sheet that asks before a
+//! change.
 
 use eframe::egui;
 
 use super::{State, column, section};
 use crate::theme::{Icon, TextRole, size};
 use crate::widgets::{
-    Button, Choice, Confirm, Notice, Placeholder, indeterminate_bar, panel_frame, progress_bar,
-    spinner,
+    Button, Choice, Confirm, Notice, Placeholder, Surface, indeterminate_bar, panel_frame,
+    progress_bar, spinner,
 };
 
 const PLACEHOLDER_AREA: egui::Vec2 = egui::vec2(196.0, 170.0);
@@ -50,7 +51,7 @@ pub(super) fn placeholders(ui: &mut egui::Ui, state: &mut State) {
                 .action("Try again"),
         ];
         for placeholder in areas {
-            let shown = panel_frame()
+            let shown = panel_frame(Surface::Sheet)
                 .show(ui, |ui| {
                     ui.set_min_size(PLACEHOLDER_AREA);
                     ui.set_max_size(PLACEHOLDER_AREA);

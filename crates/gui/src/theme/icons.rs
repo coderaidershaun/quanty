@@ -11,7 +11,7 @@ pub struct Icon(&'static str);
 macro_rules! icons {
     ($($name:ident = $glyph:ident),+ $(,)?) => {
         impl Icon {
-            $(pub const $name: Icon = Icon(egui_phosphor::regular::$glyph);)+
+            $(pub const $name: Icon = Icon(egui_phosphor::light::$glyph);)+
 
             /// Every icon with the name it has here, so a screen can show them all.
             pub const ALL: &'static [(&'static str, Icon)] =

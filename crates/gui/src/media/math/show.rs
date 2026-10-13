@@ -46,7 +46,7 @@ fn waiting(ui: &mut Ui, display: Display, em: f32) -> Response {
     }
     let size = vec2(ui.available_width(), BLOCK_WAITING_HEIGHT_EM * em);
     let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
-    ui.painter().rect_filled(rect, radius::MD, color::RAISED);
+    ui.painter().rect_filled(rect, radius::MD, color::WELL);
     let centred = UiBuilder::new()
         .max_rect(rect)
         .layout(Layout::centered_and_justified(Direction::TopDown));

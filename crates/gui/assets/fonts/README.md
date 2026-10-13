@@ -3,22 +3,37 @@
 The files here are built into the program with `include_bytes!`. Each is pinned by the commit
 of its source and by its SHA-256. A change of either is a deliberate update, not a drive-by.
 
-Base: `https://raw.githubusercontent.com/google/fonts/`
+Base of the files of Literata, Source Sans 3 and Source Code Pro: `https://raw.githubusercontent.com/google/fonts/`
+
+Base of the files of STIX Two Math: `https://raw.githubusercontent.com/stipub/stixfonts/`
 
 | File | Source | Version | Licence | SHA-256 |
 | --- | --- | --- | --- | --- |
-| `Inter-Variable.ttf` | `e1d6480102fed30739fead0faee463101f892c8f/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf` | 4.001 | SIL OFL 1.1 (`Inter-OFL.txt`) | `29160a80ff49ddcab2c97711247e08b1fab27a484a329ce8b813d820dc559031` |
-| `NotoSansMath-Regular.ttf` | `dbd1ab6e65dc59bcda3ca8de9fd372f58f98e0af/ofl/notosansmath/NotoSansMath-Regular.ttf` | 3.000 | SIL OFL 1.1 (`NotoSansMath-OFL.txt`) | `3f495fe933c06786e4d5f6d86b8ee70b6753a68ee3b9d87528726de0f6e2c47d` |
-| `Inter-OFL.txt` | `main/ofl/inter/OFL.txt` | | | `5b9321a4298cfeb6b34354164a1c3afc3db114569984c502b9b35d988fd58c57` |
-| `NotoSansMath-OFL.txt` | `main/ofl/notosansmath/OFL.txt` | | | `403a95275b469061b7d4371c328e0ada3bc7d63328abe2e88aad5cd243b2fe21` |
+| `Literata[opsz,wght].ttf` | `66928797f271fed5ee428544e7229685e2d90127/ofl/literata/Literata%5Bopsz%2Cwght%5D.ttf` | 3.103 | SIL OFL 1.1 (`Literata-OFL.txt`) | `b41138c9373112f32abb589cc22e8674b06ed4048b0c513be922bdd26f274440` |
+| `Literata-Italic[opsz,wght].ttf` | `66928797f271fed5ee428544e7229685e2d90127/ofl/literata/Literata-Italic%5Bopsz%2Cwght%5D.ttf` | 3.103 | SIL OFL 1.1 (`Literata-OFL.txt`) | `d483dfaeba9cbf4ce71d32a52ee65df82f7e35b15fff8d1011cdb242d1fcd465` |
+| `SourceSans3[wght].ttf` | `66928797f271fed5ee428544e7229685e2d90127/ofl/sourcesans3/SourceSans3%5Bwght%5D.ttf` | 3.052 | SIL OFL 1.1 (`SourceSans3-OFL.txt`) | `042fe2cc0b933e328410d7acbd0aa6a1873dca5aef81875f4bc214b08825c7b9` |
+| `SourceCodePro[wght].ttf` | `66928797f271fed5ee428544e7229685e2d90127/ofl/sourcecodepro/SourceCodePro%5Bwght%5D.ttf` | 1.026 | SIL OFL 1.1 (`SourceCodePro-OFL.txt`) | `b400fc584e10aff25d0e775ce181b4fc1c5ea1b5dc37b81aeb2084375b945790` |
+| `STIXTwoMath-Regular.otf` | `744a22a4dd626cd14d75728aef34fc8ad7c85db0/fonts/static_otf/STIXTwoMath-Regular.otf` | 2.13 b171 | SIL OFL 1.1 (`STIXTwoMath-OFL.txt`) | `3a5f3f26f40d5698b3c62dd085d48d6663696a3f80825aab8b553d5097518e8c` |
+| `Literata-OFL.txt` | `66928797f271fed5ee428544e7229685e2d90127/ofl/literata/OFL.txt` | | | `8742963604cd89dc81437811a850018fc03b2bfad686d7422c8235967c87614e` |
+| `SourceSans3-OFL.txt` | `66928797f271fed5ee428544e7229685e2d90127/ofl/sourcesans3/OFL.txt` | | | `09746787287a289323b0ec3cff4d1a4a801331b82b7207c1e186f5d26619a392` |
+| `SourceCodePro-OFL.txt` | `66928797f271fed5ee428544e7229685e2d90127/ofl/sourcecodepro/OFL.txt` | | | `cb30d3086a8b3ce0b9e3690bf48d6620402b61160bc658076f95180ccd9e9dae` |
+| `STIXTwoMath-OFL.txt` | `744a22a4dd626cd14d75728aef34fc8ad7c85db0/OFL.txt` | | | `0c8825913b60d858aacdb33c4ca6660a7d64b0d6464702efbb19313f5765861a` |
 
 Check with `shasum -a 256 *` in this folder.
 
-- Inter is one variable file. The program draws it at three weights (400, 500, 600) by setting
-  the `wght` axis, so there is one font file for text, labels and headings.
-- Noto Sans Math is the fallback for the math and letter-like signs that Inter lacks.
-- Both TTF files must stay under 1 048 576 bytes, the limit of the repository's large-file
-  check.
-- The licence texts are copied as they are. One line of each ends in a space, and must stay so.
-- Monospace and the emoji fallbacks are the fonts that eframe already bundles. Icons come
-  from the `egui-phosphor` crate, which carries its own font.
+- Literata is the serif that sets what a person reads. It comes as two variable files, upright and
+  italic, each with a weight axis (`wght`) and an optical size axis (`opsz`). The program draws
+  each file at the weights and the optical sizes of its text families (see `fonts.rs`), so a
+  family is one file at one setting of its axes.
+- Source Sans 3 sets the controls, in three weights (400, 500, 600). Source Code Pro is the
+  monospace font, at weight 400. Both are variable files whose axis starts at 200, so the program
+  always sets the weight and never relies on the default of the file.
+- STIX Two Math is the fallback of every text family for the math and letter-like signs that the
+  text fonts lack. It has CFF outlines, which the text renderer reads like TrueType outlines. Its
+  line is shorter than that of the text fonts, so the program draws it a little lower under each
+  of them, and its signs stand on their baseline.
+- Each font file must stay under 1 048 576 bytes, the limit of the repository's large-file check.
+- The licence texts are copied as they are, byte for byte.
+- Hack and the emoji fallbacks are the fonts that eframe already bundles, and they come after
+  STIX Two Math in every text family. Icons come from the `egui-phosphor` crate (its light
+  variant), which carries its own font.

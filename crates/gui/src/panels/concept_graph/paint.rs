@@ -12,7 +12,7 @@ use super::scene::{
 };
 use super::view::View;
 use crate::contract::{ConceptGraph, EdgeKind, GraphNode, NodeKind};
-use crate::theme::{Icon, Kind, TextRole, Tone, color, glow, radius, space, stroke};
+use crate::theme::{Icon, Kind, TextRole, Tone, color, radius, space, stroke};
 
 /// How much of the node's own wash a faded node takes on, over the panel colour. The fill
 /// stays solid, so a faded node still hides the links behind it.
@@ -117,11 +117,11 @@ impl Pen<'_> {
             self.drawing.graph.nodes[index].kind
         };
         if link.kinds.contains(&EdgeKind::Mentions) {
-            Tone::Magenta
+            Tone::Rubric
         } else if kind_at(link.a) == NodeKind::Related || kind_at(link.b) == NodeKind::Related {
             Tone::Purple
         } else {
-            Tone::Blue
+            Tone::Indigo
         }
     }
 
@@ -208,7 +208,7 @@ impl Pen<'_> {
             let rect = self.on_canvas(spot.rect);
             if !spot.at_rest {
                 let backing = rect.expand2(egui::vec2(space::XS, 0.0));
-                self.painter.rect_filled(backing, radius::SM, color::PANEL);
+                self.painter.rect_filled(backing, radius::SM, color::SHEET);
             }
             self.painter
                 .galley(rect.center() - galley.size() / 2.0, galley, colour);
@@ -254,11 +254,8 @@ impl Pen<'_> {
         let swatch = tone.swatch();
         let radius = self.radius(view);
         let is_centre = view.place == 0;
-        if view.state.is_selected {
-            self.painter.add(glow(tone).as_shape(view.rect, radius));
-        }
         let fill = if view.fade < 1.0 {
-            color::PANEL.lerp_to_gamma(swatch.wash, FADED_FILL)
+            color::SHEET.lerp_to_gamma(swatch.wash, FADED_FILL)
         } else {
             swatch.wash
         };

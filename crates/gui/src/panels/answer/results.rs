@@ -120,9 +120,9 @@ fn card(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem, row: &Row
 /// not look as if it ended there. It is drawn after the card, so nothing covers it.
 fn mark_cut(ui: &mut egui::Ui, window: egui::Rect, is_lit: bool) {
     let fill = if is_lit {
-        color::RAISED_HOVER
+        color::WELL_DEEP
     } else {
-        color::RAISED
+        color::WELL
     };
     let mark = TextRole::Small.rich(CUT_MARK);
     let width = TextRole::Small.galley(ui, CUT_MARK, fill).size().x;

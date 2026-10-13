@@ -6,12 +6,12 @@ use std::time::Duration;
 
 use eframe::egui::{self, Color32, Rect, Response, WidgetInfo, WidgetType};
 
-use crate::theme::{Tone, color, motion, size};
+use crate::theme::{color, motion, size};
 
 const DOTS: usize = 8;
 const DOT_RADIUS: f32 = 1.5;
 const RING_INSET: f32 = 0.5;
-const BAR_HEIGHT: f32 = 4.0;
+const BAR_HEIGHT: f32 = 3.0;
 /// Seconds that the lit part of a bar with no count takes to cross it once.
 const SLIDE: f64 = 1.5;
 /// The share of the track that the lit part of a bar with no count covers.
@@ -61,12 +61,10 @@ pub fn progress_bar(ui: &mut egui::Ui, label: &str, fraction: f32) -> Response {
         ..WidgetInfo::labeled(WidgetType::ProgressIndicator, true, label)
     });
     if ui.is_rect_visible(rect) {
-        let rounding = BAR_HEIGHT / 2.0;
-        ui.painter().rect_filled(rect, rounding, color::BORDER);
+        ui.painter().rect_filled(rect, 0.0, color::HAIRLINE);
         let mut filled = rect;
         filled.set_width(rect.width() * fraction);
-        ui.painter()
-            .rect_filled(filled, rounding, Tone::Blue.swatch().solid);
+        ui.painter().rect_filled(filled, 0.0, color::INK);
     }
     response
 }
@@ -80,8 +78,7 @@ pub fn indeterminate_bar(ui: &mut egui::Ui, label: &str) -> Response {
     if !ui.is_rect_visible(rect) {
         return response;
     }
-    let rounding = BAR_HEIGHT / 2.0;
-    ui.painter().rect_filled(rect, rounding, color::BORDER);
+    ui.painter().rect_filled(rect, 0.0, color::HAIRLINE);
     let phase = ui.input(|input| (input.time / SLIDE).fract()) as f32;
     let width = rect.width();
     let left = rect.left() + (phase * (1.0 + LIT_SHARE) - LIT_SHARE) * width;
@@ -89,8 +86,7 @@ pub fn indeterminate_bar(ui: &mut egui::Ui, label: &str) -> Response {
         left.max(rect.left())..=(left + LIT_SHARE * width).min(rect.right()),
         rect.y_range(),
     );
-    ui.painter()
-        .rect_filled(lit, rounding, Tone::Blue.swatch().solid);
+    ui.painter().rect_filled(lit, 0.0, color::INK);
     ask_for_the_next_step(ui);
     response
 }

@@ -1,4 +1,5 @@
-//! The button in its five looks.
+//! The button in its five looks: a block of ink, an outline, plain text, an outline in the red of
+//! danger, and a small square with an icon.
 
 use std::sync::Arc;
 
@@ -9,9 +10,11 @@ use eframe::egui::{
 use super::ControlSize;
 use super::look::{Look, focus_ring};
 use super::progress::paint_spinner;
-use crate::theme::{Icon, TextRole, Tone, color, glow, radius, space, stroke};
+use crate::theme::{Icon, TextRole, Tone, color, radius, space, stroke};
 
 const MIN_WIDTH_PER_HEIGHT: f32 = 2.4;
+/// How far a pressed danger button moves from its wash toward its edge colour.
+const DANGER_PRESSED_SHARE: f32 = 0.3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Variant {
@@ -145,48 +148,58 @@ impl<'a> Button<'a> {
     }
 
     fn colours(&self, look: Look) -> Colours {
-        let solid = |tone: Tone| {
-            let swatch = tone.swatch();
-            let fill = if look.pressed {
-                swatch.solid.lerp_to_gamma(color::CANVAS, 0.15)
-            } else if look.hovered {
-                swatch.solid.lerp_to_gamma(color::PAGE, 0.12)
-            } else {
-                swatch.solid
-            };
-            Colours {
-                fill,
-                edge: Stroke::NONE,
-                text: swatch.on_solid,
-            }
-        };
-        let quiet_fill = |idle: Color32| {
-            if look.pressed {
-                color::PANEL
-            } else if look.hovered {
-                color::RAISED_HOVER
-            } else {
-                idle
-            }
+        let quiet_fill = if look.pressed {
+            color::WELL_DEEP
+        } else if look.hovered {
+            color::WELL
+        } else {
+            Color32::TRANSPARENT
         };
         match self.variant {
-            Variant::Primary => solid(Tone::Magenta),
-            Variant::Danger => solid(Tone::Danger),
-            Variant::Secondary | Variant::Ghost | Variant::IconOnly if self.is_selected => {
-                let blue = Tone::Blue.swatch();
+            Variant::Primary => Colours {
+                fill: if look.pressed {
+                    color::INK_PRESSED
+                } else if look.hovered {
+                    color::INK_HOVER
+                } else {
+                    color::INK
+                },
+                edge: Stroke::NONE,
+                text: color::TEXT_ON_INK,
+            },
+            Variant::Danger => {
+                let danger = Tone::Danger.swatch();
+                let fill = if look.pressed {
+                    danger.wash.lerp_to_gamma(danger.edge, DANGER_PRESSED_SHARE)
+                } else if look.hovered {
+                    danger.wash
+                } else {
+                    Color32::TRANSPARENT
+                };
                 Colours {
-                    fill: blue.wash,
-                    edge: Stroke::new(stroke::BORDER, blue.edge),
-                    text: blue.text,
+                    fill,
+                    edge: Stroke::new(stroke::BORDER, danger.edge),
+                    text: danger.text,
+                }
+            }
+            Variant::Secondary | Variant::Ghost | Variant::IconOnly if self.is_selected => {
+                Colours {
+                    fill: if look.hovered || look.pressed {
+                        color::WELL_DEEP
+                    } else {
+                        color::WELL
+                    },
+                    edge: Stroke::new(stroke::EDGE, color::RULE),
+                    text: color::TEXT,
                 }
             }
             Variant::Secondary => Colours {
-                fill: quiet_fill(color::RAISED),
+                fill: quiet_fill,
                 edge: Stroke::new(stroke::BORDER, color::BORDER),
                 text: color::TEXT,
             },
             Variant::Ghost | Variant::IconOnly => Colours {
-                fill: quiet_fill(Color32::TRANSPARENT),
+                fill: quiet_fill,
                 edge: Stroke::NONE,
                 text: if look.hovered || look.pressed {
                     color::TEXT
@@ -200,9 +213,6 @@ impl<'a> Button<'a> {
     fn paint(&self, ui: &egui::Ui, rect: Rect, look: Look, text: Option<Arc<Galley>>) {
         let colours = self.colours(look);
         let painter = ui.painter();
-        if self.variant == Variant::Primary && ui.is_enabled() {
-            painter.add(glow(Tone::Magenta).as_shape(rect, radius::MD));
-        }
         painter.rect(
             rect,
             radius::MD,

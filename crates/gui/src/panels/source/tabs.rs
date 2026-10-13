@@ -6,7 +6,7 @@ use eframe::egui;
 use crate::contract::{DocId, Intent, Loadable, PagePiece, PageView, PieceKind};
 use crate::media::Media;
 use crate::state::SourceNav;
-use crate::theme::{Icon, Tone};
+use crate::theme::Icon;
 use crate::widgets::{Tab, TabStrip};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -143,9 +143,6 @@ pub(super) fn tab_list(nav: &SourceNav, index: &PieceIndex) -> [Tab<'static>; 5]
 
 /// Draws the strip and returns the tab the person chose, never the active one.
 pub(super) fn strip(ui: &mut egui::Ui, tabs: &[Tab<'_>], active: SourceTab) -> Option<SourceTab> {
-    let chosen = TabStrip::new(tabs, active.place())
-        .tone(Tone::Magenta)
-        .compact()
-        .show(ui)?;
+    let chosen = TabStrip::new(tabs, active.place()).compact().show(ui)?;
     SourceTab::ALL.get(chosen).copied()
 }

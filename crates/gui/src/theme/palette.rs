@@ -1,54 +1,55 @@
-//! The colours of the app: the named surfaces and text colours, and the seven tones, each with the
-//! five colours that a chip, a button or a notice of that tone is made of.
+//! The colours of the app: the named surfaces, inks and text colours of the paper, and the ten
+//! tones, each with the five colours that a chip, a button or a notice of that tone is made of.
 
-use eframe::egui::{self, Color32};
+use eframe::egui::Color32;
 
-pub fn glow(tone: Tone) -> egui::Shadow {
-    egui::Shadow {
-        offset: [0, 0],
-        blur: 16,
-        spread: 0,
-        color: tone.swatch().solid.gamma_multiply(0.35),
-    }
-}
-
-/// `CANVAS` is the window, `PANEL` a panel on it, and `RAISED` a control or a card on a panel;
-/// `BORDER` outlines a control and `HAIRLINE` a panel. Content is `TEXT`, text that supports it
-/// `TEXT_SECONDARY`, and a placeholder or a zero count `TEXT_MUTED`.
+/// `DESK` is the window and the panels drawn straight on it, `SHEET` a sheet of paper on the
+/// desk, and `WELL` a bed or an input sunk into a sheet, `WELL_DEEP` when it is pressed. `BORDER`
+/// outlines a control and `HAIRLINE` rules a sheet. Content is `TEXT`, titles `TEXT_HEADING`,
+/// text that supports content `TEXT_SECONDARY`, and a placeholder or a zero count `TEXT_MUTED`.
 pub mod color {
     use super::Color32;
 
-    pub const CANVAS: Color32 = Color32::from_rgb(0x07, 0x0E, 0x1A);
-    pub const PANEL: Color32 = Color32::from_rgb(0x0A, 0x14, 0x21);
-    pub const RAISED: Color32 = Color32::from_rgb(0x0E, 0x1C, 0x31);
-    pub const RAISED_HOVER: Color32 = Color32::from_rgb(0x14, 0x27, 0x3F);
-    pub const BORDER: Color32 = Color32::from_rgb(0x22, 0x3B, 0x5C);
-    pub const HAIRLINE: Color32 = Color32::from_rgb(0x14, 0x26, 0x3C);
-    pub const TEXT: Color32 = Color32::from_rgb(0xEE, 0xF4, 0xFB);
-    pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(0xB4, 0xC3, 0xD6);
-    pub const TEXT_MUTED: Color32 = Color32::from_rgb(0x84, 0x96, 0xB0);
-    pub const TEXT_ON_ACCENT: Color32 = Color32::from_rgb(0x0A, 0x06, 0x12);
+    pub const DESK: Color32 = Color32::from_rgb(0xF2, 0xF0, 0xE5);
+    pub const SHEET: Color32 = Color32::from_rgb(0xFF, 0xFC, 0xF0);
+    pub const WELL: Color32 = Color32::from_rgb(0xE6, 0xE4, 0xD9);
+    pub const WELL_DEEP: Color32 = Color32::from_rgb(0xDA, 0xD8, 0xCE);
+    pub const HAIRLINE: Color32 = Color32::from_rgb(0xDA, 0xD8, 0xCE);
+    pub const BORDER: Color32 = Color32::from_rgb(0x87, 0x85, 0x80);
+    pub const RULE: Color32 = Color32::from_rgb(0x1C, 0x1B, 0x1A);
+    pub const TEXT: Color32 = Color32::from_rgb(0x1C, 0x1B, 0x1A);
+    pub const TEXT_HEADING: Color32 = Color32::from_rgb(0x10, 0x0F, 0x0F);
+    pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(0x57, 0x56, 0x53);
+    pub const TEXT_MUTED: Color32 = Color32::from_rgb(0x6F, 0x6E, 0x69);
+    pub const TEXT_FAINT: Color32 = Color32::from_rgb(0xB7, 0xB5, 0xAC);
+    pub const TEXT_ON_INK: Color32 = Color32::from_rgb(0xFF, 0xFC, 0xF0);
+    pub const INK: Color32 = Color32::from_rgb(0x1C, 0x1B, 0x1A);
+    pub const INK_HOVER: Color32 = Color32::from_rgb(0x40, 0x3E, 0x3C);
+    pub const INK_PRESSED: Color32 = Color32::from_rgb(0x10, 0x0F, 0x0F);
     pub const PAGE: Color32 = Color32::from_rgb(0xFF, 0xFF, 0xFF);
-    pub const FOCUS: Color32 = Color32::from_rgb(0x7D, 0xB9, 0xFF);
-    pub const SELECTION: Color32 = Color32::from_rgba_unmultiplied_const(0x0B, 0x7B, 0xF5, 0x66);
-    pub const SCRIM: Color32 = Color32::from_rgba_unmultiplied_const(0x07, 0x0E, 0x1A, 0xB8);
+    pub const FOCUS: Color32 = Color32::from_rgb(0x20, 0x5E, 0xA6);
+    pub const SELECTION: Color32 = Color32::from_rgb(0xC6, 0xDD, 0xE8);
+    pub const SCRIM: Color32 = Color32::from_rgba_unmultiplied_const(0x1C, 0x1B, 0x1A, 0x59);
     pub const PAGE_HIGHLIGHT: Color32 =
-        Color32::from_rgba_unmultiplied_const(0x0B, 0x7B, 0xF5, 0x38);
+        Color32::from_rgba_unmultiplied_const(0xAF, 0x30, 0x29, 0x24);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Tone {
-    Neutral,
-    Blue,
+    Ink,
+    Rubric,
+    Indigo,
     Purple,
-    Magenta,
+    Verdigris,
+    Ochre,
+    Madder,
     Success,
     Warning,
     Danger,
 }
 
 /// `solid` is a fill or a stroke, `on_solid` is text on that fill, `text` is the hue as readable
-/// text on a dark surface, `wash` is a dark tinted fill, and `edge` is the outline of that fill.
+/// text on paper, `wash` is a pale tinted fill, and `edge` is the outline of that fill.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Swatch {
     pub solid: Color32,
@@ -58,13 +59,13 @@ pub struct Swatch {
     pub edge: Color32,
 }
 
-const fn swatch(solid: u32, on_solid: u32, text: u32, wash: u32, edge: u32) -> Swatch {
+const fn swatch(solid: u32, text: u32, wash: u32, edge: u32) -> Swatch {
     const fn rgb(hex: u32) -> Color32 {
         Color32::from_rgb((hex >> 16) as u8, (hex >> 8) as u8, hex as u8)
     }
     Swatch {
         solid: rgb(solid),
-        on_solid: rgb(on_solid),
+        on_solid: color::TEXT_ON_INK,
         text: rgb(text),
         wash: rgb(wash),
         edge: rgb(edge),
@@ -72,11 +73,14 @@ const fn swatch(solid: u32, on_solid: u32, text: u32, wash: u32, edge: u32) -> S
 }
 
 impl Tone {
-    pub(crate) const ALL: [Tone; 7] = [
-        Tone::Neutral,
-        Tone::Blue,
+    pub(crate) const ALL: [Tone; 10] = [
+        Tone::Ink,
+        Tone::Rubric,
+        Tone::Indigo,
         Tone::Purple,
-        Tone::Magenta,
+        Tone::Verdigris,
+        Tone::Ochre,
+        Tone::Madder,
         Tone::Success,
         Tone::Warning,
         Tone::Danger,
@@ -84,13 +88,16 @@ impl Tone {
 
     pub const fn swatch(self) -> Swatch {
         match self {
-            Tone::Neutral => swatch(0x8496B0, 0x0A0612, 0xB4C3D6, 0x0E1C31, 0x223B5C),
-            Tone::Blue => swatch(0x0B7BF5, 0x0A0612, 0x4DA6FF, 0x05245A, 0x0F58B8),
-            Tone::Purple => swatch(0x7A30F4, 0xEEF4FB, 0xA98BFF, 0x1D0C48, 0x6A2AD0),
-            Tone::Magenta => swatch(0xF800C4, 0x0A0612, 0xFF4FD8, 0x3A053A, 0xC0089A),
-            Tone::Success => swatch(0x22C58B, 0x0A0612, 0x4ADEA5, 0x062B22, 0x127A58),
-            Tone::Warning => swatch(0xF2A93B, 0x0A0612, 0xF7C266, 0x33230A, 0x8F6217),
-            Tone::Danger => swatch(0xF0503C, 0x0A0612, 0xFF8070, 0x3A120E, 0x9E2E22),
+            Tone::Ink => swatch(0x575653, 0x403E3C, 0xE6E4D9, 0x9F9D96),
+            Tone::Rubric => swatch(0xAF3029, 0x942822, 0xFFE1D5, 0xD14D41),
+            Tone::Indigo => swatch(0x205EA6, 0x1A4F8C, 0xE1ECEB, 0x4385BE),
+            Tone::Purple => swatch(0x5E409D, 0x4F3685, 0xF0EAEC, 0x8B7EC8),
+            Tone::Verdigris => swatch(0x24837B, 0x1C6C66, 0xDDF1E4, 0x3AA99F),
+            Tone::Ochre => swatch(0xAD8301, 0x8E6B01, 0xFAEEC6, 0xD0A215),
+            Tone::Madder => swatch(0xA02F6F, 0x87285E, 0xFEE4E5, 0xCE5D97),
+            Tone::Success => swatch(0x66800B, 0x536907, 0xEDEECF, 0x879A39),
+            Tone::Warning => swatch(0xBC5215, 0x9D4310, 0xFFE7CE, 0xDA702C),
+            Tone::Danger => swatch(0xAF3029, 0x942822, 0xFFE1D5, 0xD14D41),
         }
     }
 }

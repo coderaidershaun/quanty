@@ -79,16 +79,8 @@ fn plain_chips(ui: &mut egui::Ui, state: &mut State) {
 
 fn badges(ui: &mut egui::Ui) {
     ui.horizontal_wrapped(|ui| {
-        for (text, tone) in [
-            ("Neutral", Tone::Neutral),
-            ("Info", Tone::Blue),
-            ("Related", Tone::Purple),
-            ("Formula", Tone::Magenta),
-            ("Ingested", Tone::Success),
-            ("Pending", Tone::Warning),
-            ("Failed", Tone::Danger),
-        ] {
-            ui.add(Badge::new(text).tone(tone));
+        for tone in Tone::ALL {
+            ui.add(Badge::new(&format!("{tone:?}")).tone(tone));
         }
         ui.add(Badge::new("Copied").tone(Tone::Success).icon(Icon::CHECK));
     });
@@ -102,11 +94,10 @@ fn markers(ui: &mut egui::Ui) {
             (3, StepState::Active),
             (4, StepState::Pending),
         ] {
-            ui.add(StepMarker::new(number).tone(Tone::Magenta).state(status));
+            ui.add(StepMarker::new(number).state(status));
         }
-        ui.add(StepMarker::new(5).state(StepState::Active));
     });
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         for tone in Tone::ALL {
             dot(ui, tone);
             ui.label(TextRole::Small.rich(format!("{tone:?}")));

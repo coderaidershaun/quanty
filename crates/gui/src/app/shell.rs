@@ -124,7 +124,7 @@ impl App {
     fn draw(&mut self, ui: &mut egui::Ui) {
         let window = ui.max_rect();
         // The test renderer ignores the clear colour, so the window paints its own background.
-        ui.painter().rect_filled(window, 0.0, color::CANVAS);
+        ui.painter().rect_filled(window, 0.0, color::DESK);
         if self.shared.health.facts.fixture.as_deref() == Some(GALLERY_SCENE) {
             egui::CentralPanel::no_frame().show(ui, |ui| {
                 region(ui, "gallery", window.shrink(space::LG), |ui| {

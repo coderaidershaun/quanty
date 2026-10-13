@@ -239,7 +239,7 @@ const ROWS: [Row; 5] = [
     Row {
         title: "Nearest items",
         about: "The stored items closest in meaning to the question.",
-        tone: Tone::Blue,
+        tone: Tone::Indigo,
     },
     Row {
         title: "Concepts matched",
@@ -254,7 +254,7 @@ const ROWS: [Row; 5] = [
     Row {
         title: "Ranked and capped",
         about: "One ranking of all candidates, then a cap per document.",
-        tone: Tone::Blue,
+        tone: Tone::Indigo,
     },
     Row {
         title: "Cited items",

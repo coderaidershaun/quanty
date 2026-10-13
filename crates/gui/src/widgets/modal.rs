@@ -3,7 +3,7 @@
 use eframe::egui;
 
 use super::Button;
-use crate::theme::{TextRole, color, radius, space, stroke};
+use crate::theme::{TextRole, color, radius, shadow, space, stroke};
 
 const CONFIRM_WIDTH: f32 = 360.0;
 
@@ -19,11 +19,11 @@ pub fn modal<R>(
         .backdrop_color(color::SCRIM)
         .frame(
             egui::Frame::NONE
-                .fill(color::RAISED)
+                .fill(color::SHEET)
                 .stroke(egui::Stroke::new(stroke::BORDER, color::BORDER))
-                .corner_radius(radius::LG)
+                .corner_radius(radius::MD)
                 .inner_margin(space::XL)
-                .shadow(ctx.global_style().visuals.popup_shadow),
+                .shadow(shadow::SHEET),
         )
         .show(ctx, add_contents)
 }

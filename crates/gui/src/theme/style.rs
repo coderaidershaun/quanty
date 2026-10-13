@@ -1,9 +1,9 @@
 //! The look of stock egui widgets: text styles, spacing, and the colour of every widget state, so
 //! a check box, a menu or a scroll bar already matches the kit.
 
-use eframe::egui::{self, Color32, CursorIcon, Margin, Shadow, Stroke, TextStyle, Vec2, style};
+use eframe::egui::{self, CursorIcon, Margin, Stroke, TextStyle, Vec2, style};
 
-use super::{TextRole, Tone, color, motion, radius, size, space, stroke};
+use super::{TextRole, Tone, color, motion, radius, shadow, size, space, stroke};
 
 const SLIDER_WIDTH: f32 = 140.0;
 const SLIDER_RAIL_HEIGHT: f32 = 4.0;
@@ -13,7 +13,7 @@ const TOOLTIP_DELAY_SECONDS: f32 = 0.4;
 const DISABLED_ALPHA: f32 = 0.45;
 const CARET_WIDTH: f32 = 2.0;
 
-/// Both egui themes are given this look, so a light system theme changes nothing.
+/// Both egui themes are given this look, so the theme of the system changes nothing.
 pub(super) fn apply(style: &mut egui::Style) {
     text_styles(style);
     spacing(style);
@@ -51,31 +51,27 @@ fn spacing(style: &mut egui::Style) {
     };
 }
 
+/// The visuals start from egui's light ones because only they carry the colour transfer function
+/// that draws dark text on a light fill at its full weight. The dark one makes it thin and grey.
 fn visuals(visuals: &mut style::Visuals) {
-    visuals.dark_mode = true;
+    *visuals = style::Visuals::light();
     visuals.override_text_color = None;
     visuals.weak_text_color = Some(color::TEXT_MUTED);
-    visuals.hyperlink_color = Tone::Blue.swatch().text;
+    visuals.hyperlink_color = Tone::Indigo.swatch().text;
     visuals.warn_fg_color = Tone::Warning.swatch().text;
     visuals.error_fg_color = Tone::Danger.swatch().text;
 
-    visuals.panel_fill = color::CANVAS;
-    visuals.window_fill = color::RAISED;
-    visuals.extreme_bg_color = color::RAISED;
-    visuals.faint_bg_color = color::RAISED;
-    visuals.text_edit_bg_color = Some(color::RAISED);
-    visuals.code_bg_color = color::RAISED_HOVER;
+    visuals.panel_fill = color::DESK;
+    visuals.window_fill = color::SHEET;
+    visuals.extreme_bg_color = color::WELL;
+    visuals.faint_bg_color = color::WELL;
+    visuals.text_edit_bg_color = Some(color::WELL);
+    visuals.code_bg_color = color::WELL;
     visuals.window_stroke = Stroke::new(stroke::BORDER, color::BORDER);
-    visuals.window_corner_radius = radius::LG.into();
-    visuals.menu_corner_radius = radius::LG.into();
-    let shadow = Shadow {
-        offset: [0, 8],
-        blur: 24,
-        spread: 0,
-        color: Color32::BLACK.gamma_multiply(0.38),
-    };
-    visuals.window_shadow = shadow;
-    visuals.popup_shadow = shadow;
+    visuals.window_corner_radius = radius::MD.into();
+    visuals.menu_corner_radius = radius::MD.into();
+    visuals.window_shadow = shadow::SHEET;
+    visuals.popup_shadow = shadow::SHEET;
 
     widget_states(&mut visuals.widgets);
 
@@ -94,11 +90,11 @@ fn visuals(visuals: &mut style::Visuals) {
 
 fn widget_states(widgets: &mut style::Widgets) {
     let states = [
-        (&mut widgets.noninteractive, color::PANEL, color::HAIRLINE),
-        (&mut widgets.inactive, color::RAISED, color::BORDER),
-        (&mut widgets.hovered, color::RAISED_HOVER, color::BORDER),
-        (&mut widgets.active, color::RAISED_HOVER, color::FOCUS),
-        (&mut widgets.open, color::RAISED_HOVER, color::FOCUS),
+        (&mut widgets.noninteractive, color::SHEET, color::HAIRLINE),
+        (&mut widgets.inactive, color::SHEET, color::BORDER),
+        (&mut widgets.hovered, color::WELL, color::BORDER),
+        (&mut widgets.active, color::WELL_DEEP, color::RULE),
+        (&mut widgets.open, color::WELL, color::RULE),
     ];
     for (state, fill, edge) in states {
         state.bg_fill = fill;

@@ -129,5 +129,5 @@ fn label_in(ui: &mut egui::Ui, rect: egui::Rect, text: egui::RichText) -> egui::
 fn badge_in(ui: &mut egui::Ui, rect: egui::Rect, text: &str) -> egui::Response {
     let across = egui::Layout::right_to_left(egui::Align::Center);
     ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(across))
-        .add(Badge::new(text).tone(Tone::Neutral))
+        .add(Badge::new(text).tone(Tone::Ink))
 }

@@ -4,7 +4,7 @@
 use eframe::egui;
 
 use super::{State, section, used};
-use crate::theme::{Icon, TextRole, Tone};
+use crate::theme::{Icon, TextRole};
 use crate::widgets::look::Look;
 use crate::widgets::{Button, ControlSize, Dropdown, Slider, Stepper, Tab, TabStrip, TextInput};
 
@@ -192,17 +192,10 @@ pub(super) fn tabs(ui: &mut egui::Ui, state: &mut State) {
         state.demo.tab = index;
         state.last_activated = Some("TabStrip");
     }
-    let top_bar = [
-        Tab::new("Ask").icon(Icon::SEARCH),
-        Tab::new("Library").icon(Icon::LIBRARY),
-        Tab::new("Ingest").icon(Icon::INGEST),
-    ];
-    if let Some(index) = TabStrip::new(&top_bar, state.demo.top_tab)
-        .tone(Tone::Magenta)
-        .show(ui)
-    {
+    let top_bar = [Tab::new("Ask"), Tab::new("Library"), Tab::new("Ingest")];
+    if let Some(index) = TabStrip::new(&top_bar, state.demo.top_tab).show(ui) {
         state.demo.top_tab = index;
-        state.last_activated = Some("TabStrip::magenta");
+        state.last_activated = Some("TabStrip::top_bar");
     }
     let compact = [
         Tab::new("Page"),

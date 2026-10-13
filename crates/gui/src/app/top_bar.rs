@@ -6,7 +6,7 @@ use super::layout;
 use super::region::region;
 use crate::contract::{self, Intent};
 use crate::panels::PanelCx;
-use crate::theme::{Icon, Tone};
+use crate::theme::Icon;
 use crate::widgets::{self, TabStrip};
 
 fn label(tab: contract::Tab) -> &'static str {
@@ -42,7 +42,7 @@ fn tabs(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
         .iter()
         .position(|tab| *tab == cx.shared.tab)
         .unwrap_or_default();
-    if let Some(index) = TabStrip::new(&tabs, active).tone(Tone::Magenta).show(ui) {
+    if let Some(index) = TabStrip::new(&tabs, active).show(ui) {
         cx.intents.push(Intent::OpenTab(contract::Tab::ALL[index]));
     }
 }

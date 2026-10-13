@@ -2,14 +2,12 @@
 //! markers and the legend dot.
 
 use eframe::egui::{
-    self, Align2, Rect, Response, Stroke, StrokeKind, WidgetInfo, WidgetType, pos2, text::LayoutJob,
+    self, Align2, Color32, Rect, Response, Stroke, StrokeKind, WidgetInfo, WidgetType, pos2,
+    text::LayoutJob,
 };
 
 use super::look::{Look, focus_ring};
-use crate::theme::{Icon, Kind, TextRole, Tone, color, glow, radius, size, space, stroke};
-
-const CHIP_GLYPH: f32 = 10.0;
-const CHIP_BADGE: f32 = 16.0;
+use crate::theme::{Icon, Kind, TextRole, Tone, color, radius, size, space, stroke};
 
 pub struct CitationChip {
     number: usize,
@@ -40,10 +38,7 @@ impl CitationChip {
     /// The room the chip needs, to reserve in a flow of text.
     pub fn size(&self, ui: &egui::Ui) -> egui::Vec2 {
         let text = TextRole::Micro.galley(ui, &self.number.to_string(), color::TEXT);
-        egui::vec2(
-            size::CITATION.max(text.size().x + 2.0 * space::XS),
-            size::CITATION,
-        )
+        egui::vec2(text.size().x + 2.0 * space::XS, size::CITATION)
     }
 
     /// Reacts and paints at `rect`, for a chip inside text that is laid out by hand. The layout
@@ -60,22 +55,16 @@ impl CitationChip {
         });
         if ui.is_rect_visible(rect) {
             let look = self.forced.unwrap_or_else(|| Look::of(&response));
-            let blue = Tone::Blue.swatch();
+            let rubric = Tone::Rubric.swatch();
             let (fill, text) = if self.is_selected {
-                (blue.solid, blue.on_solid)
+                (rubric.solid, rubric.on_solid)
             } else if look.hovered {
-                (blue.edge, color::TEXT)
+                (rubric.wash, rubric.text)
             } else {
-                (blue.wash, color::TEXT)
+                (Color32::TRANSPARENT, rubric.text)
             };
             let painter = ui.painter();
-            painter.rect(
-                rect,
-                radius::SM,
-                fill,
-                Stroke::new(stroke::BORDER, blue.edge),
-                StrokeKind::Inside,
-            );
+            painter.rect_filled(rect, radius::SM, fill);
             painter.text(
                 rect.center(),
                 Align2::CENTER_CENTER,
@@ -143,54 +132,44 @@ impl<'a> Chip<'a> {
         self
     }
 
-    /// Space before the text, space after it, and the round badge in between, if any.
+    /// Space before the text, space after it, and the room of the kind icon in between, if any.
     fn padding(&self) -> (f32, f32, f32) {
         match self.kind {
-            Some(_) => (space::XS, space::SM, CHIP_BADGE + space::SM),
+            Some(_) => (space::SM, space::SM, size::GLYPH + space::XS),
             None => (space::MD, space::MD, 0.0),
         }
     }
 
+    fn ink(&self) -> Color32 {
+        self.kind
+            .map_or(color::TEXT, |kind| kind.tone().swatch().text)
+    }
+
     fn paint(&self, ui: &egui::Ui, rect: Rect, look: Look) {
         let painter = ui.painter();
-        let (fill, edge, corner) = match self.kind {
-            Some(kind) => {
-                let swatch = kind.tone().swatch();
-                let edge = if self.is_selected {
-                    Stroke::new(stroke::EDGE, swatch.solid)
-                } else if look.hovered {
-                    Stroke::new(stroke::BORDER, swatch.solid)
-                } else {
-                    Stroke::new(stroke::BORDER, swatch.edge)
-                };
-                if self.is_selected {
-                    painter.add(glow(kind.tone()).as_shape(rect, radius::MD));
-                }
-                (swatch.wash, edge, radius::MD)
-            }
-            None if self.is_selected => {
-                let blue = Tone::Blue.swatch();
-                (blue.wash, Stroke::new(stroke::EDGE, blue.solid), radius::XL)
-            }
-            None => {
-                let fill = if look.hovered {
-                    color::RAISED_HOVER
-                } else {
-                    color::RAISED
-                };
-                (fill, Stroke::new(stroke::BORDER, color::BORDER), radius::XL)
-            }
+        let (fill, edge) = if self.is_selected {
+            // Red marks the thread from a claim to its source, so only a kind chip takes it. A
+            // plain chip is a choice, selected as a button is.
+            let outline = match self.kind {
+                Some(_) => Tone::Rubric.swatch().solid,
+                None => color::RULE,
+            };
+            (color::WELL, Stroke::new(stroke::EDGE, outline))
+        } else {
+            let fill = if look.hovered {
+                color::WELL
+            } else {
+                Color32::TRANSPARENT
+            };
+            (fill, Stroke::new(stroke::BORDER, color::HAIRLINE))
         };
-        painter.rect(rect, corner, fill, edge, StrokeKind::Inside);
+        painter.rect(rect, radius::SM, fill, edge, StrokeKind::Inside);
         if look.focused {
-            focus_ring(painter, rect, corner);
+            focus_ring(painter, rect, radius::SM);
         }
         if let Some(kind) = self.kind {
-            let swatch = kind.tone().swatch();
-            let centre = pos2(rect.left() + space::XS + CHIP_BADGE / 2.0, rect.center().y);
-            painter.circle_filled(centre, CHIP_BADGE / 2.0, swatch.solid);
-            kind.icon()
-                .paint(painter, centre, CHIP_GLYPH, swatch.on_solid);
+            let centre = pos2(rect.left() + space::SM + size::GLYPH / 2.0, rect.center().y);
+            kind.icon().paint(painter, centre, size::GLYPH, self.ink());
         }
     }
 }
@@ -198,8 +177,8 @@ impl<'a> Chip<'a> {
 impl egui::Widget for Chip<'_> {
     fn ui(self, ui: &mut egui::Ui) -> Response {
         let (before, after, badge) = self.padding();
-        let mut job =
-            LayoutJob::single_section(self.label.to_owned(), TextRole::Small.format(color::TEXT));
+        let ink = self.ink();
+        let mut job = LayoutJob::single_section(self.label.to_owned(), TextRole::Small.format(ink));
         job.wrap.max_rows = 1;
         job.wrap.overflow_character = Some('…');
         job.wrap.max_width = (self.max_width - before - badge - after).max(0.0);
@@ -215,8 +194,7 @@ impl egui::Widget for Chip<'_> {
             self.paint(ui, rect, self.forced.unwrap_or_else(|| Look::of(&response)));
             let top = rect.center().y - galley.size().y / 2.0;
             let left = rect.left() + before + badge;
-            ui.painter()
-                .galley(pos2(left, top), galley.clone(), color::TEXT);
+            ui.painter().galley(pos2(left, top), galley.clone(), ink);
         }
         if galley.elided {
             response.on_hover_text(self.label)
@@ -236,7 +214,7 @@ impl<'a> Badge<'a> {
     pub const fn new(text: &'a str) -> Self {
         Badge {
             text,
-            tone: Tone::Neutral,
+            tone: Tone::Ink,
             icon: None,
         }
     }
@@ -254,37 +232,30 @@ impl<'a> Badge<'a> {
 
 impl egui::Widget for Badge<'_> {
     fn ui(self, ui: &mut egui::Ui) -> Response {
-        let swatch = self.tone.swatch();
-        let galley = TextRole::Small.galley(ui, self.text, swatch.text);
+        let ink = self.tone.swatch().text;
+        let galley = TextRole::Caps.galley(ui, &self.text.to_uppercase(), ink);
         let icon_room = if self.icon.is_some() {
-            size::ICON_SM + space::XS
+            size::GLYPH + space::XS
         } else {
             0.0
         };
-        let side = egui::vec2(icon_room + galley.size().x + 2.0 * space::SM, size::BADGE);
+        let side = egui::vec2(icon_room + galley.size().x, size::BADGE);
         let (rect, response) = ui.allocate_exact_size(side, egui::Sense::hover());
         response.widget_info(|| WidgetInfo::labeled(WidgetType::Label, true, self.text));
         if ui.is_rect_visible(rect) {
             let painter = ui.painter();
-            painter.rect(
-                rect,
-                radius::MD,
-                swatch.wash,
-                Stroke::new(stroke::BORDER, swatch.edge),
-                StrokeKind::Inside,
-            );
-            let mut x = rect.left() + space::SM;
+            let mut x = rect.left();
             if let Some(icon) = self.icon {
                 icon.paint(
                     painter,
-                    pos2(x + size::ICON_SM / 2.0, rect.center().y),
-                    size::ICON_SM,
-                    swatch.text,
+                    pos2(x + size::GLYPH / 2.0, rect.center().y),
+                    size::GLYPH,
+                    ink,
                 );
                 x += icon_room;
             }
             let top = rect.center().y - galley.size().y / 2.0;
-            painter.galley(pos2(x, top), galley, swatch.text);
+            painter.galley(pos2(x, top), galley, ink);
         }
         response
     }
@@ -299,7 +270,6 @@ pub enum StepState {
 
 pub struct StepMarker {
     number: usize,
-    tone: Tone,
     state: StepState,
 }
 
@@ -307,13 +277,15 @@ impl StepMarker {
     pub const fn new(number: usize) -> Self {
         StepMarker {
             number,
-            tone: Tone::Blue,
             state: StepState::Pending,
         }
     }
 
-    pub const fn tone(mut self, tone: Tone) -> Self {
-        self.tone = tone;
+    /// A marker is drawn in ink whatever the tone, so this changes nothing. It stays so that a
+    /// caller that names a tone still builds.
+    // SMELL: a builder that takes a value and ignores it misleads the caller. Remove it once no
+    // caller names a tone.
+    pub const fn tone(self, _tone: Tone) -> Self {
         self
     }
 
@@ -331,30 +303,29 @@ impl egui::Widget for StepMarker {
             WidgetInfo::labeled(WidgetType::Label, true, format!("Step {}", self.number))
         });
         if ui.is_rect_visible(rect) {
-            let swatch = self.tone.swatch();
             let painter = ui.painter();
+            let ring = size::STEP / 2.0 - stroke::BORDER / 2.0;
             let text = match self.state {
                 StepState::Pending => {
-                    painter.circle_stroke(
-                        rect.center(),
-                        size::STEP / 2.0 - stroke::BORDER / 2.0,
-                        Stroke::new(stroke::BORDER, color::BORDER),
-                    );
-                    color::TEXT_MUTED
+                    let outline = Stroke::new(stroke::BORDER, color::BORDER);
+                    painter.circle_stroke(rect.center(), ring, outline);
+                    color::TEXT_FAINT
                 }
-                StepState::Done | StepState::Active => {
-                    if self.state == StepState::Active {
-                        painter.add(glow(self.tone).as_shape(rect, size::STEP / 2.0));
-                    }
-                    painter.circle_filled(rect.center(), size::STEP / 2.0, swatch.solid);
-                    swatch.on_solid
+                StepState::Done => {
+                    let outline = Stroke::new(stroke::BORDER, color::RULE);
+                    painter.circle_stroke(rect.center(), ring, outline);
+                    color::TEXT
+                }
+                StepState::Active => {
+                    painter.circle_filled(rect.center(), size::STEP / 2.0, color::INK);
+                    color::TEXT_ON_INK
                 }
             };
             painter.text(
                 rect.center(),
                 Align2::CENTER_CENTER,
                 self.number.to_string(),
-                TextRole::Label.font(),
+                TextRole::Micro.font(),
                 text,
             );
         }

@@ -3,10 +3,11 @@
 
 use std::ops::RangeInclusive;
 
-use eframe::egui::{self, Align, Margin, Response, Stroke};
+use eframe::egui::{self, Align, CornerRadius, Margin, Response, Stroke};
 
+use super::look::focus_ring;
 use super::{Button, ControlSize};
-use crate::theme::{Icon, TextRole, Tone, color, radius, size, space, stroke};
+use crate::theme::{Icon, TextRole, color, radius, size, space, stroke};
 
 /// It is the one widget that edits the caller's own text, because egui needs a `&mut String`.
 pub struct TextInput<'a> {
@@ -83,70 +84,77 @@ impl<'a> TextInput<'a> {
             .unwrap_or_else(|| finite_or(ui.available_width(), ui.spacing().text_edit_width));
         let inner_width = (outer_width - 2.0 * (space::MD + stroke::BORDER)).max(0.0);
         let inner_height = self.size.height() - 2.0 * stroke::BORDER;
-        // A small box is lower than the smallest button, so the trailing button shrinks to fit.
-        let trailing_side = inner_height.min(size::CONTROL_SM);
+        let label = self.label;
         // The frame makes room for its border when it begins, so the border gets its width
         // here, and only its colour changes once the focus is known.
         let mut frame = egui::Frame::NONE
-            .fill(color::RAISED)
+            .fill(color::SHEET)
             .stroke(Stroke::new(stroke::BORDER, color::BORDER))
-            .corner_radius(radius::MD)
+            .corner_radius(radius::SM)
             .inner_margin(Margin::from(egui::vec2(space::MD, 0.0)))
             .begin(ui);
 
-        let mut trailing_clicked = false;
-        let response = frame
+        let (response, trailing) = frame
             .content_ui
             .allocate_ui_with_layout(
                 egui::vec2(inner_width, inner_height),
                 egui::Layout::left_to_right(Align::Center),
-                |ui| {
-                    if let Some(icon) = self.leading {
-                        let (_, rect) = ui.allocate_space(egui::Vec2::splat(size::ICON_MD));
-                        icon.paint(
-                            ui.painter(),
-                            rect.center(),
-                            size::ICON_MD,
-                            color::TEXT_SECONDARY,
-                        );
-                    }
-                    let after = self
-                        .trailing
-                        .map_or(0.0, |_| trailing_side + ui.spacing().item_spacing.x);
-                    let mut edit = egui::TextEdit::singleline(self.text)
-                        .id_salt(self.id_salt)
-                        .font(TextRole::Body.font())
-                        .frame(egui::Frame::NONE)
-                        .margin(Margin::ZERO)
-                        .vertical_align(Align::Center)
-                        .desired_width((ui.available_width() - after).max(0.0))
-                        .min_size(egui::vec2(0.0, inner_height));
-                    if let Some(hint) = self.hint {
-                        edit = edit.hint_text(hint);
-                    }
-                    let response = ui.add(edit);
-                    if let Some((icon, label)) = self.trailing {
-                        let button = Button::icon_only(icon, label).height(trailing_side);
-                        trailing_clicked = ui.add(button).clicked();
-                    }
-                    response
-                },
+                |ui| self.show_row(ui, inner_height),
             )
             .inner;
-        if response.has_focus() {
-            frame.frame.stroke.color = color::FOCUS;
+        let has_focus = response.has_focus();
+        if has_focus {
+            frame.frame.stroke.color = color::RULE;
         }
-        frame.end(ui);
+        let outer = frame.end(ui).rect;
+        if has_focus {
+            focus_ring(ui.painter(), outer, radius::SM);
+        }
 
         ui.ctx()
-            .accesskit_node_builder(response.id, |node| node.set_label(self.label));
+            .accesskit_node_builder(response.id, |node| node.set_label(label));
         let submitted =
             response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
         TextInputResponse {
             response,
             submitted,
-            trailing_clicked,
+            trailing_clicked: trailing.is_some_and(|button| button.clicked()),
         }
+    }
+
+    /// The row inside the frame: the leading icon, the text, and the trailing button if there is
+    /// one. Returns the response of the text and that of the button.
+    fn show_row(self, ui: &mut egui::Ui, height: f32) -> (Response, Option<Response>) {
+        // A small box is lower than the smallest button, so the trailing button shrinks to fit.
+        let trailing_side = height.min(size::CONTROL_SM);
+        if let Some(icon) = self.leading {
+            let (_, rect) = ui.allocate_space(egui::Vec2::splat(size::ICON_MD));
+            icon.paint(
+                ui.painter(),
+                rect.center(),
+                size::ICON_MD,
+                color::TEXT_SECONDARY,
+            );
+        }
+        let after = self
+            .trailing
+            .map_or(0.0, |_| trailing_side + ui.spacing().item_spacing.x);
+        let mut edit = egui::TextEdit::singleline(self.text)
+            .id_salt(self.id_salt)
+            .font(TextRole::Body.font())
+            .frame(egui::Frame::NONE)
+            .margin(Margin::ZERO)
+            .vertical_align(Align::Center)
+            .desired_width((ui.available_width() - after).max(0.0))
+            .min_size(egui::vec2(0.0, height));
+        if let Some(hint) = self.hint {
+            edit = edit.hint_text(hint);
+        }
+        let response = ui.add(edit);
+        let trailing = self
+            .trailing
+            .map(|(icon, label)| ui.add(Button::icon_only(icon, label).height(trailing_side)));
+        (response, trailing)
     }
 }
 
@@ -262,20 +270,23 @@ impl<'a> Slider<'a> {
     }
 
     pub fn show(mut self, ui: &mut egui::Ui) -> Option<f32> {
-        let blue = Tone::Blue.swatch();
         let response = ui
             .scope(|ui| {
-                // The stock slider paints its rail and its knob from the same field, so the
-                // three states get the same fill here, and the knob gets a blue ring.
+                // The stock slider paints its rail and the knob at rest from the same field, so
+                // the knob is a rail-coloured disc with an ink ring, and it fills with ink while
+                // the pointer is on it. The rail has square ends, like a progress bar.
                 let visuals = ui.visuals_mut();
-                visuals.selection.bg_fill = blue.solid;
+                visuals.selection.bg_fill = color::INK;
+                visuals.widgets.inactive.bg_fill = color::HAIRLINE;
+                visuals.widgets.inactive.corner_radius = CornerRadius::ZERO;
+                visuals.widgets.hovered.bg_fill = color::INK_HOVER;
+                visuals.widgets.active.bg_fill = color::INK_PRESSED;
                 for state in [
                     &mut visuals.widgets.inactive,
                     &mut visuals.widgets.hovered,
                     &mut visuals.widgets.active,
                 ] {
-                    state.bg_fill = color::BORDER;
-                    state.fg_stroke = Stroke::new(stroke::FOCUS, blue.solid);
+                    state.fg_stroke = Stroke::new(stroke::FOCUS, color::INK);
                 }
                 ui.add(egui::Slider::new(&mut self.value, self.range).show_value(false))
             })
@@ -327,9 +338,9 @@ impl<'a> Stepper<'a> {
     pub fn show(self, ui: &mut egui::Ui) -> Option<Step> {
         let mut step = None;
         egui::Frame::NONE
-            .fill(color::RAISED)
+            .fill(color::SHEET)
             .stroke(Stroke::new(stroke::BORDER, color::BORDER))
-            .corner_radius(radius::MD)
+            .corner_radius(radius::SM)
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 let side = STEPPER_SIZE.height();

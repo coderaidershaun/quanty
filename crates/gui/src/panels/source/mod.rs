@@ -16,7 +16,7 @@ use crate::contract::Loadable;
 use crate::panels::PanelCx;
 use crate::state::SourceTarget;
 use crate::theme::space;
-use crate::widgets::panel_frame;
+use crate::widgets::{Surface, panel_frame};
 use follow::marked_piece;
 use tabs::{SourceTab, TabCx};
 
@@ -38,7 +38,7 @@ pub struct Local {
 pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     let shared = cx.shared;
     local.follow(shared);
-    panel_frame().show(ui, |ui| {
+    panel_frame(Surface::Sheet).show(ui, |ui| {
         ui.set_min_size(ui.available_size());
         ui.spacing_mut().item_spacing = egui::vec2(space::SM, space::SM);
         header::show(ui, &mut local.header, cx);

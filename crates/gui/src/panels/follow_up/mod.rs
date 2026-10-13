@@ -27,7 +27,7 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
         };
     }
     let mut asked = None;
-    widgets::panel_frame().show(ui, |ui| {
+    widgets::panel_frame(widgets::Surface::Sheet).show(ui, |ui| {
         ui.set_min_size(ui.available_size());
         ui.spacing_mut().item_spacing.y = space::SM;
         widgets::section_header(ui, guidance::TITLE, |ui| {

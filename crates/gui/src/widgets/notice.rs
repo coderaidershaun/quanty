@@ -1,4 +1,4 @@
-//! The message strip above content, and the card that fills an area that is empty, loading or
+//! The message strip above content, and the message that fills an area that is empty, loading or
 //! failed.
 
 use eframe::egui::{
@@ -36,7 +36,7 @@ impl<'a> Notice<'a> {
     }
 
     pub fn info(title: &'a str) -> Self {
-        Notice::with_tone(title, Tone::Blue, Icon::INFO)
+        Notice::with_tone(title, Tone::Indigo, Icon::INFO)
     }
 
     pub fn success(title: &'a str) -> Self {
@@ -73,7 +73,7 @@ impl<'a> Notice<'a> {
         let framed = egui::Frame::NONE
             .fill(swatch.wash)
             .stroke(Stroke::new(stroke::BORDER, swatch.edge))
-            .corner_radius(radius::LG)
+            .corner_radius(radius::SM)
             .inner_margin(space::LG)
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
@@ -90,7 +90,7 @@ impl<'a> Notice<'a> {
                         ui.set_width((ui.available_width() - after).max(0.0));
                         ui.label(TextRole::BodyStrong.rich(self.title).color(swatch.text));
                         if let Some(body) = self.body {
-                            ui.label(TextRole::Body.rich(body).color(color::TEXT_SECONDARY));
+                            ui.label(TextRole::Body.rich(body).color(swatch.text));
                         }
                         if let Some(label) = self.action {
                             let button = Button::secondary(label).size(ControlSize::Small);
@@ -130,7 +130,7 @@ enum Fill {
 }
 
 const PLACEHOLDER_TEXT_WIDTH: f32 = 360.0;
-const PLACEHOLDER_ICON: f32 = 32.0;
+const PLACEHOLDER_ICON: f32 = 28.0;
 
 /// What a placeholder stacks, from the top. The drawing and the measure that centres the stack
 /// both walk the same list, so a new part cannot be left out of one of them.
@@ -250,7 +250,7 @@ impl<'a> Placeholder<'a> {
     fn height_of(&self, ui: &egui::Ui, part: Part<'_>, text_width: f32) -> f32 {
         match part {
             Part::Icon => PLACEHOLDER_ICON,
-            Part::Title => text_height(ui, TextRole::BodyStrong, self.title, text_width),
+            Part::Title => text_height(ui, TextRole::Heading, self.title, text_width),
             Part::Hint(hint) => text_height(ui, TextRole::Small, hint, text_width),
             Part::Action(_) => ControlSize::Small.height(),
         }
@@ -260,9 +260,9 @@ impl<'a> Placeholder<'a> {
         let tint = if self.fill == Fill::Error {
             Tone::Danger.swatch().text
         } else {
-            color::TEXT
+            TextRole::Heading.color()
         };
-        TextRole::BodyStrong.rich(self.title).color(tint)
+        TextRole::Heading.rich(self.title).color(tint)
     }
 
     fn paint_icon(&self, ui: &mut egui::Ui) {
@@ -272,7 +272,7 @@ impl<'a> Placeholder<'a> {
                 spinner(ui, self.title);
                 ui.add_space((PLACEHOLDER_ICON - size::ICON_MD) / 2.0);
             }
-            Fill::Empty(icon) => paint_big_icon(ui, icon, color::TEXT_MUTED),
+            Fill::Empty(icon) => paint_big_icon(ui, icon, color::TEXT_FAINT),
             Fill::Error => paint_big_icon(ui, Icon::ERROR, Tone::Danger.swatch().text),
         }
     }

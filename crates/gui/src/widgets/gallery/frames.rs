@@ -1,12 +1,12 @@
-//! The frames that hold content, each in every state: the cards, and the header row that a
-//! panel starts with.
+//! The frames that hold content, each in every state: the cards, the two surfaces a panel is
+//! drawn on, and the header row that a panel starts with.
 
 use eframe::egui;
 
 use super::{State, column, section, used};
 use crate::theme::{Icon, Kind, TextRole, space};
 use crate::widgets::look::Look;
-use crate::widgets::{Button, Card, Stepper, section_header, separator};
+use crate::widgets::{Button, Card, Stepper, Surface, panel_frame, section_header, separator};
 
 /// The text of the stepper in the panel header, where the actions run from right to left.
 const HEADER_STEP: &str = "2 of 6";
@@ -60,6 +60,22 @@ pub(super) fn cards(ui: &mut egui::Ui, state: &mut State) {
             }
         });
     }
+}
+
+pub(super) fn surfaces(ui: &mut egui::Ui) {
+    section(ui, "Surfaces");
+    let width = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
+    ui.horizontal_top(|ui| {
+        for (name, surface) in [("Sheet", Surface::Sheet), ("Desk", Surface::Desk)] {
+            column(ui, width, 0.0, |ui| {
+                panel_frame(surface).show(ui, |ui| {
+                    ui.set_min_width(ui.available_width());
+                    ui.label(TextRole::Heading.rich(name));
+                    ui.label(TextRole::Body.rich(format!("A panel drawn on the {name}.")));
+                });
+            });
+        }
+    });
 }
 
 pub(super) fn panel_header(ui: &mut egui::Ui, state: &mut State) {

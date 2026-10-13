@@ -9,8 +9,8 @@ use super::{
 use crate::contract::{Intent, Panel};
 use crate::media::Media;
 use crate::state::Shared;
-use crate::theme::{Icon, TextRole, color, radius};
-use crate::widgets::{Button, panel_frame};
+use crate::theme::{Icon, TextRole, color, radius, stroke};
+use crate::widgets::{Button, Surface, panel_frame};
 
 /// The app applies the pushed `intents` after the frame.
 pub struct PanelCx<'a> {
@@ -60,7 +60,7 @@ pub(super) fn column(
         egui::pos2(page.center().x - width / 2.0, page.top()),
         egui::vec2(width, page.height()),
     );
-    let frame = panel_frame();
+    let frame = panel_frame(Surface::Sheet);
     let margin = frame.total_margin().sum();
     let builder = egui::UiBuilder::new()
         .id_salt(id_salt)
@@ -82,8 +82,8 @@ pub fn placeholder(ui: &mut egui::Ui, name: &str) {
     painter.rect(
         rect,
         radius::XL,
-        color::PANEL,
-        egui::Stroke::new(1.0, color::HAIRLINE),
+        color::SHEET,
+        egui::Stroke::new(stroke::BORDER, color::HAIRLINE),
         egui::StrokeKind::Inside,
     );
     painter.text(

@@ -16,6 +16,8 @@ pub(super) struct TextLook {
     pub(super) role: TextRole,
     pub(super) font: FontId,
     pub(super) strong_font: FontId,
+    pub(super) italic_font: FontId,
+    pub(super) strong_italic_font: FontId,
     pub(super) code_font: FontId,
     pub(super) foot_font: FontId,
     pub(super) color: Color32,
@@ -57,11 +59,13 @@ pub(super) fn text_look(role: TextRole) -> TextLook {
         foot_raise: font.size * FOOT_RAISE,
         font,
         strong_font: role.strong_font(),
+        italic_font: role.italic_font(),
+        strong_italic_font: role.strong_italic_font(),
         code_font: role.code_font(),
         color: role.color(),
         strong_color: color::TEXT,
         foot_color: color::TEXT_MUTED,
-        code_fill: color::RAISED_HOVER,
+        code_fill: color::WELL,
         code_radius: radius::SM,
         code_pad: space::XXS,
         line_height: role.line_height(),
@@ -90,21 +94,22 @@ pub(super) fn table_look() -> TableLook {
     TableLook {
         pad_x: space::MD,
         pad_y: space::SM,
-        header_fill: color::RAISED_HOVER,
+        header_fill: color::WELL_DEEP,
     }
 }
 
 impl TextLook {
     pub(super) fn format(&self, style: SpanStyle) -> TextFormat {
         let (font_id, color) = match style {
-            SpanStyle::Plain | SpanStyle::Emphasis => (&self.font, self.color),
-            SpanStyle::Strong | SpanStyle::StrongEmphasis => (&self.strong_font, self.strong_color),
+            SpanStyle::Plain => (&self.font, self.color),
+            SpanStyle::Emphasis => (&self.italic_font, self.color),
+            SpanStyle::Strong => (&self.strong_font, self.strong_color),
+            SpanStyle::StrongEmphasis => (&self.strong_italic_font, self.strong_color),
             SpanStyle::Code => (&self.code_font, self.color),
         };
         TextFormat {
             font_id: font_id.clone(),
             color,
-            italics: matches!(style, SpanStyle::Emphasis | SpanStyle::StrongEmphasis),
             ..TextFormat::default()
         }
     }

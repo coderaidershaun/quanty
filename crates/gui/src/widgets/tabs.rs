@@ -28,6 +28,10 @@ impl<'a> Tab<'a> {
         self
     }
 
+    /// Nothing is painted for the icon. It stays so that a caller that names one still builds.
+    // SMELL: the icon is stored and never painted, so a caller that marks a tab with one, such as
+    // a warning on a tab that failed to load, shows nothing. Remove the field once no caller
+    // sets it, or give that caller another way to show the state.
     pub const fn icon(mut self, icon: Icon) -> Self {
         self.icon = Some(icon);
         self
@@ -37,7 +41,6 @@ impl<'a> Tab<'a> {
 pub struct TabStrip<'a> {
     tabs: &'a [Tab<'a>],
     active: usize,
-    tone: Tone,
     is_compact: bool,
     forced: Option<Look>,
 }
@@ -47,14 +50,16 @@ impl<'a> TabStrip<'a> {
         TabStrip {
             tabs,
             active,
-            tone: Tone::Blue,
             is_compact: false,
             forced: None,
         }
     }
 
-    pub fn tone(mut self, tone: Tone) -> Self {
-        self.tone = tone;
+    /// The active tab is drawn in ink whatever the tone, so this changes nothing. It stays so
+    /// that a caller that names a tone still builds.
+    // SMELL: a builder that takes a value and ignores it misleads the caller. Remove it once no
+    // caller names a tone.
+    pub fn tone(self, _tone: Tone) -> Self {
         self
     }
 
@@ -107,18 +112,10 @@ impl<'a> TabStrip<'a> {
         role: TextRole,
         height: f32,
     ) -> bool {
-        let swatch = self.tone.swatch();
-        let icon_size = size::ICON_MD;
-        let icon_room = if tab.icon.is_some() {
-            icon_size + space::SM
-        } else {
-            0.0
-        };
         // The colour does not change the width, so any colour measures the text.
         let measured = self.galley(ui, tab, role, color::TEXT);
-        let width = icon_room + measured.size().x;
         let (rect, response) =
-            ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
+            ui.allocate_exact_size(egui::vec2(measured.size().x, height), egui::Sense::click());
         // egui has no widget type for a tab, so the tab is named as a button and is given its
         // role afterwards.
         response
@@ -132,31 +129,19 @@ impl<'a> TabStrip<'a> {
         });
         if ui.is_rect_visible(rect) {
             let look = self.forced.unwrap_or_else(|| Look::of(&response));
-            let tint = if is_active {
-                swatch.text
-            } else if look.hovered || look.pressed {
+            let tint = if is_active || look.hovered || look.pressed {
                 color::TEXT
             } else {
                 color::TEXT_SECONDARY
             };
             let painter = ui.painter();
-            let mut x = rect.left();
-            if let Some(icon) = tab.icon {
-                icon.paint(
-                    painter,
-                    egui::pos2(x + icon_size / 2.0, rect.center().y),
-                    icon_size,
-                    tint,
-                );
-                x += icon_room;
-            }
             let galley = self.galley(ui, tab, role, tint);
             let top = rect.center().y - galley.size().y / 2.0;
-            painter.galley(egui::pos2(x, top), galley, tint);
+            painter.galley(egui::pos2(rect.left(), top), galley, tint);
             if is_active {
                 let mut bar = rect;
                 bar.min.y = rect.bottom() - stroke::UNDERLINE;
-                painter.rect_filled(bar, stroke::UNDERLINE / 2.0, swatch.solid);
+                painter.rect_filled(bar, 0.0, color::RULE);
             }
             if look.focused {
                 focus_ring(painter, rect, radius::SM);

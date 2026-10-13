@@ -1,15 +1,13 @@
-//! The raised card that holds one result, one document or one step.
+//! The entry that holds one result, one document or one step: a thin outline around its content.
 
 use eframe::egui::{
-    self, Align, Response, Sense, Stroke, StrokeKind, WidgetInfo, WidgetType, pos2, vec2,
+    self, Align, Color32, Response, Sense, Stroke, StrokeKind, WidgetInfo, WidgetType, pos2, vec2,
 };
 
 use super::Button;
 use super::look::{Look, focus_ring};
 use crate::theme::{Icon, Kind, TextRole, Tone, color, radius, size, space, stroke};
 
-const TAG_GLYPH: f32 = 10.0;
-const TAG_BOX: f32 = 16.0;
 const MARGIN: f32 = space::MD;
 
 #[derive(Default)]
@@ -80,54 +78,67 @@ impl<'a> Card<'a> {
         if self.clickable.is_some() {
             builder = builder.sense(Sense::click());
         }
-        let mut action_clicked = false;
-        let scope = ui.scope_builder(builder, |ui| {
-            let edge = if self.is_selected {
-                Tone::Blue.swatch().solid
-            } else {
-                color::BORDER
-            };
-            let mut frame = egui::Frame::NONE
-                .stroke(Stroke::new(stroke::BORDER, edge))
-                .corner_radius(radius::LG)
-                .inner_margin(MARGIN)
-                .begin(ui);
-            let room = frame.content_ui.available_width();
-            if room.is_finite() {
-                frame.content_ui.set_min_width(room);
-            }
-            if self.tag.is_some() || self.action.is_some() {
-                action_clicked = self.header(&mut frame.content_ui);
-            }
-            let inner = add_contents(&mut frame.content_ui);
-
-            let look = match (self.clickable, self.forced) {
-                (None, _) => Look::default(),
-                (Some(_), Some(forced)) => forced,
-                (Some(_), None) => Look::of(&ui.response()),
-            };
-            frame.frame.fill = if look.hovered || look.pressed {
-                color::RAISED_HOVER
-            } else {
-                color::RAISED
-            };
-            let outer = frame.content_ui.min_rect() + frame.frame.total_margin();
-            frame.end(ui);
-            if look.focused {
-                focus_ring(ui.painter(), outer, radius::LG);
-            }
-            inner
-        });
+        let scope = ui.scope_builder(builder, |ui| self.framed(ui, add_contents));
+        let (inner, action_clicked) = scope.inner;
         if let Some(label) = self.clickable {
             scope.response.widget_info(|| {
                 WidgetInfo::selected(WidgetType::Button, ui.is_enabled(), self.is_selected, label)
             });
         }
         CardResponse {
-            inner: scope.inner,
+            inner,
             response: scope.response,
             action_clicked,
         }
+    }
+
+    /// The outline, the header and the content, in the `Ui` that senses a click on the whole
+    /// card. Returns what the content returns, and whether the action button was clicked.
+    fn framed<R>(
+        &self,
+        ui: &mut egui::Ui,
+        add_contents: impl FnOnce(&mut egui::Ui) -> R,
+    ) -> (R, bool) {
+        // The width of the outline never changes, so that selecting a card does not move what
+        // is below it. The heavier outline of a selected card is drawn over it.
+        let mut frame = egui::Frame::NONE
+            .stroke(Stroke::new(stroke::BORDER, color::HAIRLINE))
+            .corner_radius(radius::SM)
+            .inner_margin(MARGIN)
+            .begin(ui);
+        let room = frame.content_ui.available_width();
+        if room.is_finite() {
+            frame.content_ui.set_min_width(room);
+        }
+        let mut action_clicked = false;
+        if self.tag.is_some() || self.action.is_some() {
+            action_clicked = self.header(&mut frame.content_ui);
+        }
+        let inner = add_contents(&mut frame.content_ui);
+
+        let look = match (self.clickable, self.forced) {
+            (None, _) => Look::default(),
+            (Some(_), Some(forced)) => forced,
+            (Some(_), None) => Look::of(&ui.response()),
+        };
+        frame.frame.fill = if look.pressed {
+            color::WELL_DEEP
+        } else if look.hovered {
+            color::WELL
+        } else {
+            Color32::TRANSPARENT
+        };
+        let outer = frame.content_ui.min_rect() + frame.frame.total_margin();
+        frame.end(ui);
+        if self.is_selected {
+            let edge = Stroke::new(stroke::EDGE, Tone::Rubric.swatch().solid);
+            ui.painter()
+                .rect_stroke(outer, radius::SM, edge, StrokeKind::Inside);
+        }
+        if look.focused {
+            focus_ring(ui.painter(), outer, radius::SM);
+        }
+        (inner, action_clicked)
     }
 
     fn header(&self, ui: &mut egui::Ui) -> bool {
@@ -146,36 +157,25 @@ impl<'a> Card<'a> {
     }
 }
 
-/// The text of the tag is a label of its own, so a test or a screen reader finds it.
+/// The text of the tag is a label of its own, so a test or a screen reader finds it. It is
+/// painted in capitals, and the name it answers to stays the text as it was given.
 fn paint_tag(ui: &mut egui::Ui, kind: Kind, text: &str) {
-    let swatch = kind.tone().swatch();
-    let galley = TextRole::Small.galley(ui, text, swatch.text);
-    let inset = (size::CHIP - TAG_BOX) / 2.0;
-    let width = inset + TAG_BOX + space::SM + galley.size().x + space::SM;
-    let (rect, response) = ui.allocate_exact_size(vec2(width, size::CHIP), Sense::hover());
+    let ink = kind.tone().swatch().text;
+    let galley = TextRole::Caps.galley(ui, &text.to_uppercase(), ink);
+    let height = galley.size().y.max(size::GLYPH);
+    let width = size::GLYPH + space::XS + galley.size().x;
+    let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Label, true, text));
     if !ui.is_rect_visible(rect) {
         return;
     }
     let painter = ui.painter();
-    painter.rect(
-        rect,
-        radius::MD,
-        swatch.wash,
-        Stroke::new(stroke::BORDER, swatch.edge),
-        StrokeKind::Inside,
-    );
-    let tag_box = egui::Rect::from_min_size(
-        pos2(rect.left() + inset, rect.center().y - TAG_BOX / 2.0),
-        egui::Vec2::splat(TAG_BOX),
-    );
-    painter.rect_filled(tag_box, radius::SM, swatch.solid);
-    kind.icon()
-        .paint(painter, tag_box.center(), TAG_GLYPH, swatch.on_solid);
-    let left = tag_box.right() + space::SM;
+    let glyph = pos2(rect.left() + size::GLYPH / 2.0, rect.center().y);
+    kind.icon().paint(painter, glyph, size::GLYPH, ink);
+    let left = rect.left() + size::GLYPH + space::XS;
     painter.galley(
         pos2(left, rect.center().y - galley.size().y / 2.0),
         galley,
-        swatch.text,
+        ink,
     );
 }

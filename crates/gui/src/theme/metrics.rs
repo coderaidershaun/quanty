@@ -1,5 +1,5 @@
-//! The sizes of the app, in points: spacing, corner radii, control and icon sizes, line widths and
-//! the two animation times. The one-pixel line is here too.
+//! The sizes of the app, in points: spacing, corner radii, control and icon sizes, line widths,
+//! the one shadow and the two animation times. The one-pixel line is here too.
 
 use eframe::egui::{self, Color32, Stroke};
 
@@ -19,10 +19,10 @@ pub mod space {
 
 /// Points.
 pub mod radius {
-    pub const SM: f32 = 4.0;
-    pub const MD: f32 = 6.0;
-    pub const LG: f32 = 8.0;
-    pub const XL: f32 = 12.0;
+    pub const SM: f32 = 2.0;
+    pub const MD: f32 = 3.0;
+    pub const LG: f32 = 3.0;
+    pub const XL: f32 = 4.0;
 }
 
 /// Points.
@@ -33,6 +33,8 @@ pub mod size {
     pub const ICON_SM: f32 = 14.0;
     pub const ICON_MD: f32 = 16.0;
     pub const ICON_LG: f32 = 20.0;
+    /// The icon that sits before a short word, such as the kind of a tag.
+    pub const GLYPH: f32 = 12.0;
     pub const CHIP: f32 = 24.0;
     pub const BADGE: f32 = 20.0;
     pub const CITATION: f32 = 18.0;
@@ -45,9 +47,23 @@ pub mod size {
 /// Points.
 pub mod stroke {
     pub const BORDER: f32 = 1.0;
-    pub const FOCUS: f32 = 2.0;
-    pub const UNDERLINE: f32 = 2.0;
+    pub const FOCUS: f32 = 1.5;
+    pub const UNDERLINE: f32 = 1.5;
     pub const EDGE: f32 = 1.5;
+    pub const HEAVY: f32 = 1.5;
+}
+
+/// A shadow means a physical sheet of paper, so only the scanned page, a popup, a menu and the
+/// sheet that asks a question cast one.
+pub mod shadow {
+    use eframe::egui::{Color32, Shadow};
+
+    pub const SHEET: Shadow = Shadow {
+        offset: [0, 2],
+        blur: 10,
+        spread: 0,
+        color: Color32::from_rgba_unmultiplied_const(0x10, 0x0F, 0x0F, 0x1F),
+    };
 }
 
 /// Seconds.

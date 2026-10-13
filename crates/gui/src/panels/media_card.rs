@@ -114,9 +114,9 @@ pub(super) fn pencil(ui: &mut egui::Ui, title: &str, pencil: Pencil) -> bool {
 
 fn category_badge(category: Category) -> Badge<'static> {
     let (tone, icon) = match category {
-        Category::Book => (Tone::Blue, Icon::BOOK),
+        Category::Book => (Tone::Indigo, Icon::BOOK),
         Category::Paper => (Tone::Purple, Icon::DOCUMENT),
-        Category::Other => (Tone::Neutral, Icon::FOLDER),
+        Category::Other => (Tone::Ink, Icon::FOLDER),
     };
     Badge::new(category.label()).tone(tone).icon(icon)
 }

@@ -15,13 +15,15 @@ pub enum Kind {
 }
 
 impl Kind {
-    /// A formula, a figure and a table share one colour, and `icon` tells them apart.
+    /// Each kind has a tone of its own, so the colour alone tells one kind from another.
     pub const fn tone(self) -> Tone {
         match self {
-            Kind::Concept => Tone::Blue,
+            Kind::Concept => Tone::Indigo,
             Kind::RelatedConcept => Tone::Purple,
-            Kind::Text => Tone::Neutral,
-            Kind::Formula | Kind::Figure | Kind::Table => Tone::Magenta,
+            Kind::Text => Tone::Ink,
+            Kind::Formula => Tone::Verdigris,
+            Kind::Figure => Tone::Ochre,
+            Kind::Table => Tone::Madder,
         }
     }
 

@@ -4,8 +4,8 @@
 use eframe::egui;
 
 use super::steps::{Progress, Step};
-use crate::theme::{self, TextRole, Tone, color, size, space};
-use crate::widgets::{Badge, StepMarker, StepState};
+use crate::theme::{self, TextRole, color, size, space};
+use crate::widgets::{StepMarker, StepState};
 
 const TITLE: f32 = TextRole::Label.line_height();
 const TWO_LINES: f32 = TITLE + TextRole::Small.line_height();
@@ -72,11 +72,11 @@ fn place_marker(ui: &mut egui::Ui, rect: egui::Rect, number: usize, step: &Step)
         Progress::Taken => StepState::Done,
         Progress::Waiting | Progress::NotReached => StepState::Pending,
     };
-    ui.place(marker, StepMarker::new(number).tone(step.tone).state(state));
+    ui.place(marker, StepMarker::new(number).state(state));
     marker
 }
 
-/// The badge sits on the title's line, so the line under the title can use the whole width.
+/// The count sits on the title's line, so the line under the title can use the whole width.
 fn title_line(
     ui: &mut egui::Ui,
     rect: egui::Rect,
@@ -87,12 +87,15 @@ fn title_line(
         egui::pos2(rect.left(), start.y),
         egui::pos2(rect.right(), start.y + TITLE),
     );
-    let title_right = match &step.badge {
-        Some(text) => badge_in(ui, line, text).rect.left() - space::SM,
+    let (title_color, line_color) = tints(step.progress);
+    let title_right = match &step.count {
+        Some(text) => {
+            let count = TextRole::Small.rich(text).color(line_color);
+            count_in(ui, line, count).rect.left() - space::SM
+        }
         None => rect.right(),
     };
     let title_rect = egui::Rect::from_min_max(start, egui::pos2(title_right, start.y + TITLE));
-    let (title_color, _) = tints(step.progress);
     label_in(
         ui,
         title_rect,
@@ -103,7 +106,7 @@ fn title_line(
 /// The colours of the title and of the line under it.
 fn tints(progress: Progress) -> (egui::Color32, egui::Color32) {
     match progress {
-        Progress::NotReached => (color::TEXT_MUTED, color::TEXT_MUTED),
+        Progress::NotReached => (color::TEXT_SECONDARY, color::TEXT_SECONDARY),
         Progress::Waiting | Progress::Taken => (color::TEXT, color::TEXT_SECONDARY),
     }
 }
@@ -114,7 +117,7 @@ pub(super) fn connect(ui: &egui::Ui, upper: egui::Rect, lower: egui::Rect) {
     let to = lower.center().y - HALF_STEP - space::XS;
     if to - from >= space::XS {
         let painter = ui.painter();
-        painter.vline(x, from..=to, theme::hairline(painter, color::BORDER));
+        painter.vline(x, from..=to, theme::hairline(painter, color::HAIRLINE));
     }
 }
 
@@ -126,8 +129,8 @@ fn label_in(ui: &mut egui::Ui, rect: egui::Rect, text: egui::RichText) -> egui::
         .add(egui::Label::new(text).truncate())
 }
 
-fn badge_in(ui: &mut egui::Ui, rect: egui::Rect, text: &str) -> egui::Response {
+fn count_in(ui: &mut egui::Ui, rect: egui::Rect, text: egui::RichText) -> egui::Response {
     let across = egui::Layout::right_to_left(egui::Align::Center);
     ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(across))
-        .add(Badge::new(text).tone(Tone::Ink))
+        .add(egui::Label::new(text))
 }

@@ -8,7 +8,7 @@ use eframe::egui;
 
 use crate::contract::{AskDraft, Intent};
 use crate::panels::PanelCx;
-use crate::theme::{Icon, TextRole, color, space};
+use crate::theme::{Icon, TextRole, space};
 use crate::widgets;
 
 #[derive(Debug, Default)]
@@ -27,15 +27,11 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
         };
     }
     let mut asked = None;
-    widgets::panel_frame(widgets::Surface::Sheet).show(ui, |ui| {
+    widgets::panel_frame(widgets::Surface::Desk).show(ui, |ui| {
         ui.set_min_size(ui.available_size());
         ui.spacing_mut().item_spacing.y = space::SM;
         widgets::section_header(ui, guidance::TITLE, |ui| {
-            ui.label(
-                TextRole::Small
-                    .rich(guidance::CAPTION)
-                    .color(color::TEXT_MUTED),
-            );
+            ui.label(TextRole::Small.rich(guidance::CAPTION));
         });
         let Some(guidance) = guidance::guidance(ask) else {
             widgets::Placeholder::empty(Icon::SEND, guidance::NOTHING_YET)
@@ -44,11 +40,10 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
             return;
         };
         let typed = ask_box(ui, &mut local.draft);
-        let height = ui.available_height();
         let clicked = egui::ScrollArea::vertical()
             .id_salt(("follow_up", ask.generation))
             .auto_shrink([false, false])
-            .show(ui, |ui| body::show(ui, &guidance, height))
+            .show(ui, |ui| body::show(ui, &guidance))
             .inner;
         asked = typed.or_else(|| clicked.map(str::to_owned));
     });

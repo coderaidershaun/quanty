@@ -11,38 +11,41 @@ use super::plan::{Plan, is_concept, plan};
 use super::seats::{Metrics, Sizes};
 use super::view::View;
 use crate::contract::{ConceptGraph, ConceptId, EdgeKind, GraphNode, NodeId};
-use crate::theme::{Kind, TextRole, color, radius, size, space};
+use crate::theme::{Kind, TextRole, Tone, color, radius, size, space};
 
-/// These are the heights of a pill with two lines of text and of a pill with a single line.
-const PILL_ROOMY: f32 = size::CONTROL_LG;
-const PILL_COMPACT: f32 = size::CONTROL_SM;
-/// A canvas this high or higher has room for three pills of two lines, two bands and margins.
+/// These are the heights of a node with two lines of text and of a node with a single line.
+const NODE_ROOMY: f32 = size::CONTROL_LG;
+const NODE_COMPACT: f32 = size::CONTROL_SM;
+/// A canvas this high or higher has room for three nodes of two lines, two bands and margins.
 const ROOMY_FROM: f32 = 168.0;
-/// This is the room between two pills of a row.
+/// This is the room between two nodes of a row.
 const GAP: f32 = space::LG;
 /// This is the room on each side of a link's label where it stands between the centre and the
 /// node beside it.
 const LABEL_PAD_ROOMY: f32 = space::MD;
 const LABEL_PAD_COMPACT: f32 = space::SM;
-const BAND_MIN: f32 = TextRole::Small.line_height();
+/// The role of the words on a link, both when they are measured and when they are painted.
+pub(super) const LINK_TEXT: TextRole = TextRole::Caption;
+const BAND_MIN: f32 = LINK_TEXT.line_height();
 const BAND_MAX: f32 = size::TAB;
 const MARGIN: f32 = space::XS;
-pub(super) const CORNER: f32 = radius::XL;
+pub(super) const CORNER: f32 = radius::SM;
 /// The most width a node's text may take, before it wraps or ends in "…".
 const LABEL_MAX: f32 = 108.0;
 const CENTRE_LABEL_MAX: f32 = 124.0;
-/// The parts of a pill besides its text, left to right: padding, the disc with the kind's icon,
-/// a gap, and padding.
+/// The parts of a node besides its text, left to right: padding, the kind's icon, a gap, and
+/// padding.
 pub(super) const PAD_LEFT: f32 = space::SM;
-pub(super) const DISC: f32 = size::ICON_MD;
-pub(super) const DISC_GAP: f32 = 6.0;
+const GLYPH_GAP: f32 = 6.0;
 const PAD_RIGHT: f32 = 10.0;
-const CHROME: f32 = PAD_LEFT + DISC + DISC_GAP + PAD_RIGHT;
-pub(super) const DISC_GLYPH: f32 = 11.0;
-pub(super) const LEGEND_DISC: f32 = size::ICON_SM;
-pub(super) const LEGEND_GLYPH: f32 = 10.0;
-/// How long an arrowhead is.
-pub(super) const ARROW: f32 = 7.0;
+/// Where the text of a node starts, measured from its left edge.
+pub(super) const TEXT_LEFT: f32 = PAD_LEFT + size::GLYPH + GLYPH_GAP;
+const CHROME: f32 = TEXT_LEFT + PAD_RIGHT;
+/// How long an arrowhead is, and how wide at its base.
+pub(super) const ARROW: f32 = 6.0;
+/// The room between the end of a link and the outline of the node it reaches. It grows and
+/// shrinks with the zoom, like the rest of the picture.
+pub(super) const LINK_GAP: f32 = 3.0;
 /// How much of its colour a node or link keeps while another node is lit.
 pub(super) const DIM: f32 = 0.3;
 /// Points of wheel scroll that double or halve the size.
@@ -52,9 +55,9 @@ pub(super) const LEGEND_HEIGHT: f32 = TextRole::Small.line_height();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Density {
-    /// A pill holds two rows of text.
+    /// A node holds two rows of text.
     Roomy,
-    /// A pill holds one row of text.
+    /// A node holds one row of text.
     Compact,
 }
 
@@ -68,19 +71,19 @@ impl Density {
     }
 
     fn metrics(self) -> Metrics {
-        let (pill_height, label_pad) = match self {
-            Density::Roomy => (PILL_ROOMY, LABEL_PAD_ROOMY),
-            Density::Compact => (PILL_COMPACT, LABEL_PAD_COMPACT),
+        let (node_height, label_pad) = match self {
+            Density::Roomy => (NODE_ROOMY, LABEL_PAD_ROOMY),
+            Density::Compact => (NODE_COMPACT, LABEL_PAD_COMPACT),
         };
         Metrics {
-            pill_height,
+            node_height,
             gap: GAP,
             label_pad,
             band_min: BAND_MIN,
             band_max: BAND_MAX,
             margin: MARGIN,
             corner: CORNER,
-            label_height: TextRole::Small.line_height(),
+            label_height: LINK_TEXT.line_height(),
         }
     }
 }
@@ -93,6 +96,9 @@ pub(super) struct TextOpts {
     pub scale: f32,
     /// How much of its colour the text keeps: 1.0 is all of it.
     pub fade: f32,
+    /// The first line of a selected node takes the rubric red, the colour of the thread from a
+    /// claim to its source.
+    pub is_selected: bool,
 }
 
 impl TextOpts {
@@ -100,15 +106,6 @@ impl TextOpts {
         let mut format = role.format(colour.gamma_multiply(self.fade));
         format.font_id.size *= self.scale;
         format.line_height = format.line_height.map(|height| height * self.scale);
-        format
-    }
-
-    fn strong(&self, role: TextRole, colour: Color32) -> TextFormat {
-        let mut format = self.plain(role, colour);
-        format.font_id = FontId {
-            size: format.font_id.size,
-            ..role.strong_font()
-        };
         format
     }
 }
@@ -139,35 +136,59 @@ fn job(text: &str, format: TextFormat, limit: Limit) -> LayoutJob {
 pub(super) fn node_text(node: &GraphNode, opts: TextOpts) -> NodeText {
     let is_result = !is_concept(node.kind);
     let roomy = opts.density == Density::Roomy;
+    let ink = if opts.is_selected {
+        Tone::Rubric.swatch().text
+    } else {
+        color::TEXT
+    };
+    let name = opts.plain(TextRole::Label, ink);
     if is_result && roomy {
         let limit = Limit {
             width: LABEL_MAX * opts.scale,
             rows: 1,
         };
-        let first = job(
-            &node.label,
-            opts.strong(TextRole::Small, color::TEXT),
-            limit,
-        );
+        let first = job(&node.label, name, limit);
         let second = node.detail.as_deref().map(|detail| {
             let format = opts.plain(TextRole::Small, color::TEXT_SECONDARY);
             job(detail, format, limit)
         });
         return NodeText { first, second };
     }
-    let (role, width) = if opts.is_centre {
-        (TextRole::Label, CENTRE_LABEL_MAX)
+    let width = if opts.is_centre {
+        CENTRE_LABEL_MAX
     } else {
-        (TextRole::Small, LABEL_MAX)
+        LABEL_MAX
     };
     let limit = Limit {
         width: width * opts.scale,
         rows: if roomy { 2 } else { 1 },
     };
     NodeText {
-        first: job(&node.label, opts.plain(role, color::TEXT), limit),
+        first: job(&node.label, name, limit),
         second: None,
     }
+}
+
+/// The text is measured at full size and not selected. Selected text differs only in colour, so
+/// it takes the same room.
+fn node_widths(ui: &egui::Ui, nodes: &[&GraphNode], density: Density) -> Vec<f32> {
+    nodes
+        .iter()
+        .enumerate()
+        .map(|(place, node)| {
+            let opts = TextOpts {
+                is_centre: place == 0,
+                density,
+                scale: 1.0,
+                fade: 1.0,
+                is_selected: false,
+            };
+            let text = node_text(node, opts);
+            let width = |job| ui.painter().layout_job(job).size().x;
+            let second = text.second.map_or(0.0, width);
+            (width(text.first).max(second) + CHROME).ceil()
+        })
+        .collect()
 }
 
 pub(super) fn scaled_font(role: TextRole, scale: f32) -> FontId {
@@ -190,7 +211,17 @@ fn words(kind: EdgeKind) -> &'static str {
 
 fn link_words(kinds: &[EdgeKind]) -> String {
     let words: Vec<&str> = kinds.iter().map(|kind| words(*kind)).collect();
-    words.join(" · ")
+    words.join(", ")
+}
+
+fn label_widths(ui: &egui::Ui, link_words: &[String]) -> Vec<f32> {
+    link_words
+        .iter()
+        .map(|words| {
+            let galley = LINK_TEXT.galley(ui, words, color::TEXT_SECONDARY);
+            galley.size().x.ceil()
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -205,10 +236,10 @@ pub(super) struct SceneKey {
     pub graph_size: [usize; 2],
 }
 
-/// The words of the badge that counts what the picture leaves out, made when the scene is.
+/// The words that say how many nodes the picture leaves out, made when the scene is.
 #[derive(Debug)]
 pub(super) struct NotDrawn {
-    pub badge: String,
+    pub count: String,
     pub hover: String,
 }
 
@@ -302,35 +333,18 @@ impl Scene {
             h: key.canvas[1] as f32,
         };
         let density = Density::of(canvas);
-        let node_widths: Vec<f32> = plan
+        let nodes: Vec<&GraphNode> = plan
             .nodes
             .iter()
-            .enumerate()
-            .map(|(place, index)| {
-                let opts = TextOpts {
-                    is_centre: place == 0,
-                    density,
-                    scale: 1.0,
-                    fade: 1.0,
-                };
-                let text = node_text(&graph.nodes[*index], opts);
-                let width = |job| ui.painter().layout_job(job).size().x;
-                let second = text.second.map_or(0.0, width);
-                (width(text.first).max(second) + CHROME).ceil()
-            })
+            .map(|index| &graph.nodes[*index])
             .collect();
+        let node_widths = node_widths(ui, &nodes, density);
         let link_words: Vec<String> = plan
             .links
             .iter()
             .map(|link| link_words(&link.kinds))
             .collect();
-        let label_widths: Vec<f32> = link_words
-            .iter()
-            .map(|words| {
-                let galley = TextRole::Small.galley(ui, words, color::TEXT_SECONDARY);
-                galley.size().x.ceil()
-            })
-            .collect();
+        let label_widths = label_widths(ui, &link_words);
         let sizes = Sizes {
             nodes: &node_widths,
             labels: &label_widths,
@@ -339,14 +353,10 @@ impl Scene {
         let placed = place(&plan, &sizes, &density.metrics());
         let opening = View::opening(placed.world, canvas, placed.nodes[0].centre());
         let not_drawn = (plan.left_out > 0).then(|| NotDrawn {
-            badge: format!("+{} not drawn", plan.left_out),
+            count: format!("+{} not drawn", plan.left_out),
             hover: format!("The {} least connected nodes are left out.", plan.left_out),
         });
-        let drawn = |kind: &Kind| {
-            plan.nodes
-                .iter()
-                .any(|index| Kind::from(graph.nodes[*index].kind) == *kind)
-        };
+        let drawn = |kind: &Kind| nodes.iter().any(|node| Kind::from(node.kind) == *kind);
         let kinds = LEGEND_ORDER.into_iter().filter(drawn).collect();
         Some(Scene {
             key,

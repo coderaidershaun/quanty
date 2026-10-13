@@ -41,7 +41,7 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
             ..Local::default()
         };
     }
-    panel_frame(Surface::Sheet).show(ui, |ui| {
+    panel_frame(Surface::Desk).show(ui, |ui| {
         ui.set_min_size(ui.available_size());
         ui.spacing_mut().item_spacing = egui::vec2(space::SM, space::SM);
         if !show_graph(ui, local, cx) {

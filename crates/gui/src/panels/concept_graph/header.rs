@@ -1,14 +1,13 @@
-//! The title row of the panel, with the maximise button, the button that puts the picture back
-//! and the badge that counts what was left out, and the row that tells what each colour stands
-//! for.
+//! The title row of the panel, with the maximise and reset buttons and the count of nodes left
+//! out, and the legend row that tells what each colour stands for.
 
-use eframe::egui::{self, Align, Align2, Layout, Sense, UiBuilder, Vec2};
+use eframe::egui::{self, Align, Layout, Sense, UiBuilder, Vec2};
 
-use super::scene::{HEADER_HEIGHT, LEGEND_DISC, LEGEND_GLYPH, LEGEND_HEIGHT, Picture};
+use super::scene::{HEADER_HEIGHT, LEGEND_HEIGHT, Picture};
 use crate::contract::Panel;
 use crate::panels::PanelCx;
-use crate::theme::{Icon, Kind, TextRole, space};
-use crate::widgets::{Badge, Button, section_header};
+use crate::theme::{Icon, Kind, TextRole, size, space};
+use crate::widgets::{Button, section_header};
 
 /// The areas are worked out before anything is drawn, so the canvas has its size before the
 /// picture is made, and the title row still shows what the picture holds in the same frame.
@@ -64,7 +63,7 @@ impl Areas {
                 reset_clicked = ui.add_enabled(can_reset, reset).clicked();
                 let not_drawn = picture.and_then(|picture| picture.scene.not_drawn.as_ref());
                 if let Some(not_drawn) = not_drawn {
-                    ui.add(Badge::new(&not_drawn.badge))
+                    ui.label(TextRole::Small.rich(&not_drawn.count))
                         .on_hover_text(&not_drawn.hover);
                 }
             });
@@ -87,18 +86,11 @@ fn legend(ui: &mut egui::Ui, kinds: &[Kind]) {
             // The space that follows every item is there already, so this adds only the rest.
             ui.add_space(space::MD - space::XS);
         }
-        let (rect, _) = ui.allocate_exact_size(Vec2::splat(LEGEND_DISC), Sense::hover());
-        let swatch = kind.tone().swatch();
-        let painter = ui.painter();
-        painter.circle_filled(rect.center(), LEGEND_DISC / 2.0, swatch.solid);
-        painter.text(
-            rect.center(),
-            Align2::CENTER_CENTER,
-            kind.icon().glyph(),
-            Icon::font(LEGEND_GLYPH),
-            swatch.on_solid,
-        );
-        ui.label(TextRole::Small.rich(word(*kind)));
+        let ink = kind.tone().swatch().text;
+        let (rect, _) = ui.allocate_exact_size(Vec2::splat(size::GLYPH), Sense::hover());
+        kind.icon()
+            .paint(ui.painter(), rect.center(), size::GLYPH, ink);
+        ui.label(TextRole::Small.rich(word(*kind)).color(ink));
     }
 }
 

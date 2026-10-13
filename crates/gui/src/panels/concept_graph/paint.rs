@@ -2,21 +2,18 @@
 //! the nodes, then the ring of the node that has the keyboard.
 
 use eframe::egui::epaint::{PathShape, QuadraticBezierShape};
-use eframe::egui::{self, Align2, Color32, Painter, Pos2, Shape, Stroke, StrokeKind};
+use eframe::egui::{self, Color32, Painter, Pos2, Shape, Stroke, StrokeKind};
 
 use super::geometry::{Point, Rect, Route, point};
 use super::plan::Link;
 use super::scene::{
-    ARROW, CORNER, DIM, DISC, DISC_GAP, DISC_GLYPH, NodeText, PAD_LEFT, Scene, TextOpts, node_text,
-    scaled_font,
+    ARROW, CORNER, DIM, LINK_GAP, LINK_TEXT, NodeText, PAD_LEFT, Scene, TEXT_LEFT, TextOpts,
+    node_text, scaled_font,
 };
 use super::view::View;
-use crate::contract::{ConceptGraph, EdgeKind, GraphNode, NodeKind};
-use crate::theme::{Icon, Kind, TextRole, Tone, color, radius, space, stroke};
+use crate::contract::{ConceptGraph, GraphNode};
+use crate::theme::{Kind, Tone, color, radius, size, space, stroke};
 
-/// How much of the node's own wash a faded node takes on, over the panel colour. The fill
-/// stays solid, so a faded node still hides the links behind it.
-const FADED_FILL: f32 = 0.45;
 const RING_OFFSET: f32 = space::XXS;
 
 #[derive(Debug, Clone, Copy)]
@@ -111,20 +108,6 @@ impl Pen<'_> {
         })
     }
 
-    fn link_tone(&self, link: &Link) -> Tone {
-        let kind_at = |place: usize| {
-            let index = self.drawing.scene.plan.nodes[place];
-            self.drawing.graph.nodes[index].kind
-        };
-        if link.kinds.contains(&EdgeKind::Mentions) {
-            Tone::Rubric
-        } else if kind_at(link.a) == NodeKind::Related || kind_at(link.b) == NodeKind::Related {
-            Tone::Purple
-        } else {
-            Tone::Indigo
-        }
-    }
-
     fn links(&self) {
         let links = self.drawing.scene.plan.links.iter().enumerate();
         let of_centre = links
@@ -137,17 +120,19 @@ impl Pen<'_> {
     }
 
     fn link(&self, index: usize, link: &Link) {
-        let swatch = self.link_tone(link).swatch();
         let (colour, width) = if self.is_lit_link(link) {
-            (swatch.solid, stroke::FOCUS)
+            (color::RULE, stroke::EDGE)
         } else if self.lit.is_some() {
-            (swatch.edge.gamma_multiply(DIM), stroke::EDGE)
+            (color::TEXT_SECONDARY.gamma_multiply(DIM), stroke::BORDER)
         } else {
-            (swatch.solid, stroke::EDGE)
+            (color::TEXT_SECONDARY, stroke::BORDER)
         };
         let line = Stroke::new(width, colour);
         let route = self.drawing.scene.placed.routes[index];
-        match route {
+        // The line ends at the base of an arrowhead, so it never shows past the tip.
+        let at_start = LINK_GAP + if link.points_at_a { ARROW } else { 0.0 };
+        let at_end = LINK_GAP + if link.points_at_b { ARROW } else { 0.0 };
+        match drawn_short(route, at_start, at_end) {
             Route::Line(from, to) => {
                 self.painter
                     .line_segment([self.at(from), self.at(to)], line);
@@ -167,6 +152,8 @@ impl Pen<'_> {
                 self.painter.add(PathShape::line(points, line));
             }
         }
+        // SMELL: two nodes side by side can stand closer than a link with a head at each end
+        // needs, so its two heads overlap a little. The layout leaves no room for the heads.
         if link.points_at_b {
             self.arrowhead(route.arrow_at_end(), colour);
         }
@@ -175,9 +162,12 @@ impl Pen<'_> {
         }
     }
 
+    /// `along` is the line the head sits on, from the point before the end to the end itself.
+    /// The tip stops `LINK_GAP` short of the end.
     fn arrowhead(&self, along: (Point, Point), colour: Color32) {
-        let (from, tip) = (self.at(along.0), self.at(along.1));
-        let direction = (tip - from).normalized();
+        let (from, end) = along;
+        let tip = self.at(toward(end, from, LINK_GAP));
+        let direction = (tip - self.at(from)).normalized();
         let across = direction.rot90() * (ARROW / 2.0 * self.scale());
         let base = tip - direction * (ARROW * self.scale());
         let head = Shape::convex_polygon(
@@ -201,14 +191,14 @@ impl Pen<'_> {
             } else {
                 color::TEXT_SECONDARY
             };
-            let font = scaled_font(TextRole::Small, self.scale());
+            let font = scaled_font(LINK_TEXT, self.scale());
             let galley = self
                 .painter
                 .layout_no_wrap(scene.link_words[index].clone(), font, colour);
             let rect = self.on_canvas(spot.rect);
             if !spot.at_rest {
                 let backing = rect.expand2(egui::vec2(space::XS, 0.0));
-                self.painter.rect_filled(backing, radius::SM, color::SHEET);
+                self.painter.rect_filled(backing, radius::SM, color::DESK);
             }
             self.painter
                 .galley(rect.center() - galley.size() / 2.0, galley, colour);
@@ -235,7 +225,7 @@ impl Pen<'_> {
             scale: self.scale(),
         };
         self.body(&view);
-        self.disc_and_text(&view);
+        self.glyph_and_text(&view);
         if state.has_focus {
             let radius = self.radius(&view);
             let ring = Stroke::new(stroke::FOCUS, color::FOCUS);
@@ -250,60 +240,53 @@ impl Pen<'_> {
     }
 
     fn body(&self, view: &NodeView<'_>) {
-        let tone = Kind::from(view.node.kind).tone();
-        let swatch = tone.swatch();
+        let swatch = Kind::from(view.node.kind).tone().swatch();
         let radius = self.radius(view);
-        let is_centre = view.place == 0;
         let fill = if view.fade < 1.0 {
-            color::SHEET.lerp_to_gamma(swatch.wash, FADED_FILL)
+            // A faded node mixes paper into the desk instead of turning see-through, so it still
+            // hides the words of a lit link that fall under it.
+            color::DESK.lerp_to_gamma(color::SHEET, DIM)
+        } else if view.state.is_hovered {
+            color::WELL
         } else {
-            swatch.wash
+            color::SHEET
         };
         self.painter.rect_filled(view.rect, radius, fill);
-        let (outline, width) = if is_centre || view.state.is_selected {
-            (swatch.solid, stroke::EDGE)
-        } else if view.state.is_hovered {
-            (swatch.solid, stroke::BORDER)
+        let (outline, width) = if view.state.is_selected {
+            (Tone::Rubric.swatch().solid, stroke::EDGE)
+        } else if view.place == 0 {
+            (color::RULE, stroke::EDGE)
         } else {
-            (swatch.edge, stroke::BORDER)
+            (swatch.solid, stroke::BORDER)
         };
         let outline = Stroke::new(width, outline.gamma_multiply(view.fade));
         self.painter
             .rect_stroke(view.rect, radius, outline, StrokeKind::Inside);
     }
 
-    fn disc_and_text(&self, view: &NodeView<'_>) {
+    fn glyph_and_text(&self, view: &NodeView<'_>) {
         let kind = Kind::from(view.node.kind);
-        let swatch = kind.tone().swatch();
         let scale = view.scale;
-        let disc = egui::pos2(
-            view.rect.left() + (PAD_LEFT + DISC / 2.0) * scale,
+        let glyph = egui::pos2(
+            view.rect.left() + (PAD_LEFT + size::GLYPH / 2.0) * scale,
             view.rect.center().y,
         );
-        self.painter.circle_filled(
-            disc,
-            DISC / 2.0 * scale,
-            swatch.solid.gamma_multiply(view.fade),
-        );
-        self.painter.text(
-            disc,
-            Align2::CENTER_CENTER,
-            kind.icon().glyph(),
-            Icon::font(DISC_GLYPH * scale),
-            swatch.on_solid.gamma_multiply(view.fade),
-        );
+        let ink = kind.tone().swatch().text.gamma_multiply(view.fade);
+        kind.icon()
+            .paint(&self.painter, glyph, size::GLYPH * scale, ink);
 
         let opts = TextOpts {
             is_centre: view.place == 0,
             density: self.drawing.scene.density,
             scale,
             fade: view.fade,
+            is_selected: view.state.is_selected,
         };
         let NodeText { first, second } = node_text(view.node, opts);
         let first = self.painter.layout_job(first);
         let second = second.map(|job| self.painter.layout_job(job));
         let height = first.size().y + second.as_ref().map_or(0.0, |galley| galley.size().y);
-        let left = view.rect.left() + (PAD_LEFT + DISC + DISC_GAP) * scale;
+        let left = view.rect.left() + TEXT_LEFT * scale;
         let top = view.rect.center().y - height / 2.0;
         let below = top + first.size().y;
         self.painter
@@ -312,5 +295,39 @@ impl Pen<'_> {
             self.painter
                 .galley(egui::pos2(left, below), second, color::TEXT_SECONDARY);
         }
+    }
+}
+
+/// The point `by` away from `from`, on the line toward `to`.
+fn toward(from: Point, to: Point, by: f32) -> Point {
+    let (dx, dy) = (to.x - from.x, to.y - from.y);
+    let length = dx.hypot(dy);
+    if length == 0.0 {
+        return from;
+    }
+    point(from.x + dx * by / length, from.y + dy * by / length)
+}
+
+/// The route with `at_start` cut off its start and `at_end` cut off its end. Only the drawing is
+/// cut: the layout keeps the full route, so no label moves.
+fn drawn_short(route: Route, at_start: f32, at_end: f32) -> Route {
+    // When a straight route is shorter than its two cuts together, both cuts shrink by the same
+    // share, so the two ends meet instead of crossing. A curved or bent route cuts its two ends
+    // along two different lines.
+    let share = match route {
+        Route::Line(from, to) => {
+            let length = (to.x - from.x).hypot(to.y - from.y);
+            (length / (at_start + at_end)).min(1.0)
+        }
+        Route::Arc(..) | Route::Bent(..) => 1.0,
+    };
+    let (next, start) = route.arrow_at_start();
+    let (previous, end) = route.arrow_at_end();
+    let start = toward(start, next, at_start * share);
+    let end = toward(end, previous, at_end * share);
+    match route {
+        Route::Line(..) => Route::Line(start, end),
+        Route::Arc(_, control, _) => Route::Arc(start, control, end),
+        Route::Bent([_, second, third, _]) => Route::Bent([start, second, third, end]),
     }
 }

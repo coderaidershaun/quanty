@@ -281,14 +281,6 @@ impl StepMarker {
         }
     }
 
-    /// A marker is drawn in ink whatever the tone, so this changes nothing. It stays so that a
-    /// caller that names a tone still builds.
-    // SMELL: a builder that takes a value and ignores it misleads the caller. Remove it once no
-    // caller names a tone.
-    pub const fn tone(self, _tone: Tone) -> Self {
-        self
-    }
-
     pub const fn state(mut self, state: StepState) -> Self {
         self.state = state;
         self

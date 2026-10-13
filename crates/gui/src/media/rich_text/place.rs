@@ -112,7 +112,10 @@ impl Placed {
                     self.finish_run(run.take(), row.index);
                     let atom = fragment.atom;
                     let size = vec2(atom.width, atom.ascent + atom.descent);
-                    let y = row.bounds.top + (row.bounds.height - size.y) / 2.0;
+                    // SMELL: the height of a row still makes room for the numeral as if it sat
+                    // in the middle of the row, and the rise is that of the block's text even on
+                    // a footnote line. So in small text a numeral can reach a little above its row.
+                    let y = row.bounds.baseline - row.look.cite_rise - size.y / 2.0;
                     self.chips.push(PlacedChip {
                         number: *number,
                         rect: Rect::from_min_size(pos2(fragment.x, y), size),

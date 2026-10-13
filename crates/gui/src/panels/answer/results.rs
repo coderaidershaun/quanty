@@ -12,14 +12,19 @@ use crate::media::{images, math, rich_text};
 use crate::theme::{Icon, Kind, TextRole, color, size, space};
 use crate::widgets::{Badge, Card, CitationChip, Placeholder};
 
-const TEXT_PREVIEW: f32 = 3.0 * TextRole::Small.line_height();
-const THUMBNAIL: egui::Vec2 = egui::vec2(3.0 * TEXT_PREVIEW, 2.0 * TEXT_PREVIEW);
-/// This is room for a table's header and two rows.
-const TABLE_PREVIEW: f32 = 2.0 * TEXT_PREVIEW;
+const TEXT_PREVIEW: f32 = 3.0 * TextRole::Body.line_height();
+/// The size of a figure's picture in the list, in points.
+const THUMBNAIL: egui::Vec2 = egui::vec2(144.0, 96.0);
+/// This is room for a table's header and two rows. A row is a line of text with the room that a
+/// table leaves above and below it.
+// SMELL: this repeats the type of a table's header and the room a table leaves around a row,
+// which the table keeps to itself, so a change to either must be made here too.
+const TABLE_PREVIEW: f32 = (TextRole::Caps.line_height() + 2.0 * space::XS)
+    + 2.0 * (TextRole::Body.line_height() + 2.0 * space::XS);
 /// What a row is taken to be high until it has been drawn once: a card with the chip line, the
 /// reason and three lines of preview.
 const ROW_ESTIMATE: f32 =
-    2.0 * space::MD + size::CHIP + 2.0 * space::SM + 4.0 * TextRole::Small.line_height();
+    2.0 * space::MD + size::CHIP + 2.0 * space::SM + TextRole::Small.line_height() + TEXT_PREVIEW;
 const SCORE_WIDTH: f32 = size::CONTROL_LG;
 /// Rounding to whole pixels can move a row by a hair. This is the room that allows for it.
 const SLACK: f32 = 1.0;
@@ -43,6 +48,7 @@ pub(super) fn list(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, tab: AnswerTab) {
         .animated(false)
         .auto_shrink([false, false])
         .show(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = space::MD;
             ui.add_space(space::MD);
             rows(ui, pane, tab);
             ui.add_space(space::LG);
@@ -63,11 +69,19 @@ fn rows(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, tab: AnswerTab) {
         return;
     };
     let mut heights = Heights::take(&mut pane.view.row_heights, ROW_ESTIMATE);
+    // Every numeral stands in a slot as wide as the widest one of the list, so that the badge
+    // after it starts at the same place in every row.
+    let number_width = ask
+        .results()
+        .iter()
+        .filter(|item| tab.lists(item.kind))
+        .map(|item| CitationChip::new(item.number).size(ui).x)
+        .fold(0.0, f32::max);
     for (place, (item, row)) in ask.results().iter().zip(&listing.rows).enumerate() {
         if !tab.lists(item.kind) {
             continue;
         }
-        let slot = heights.show(ui, place, |ui| card(ui, pane, item, row));
+        let slot = heights.show(ui, place, |ui| card(ui, pane, item, row, number_width));
         if pane.is_selected(item.number) {
             reveal(ui, pane, slot);
         }
@@ -96,13 +110,20 @@ fn reveal(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, slot: Slot) {
     }
 }
 
-fn card(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem, row: &Row) {
+fn card(
+    ui: &mut egui::Ui,
+    pane: &mut Pane<'_, '_>,
+    item: &ResultItem,
+    row: &Row,
+    number_width: f32,
+) {
     let is_selected = pane.is_selected(item.number);
     let card = Card::new()
         .selected(is_selected)
         .clickable(&row.open_label)
         .show(ui, |ui| {
-            let chip_clicked = head(ui, item, row, is_selected);
+            ui.spacing_mut().item_spacing.y = space::SM;
+            let chip_clicked = head(ui, item, row, is_selected, number_width);
             let (preview_clicked, cut) = preview(ui, pane, item, row);
             (chip_clicked || preview_clicked, cut)
         });
@@ -111,25 +132,31 @@ fn card(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem, row: &Row
         pane.select(item.number);
     }
     if let Some(window) = cut {
-        let is_lit = card.response.hovered() || card.response.is_pointer_button_down_on();
-        mark_cut(ui, window, is_lit);
+        mark_cut(ui, window, card_fill(&card.response));
+    }
+}
+
+// SMELL: these are the fills of a card and of the sheet under it, copied from the widget kit, so
+// a change to how a card is filled must be made here too.
+fn card_fill(card: &egui::Response) -> egui::Color32 {
+    if card.is_pointer_button_down_on() {
+        color::WELL_DEEP
+    } else if card.hovered() {
+        color::WELL
+    } else {
+        color::SHEET
     }
 }
 
 /// The mark stands over a fade of the card's own fill, so a text that goes on past the box does
 /// not look as if it ended there. It is drawn after the card, so nothing covers it.
-fn mark_cut(ui: &mut egui::Ui, window: egui::Rect, is_lit: bool) {
-    let fill = if is_lit {
-        color::WELL_DEEP
-    } else {
-        color::WELL
-    };
-    let mark = TextRole::Small.rich(CUT_MARK);
-    let width = TextRole::Small.galley(ui, CUT_MARK, fill).size().x;
+fn mark_cut(ui: &mut egui::Ui, window: egui::Rect, fill: egui::Color32) {
+    let mark = TextRole::Body.rich(CUT_MARK);
+    let width = TextRole::Body.galley(ui, CUT_MARK, fill).size().x;
     let line = egui::Rect::from_min_max(
         egui::pos2(
             window.right() - width,
-            window.bottom() - TextRole::Small.line_height(),
+            window.bottom() - TextRole::Body.line_height(),
         ),
         window.right_bottom(),
     );
@@ -155,12 +182,23 @@ fn mark_cut(ui: &mut egui::Ui, window: egui::Rect, is_lit: bool) {
     ui.put(line, egui::Label::new(mark).selectable(false).extend());
 }
 
-fn head(ui: &mut egui::Ui, item: &ResultItem, row: &Row, is_selected: bool) -> bool {
+fn head(
+    ui: &mut egui::Ui,
+    item: &ResultItem,
+    row: &Row,
+    is_selected: bool,
+    number_width: f32,
+) -> bool {
     let kind = Kind::from(item.kind);
     let mut chip_clicked = false;
     ui.horizontal(|ui| {
+        let at_right = egui::Layout::right_to_left(egui::Align::Center);
+        let chip = CitationChip::new(item.number).selected(is_selected);
         chip_clicked = ui
-            .add(CitationChip::new(item.number).selected(is_selected))
+            .allocate_ui_with_layout(egui::vec2(number_width, size::CHIP), at_right, |ui| {
+                ui.add(chip)
+            })
+            .inner
             .clicked();
         ui.add(
             Badge::new(&row.kind_label)
@@ -175,8 +213,7 @@ fn head(ui: &mut egui::Ui, item: &ResultItem, row: &Row, is_selected: bool) -> b
                 ui.add(egui::Label::new(TextRole::Small.rich(&row.place)).truncate());
             },
         );
-        let right = egui::Layout::right_to_left(egui::Align::Center);
-        ui.with_layout(right, |ui| {
+        ui.with_layout(at_right, |ui| {
             let score = TextRole::Label
                 .rich(&row.score)
                 .color(color::TEXT_SECONDARY);
@@ -199,7 +236,7 @@ fn preview(
 ) -> (bool, Option<egui::Rect>) {
     match item.kind {
         ItemKind::Chunk => {
-            let cut = clipped(ui, TEXT_PREVIEW, |ui| pane.rich(ui, &small(&item.text)));
+            let cut = clipped(ui, TEXT_PREVIEW, |ui| pane.rich(ui, &body(&item.text)));
             (false, cut)
         }
         ItemKind::Formula => {
@@ -223,11 +260,11 @@ fn preview(
                     });
                 }
                 ui.vertical(|ui| {
-                    cut = clipped(ui, THUMBNAIL.y, |ui| {
+                    cut = clipped(ui, TEXT_PREVIEW, |ui| {
                         if let Some(caption) = &item.caption {
-                            pane.rich(ui, &small(caption));
+                            pane.rich(ui, &body(caption));
                         }
-                        pane.rich(ui, &small(&item.text));
+                        pane.rich(ui, &body(&item.text));
                     });
                 });
             });
@@ -235,18 +272,18 @@ fn preview(
         }
         ItemKind::Table => {
             if let Some(caption) = &item.caption {
-                pane.rich(ui, &small(caption));
+                pane.rich(ui, &body(caption));
             }
             clipped(ui, TABLE_PREVIEW, |ui| {
-                pane.table(ui, &item.text, TextRole::Small);
+                pane.table(ui, &item.text, TextRole::Body);
             });
             (false, None)
         }
     }
 }
 
-fn small(text: &str) -> rich_text::RichText<'_> {
-    rich_text::RichText::new(text, TextRole::Small)
+fn body(text: &str) -> rich_text::RichText<'_> {
+    rich_text::RichText::new(text, TextRole::Body)
 }
 
 fn clipped(

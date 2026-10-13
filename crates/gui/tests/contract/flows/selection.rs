@@ -256,7 +256,7 @@ fn a_choice_in_one_panel_shows_in_every_panel() {
 fn the_header_says_what_an_ask_used() {
     let mut answered = testkit::app("black-scholes", DEFAULT_WINDOW);
     testkit::settle(&mut answered);
-    assert!(has(&answered, Role::Label, "12k tokens · ≈ $0.03"));
+    assert!(has(&answered, Role::Label, "12k tokens, about $0.03"));
 
     let mut answering = testkit::app("answering", DEFAULT_WINDOW);
     wait_until(&mut answering, "the results", |harness| {
@@ -270,7 +270,7 @@ fn the_header_says_what_an_ask_used() {
 
     let mut results_only = testkit::app("results-only", DEFAULT_WINDOW);
     testkit::settle(&mut results_only);
-    assert!(has(&results_only, Role::Label, "12 tokens · under $0.01"));
+    assert!(has(&results_only, Role::Label, "12 tokens, under $0.01"));
 }
 
 fn both_phases_of_an_ask_can_be_used_before_the_answer_is_written() {

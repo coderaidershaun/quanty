@@ -31,7 +31,7 @@ fn a_wide_table_scrolls_sideways_and_a_narrow_one_fits() {
             .map(|piece| piece.right)
             .fold(f32::MIN, f32::max)
     };
-    let header_font = TextRole::Small.strong_font();
+    let header_font = TextRole::Caps.font();
 
     let (node, shapes) = table_in(900.0, "rich-text-table-wide");
     assert!(node.width() <= 900.0 + 0.5, "the table fits its panel");
@@ -40,7 +40,7 @@ fn a_wide_table_scrolls_sideways_and_a_narrow_one_fits() {
         .filter(|piece| piece.sections.iter().all(|(_, f)| f.font_id == header_font))
         .collect();
     assert!(
-        squeezed_of(&header).ends_with("Ifforeignratesfall"),
+        squeezed_of(&header).ends_with("IFFOREIGNRATESFALL"),
         "the last header cell is drawn after the others"
     );
     let all: Vec<&Painted> = shapes.iter().collect();

@@ -88,8 +88,8 @@ fn kind_label(item: &ResultItem) -> String {
 
 fn place(item: &ResultItem) -> String {
     match &item.printed_page {
-        Some(printed) => format!("{} \u{b7} p. {printed}", item.doc_title),
-        None => format!("{} \u{b7} page {}", item.doc_title, item.page),
+        Some(printed) => format!("{}, p. {printed}", item.doc_title),
+        None => format!("{}, page {}", item.doc_title, item.page),
     }
 }
 
@@ -101,7 +101,7 @@ fn reason(reason: &Reason) -> String {
     }
 }
 
-/// Only a figure and a table have a caption line under their card.
+/// Only a figure and a table have a caption. A formula shows its label beside it instead.
 fn caption(item: &ResultItem) -> String {
     if !matches!(item.kind, ItemKind::Figure | ItemKind::Table) {
         return String::new();

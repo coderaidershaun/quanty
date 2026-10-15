@@ -30,6 +30,7 @@ pub(crate) fn piece_word_count(page: &TranscribedPage) -> usize {
             TranscribedPiece::Table { markdown, note, .. } => std::iter::once(markdown.as_str())
                 .chain(note.as_deref())
                 .collect(),
+            TranscribedPiece::Code { code, .. } => vec![code.as_str()],
             TranscribedPiece::Formula { .. } | TranscribedPiece::Figure { .. } => Vec::new(),
         })
         .map(|text| words(text).len())
@@ -85,6 +86,16 @@ pub(crate) fn piece_strings(piece: &TranscribedPiece) -> Vec<&str> {
         } => {
             copied.extend(marker.as_deref());
             copied.push(markdown);
+        }
+        TranscribedPiece::Code {
+            label,
+            caption,
+            code,
+            ..
+        } => {
+            copied.extend(label.as_deref());
+            copied.extend(caption.as_deref());
+            copied.push(code);
         }
     }
     copied

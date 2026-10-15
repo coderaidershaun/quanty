@@ -1,4 +1,4 @@
-//! The five tabs of the source panel: what each one counts, which one a result opens, and the
+//! The six tabs of the source panel: what each one counts, which one a result opens, and the
 //! strip that shows them.
 
 use eframe::egui;
@@ -22,14 +22,16 @@ pub(super) enum CardTab {
     Figures,
     Formulas,
     Tables,
+    Code,
 }
 
 impl SourceTab {
-    const ALL: [SourceTab; 5] = [
+    const ALL: [SourceTab; 6] = [
         SourceTab::Page,
         SourceTab::Cards(CardTab::Figures),
         SourceTab::Cards(CardTab::Formulas),
         SourceTab::Cards(CardTab::Tables),
+        SourceTab::Cards(CardTab::Code),
         SourceTab::Concepts,
     ];
 
@@ -46,6 +48,7 @@ impl SourceTab {
             SourceTab::Cards(CardTab::Figures) => "Figures",
             SourceTab::Cards(CardTab::Formulas) => "Formulas",
             SourceTab::Cards(CardTab::Tables) => "Tables",
+            SourceTab::Cards(CardTab::Code) => "Code",
             SourceTab::Concepts => "Concepts",
         }
     }
@@ -58,6 +61,7 @@ pub(super) struct PieceIndex {
     figures: Vec<usize>,
     formulas: Vec<usize>,
     tables: Vec<usize>,
+    code: Vec<usize>,
 }
 
 impl PieceIndex {
@@ -70,11 +74,13 @@ impl PieceIndex {
         self.figures.clear();
         self.formulas.clear();
         self.tables.clear();
+        self.code.clear();
         for (place, piece) in page.pieces.iter().enumerate() {
             match piece.kind {
                 PieceKind::Figure => self.figures.push(place),
                 PieceKind::Formula => self.formulas.push(place),
                 PieceKind::Table => self.tables.push(place),
+                PieceKind::Code => self.code.push(place),
                 PieceKind::Heading { .. } | PieceKind::Text | PieceKind::Footnote => {}
             }
         }
@@ -85,6 +91,7 @@ impl PieceIndex {
             CardTab::Figures => &self.figures,
             CardTab::Formulas => &self.formulas,
             CardTab::Tables => &self.tables,
+            CardTab::Code => &self.code,
         }
     }
 }
@@ -117,6 +124,7 @@ pub(super) fn tab_for(page: &PageView, piece: &PagePiece) -> SourceTab {
         PieceKind::Figure if piece.cut.is_none() => SourceTab::Cards(CardTab::Figures),
         PieceKind::Formula => SourceTab::Cards(CardTab::Formulas),
         PieceKind::Table => SourceTab::Cards(CardTab::Tables),
+        PieceKind::Code => SourceTab::Cards(CardTab::Code),
         PieceKind::Figure | PieceKind::Heading { .. } | PieceKind::Text | PieceKind::Footnote => {
             SourceTab::Page
         }
@@ -124,7 +132,7 @@ pub(super) fn tab_for(page: &PageView, piece: &PagePiece) -> SourceTab {
 }
 
 /// A count that is not known is `None`, not 0.
-pub(super) fn tab_list(nav: &SourceNav, index: &PieceIndex) -> [Tab<'static>; 5] {
+pub(super) fn tab_list(nav: &SourceNav, index: &PieceIndex) -> [Tab<'static>; 6] {
     let has_page = nav.page.ready().is_some();
     SourceTab::ALL.map(|tab| {
         let count = match tab {

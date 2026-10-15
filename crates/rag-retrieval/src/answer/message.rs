@@ -27,6 +27,9 @@ fn item_block(number: usize, payload: &ItemPayload) -> String {
     if let Some(label) = &payload.label {
         lines.push(format!("label: {label}"));
     }
+    if let Some(language) = &payload.language {
+        lines.push(format!("language: {language}"));
+    }
     if let Some(picture) = &payload.image_path {
         lines.push(format!("picture: {}", picture.display()));
     }
@@ -42,5 +45,6 @@ fn body_heading(kind: ItemKind) -> &'static str {
         ItemKind::Formula => "latex:",
         ItemKind::Figure => "explanation:",
         ItemKind::Table => "table:",
+        ItemKind::Code => "code:",
     }
 }

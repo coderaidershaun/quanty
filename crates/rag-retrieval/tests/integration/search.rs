@@ -95,6 +95,56 @@ async fn a_question_finds_its_item_and_prints_title_page_kind_text_and_picture()
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-retrieval --test integration -- --ignored search::"]
+async fn a_search_for_code_finds_the_listing_with_its_language() {
+    let throwaway = ThrowawayStores::new("search-code");
+    let stores = throwaway.connect().await;
+    let embedder = WordEmbedder::default();
+    let items = store_samples(&embedder, &stores.items, &stores.concepts).await;
+    let codes: Vec<_> = items
+        .iter()
+        .filter(|item| item.payload.kind == ItemKind::Code)
+        .collect();
+    let [target] = codes[..] else {
+        panic!("the sample chapters should hold one code listing, got {codes:?}");
+    };
+    let retriever = Retriever {
+        embedder: embedder.clone(),
+        items: stores.items,
+        concepts: stores.concepts,
+        graph: stores.graph,
+    };
+
+    let results = retriever
+        .search(
+            &target.payload.text,
+            Some(ItemKind::Code),
+            &LabelFilter::default(),
+        )
+        .await
+        .unwrap();
+
+    let [hit] = &results.hits[..] else {
+        panic!(
+            "expected the one code listing alone, got {:?}",
+            results.hits
+        );
+    };
+    assert_eq!(hit.item.id, target.id);
+    assert_eq!(hit.item.payload.kind, ItemKind::Code);
+    assert_eq!(hit.item.payload.language.as_deref(), Some("python"));
+    let printed = results.to_string();
+    let header: Vec<&str> = printed
+        .lines()
+        .take_while(|line| *line != "text:")
+        .collect();
+    assert!(header.contains(&"kind: code"), "{printed}");
+    assert!(header.contains(&"label: Listing 2.1"), "{printed}");
+    assert!(header.contains(&"language: python"), "{printed}");
+    assert!(printed.contains(&target.payload.text), "{printed}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-retrieval --test integration -- --ignored search::"]
 async fn an_item_of_another_document_comes_back_through_a_shared_concept_and_the_cap_holds() {
     let throwaway = ThrowawayStores::new("search-graph");
     let stores = throwaway.connect().await;

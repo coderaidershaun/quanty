@@ -82,3 +82,54 @@ pub(super) fn judge_copy(
         None => CopyOutcome::Kept(page),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::{CopyOutcome, judge_copy};
+    use crate::content::RouteReason;
+    use crate::convert::reply::{CopiedPage, TranscribedPiece};
+
+    const TEXT_LAYER: &str = "let a = \"x\\ty\"; if a { b % c } $";
+
+    fn a_copy_with_code(code: &str) -> CopiedPage {
+        serde_json::from_value(json!({
+            "needs-stronger-model": false,
+            "printed-page-number": null,
+            "running-header": null,
+            "pieces": [{
+                "kind": "code",
+                "number": 1,
+                "label": null,
+                "caption": null,
+                "language": " Rust ",
+                "code": code,
+                "summary": "Compares two values."
+            }],
+            "starts-mid-sentence": false,
+            "ends-mid-sentence": false
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn a_haiku_copy_keeps_its_code_listing_and_refuses_one_with_a_tab() {
+        let indented = "\n    let a = \"x\\ty\";   \n\n    if a { b % c } $\n  \n";
+
+        let CopyOutcome::Kept(page) = judge_copy(a_copy_with_code(indented), TEXT_LAYER, 8) else {
+            panic!("a copy that holds only code was refused");
+        };
+        let TranscribedPiece::Code { code, language, .. } = &page.pieces[0] else {
+            panic!("the kept piece is not code");
+        };
+        assert_eq!(code, "    let a = \"x\\ty\";\n\n    if a { b % c } $");
+        assert_eq!(language.as_deref(), Some("rust"));
+
+        let tabbed = "\tlet a = \"x\\ty\"; if a { b % c } $";
+        assert!(matches!(
+            judge_copy(a_copy_with_code(tabbed), TEXT_LAYER, 8),
+            CopyOutcome::Refused(RouteReason::CopyFailedReplyCheck)
+        ));
+    }
+}

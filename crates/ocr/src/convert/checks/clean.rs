@@ -1,5 +1,5 @@
 //! Tidies every model reply before it is checked or saved, without changing any word or symbol a
-//! reader can see.
+//! reader can see, except that the language of a code listing is put in lower case.
 
 use super::latex;
 use crate::convert::reply::{CitedLabel, TranscribedPage, TranscribedPiece};
@@ -91,6 +91,20 @@ pub(super) fn clean_reply(page: &mut TranscribedPage) {
                 clean_text(markdown);
                 clean_cites(cites);
             }
+            TranscribedPiece::Code {
+                label,
+                caption,
+                language,
+                code,
+                summary,
+                ..
+            } => {
+                clean_optional(label);
+                clean_optional(caption);
+                clean_language(language);
+                clean_code(code);
+                clean_text(summary);
+            }
         }
     }
 }
@@ -115,6 +129,28 @@ fn clean_optional(text: &mut Option<String>) {
             *text = None;
         }
     }
+}
+
+fn clean_language(language: &mut Option<String>) {
+    clean_optional(language);
+    if let Some(name) = language {
+        *name = name.to_lowercase();
+    }
+}
+
+/// Code keeps its indentation, so only the ends of lines are trimmed and the blank lines around
+/// the listing are dropped. `remove_invisible` is not used: it would also eat the whitespace
+/// after a soft hyphen, and code has no word broken at a line end.
+fn clean_code(code: &mut String) {
+    let lines: Vec<&str> = code.lines().map(str::trim_end).collect();
+    let kept = match (
+        lines.iter().position(|line| !line.is_empty()),
+        lines.iter().rposition(|line| !line.is_empty()),
+    ) {
+        (Some(first), Some(last)) => &lines[first..=last],
+        _ => &[],
+    };
+    *code = kept.join("\n");
 }
 
 fn clean_cites(cites: &mut [CitedLabel]) {

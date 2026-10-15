@@ -280,6 +280,7 @@ fn shown(summary: &IngestSummary, number: u32, name: &str, folder: &Path) -> Doc
             formulas: counts.formulas as u64,
             figures: counts.figures as u64,
             tables: counts.tables as u64,
+            code: counts.code as u64,
         },
         ingested_items: Some(counts.total() as u64),
         folder: Some(folder.to_path_buf()),

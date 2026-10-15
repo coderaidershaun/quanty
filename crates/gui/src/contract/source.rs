@@ -27,6 +27,7 @@ pub enum PieceKind {
     Figure,
     Table,
     Footnote,
+    Code,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -37,6 +38,10 @@ pub struct PagePiece {
     pub label: Option<String>,
     pub name: Option<String>,
     pub caption: Option<String>,
+    /// The language of a piece of code, in lower case. `None` for any other piece, and for code of
+    /// an unknown language.
+    pub language: Option<String>,
+    /// The piece as saved. For code, the code as printed.
     pub text: String,
     pub image: Option<ImageRef>,
     /// Where a figure was cut from the page. Only when the cut shows the figure.

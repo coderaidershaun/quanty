@@ -1,6 +1,7 @@
 //! Tests of how the parts of the desktop app work together.
 #![recursion_limit = "256"]
 
+mod answer_code;
 mod backend_seam;
 mod flows;
 mod look;

@@ -116,6 +116,7 @@ pub struct PieceCounts {
     pub figure: u32,
     pub table: u32,
     pub footnote: u32,
+    pub code: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -216,6 +217,7 @@ impl ConversionSummary {
                 PieceDetail::Figure { .. } => &mut self.pieces.figure,
                 PieceDetail::Table { .. } => &mut self.pieces.table,
                 PieceDetail::Footnote { .. } => &mut self.pieces.footnote,
+                PieceDetail::Code { .. } => &mut self.pieces.code,
             };
             *count += 1;
         }
@@ -310,13 +312,14 @@ impl fmt::Display for ConversionSummary {
         )?;
         writeln!(
             formatter,
-            "pieces: heading {}, text {}, formula {}, figure {}, table {}, footnote {}",
+            "pieces: heading {}, text {}, formula {}, figure {}, table {}, footnote {}, code {}",
             pieces.heading,
             pieces.text,
             pieces.formula,
             pieces.figure,
             pieces.table,
-            pieces.footnote
+            pieces.footnote,
+            pieces.code
         )?;
         // No cost is printed: this crate has no table of prices, and the figure that `claude`
         // reports is not the one the programs that do have the table print.

@@ -11,6 +11,7 @@ pub(super) struct Counts {
     pub(super) formulas: usize,
     pub(super) figures: usize,
     pub(super) tables: usize,
+    pub(super) code: usize,
 }
 
 impl Counts {
@@ -21,6 +22,7 @@ impl Counts {
             AnswerTab::Formulas => Some(self.formulas),
             AnswerTab::Figures => Some(self.figures),
             AnswerTab::Tables => Some(self.tables),
+            AnswerTab::Code => Some(self.code),
         }
     }
 }
@@ -51,6 +53,7 @@ impl Listing {
                 formulas: count(ItemKind::Formula),
                 figures: count(ItemKind::Figure),
                 tables: count(ItemKind::Table),
+                code: count(ItemKind::Code),
             },
             rows: results.iter().map(Row::of).collect(),
         }
@@ -78,6 +81,7 @@ fn kind_label(item: &ResultItem) -> String {
         ItemKind::Formula => "Formula",
         ItemKind::Figure => "Figure",
         ItemKind::Table => "Table",
+        ItemKind::Code => "Code",
     };
     match item.label.as_deref() {
         Some(label) if label.starts_with(name) => label.to_owned(),
@@ -101,9 +105,13 @@ fn reason(reason: &Reason) -> String {
     }
 }
 
-/// Only a figure and a table have a caption. A formula shows its label beside it instead.
+/// Only a figure, a table and a code listing have a caption. A formula shows its label beside it
+/// instead.
 fn caption(item: &ResultItem) -> String {
-    if !matches!(item.kind, ItemKind::Figure | ItemKind::Table) {
+    if !matches!(
+        item.kind,
+        ItemKind::Figure | ItemKind::Table | ItemKind::Code
+    ) {
         return String::new();
     }
     match (item.label.as_deref(), item.caption.as_deref()) {

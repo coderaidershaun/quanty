@@ -102,7 +102,7 @@ macro_rules! enum_with_all {
 }
 
 enum_with_all! {
-    /// The four things a chapter is stored as. A heading is not one of them: it is context.
+    /// The five things a chapter is stored as. A heading is not one of them: it is context.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "lowercase")]
     pub enum ItemKind {
@@ -110,6 +110,7 @@ enum_with_all! {
         Formula,
         Figure,
         Table,
+        Code,
     }
 }
 
@@ -121,6 +122,7 @@ impl ItemKind {
             ItemKind::Formula => "formula",
             ItemKind::Figure => "figure",
             ItemKind::Table => "table",
+            ItemKind::Code => "code",
         }
     }
 }
@@ -159,15 +161,19 @@ pub struct ItemPayload {
     pub printed_page: Option<String>,
     pub kind: ItemKind,
     /// The item as the reader would quote it: the raw LaTeX for a formula, the Markdown body for
-    /// a table, the explanation for a figure.
+    /// a table, the explanation for a figure, the code as printed for code.
     pub text: String,
     /// The figure's own picture. Figures only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image_path: Option<PathBuf>,
-    /// The label as printed, such as "(7.3)", "Figure 13-4" or "Table 1-1". Formulas, figures and
-    /// tables only, and only those that have one.
+    /// The label as printed, such as "(7.3)", "Figure 13-4" or "Table 1-1". Formulas, figures,
+    /// tables and code only, and only those that have one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    /// The language of the code in lower case, such as "python". Code only, and only when it is
+    /// known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
     /// The printed labels of the figures, tables and equations that the text points at, each once,
     /// in reading order. Chunks only.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

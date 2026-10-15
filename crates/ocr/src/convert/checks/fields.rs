@@ -13,6 +13,9 @@ enum Role {
     /// Prose that may hold `\( … \)` spans.
     Mixed,
     Plain,
+    /// Program code: any character may be printed, so no LaTeX rule reads it. A tab is still
+    /// refused: the model is told to indent with spaces, so a tab means a lost `\t`.
+    Code,
 }
 
 struct Field<'a> {
@@ -134,6 +137,20 @@ fn fields(page: &TranscribedPage) -> Vec<Field<'_>> {
                 collector.add("markdown", markdown, Role::Mixed);
                 collector.add_cites(cites);
             }
+            TranscribedPiece::Code {
+                label,
+                caption,
+                language,
+                code,
+                summary,
+                ..
+            } => {
+                collector.add_optional("label", label, Role::Plain);
+                collector.add_optional("caption", caption, Role::Mixed);
+                collector.add_optional("language", language, Role::Plain);
+                collector.add("code", code, Role::Code);
+                collector.add("summary", summary, Role::Plain);
+            }
         }
     }
     collector.fields
@@ -189,7 +206,7 @@ fn lost_backslash(page: &TranscribedPage, fields: &[Field<'_>]) -> Result<(), Re
                     return Err(fault("a line break inside LaTeX"));
                 }
             }
-            Role::Formula | Role::Symbol | Role::Plain => {}
+            Role::Formula | Role::Symbol | Role::Plain | Role::Code => {}
         }
     }
     Ok(())
@@ -199,7 +216,7 @@ fn latex_parts<'a>(field: &Field<'a>) -> Result<Vec<&'a str>, &'static str> {
     match field.role {
         Role::Formula | Role::Symbol => Ok(vec![field.text]),
         Role::Mixed => latex::math_spans(field.text),
-        Role::Plain => Ok(Vec::new()),
+        Role::Plain | Role::Code => Ok(Vec::new()),
     }
 }
 
@@ -251,8 +268,11 @@ fn piece_ref_of(page: &TranscribedPage, field: &Field<'_>) -> Option<PieceRef> {
     field.piece.map(|index| PieceRef::of(page, index))
 }
 
+/// A backslash in code is part of the code, so only the other strings are looked at.
 pub(crate) fn any_string_has_backslash(page: &TranscribedPage) -> bool {
-    fields(page).iter().any(|field| field.text.contains('\\'))
+    fields(page)
+        .iter()
+        .any(|field| field.role != Role::Code && field.text.contains('\\'))
 }
 
 pub(super) fn check_strings(page: &TranscribedPage) -> Result<(), ReplyFault> {

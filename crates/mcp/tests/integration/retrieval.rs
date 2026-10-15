@@ -123,6 +123,35 @@ async fn search_gives_the_placed_item_first_and_explain_says_how_it_was_found() 
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored retrieval::"]
+async fn search_can_ask_for_code_alone_and_gives_its_language() {
+    let library = Library::ingested("mcp-search-code").await;
+    let client = connect(library.server()).await;
+
+    let result = call(
+        &client,
+        "search",
+        json!({ "question": QUESTION, "kind": "code" }),
+    )
+    .await;
+
+    let results = structured(&result)["results"].as_array().unwrap();
+    let [listing] = results.as_slice() else {
+        panic!("expected the one code listing of the library: {results:?}");
+    };
+    assert_eq!(listing["kind"], "code");
+    assert_eq!(listing["label"], "Listing 2.1");
+    assert_eq!(listing["language"], "python");
+    assert!(
+        listing["text"]
+            .as_str()
+            .unwrap()
+            .starts_with("def call_price("),
+        "{listing}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored retrieval::"]
 async fn answer_gives_claims_with_the_results_they_rest_on() {
     let library = Library::ingested("mcp-answer").await;
     let client = connect(library.server()).await;

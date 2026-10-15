@@ -60,13 +60,18 @@ pub(super) struct ItemView {
     /// out when the page shows no number.
     #[serde(skip_serializing_if = "Option::is_none")]
     printed_page: Option<String>,
-    /// `chunk`, `formula`, `figure` or `table`.
+    /// `chunk`, `formula`, `figure`, `table` or `code`.
     kind: String,
-    /// The label as printed, such as "(7.3)" or "Figure 13-4". Formulas, figures and tables only.
+    /// The label as printed, such as "(7.3)" or "Figure 13-4". Formulas, figures, tables and code
+    /// only.
     #[serde(skip_serializing_if = "Option::is_none")]
     label: Option<String>,
+    /// The language of a code listing in lower case, such as "python". Left out when the language
+    /// is not known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    language: Option<String>,
     /// The item as a reader would quote it: the LaTeX of a formula, the Markdown of a table, the
-    /// explanation of a figure.
+    /// explanation of a figure, the code as printed for code.
     text: String,
     /// The path of the picture of a figure, on the disk of the machine the server runs on.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -168,6 +173,7 @@ impl From<&ItemPayload> for ItemView {
             printed_page: payload.printed_page.clone(),
             kind: payload.kind.as_str().to_owned(),
             label: payload.label.clone(),
+            language: payload.language.clone(),
             text: payload.text.clone(),
             picture: payload
                 .image_path

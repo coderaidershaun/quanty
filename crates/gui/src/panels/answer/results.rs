@@ -8,7 +8,7 @@ use super::listing::Row;
 use super::pane::Pane;
 use super::phase::AnswerTab;
 use crate::contract::{ItemKind, ResultItem};
-use crate::media::{images, math, rich_text};
+use crate::media::{code, images, math, rich_text};
 use crate::theme::{Icon, Kind, TextRole, color, size, space};
 use crate::widgets::{Badge, Card, CitationChip, Placeholder};
 
@@ -25,6 +25,8 @@ const TABLE_PREVIEW: f32 = (TextRole::Caps.line_height() + 2.0 * space::XS)
 /// reason and three lines of preview.
 const ROW_ESTIMATE: f32 =
     2.0 * space::MD + size::CHIP + 2.0 * space::SM + TextRole::Small.line_height() + TEXT_PREVIEW;
+/// A code listing shows its first four lines.
+const CODE_PREVIEW: f32 = code::height_of(4);
 const SCORE_WIDTH: f32 = size::CONTROL_LG;
 /// Rounding to whole pixels can move a row by a hair. This is the room that allows for it.
 const SLACK: f32 = 1.0;
@@ -60,6 +62,7 @@ fn nothing_of(tab: AnswerTab) -> Option<(Icon, &'static str)> {
         AnswerTab::Formulas => Some((Kind::Formula.icon(), "No formulas among the results")),
         AnswerTab::Figures => Some((Kind::Figure.icon(), "No figures among the results")),
         AnswerTab::Tables => Some((Kind::Table.icon(), "No tables among the results")),
+        AnswerTab::Code => Some((Kind::Code.icon(), "No code among the results")),
         AnswerTab::Answer | AnswerTab::Results => None,
     }
 }
@@ -276,6 +279,15 @@ fn preview(
             }
             clipped(ui, TABLE_PREVIEW, |ui| {
                 pane.table(ui, &item.text, TextRole::Body);
+            });
+            (false, None)
+        }
+        ItemKind::Code => {
+            if let Some(caption) = &item.caption {
+                pane.rich(ui, &body(caption));
+            }
+            clipped(ui, CODE_PREVIEW, |ui| {
+                pane.code(ui, &item.text, item.language.as_deref());
             });
             (false, None)
         }

@@ -13,10 +13,10 @@ const DELETE: &str = "Delete";
 const DELETE_DOCUMENT: &str = "Delete document";
 const DELETE_MEDIA: &str = "Delete media";
 
-const DOCUMENT_BODY: &str = "Its passages, formulas, figures and tables go from the library. Its converted pages go from the disk, and so does the copy of its PDF, if quanty keeps one. The PDF you picked from your own disk is not touched. This cannot be undone.";
+const DOCUMENT_BODY: &str = "Its passages, formulas, figures, tables and code listings go from the library. Its converted pages go from the disk, and so does the copy of its PDF, if quanty keeps one. The PDF you picked from your own disk is not touched. This cannot be undone.";
 const MEDIA_WITHOUT_DOCUMENT_BODY: &str =
     "It has no document, so only the media goes. This cannot be undone.";
-const MEDIA_WITH_ONE_DOCUMENT_BODY: &str = "Its 1 document goes with it: its passages, formulas, figures and tables go from the library, and its converted pages go from the disk, with the copy of its PDF if quanty keeps one. The PDF you picked from your own disk is not touched. This cannot be undone.";
+const MEDIA_WITH_ONE_DOCUMENT_BODY: &str = "Its 1 document goes with it: its passages, formulas, figures, tables and code listings go from the library, and its converted pages go from the disk, with the copy of its PDF if quanty keeps one. The PDF you picked from your own disk is not touched. This cannot be undone.";
 
 const OFF_WHILE_INGESTING: &str = "Nothing can be deleted while an ingest runs.";
 const OFF_WHILE_UPDATING: &str = "Nothing can be deleted while the library is being updated.";
@@ -74,7 +74,7 @@ fn media_body(documents: usize) -> String {
         0 => MEDIA_WITHOUT_DOCUMENT_BODY.to_owned(),
         1 => MEDIA_WITH_ONE_DOCUMENT_BODY.to_owned(),
         count => format!(
-            "Its {count} documents go with it: the passages, formulas, figures and tables of each go from the library, and the converted pages of each go from the disk, with the copy of its PDF if quanty keeps one. The PDFs you picked from your own disk are not touched. This cannot be undone."
+            "Its {count} documents go with it: the passages, formulas, figures, tables and code listings of each go from the library, and the converted pages of each go from the disk, with the copy of its PDF if quanty keeps one. The PDFs you picked from your own disk are not touched. This cannot be undone."
         ),
     }
 }

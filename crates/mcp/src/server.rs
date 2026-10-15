@@ -191,11 +191,11 @@ impl<S: Services> QuantyServer<S> {
 
 #[tool_router]
 impl<S: Services> QuantyServer<S> {
-    /// Finds the stored items (text chunks, formulas, figures and tables) that are nearest to a
-    /// question, with their document, page and the reason each was found. It embeds the question
-    /// with the Gemini API, which is a small paid call. Give the `document_id` and `page` of a
-    /// result to `read_page` to read the page around it. Give `document` (a `title` or
-    /// `document_id` from `list_documents`) to search one document only.
+    /// Finds the stored items (text chunks, formulas, figures, tables and code listings) that
+    /// are nearest to a question, with their document, page and the reason each was found. It
+    /// embeds the question with the Gemini API, which is a small paid call. Give the
+    /// `document_id` and `page` of a result to `read_page` to read the page around it. Give
+    /// `document` (a `title` or `document_id` from `list_documents`) to search one document only.
     #[tool(annotations(read_only_hint = true))]
     async fn search(
         &self,

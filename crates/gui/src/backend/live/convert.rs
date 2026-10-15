@@ -56,6 +56,7 @@ impl From<rag_core::ItemKind> for ItemKind {
             rag_core::ItemKind::Formula => ItemKind::Formula,
             rag_core::ItemKind::Figure => ItemKind::Figure,
             rag_core::ItemKind::Table => ItemKind::Table,
+            rag_core::ItemKind::Code => ItemKind::Code,
         }
     }
 }
@@ -67,6 +68,7 @@ impl From<ItemKind> for rag_core::ItemKind {
             ItemKind::Formula => rag_core::ItemKind::Formula,
             ItemKind::Figure => rag_core::ItemKind::Figure,
             ItemKind::Table => rag_core::ItemKind::Table,
+            ItemKind::Code => rag_core::ItemKind::Code,
         }
     }
 }

@@ -108,6 +108,14 @@ pub(super) enum Detail {
         #[serde(default)]
         marker: Option<String>,
     },
+    Code {
+        #[serde(default)]
+        label: Option<String>,
+        #[serde(default)]
+        caption: Option<String>,
+        #[serde(default)]
+        language: Option<String>,
+    },
 }
 
 #[derive(Deserialize)]

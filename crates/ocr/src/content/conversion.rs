@@ -31,11 +31,11 @@ pub struct Conversion {
 #[schemars(description = "Which kinds of content are present on one PDF page.")]
 pub struct PageCategories {
     #[schemars(
-        description = "Displayed mathematical notation: an equation or formula set on its own line or lines, apart from the running text."
+        description = "Displayed mathematical notation: an equation or formula set on its own line or lines, apart from the running text. Program code is not mathematical notation."
     )]
     pub math_notation: bool,
     #[schemars(
-        description = "Mathematical notation inside a line of running text, such as symbols, subscripts or short expressions within a sentence. Plain numbers, money amounts, percentages and dates are not mathematical notation."
+        description = "Mathematical notation inside a line of running text, such as symbols, subscripts or short expressions within a sentence. Plain numbers, money amounts, percentages and dates are not mathematical notation. Program code is not mathematical notation."
     )]
     pub inline_with_text_math_notation: bool,
     #[schemars(
@@ -118,7 +118,7 @@ pub enum RouteReason {
 #[serde(rename_all = "kebab-case")]
 pub struct Checks {
     pub text_layer_words: usize,
-    /// Words in the copied kinds only: headings, text, footnotes and tables.
+    /// Words in the copied kinds only: headings, text, footnotes, tables and code.
     pub piece_words: usize,
     pub word_match: WordMatch,
     /// The page was reported to hold displayed math but has no formula piece.

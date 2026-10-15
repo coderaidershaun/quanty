@@ -196,6 +196,7 @@ impl Fixture {
                 text: placed.text,
                 image_path: placed.picture,
                 label: placed.label,
+                language: None,
                 cites: placed.cites,
                 document_labels: document.labels.clone(),
             },

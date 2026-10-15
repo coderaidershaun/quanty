@@ -57,6 +57,7 @@ fn paper() -> Media {
             formulas: 6,
             figures: 2,
             tables: 1,
+            code: 0,
         },
         ingested_items: Some(33),
         folder: None,
@@ -86,6 +87,7 @@ fn index(authors: Vec<String>) -> Document {
             formulas: 0,
             figures: 0,
             tables: 0,
+            code: 0,
         },
         ingested_items: Some(9),
         folder: None,
@@ -135,11 +137,12 @@ pub(in crate::backend::fake) fn catalogue(samples: &Path) -> Result<Catalogue, S
                     Detail::Formula { .. } => items.formulas += 1,
                     Detail::Figure { .. } => items.figures += 1,
                     Detail::Table { .. } => items.tables += 1,
+                    Detail::Code { .. } => items.code += 1,
                     Detail::Heading { .. } => {}
                 }
             }
         }
-        let total = items.chunks + items.formulas + items.figures + items.tables;
+        let total = items.total();
         let authors = SAMPLE_AUTHORS
             .iter()
             .find(|(title, _)| *title == chapter.media_title)
@@ -236,6 +239,7 @@ fn piece_of(folder: &Path, position: u32, entry: PieceFile) -> Result<PagePiece,
         label: None,
         name: None,
         caption: None,
+        language: None,
         text,
         image: None,
         cut: None,
@@ -277,6 +281,16 @@ fn piece_of(folder: &Path, position: u32, entry: PieceFile) -> Result<PagePiece,
         Detail::Footnote { marker } => {
             piece.kind = PieceKind::Footnote;
             piece.label = marker;
+        }
+        Detail::Code {
+            label,
+            caption,
+            language,
+        } => {
+            piece.kind = PieceKind::Code;
+            piece.label = label;
+            piece.caption = caption;
+            piece.language = language;
         }
     }
     Ok(piece)

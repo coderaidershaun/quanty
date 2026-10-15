@@ -208,6 +208,7 @@ fn piece_view(piece: ChapterPiece) -> PagePiece {
         label: None,
         name: None,
         caption: None,
+        language: None,
         text: content,
         image: None,
         cut: None,
@@ -255,6 +256,18 @@ fn piece_view(piece: ChapterPiece) -> PagePiece {
         PieceDetail::Footnote { marker, .. } => PagePiece {
             kind: PieceKind::Footnote,
             label: marker,
+            ..plain
+        },
+        PieceDetail::Code {
+            label,
+            caption,
+            language,
+            ..
+        } => PagePiece {
+            kind: PieceKind::Code,
+            label,
+            caption,
+            language,
             ..plain
         },
     }

@@ -131,6 +131,7 @@ pub struct ItemsByKind {
     pub formulas: u64,
     pub figures: u64,
     pub tables: u64,
+    pub code: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

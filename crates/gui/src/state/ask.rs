@@ -88,11 +88,31 @@ fn card_markdown(result: &ResultItem) -> String {
     let number = result.number;
     let name = match result.kind {
         ItemKind::Formula => return format!("$$ {} $$ [{number}]", result.text),
+        ItemKind::Code => {
+            let title = result.label.as_deref().unwrap_or("Code");
+            let language = result.language.as_deref().unwrap_or_default();
+            let fence = fence_for(&result.text);
+            return format!(
+                "*{title}* [{number}]\n\n{fence}{language}\n{}\n{fence}",
+                result.text
+            );
+        }
         ItemKind::Figure => "Figure",
         ItemKind::Table => "Table",
         ItemKind::Chunk => "Text",
     };
     format!("*{}* [{number}]", result.label.as_deref().unwrap_or(name))
+}
+
+/// Three backticks, or one more than the longest run of them in the code, so that a listing that
+/// holds a fence of its own cannot end the block early.
+fn fence_for(code: &str) -> String {
+    let longest_run = code
+        .split(|character| character != '`')
+        .map(str::len)
+        .max()
+        .unwrap_or(0);
+    "`".repeat(longest_run.max(2) + 1)
 }
 
 fn source_line(result: &ResultItem) -> String {

@@ -102,5 +102,6 @@ fn word(kind: Kind) -> &'static str {
         Kind::Formula => "Formula",
         Kind::Figure => "Figure",
         Kind::Table => "Table",
+        Kind::Code => "Code",
     }
 }

@@ -29,7 +29,8 @@ impl PieceRef {
             TranscribedPiece::Figure {
                 label, explanation, ..
             } => (label.as_deref(), explanation),
-            TranscribedPiece::Table { label, summary, .. } => (label.as_deref(), summary),
+            TranscribedPiece::Table { label, summary, .. }
+            | TranscribedPiece::Code { label, summary, .. } => (label.as_deref(), summary),
         };
         let called = match label {
             Some(label) => format!("\"{label}\""),
@@ -126,12 +127,12 @@ pub enum ReplyFault {
     },
 
     #[error(
-        "starts-mid-sentence is true, but the first piece that is not a figure, table or footnote is not a text piece; make it false unless the page really begins in the middle of a sentence in a text piece"
+        "starts-mid-sentence is true, but the first piece that is not a figure, table, code listing or footnote is not a text piece; make it false unless the page really begins in the middle of a sentence in a text piece"
     )]
     StartsMidSentenceFlag,
 
     #[error(
-        "ends-mid-sentence is true, but the last piece that is not a figure, table or footnote is not a text piece; make it false unless the page really ends in the middle of a sentence in a text piece"
+        "ends-mid-sentence is true, but the last piece that is not a figure, table, code listing or footnote is not a text piece; make it false unless the page really ends in the middle of a sentence in a text piece"
     )]
     EndsMidSentenceFlag,
 

@@ -29,7 +29,8 @@ pub(super) fn write_page(
         let (detail, content) = piece_parts(piece, image);
         let entry = PieceEntry::new(piece.number(), detail);
         let path = folder.join(&entry.file);
-        std::fs::write(&path, format!("{}\n", content.trim()))
+        // Only the end is trimmed, so that the first line of a code listing keeps its indentation.
+        std::fs::write(&path, format!("{}\n", content.trim_end()))
             .map_err(|source| ContentError::Write { path, source })?;
         pieces.push(entry);
     }
@@ -131,6 +132,22 @@ fn piece_parts(piece: &TranscribedPiece, image: Option<FigureImage>) -> (PieceDe
                 cites: all_cites(markdown, cites),
             },
             markdown.clone(),
+        ),
+        TranscribedPiece::Code {
+            label,
+            caption,
+            language,
+            code,
+            summary,
+            ..
+        } => (
+            PieceDetail::Code {
+                label: label.clone(),
+                caption: caption.clone(),
+                language: language.clone(),
+                summary: summary.clone(),
+            },
+            code.clone(),
         ),
     }
 }
@@ -242,7 +259,8 @@ fn footnote_links(page: &TranscribedPage) -> Vec<Relationship> {
                 | TranscribedPiece::Table { markdown, .. } => markdown,
                 TranscribedPiece::Formula { .. }
                 | TranscribedPiece::Figure { .. }
-                | TranscribedPiece::Footnote { .. } => continue,
+                | TranscribedPiece::Footnote { .. }
+                | TranscribedPiece::Code { .. } => continue,
             };
             if words.contains(&carrying) {
                 links.push(Relationship {
@@ -260,8 +278,11 @@ fn footnote_links(page: &TranscribedPage) -> Vec<Relationship> {
 mod tests {
     use serde_json::json;
 
-    use super::piece_parts;
-    use crate::convert::reply::TranscribedPiece;
+    use super::{piece_parts, write_page};
+    use crate::content::{
+        Checks, Conversion, MathCheck, PageCategories, PageIndex, PieceDetail, Route, WordMatch,
+    };
+    use crate::convert::reply::{TranscribedPage, TranscribedPiece};
 
     // The kind names are written out twice, once for a reply and once for the saved pieces, and
     // only this test keeps the two lists the same.
@@ -275,7 +296,8 @@ mod tests {
             { "kind": "figure", "number": 4, "printed-text": [], "bounds": bounds,
               "explanation": "D" },
             { "kind": "table", "number": 5, "markdown": "| e |", "summary": "E" },
-            { "kind": "footnote", "number": 6, "markdown": "F", "cites": [] }
+            { "kind": "footnote", "number": 6, "markdown": "F", "cites": [] },
+            { "kind": "code", "number": 7, "code": "g", "summary": "G" }
         ]))
         .unwrap();
         for piece in &pieces {
@@ -284,6 +306,70 @@ mod tests {
             assert_eq!(serde_json::to_value(piece).unwrap()["kind"], name);
             assert_eq!(saved.kind_name(), name);
             assert_eq!(serde_json::to_value(&saved).unwrap()["kind"], name);
+        }
+    }
+
+    #[test]
+    fn a_code_piece_is_saved_as_printed() {
+        let code = r#"    fn main() {
+        let path = "C:\\temp\\n";
+
+        println!("{path}");
+    }"#;
+        let page = TranscribedPage {
+            printed_page_number: None,
+            running_header: None,
+            pieces: vec![TranscribedPiece::Code {
+                number: 1,
+                label: Some("Listing 2.1".to_owned()),
+                caption: Some("A short program".to_owned()),
+                language: Some("rust".to_owned()),
+                code: code.to_owned(),
+                summary: "Prints a path.".to_owned(),
+            }],
+            discusses: Vec::new(),
+            starts_mid_sentence: false,
+            ends_mid_sentence: false,
+        };
+        let folder = tempfile::tempdir().unwrap();
+
+        write_page(folder.path(), 1, &page, &[], a_conversion()).unwrap();
+
+        let saved = std::fs::read_to_string(folder.path().join("01-code.txt")).unwrap();
+        assert_eq!(saved, format!("{code}\n"));
+        let index = PageIndex::read(folder.path()).unwrap();
+        assert_eq!(
+            index.pieces[0].detail,
+            PieceDetail::Code {
+                label: Some("Listing 2.1".to_owned()),
+                caption: Some("A short program".to_owned()),
+                language: Some("rust".to_owned()),
+                summary: "Prints a path.".to_owned(),
+            }
+        );
+        assert_eq!(index.pieces[0].file, "01-code.txt");
+    }
+
+    fn a_conversion() -> Conversion {
+        Conversion {
+            tags: PageCategories::default(),
+            math_check: MathCheck::None,
+            math_check_failure: None,
+            route: Route::HaikuCopy,
+            route_reasons: Vec::new(),
+            checks: Checks {
+                text_layer_words: 0,
+                piece_words: 0,
+                word_match: WordMatch {
+                    piece_words_in_text_layer: 1.0,
+                    text_layer_words_in_pieces: 1.0,
+                },
+                displayed_math_without_formula: false,
+                reply_retried: false,
+                retry_reason: None,
+                whole_page_figures: Vec::new(),
+            },
+            calls: Vec::new(),
         }
     }
 }

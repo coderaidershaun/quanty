@@ -103,7 +103,7 @@ pub(super) fn block(
 
 /// Shows the menu that a secondary click opens, with one entry. True in the frame that the
 /// entry is chosen.
-pub(super) fn copy_is_chosen(response: &Response, label: &str) -> bool {
+pub(in crate::media) fn copy_is_chosen(response: &Response, label: &str) -> bool {
     let mut chosen = false;
     response.context_menu(|ui| {
         if ui.add(Button::ghost(label)).clicked() {

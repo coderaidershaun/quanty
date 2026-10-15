@@ -29,6 +29,7 @@ struct Draft {
     kind: ItemKind,
     text: String,
     label: Option<String>,
+    language: Option<String>,
     cites: Vec<String>,
     input: DocumentInput,
 }
@@ -46,6 +47,7 @@ impl Draft {
                 text: self.text,
                 image_path: self.input.image.clone(),
                 label: self.label,
+                language: self.language,
                 cites: self.cites,
                 document_labels: DocumentLabels::default(),
             },

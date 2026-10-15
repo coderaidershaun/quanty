@@ -38,7 +38,8 @@ pub(super) struct Candidates {
 }
 
 impl Candidates {
-    /// A chunk is never drawn: chunks that mention everything would bury the concepts.
+    /// A chunk is never drawn: chunks that mention everything would bury the concepts. A code
+    /// listing is not drawn either, because the graph has no node for one.
     pub(super) fn new(trace: &SearchTrace, results: &[ResultItem]) -> Candidates {
         let seeds: Vec<SeedConcept> = trace::seeds(trace).into_iter().take(MAX_SEEDS).collect();
         let pool = trace
@@ -58,7 +59,7 @@ impl Candidates {
 
 fn item_candidate(result: &ResultItem) -> Option<ItemCandidate> {
     let (kind, word, detail) = match result.kind {
-        ItemKind::Chunk => return None,
+        ItemKind::Chunk | ItemKind::Code => return None,
         ItemKind::Formula => (NodeKind::Formula, "Formula", &result.name),
         ItemKind::Figure => (NodeKind::Figure, "Figure", &result.caption),
         ItemKind::Table => (NodeKind::Table, "Table", &result.caption),

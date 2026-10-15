@@ -293,8 +293,8 @@ fn collect_relationships(
 }
 
 /// The lead-in of a formula that opens `next` is the last text piece of `previous`, when
-/// `previous` ends in the middle of a sentence. Only figures, tables and footnotes may follow
-/// that text piece, and only formulas may come before the formula.
+/// `previous` ends in the middle of a sentence. Only figures, tables, code listings and footnotes
+/// may follow that text piece, and only formulas may come before the formula.
 fn bridged_lead_ins(
     previous_position: u32,
     previous: &PageIndex,
@@ -306,7 +306,10 @@ fn bridged_lead_ins(
     let lead_in = previous.pieces.iter().rev().find(|piece| {
         !matches!(
             piece.detail,
-            PieceDetail::Figure { .. } | PieceDetail::Table { .. } | PieceDetail::Footnote { .. }
+            PieceDetail::Figure { .. }
+                | PieceDetail::Table { .. }
+                | PieceDetail::Footnote { .. }
+                | PieceDetail::Code { .. }
         )
     });
     let Some(lead_in) = lead_in.filter(|piece| matches!(piece.detail, PieceDetail::Text { .. }))

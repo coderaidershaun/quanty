@@ -1,5 +1,5 @@
 //! Reads and checks what the model replied, and prints the answer. The program, not the model,
-//! writes the document, the printed page and the LaTeX of each source.
+//! writes the document, the printed page and the LaTeX or the code of each source.
 
 use std::fmt;
 
@@ -221,7 +221,7 @@ fn write_source(formatter: &mut fmt::Formatter<'_>, source: &ItemPayload) -> fmt
     }
     formatter.write_str(")")?;
     match source.kind {
-        ItemKind::Formula => write!(formatter, "\n{}", source.text),
+        ItemKind::Formula | ItemKind::Code => write!(formatter, "\n{}", source.text),
         ItemKind::Figure => match &source.image_path {
             Some(picture) => write!(formatter, "\n  picture: {}", picture.display()),
             None => Ok(()),

@@ -43,7 +43,8 @@ async fn document_records_come_back_with_their_labels_mark_folder_and_items_by_k
     let kinds = repeat_n(ItemKind::Chunk, 4)
         .chain(repeat_n(ItemKind::Formula, 3))
         .chain(repeat_n(ItemKind::Figure, 2))
-        .chain(repeat_n(ItemKind::Table, 1));
+        .chain(repeat_n(ItemKind::Table, 1))
+        .chain(repeat_n(ItemKind::Code, 5));
     let items: Vec<ItemNode> = (0u32..)
         .zip(kinds)
         .map(|(position, kind)| item(id_a, kind, position, 1))
@@ -53,19 +54,20 @@ async fn document_records_come_back_with_their_labels_mark_folder_and_items_by_k
     graph.upsert_document(&node_b).await.unwrap();
     graph.upsert_document(&node_a).await.unwrap();
     graph.upsert_items(id_a, &items).await.unwrap();
-    graph.set_ingested_items(id_a, Some(10)).await.unwrap();
+    graph.set_ingested_items(id_a, Some(15)).await.unwrap();
     graph.set_chapter_folder(id_a, folder).await.unwrap();
 
     let expected = vec![
         DocumentRecord {
             node: node_a,
-            ingested_items: Some(10),
+            ingested_items: Some(15),
             chapter_folder: Some(folder.to_path_buf()),
             items: ItemsByKind {
                 chunks: 4,
                 formulas: 3,
                 figures: 2,
                 tables: 1,
+                code: 5,
             },
         },
         DocumentRecord {

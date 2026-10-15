@@ -178,6 +178,15 @@
           "label": "(2.5)"
         }
       ]
+    },
+    {
+      "number": 11,
+      "file": "11-code.txt",
+      "kind": "code",
+      "label": "Listing 2.1",
+      "caption": "The call price in Python",
+      "language": "python",
+      "summary": "A Python function that returns the Black–Scholes price of a European call from the spot price, the strike, the interest rate, the volatility and the years to expiry."
     }
   ],
   "relationships": [

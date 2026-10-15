@@ -56,6 +56,7 @@ fn count_of(items: &mut ItemsByKind, kind: ItemKind) -> &mut u64 {
         ItemKind::Formula => &mut items.formulas,
         ItemKind::Figure => &mut items.figures,
         ItemKind::Table => &mut items.tables,
+        ItemKind::Code => &mut items.code,
     }
 }
 

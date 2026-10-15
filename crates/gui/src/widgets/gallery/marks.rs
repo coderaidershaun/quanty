@@ -47,6 +47,7 @@ fn kind_chips(ui: &mut egui::Ui, state: &mut State) {
             (Kind::Formula, "Formula (3.17)"),
             (Kind::Figure, "Figure 3.1"),
             (Kind::Table, "Table 3.2"),
+            (Kind::Code, "Listing 3.3"),
         ];
         for (kind, label) in kinds {
             used(state, &ui.add(Chip::kind(kind, label)), "Chip::kind");

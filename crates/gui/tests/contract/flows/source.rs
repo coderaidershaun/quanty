@@ -7,13 +7,13 @@ use std::time::{Duration, Instant};
 
 use eframe::egui;
 use eframe::egui::accesskit::Role;
-use gui::app::layout::DEFAULT_WINDOW;
+use gui::app::layout::{DEFAULT_WINDOW, MIN_WINDOW};
 use gui::contract::{Category, DocId, Intent, Loadable, PieceKind};
 use gui::testkit;
 
 use super::{
-    COMMAND, Window, are_stacked_in_order, click, click_in, has, is_enabled, node, panels, press,
-    says, shared,
+    COMMAND, Window, are_stacked_in_order, click, click_in, has, is_enabled, node, node_in, panels,
+    press, says, shared,
 };
 
 const SOURCE_TITLE: &str = "Source in Context";
@@ -296,6 +296,54 @@ fn the_source_shows_the_page_its_pickers_and_pager_name() {
 
     a_chapter_with_no_page_pictures_shows_its_pieces(&mut harness, notes.doc);
     a_paper_is_named_by_its_title(&mut harness);
+}
+
+#[test]
+fn a_page_with_code_has_a_code_tab_and_shows_the_listing_with_its_language() {
+    let mut harness = testkit::app("black-scholes", DEFAULT_WINDOW);
+    testkit::settle(&mut harness);
+    harness.state_mut().push(Intent::SelectResult(1));
+    testkit::settle(&mut harness);
+    // The Answer pane has a Code tab too, so the Source panel's is found by its place.
+    let source = panels(DEFAULT_WINDOW).source;
+    let code_tab =
+        node_in(&harness, Role::Tab, "Code", source).expect("the Source panel has a Code tab");
+    assert_eq!(
+        code_tab.value().as_deref(),
+        Some("1"),
+        "page 3 of chapter 2 holds one listing"
+    );
+
+    click_in(&mut harness, Role::Tab, "Code", source);
+
+    assert!(
+        has(&harness, Role::Label, "Listing 2.1"),
+        "the card is tagged with the label"
+    );
+    assert!(
+        has(&harness, Role::Label, "python"),
+        "the listing names its language"
+    );
+    assert!(
+        says(&harness, "\n    d1 = (log(spot / strike)"),
+        "the listing keeps its indentation"
+    );
+    assert!(
+        says(&harness, "The call price in Python"),
+        "the caption is under the listing"
+    );
+
+    let mut small = testkit::app("black-scholes", MIN_WINDOW);
+    testkit::settle(&mut small);
+    small.state_mut().push(Intent::SelectResult(1));
+    testkit::settle(&mut small);
+    let source = panels(MIN_WINDOW).source;
+    let concepts_tab = node_in(&small, Role::Tab, "Concepts", source)
+        .expect("the Source panel has a Concepts tab");
+    assert!(
+        source.contains_rect(concepts_tab.rect()),
+        "the six tabs fit the Source panel at the smallest window"
+    );
 }
 
 /// The paper of the sample library has no folder, so its page fails to open. This step comes last

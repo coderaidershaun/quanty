@@ -36,7 +36,7 @@ Seven tools. A tool that costs money says so in its description, and so does thi
 
 | Tool | What it does | Costs |
 | --- | --- | --- |
-| `search` | The stored items (text chunks, formulas, figures, tables) nearest to a question | A small Gemini call |
+| `search` | The stored items (text chunks, formulas, figures, tables, code listings) nearest to a question | A small Gemini call |
 | `answer` | An answer written from what `search` finds, with its sources | A Gemini call and your Claude usage; a minute or two |
 | `list_documents` | Every stored document with its media, category, authors, tags and chapter | Nothing |
 | `read_page` | The pieces of one page of a document, in reading order | Nothing, and it needs no store |
@@ -57,7 +57,7 @@ First calls to try, in this order:
 | Argument | |
 | --- | --- |
 | `question` | Required. The question, in plain words |
-| `kind` | `chunk`, `formula`, `figure` or `table` |
+| `kind` | `chunk`, `formula`, `figure`, `table` or `code` |
 | `document` | Only one document: its `title` or its `document_id` from `list_documents`. The title is the whole stored title, whatever the capitals. A title or an id that no stored document has gives no results |
 | `media` | Only documents of this media, whatever the capitals. The older name `book` is understood too |
 | `author` | Only documents by this author, whatever the capitals. It matches any author of a document |
@@ -66,7 +66,7 @@ First calls to try, in this order:
 | `limit` | Keep only the first `limit` results (from 1) |
 | `explain` | `true` adds `trace`, which says how the search got to the results |
 
-Gives `results`, best first. Each result has `number`, `document_id`, `document` (its title: the book and the chapter, or a title of its own), `media` (the title of its media; a picture that stands alone has none), `category` (left out when there is no media), `authors`, `media_tags` (the tags of the media), `tags` (the document's own tags), `page` (the place of the page in the document, from 1), `printed_page` (the number printed on the page: cite with it), `kind`, `label`, `score`, `reason`, `text` and, for a figure, `picture` (the path of its picture on this machine). `reason` is `{"why": "nearest"}`, `{"why": "concept", "concept": …}` or `{"why": "cited", "by": …, "label": …}`. With `explain`, `trace` has `documents_searched`, `seeds`, `question_concepts`, `seed_concepts`, `related_concepts`, `candidates`, `ranked`, `capped` and `kept`. It also gives `usage` and `cost_usd`, as below. Give the `document_id` and `page` of a result to `read_page` to read around it.
+Gives `results`, best first. Each result has `number`, `document_id`, `document` (its title: the book and the chapter, or a title of its own), `media` (the title of its media; a picture that stands alone has none), `category` (left out when there is no media), `authors`, `media_tags` (the tags of the media), `tags` (the document's own tags), `page` (the place of the page in the document, from 1), `printed_page` (the number printed on the page: cite with it), `kind`, `label`, `language` (the language of a code listing in lower case, left out when it is not known), `score`, `reason`, `text` and, for a figure, `picture` (the path of its picture on this machine). `reason` is `{"why": "nearest"}`, `{"why": "concept", "concept": …}` or `{"why": "cited", "by": …, "label": …}`. With `explain`, `trace` has `documents_searched`, `seeds`, `question_concepts`, `seed_concepts`, `related_concepts`, `candidates`, `ranked`, `capped` and `kept`. It also gives `usage` and `cost_usd`, as below. Give the `document_id` and `page` of a result to `read_page` to read around it.
 
 ### `answer`
 
@@ -92,7 +92,7 @@ It also gives `unreadable_chapters`: one line for each converted document under 
 | `document_id` | Required. From a search result or `list_documents` |
 | `page` | Required. The `page` of a search result (from 1), not the printed number |
 
-Gives `document_id`, `media` (the title of its media), `chapter_number` and `chapter_name` (for a book's chapter), `document_title` (for a document with a title of its own, such as a paper's or a part of a book that is not a chapter; it gives the whole stored title, which for a part is "<book>, <part>"), `page`, `pages`, `printed_page`, `page_image` (the path of the picture of the whole page) and `pieces`: for each, `number`, `kind` (`heading`, `text`, `formula`, `figure`, `table` or `footnote`), `section` (the headings it sits under, outermost first), `label`, `content` and, for a figure, `picture`.
+Gives `document_id`, `media` (the title of its media), `chapter_number` and `chapter_name` (for a book's chapter), `document_title` (for a document with a title of its own, such as a paper's or a part of a book that is not a chapter; it gives the whole stored title, which for a part is "<book>, <part>"), `page`, `pages`, `printed_page`, `page_image` (the path of the picture of the whole page) and `pieces`: for each, `number`, `kind` (`heading`, `text`, `formula`, `figure`, `table`, `footnote` or `code`), `section` (the headings it sits under, outermost first), `label`, `language` (for code, when it is known), `content` (the code as printed, with its indentation, for code) and, for a figure, `picture`.
 
 ### `health`
 

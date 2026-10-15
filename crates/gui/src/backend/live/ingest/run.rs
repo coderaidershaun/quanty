@@ -185,6 +185,7 @@ fn ingested(summary: PdfSummary) -> IngestReport {
             formulas: counts.formulas as u64,
             figures: counts.figures as u64,
             tables: counts.tables as u64,
+            code: counts.code as u64,
         },
         concepts_created: ingest.concepts.concepts_created,
         concepts_linked: ingest.concepts.concepts_linked,

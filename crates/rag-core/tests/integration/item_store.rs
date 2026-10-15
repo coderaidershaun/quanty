@@ -86,6 +86,7 @@ fn point(document: DocId, kind: ItemKind, position: u32) -> ItemPoint {
             text: format!("item {position}"),
             image_path: None,
             label: None,
+            language: None,
             cites: Vec::new(),
             document_labels: DocumentLabels::default(),
         },

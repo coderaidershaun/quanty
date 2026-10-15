@@ -1,4 +1,4 @@
-//! The Figures, Formulas and Tables tabs: one card for each piece of that kind on the page.
+//! The Figures, Formulas, Tables and Code tabs: one card for each piece of that kind on the page.
 
 use eframe::egui;
 
@@ -54,5 +54,6 @@ fn nothing_of(tab: CardTab) -> (Icon, &'static str) {
         CardTab::Figures => (Icon::FIGURE, "No figures on this page"),
         CardTab::Formulas => (Icon::FORMULA, "No formulas on this page"),
         CardTab::Tables => (Icon::TABLE, "No tables on this page"),
+        CardTab::Code => (Icon::CODE, "No code on this page"),
     }
 }

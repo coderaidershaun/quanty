@@ -1,6 +1,8 @@
 //! Pictures, formulas and laid-out text that panels show: each is made off the window's thread
-//! the first time it is asked for, and kept.
+//! the first time it is asked for, and kept. A code listing is the exception: it is laid out on
+//! the window's thread and not kept.
 
+pub mod code;
 pub mod images;
 pub mod math;
 mod offload;

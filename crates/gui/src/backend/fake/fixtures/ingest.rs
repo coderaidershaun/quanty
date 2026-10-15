@@ -21,9 +21,9 @@ const ITEM_COUNTS: ItemCounts = ItemCounts {
     formulas: 8,
     figures: 3,
     tables: 2,
+    code: 0,
 };
-const ITEMS: u32 =
-    (ITEM_COUNTS.chunks + ITEM_COUNTS.formulas + ITEM_COUNTS.figures + ITEM_COUNTS.tables) as u32;
+const ITEMS: u32 = ITEM_COUNTS.total() as u32;
 /// The page at which the play of a scene whose ingest never ends stops for ever.
 const STALLED_AT_PAGE: u32 = 3;
 

@@ -229,7 +229,7 @@ async fn a_checked_chapter_is_ingested_with_its_labels_and_a_second_start_finds_
     };
     assert_eq!(report.pages, 7);
     let counts = report.items;
-    let items = counts.chunks + counts.formulas + counts.figures + counts.tables;
+    let items = counts.total();
     assert!(items > 0, "{report:#?}");
     let used: Vec<(&str, bool)> = (report.usage.models.iter())
         .map(|model| (model.model.as_str(), model.estimated))

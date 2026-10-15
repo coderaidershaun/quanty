@@ -1,5 +1,6 @@
-//! The formulas, figures and tables of the written answer, shown as the source has them. A block
-//! has no box: it is one thing to click, and the number of its result stands in its caption.
+//! The formulas, figures, tables and code listings of the written answer, shown as the source has
+//! them. A block has no box: it is one thing to click, and the number of its result stands in its
+//! caption.
 
 use eframe::egui;
 
@@ -85,6 +86,24 @@ pub(super) fn table(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultIte
     }
 }
 
+/// The listing runs as wide as the pane, with its caption under it.
+pub(super) fn code(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem, row: &Row) {
+    let number = item.number;
+    let is_selected = pane.is_selected(number);
+    let response = block(ui, &row.open_label, is_selected, |ui| {
+        ui.spacing_mut().item_spacing.y = space::SM;
+        pane.code(ui, &item.text, item.language.as_deref());
+        ui.scope(|ui| {
+            narrow_to_measure(ui);
+            caption(ui, pane, item, row);
+        });
+    })
+    .response;
+    if response.clicked() {
+        pane.select(number);
+    }
+}
+
 /// Draws a block as one thing to click, named after its result, with a little room above and
 /// below. At rest it has no fill and no outline: the pointer shows that it can be clicked, and
 /// the keyboard focus shows as a ring.
@@ -121,7 +140,8 @@ fn block<R>(
     egui::InnerResponse::new(scope.inner, response)
 }
 
-/// The caption of a figure or a table, in italics, with the number of its result after it.
+/// The caption of a figure, a table or a code listing, in italics, with the number of its result
+/// after it.
 fn caption(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem, row: &Row) {
     let text = rich_text::RichText::new(&row.caption, TextRole::Caption)
         .cites(std::slice::from_ref(&item.number))

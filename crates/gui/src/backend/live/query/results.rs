@@ -18,9 +18,9 @@ pub(super) struct PieceFacts {
     pub(super) name: Option<String>,
 }
 
-/// A chunk has none, because one chunk can hold several text pieces. A formula, figure or table
-/// has one only when exactly one piece of its page has its kind and its label: with none or with
-/// two there is no guess.
+/// A chunk has none, because one chunk can hold several text pieces. A formula, figure, table or
+/// code listing has one only when exactly one piece of its page has its kind and its label: with
+/// none or with two there is no guess.
 pub(super) fn piece_facts(
     hits: &[SearchHit],
     folders: &HashMap<DocId, PathBuf>,
@@ -71,6 +71,9 @@ fn facts_if_it_fits(piece: &ChapterPiece, payload: &ItemPayload) -> Option<Piece
         PieceDetail::Table { label, caption, .. } => {
             (ItemKind::Table, label, None, caption.as_deref())
         }
+        PieceDetail::Code { label, caption, .. } => {
+            (ItemKind::Code, label, None, caption.as_deref())
+        }
         _ => return None,
     };
     let fits =
@@ -110,6 +113,7 @@ pub(super) fn result_items(hits: &[SearchHit], facts: Vec<Option<PieceFacts>>) -
                 printed_page: payload.printed_page.clone(),
                 label: payload.label.clone(),
                 text: payload.text.clone(),
+                language: payload.language.clone(),
                 image: payload.image_path.clone().map(|path| ImageRef { path }),
                 piece,
                 caption,

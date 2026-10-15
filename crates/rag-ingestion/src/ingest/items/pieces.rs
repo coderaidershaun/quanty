@@ -1,17 +1,17 @@
-//! The pieces that are one item each: a formula, a figure or a table.
+//! The pieces that are one item each: a formula, a figure, a table or a code listing.
 
 use ocr::{Chapter, ChapterPiece, PieceDetail, RelationshipKind, Symbol};
 use rag_core::{DocumentInput, ItemKind};
 
 use super::{BLOCK_SEPARATOR, Draft, context_line};
 
-/// `None` for a piece that is not a formula, a figure or a table.
+/// `None` for a piece that is not a formula, a figure, a table or a code listing.
 pub(super) fn piece_draft(
     chapter: &Chapter,
     piece: &ChapterPiece,
     doc_title: &str,
 ) -> Option<Draft> {
-    let (kind, text, image, label) = match &piece.detail {
+    let (kind, text, image, label, language) = match &piece.detail {
         PieceDetail::Formula {
             label,
             name,
@@ -27,7 +27,7 @@ pub(super) fn piece_draft(
                 Some(statement),
                 symbols.as_deref(),
             ]);
-            (ItemKind::Formula, text, None, label)
+            (ItemKind::Formula, text, None, label, None)
         }
         PieceDetail::Table {
             label,
@@ -36,7 +36,7 @@ pub(super) fn piece_draft(
         } => {
             let heading = label_line(label.as_deref(), caption.as_deref());
             let text = join_blocks([heading.as_deref(), Some(summary), Some(&piece.content)]);
-            (ItemKind::Table, text, None, label)
+            (ItemKind::Table, text, None, label, None)
         }
         PieceDetail::Figure { label, caption, .. } => {
             let heading = label_line(label.as_deref(), caption.as_deref());
@@ -45,7 +45,23 @@ pub(super) fn piece_draft(
                 .figure_image
                 .as_ref()
                 .map(|picture| picture.path.clone());
-            (ItemKind::Figure, text, picture, label)
+            (ItemKind::Figure, text, picture, label, None)
+        }
+        PieceDetail::Code {
+            label,
+            caption,
+            language,
+            summary,
+        } => {
+            let heading = label_line(label.as_deref(), caption.as_deref());
+            let language_line = language.as_deref().map(|name| format!("Language: {name}"));
+            let text = join_blocks([
+                heading.as_deref(),
+                language_line.as_deref(),
+                Some(summary),
+                Some(&piece.content),
+            ]);
+            (ItemKind::Code, text, None, label, language.clone())
         }
         _ => return None,
     };
@@ -55,6 +71,7 @@ pub(super) fn piece_draft(
         kind,
         text: piece.content.clone(),
         label: printed_label(label.as_deref()),
+        language,
         cites: Vec::new(),
         input: DocumentInput {
             title: context_line(doc_title, &piece.section),

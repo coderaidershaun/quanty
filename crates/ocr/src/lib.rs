@@ -1,5 +1,6 @@
 //! Turns the PDF of a book chapter, a paper or another document into saved pieces (headings,
-//! text, formulas, figures, tables and footnotes) that later steps can read back in reading order.
+//! text, formulas, figures, tables, code listings and footnotes) that later steps can read back
+//! in reading order.
 
 pub mod content;
 pub mod convert;

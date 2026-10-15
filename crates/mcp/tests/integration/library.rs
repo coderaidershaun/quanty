@@ -1,6 +1,7 @@
 //! Checks what an agent can read of the library: the documents that are stored, and the pieces of
 //! one page of a converted chapter.
 
+use rag_core::DocId;
 use serde_json::json;
 
 use crate::support::{
@@ -91,6 +92,39 @@ async fn read_page_gives_the_pieces_of_a_page_in_reading_order() {
     let picture = sample_chapter_folder().join("page-num-5/01-figure.png");
     assert_eq!(figure["picture"], picture.display().to_string());
     assert!(picture.is_file());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn read_page_gives_a_code_listing_as_printed_with_its_language() {
+    let ports = ClosedPorts::new().with_content_folder(&sample_content_folder());
+    let client = connect(ports.server()).await;
+    let chapter =
+        ocr::ChapterIndex::read(&sample_content_folder().join("quanty-sample-notes/chapter-2"))
+            .expect("the notes chapter should have a chapter.json");
+    let document_id = DocId::from_source_sha256(&chapter.source_sha256).to_string();
+
+    let result = call(
+        &client,
+        "read_page",
+        json!({ "document_id": document_id, "page": 3 }),
+    )
+    .await;
+
+    let pieces = structured(&result)["pieces"].as_array().unwrap();
+    assert_eq!(pieces.len(), 11);
+    let listing = &pieces[10];
+    assert_eq!(listing["number"], 11);
+    assert_eq!(listing["kind"], "code");
+    assert_eq!(listing["label"], "Listing 2.1");
+    assert_eq!(listing["language"], "python");
+    assert_eq!(
+        listing["content"],
+        "def call_price(spot, strike, rate, volatility, years):\n    d1 = (log(spot / strike) + (rate + 0.5 * volatility ** 2) * years) / (volatility * sqrt(years))\n    d2 = d1 - volatility * sqrt(years)\n\n    return spot * norm_cdf(d1) - strike * exp(-rate * years) * norm_cdf(d2)"
+    );
+    assert!(
+        pieces[9].get("language").is_none(),
+        "a piece that is not code has no language"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

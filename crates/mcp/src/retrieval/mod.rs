@@ -23,7 +23,8 @@ pub(crate) use written::AnswerResult;
 pub(crate) struct QuestionArgs {
     /// The question, in plain words, as a person would ask it.
     question: String,
-    /// Look only at items of this kind: `chunk` (running text), `formula`, `figure` or `table`.
+    /// Look only at items of this kind: `chunk` (running text), `formula`, `figure`, `table` or
+    /// `code` (a code listing).
     kind: Option<String>,
     /// Look only at one document: its `title` or its `document_id` from `list_documents`. The
     /// title is the whole stored title, such as "Option Volatility and Pricing, chapter 1: Sample

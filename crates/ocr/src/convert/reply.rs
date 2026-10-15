@@ -24,6 +24,11 @@ const TEXT: &str = "One paragraph of running text, or one whole list.";
 const CITES: &str = "Every figure, table and numbered equation this piece refers to by its printed label, on this page or elsewhere. Empty when there are none.";
 const CAPTION: &str =
     "The printed title or caption that goes with the label. Null when none is printed.";
+const CODE: &str = "One listing of program code, a shell command or session, or a configuration file, printed apart from the running text, often in a box or in a fixed-width font, with its label and caption.";
+const CODE_LABEL: &str = "The printed label, such as \"Listing 3-2\" or \"Example 4.1\", with a plain hyphen between numbers. Null when none is printed.";
+const CODE_LANGUAGE: &str = "The language of the code in lower case, such as \"python\", \"rust\", \"bash\", \"sql\" or \"c++\", as the page names it or as the code shows. Null when it cannot be told.";
+const CODE_BODY: &str = "The code exactly as printed: each printed line on its own line, the indentation of each line kept as spaces, and every character kept, backslashes and quotes included. A line that the page broke only because it ran out of width is joined back into one line, with one space where it broke. No Markdown fences and no line numbers printed in the margin.";
+const CODE_SUMMARY: &str = "One sentence saying what the code does.";
 const FOOTNOTE: &str = "One footnote or endnote printed on the page.";
 const FOOTNOTE_MARKER: &str =
     "The footnote's printed marker, such as \"1\" or \"*\". Null when it has none.";
@@ -180,6 +185,21 @@ pub enum TranscribedPiece {
         #[schemars(description = CITES)]
         cites: Vec<CitedLabel>,
     },
+    #[schemars(description = CODE)]
+    Code {
+        #[schemars(description = PIECE_NUMBER)]
+        number: u32,
+        #[schemars(description = CODE_LABEL)]
+        label: Option<String>,
+        #[schemars(description = CAPTION)]
+        caption: Option<String>,
+        #[schemars(description = CODE_LANGUAGE)]
+        language: Option<String>,
+        #[schemars(description = CODE_BODY)]
+        code: String,
+        #[schemars(description = CODE_SUMMARY)]
+        summary: String,
+    },
 }
 
 /// A printed label a text or footnote piece points at.
@@ -222,6 +242,8 @@ pub struct Discussion {
     pub about: u32,
 }
 
+// SMELL: this file is past 400 lines. The Haiku copy types from here down, with their conversion
+// to a transcribed page, are the part to move into a file of their own before it grows further.
 /// A page copied by Haiku, or the flag that says the page needs the stronger model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
@@ -231,7 +253,7 @@ pub struct Discussion {
 )]
 pub struct CopiedPage {
     #[schemars(
-        description = "True when the page shows math notation, an equation or expression on its own line, a figure or a table. Then no pieces are returned."
+        description = "True when the page shows math notation, an equation or expression on its own line, a figure or a table. Then no pieces are returned. A code listing is not math notation and not an expression on its own line: copy it as a code piece."
     )]
     pub needs_stronger_model: bool,
     #[schemars(description = PRINTED_PAGE_NUMBER)]
@@ -292,6 +314,21 @@ pub enum CopiedPiece {
         #[schemars(description = CITES)]
         cites: Vec<CitedLabel>,
     },
+    #[schemars(description = CODE)]
+    Code {
+        #[schemars(description = PIECE_NUMBER)]
+        number: u32,
+        #[schemars(description = CODE_LABEL)]
+        label: Option<String>,
+        #[schemars(description = CAPTION)]
+        caption: Option<String>,
+        #[schemars(description = CODE_LANGUAGE)]
+        language: Option<String>,
+        #[schemars(description = CODE_BODY)]
+        code: String,
+        #[schemars(description = CODE_SUMMARY)]
+        summary: String,
+    },
 }
 
 impl TranscribedPiece {
@@ -302,7 +339,8 @@ impl TranscribedPiece {
             | Self::Formula { number, .. }
             | Self::Figure { number, .. }
             | Self::Table { number, .. }
-            | Self::Footnote { number, .. } => *number,
+            | Self::Footnote { number, .. }
+            | Self::Code { number, .. } => *number,
         }
     }
 
@@ -315,6 +353,7 @@ impl TranscribedPiece {
             Self::Figure { .. } => "figure",
             Self::Table { .. } => "table",
             Self::Footnote { .. } => "footnote",
+            Self::Code { .. } => "code",
         }
     }
 }
@@ -357,6 +396,21 @@ impl From<CopiedPage> for TranscribedPage {
                     marker,
                     markdown,
                     cites,
+                },
+                CopiedPiece::Code {
+                    number,
+                    label,
+                    caption,
+                    language,
+                    code,
+                    summary,
+                } => TranscribedPiece::Code {
+                    number,
+                    label,
+                    caption,
+                    language,
+                    code,
+                    summary,
                 },
             })
             .collect();

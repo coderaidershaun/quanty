@@ -44,6 +44,7 @@ fn result(number: usize, kind: ItemKind, doc: u128, title: &str, text: &str) -> 
         printed_page: Some("7".to_owned()),
         label: None,
         text: text.to_owned(),
+        language: None,
         image: None,
         piece: Some(1),
         caption: None,

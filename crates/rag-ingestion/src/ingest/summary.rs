@@ -87,11 +87,12 @@ pub struct ItemCounts {
     pub formulas: usize,
     pub figures: usize,
     pub tables: usize,
+    pub code: usize,
 }
 
 impl ItemCounts {
     pub fn total(&self) -> usize {
-        self.chunks + self.formulas + self.figures + self.tables
+        self.chunks + self.formulas + self.figures + self.tables + self.code
     }
 
     pub(super) fn of(items: &[Item]) -> Self {
@@ -102,6 +103,7 @@ impl ItemCounts {
                 ItemKind::Formula => counts.formulas += 1,
                 ItemKind::Figure => counts.figures += 1,
                 ItemKind::Table => counts.tables += 1,
+                ItemKind::Code => counts.code += 1,
             }
         }
         counts
@@ -150,11 +152,12 @@ impl IngestSummary {
         writeln!(formatter, "document id: {}", self.doc_id)?;
         writeln!(
             formatter,
-            "items: {} chunks, {} formulas, {} figures, {} tables ({} in all)",
+            "items: {} chunks, {} formulas, {} figures, {} tables, {} code ({} in all)",
             counts.chunks,
             counts.formulas,
             counts.figures,
             counts.tables,
+            counts.code,
             counts.total()
         )?;
         writeln!(

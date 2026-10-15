@@ -15,6 +15,7 @@ Return every piece of the page in the order a reader would read it, numbered 1, 
 - formula: ONE displayed formula: an equation or expression set on its own line or lines, apart from the running text, with or without a printed label such as (2.14). An equation written in ordinary words and a line of displayed arithmetic are formulas too.
 - figure: ONE chart, graph, diagram, drawing or photograph, together with its label and caption.
 - table: ONE table (data printed in rows and columns), together with its label and caption, even when the book labels it "Figure".
+- code: ONE code listing (program code, a shell command or session, or a configuration file), printed apart from the running text, often in a box or a fixed-width font, together with its label and caption.
 - footnote: ONE footnote or endnote printed on the page.
 
 Rules for cutting the page into pieces:
@@ -23,8 +24,9 @@ Rules for cutting the page into pieces:
 - The running header or footer and the printed page number are not pieces. They go in the page fields. Logos, rules, borders, shading and ornaments are decoration and are left out.
 - A displayed formula always splits the text around it. The words before it are one text piece, even when they stop mid-sentence ("... we obtain"). The formula is its own piece. The words after it start a new text piece, even when they carry on the same sentence ("where ...").
 - Place a figure or table where it sits on the page. A figure or table printed above all the text of the page comes first. If it interrupts a paragraph that began on this page and carries on after it, write that whole paragraph first, together with any formula inside it, and the figure or table after it.
+- A code listing always splits the text around it. The words before it are one text piece, the listing is its own piece, and the words after it start a new text piece.
 - A caption or label belongs to its figure or table piece. It is never a text piece of its own.
-- A printed box or frame changes nothing: the contents of a boxed example, remark or definition are cut into the same kinds of piece as the rest of the page.
+- A printed box or frame changes nothing: the contents of a boxed example, remark or definition are cut into the same kinds of piece as the rest of the page. A code listing in a box is one code piece.
 - A label that starts a paragraph on the same line, such as "Example 2.1", "Theorem 3" or "Proof.", is part of that paragraph's text. It is not a heading.
 - If the page is blank, or holds only a header, footer or page number, return no pieces.
 
@@ -84,6 +86,16 @@ Rules for cutting the page into pieces:
 - note: any note, source line or key printed directly under the table, exactly as printed. Null if there is none.
 - summary: one sentence saying what the table records: what its rows are and what its columns are.
 
+# Code
+
+- A code listing is a code piece, never a formula, even when one of its lines is an assignment or an equation. The Words rules and the rules for math inside a sentence do not apply to the code: no LaTeX, no \( \), no *italic* or **bold** marks, and no joined lines except a line the page wrapped.
+- label: the printed label, such as "Listing 3-2" or "Example 4.1", with a plain hyphen between numbers. Null when none is printed. caption: the printed title that goes with the label. Null when none is printed.
+- language: the language of the code in lower case, such as "python", "rust", "bash", "sql" or "c++", as the page names it or as the code shows. Null when you cannot tell.
+- code: the code exactly as printed. Each printed line is its own line. Keep the indentation of every line, written as spaces: never indent with a tab. Keep every character, including braces, dollar signs and percent signs. Keep straight quotation marks and apostrophes in code, even where the page prints curly ones. Write no Markdown fence and no line number printed in the margin.
+- A backslash printed in the code, as in "\n" or "\t" inside a string, is kept as the backslash and its letter. Never turn it into a line break or a tab.
+- A line that the page broke only because it ran out of width is joined back into one line, with one space where it broke.
+- summary: one sentence saying what the code does.
+
 # Citations: the cites list of a text or footnote piece
 
 List each figure, table or numbered equation that the paragraph refers to by its printed label, whether that item is on this page or anywhere else in the book. Write each label the way the item is itself labelled: "Figure 3-2", "Table 5.1", "(2.14)". The kind follows the printed word: "Figure 3-2" is kind figure even when the item it names is a table, and a number in brackets that names an equation is kind equation. "Figures 3-2 and 3-3" is two citations. For a printed range ("Figures 3-1 through 3-4") list its first and last labels only. Do not list footnotes (their markers are already in the text), chapters, sections, pages, examples, theorems or other books. Give an empty list when there are none.
@@ -101,7 +113,7 @@ Add one entry for each text or footnote piece on this page that talks about a fi
 
 # Before you answer, check
 
-- Every paragraph, heading, formula, figure, table and footnote on the page is there, once, in reading order, numbered 1, 2, 3 with no gaps.
+- Every paragraph, heading, formula, figure, table, code listing and footnote on the page is there, once, in reading order, numbered 1, 2, 3 with no gaps.
 - No word came from the text layer that is not printed, no printed word is missing or changed, and no invisible soft-hyphen character was copied.
 - Every \( has its \), every { its }, every \begin its \end, and every \left its \right.
 - Every bold letter, in a formula and in a sentence, is written with \boldsymbol.
@@ -111,4 +123,5 @@ Add one entry for each text or footnote piece on this page that talks about a fi
 - Every figure's printed-text list holds every word printed in the figure.
 - Every figure's bounds hold the whole figure with its axis titles, tick values, legend, label and caption, and none of the paragraphs around it.
 - Every line of every table has the same number of cells.
+- Every code listing is a code piece, not a formula, with its indentation kept as spaces, its backslashes kept, and its language in lower case or null.
 - Every number in the discusses list is the number of a piece you wrote.

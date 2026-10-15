@@ -15,6 +15,8 @@ Set needs-stronger-model to true if the page shows ANY of these:
 - a chart, graph, diagram, drawing or photograph;
 - a table: data printed in rows and columns.
 
+A code listing (program code, a shell session or a configuration file, printed apart from the running text, often in a box or a fixed-width font) is not math notation and not an expression on its own line. It does not need the stronger model: copy it as a code piece, even when its lines hold =, *, /, brackets or one-letter names.
+
 Plain numbers, money, percentages and dates inside a sentence are not mathematical notation. Nor is arithmetic inside a sentence that uses only numbers, the signs + - × ÷ / = and brackets, nor ordinary words joined by those signs (price/earnings, profit = revenue - costs).
 
 When needs-stronger-model is true, stop there: return an empty pieces list, null for printed-page-number and running-header, and false for the two mid-sentence fields.
@@ -26,15 +28,16 @@ Return every piece of the page in the order a reader would read it, numbered 1, 
 - heading: a chapter title, or a section or sub-section heading, standing on its own line.
 - text: ONE paragraph of running text. A whole numbered or bulleted list is one text piece.
 - footnote: ONE footnote or endnote printed on the page.
+- code: ONE code listing, as set out under Code below.
 
 Rules for cutting the page into pieces:
 
 - Leave nothing out. Every printed word must end up in a piece or in one of the page fields below.
 - The running header or footer and the printed page number are not pieces. They go in the page fields. Logos, rules, borders, shading and ornaments are decoration and are left out.
-- A printed box or frame changes nothing: the paragraphs inside it are text pieces like any others.
+- A printed box or frame changes nothing: the paragraphs inside it are text pieces like any others. A code listing in a box is one code piece.
 - A label that starts a paragraph on the same line, such as "Example 2.1" or "Remark", is part of that paragraph's text. It is not a heading.
 
-# Words
+# Words: headings, text and footnotes
 
 - Copy the exact printed words. Never reword, summarise, correct, translate, expand or leave anything out. Keep the printed spelling, capital letters and punctuation.
 - Join the lines of a paragraph into one line. Rejoin a word that was split by a hyphen at the end of a line ("informa-" and "tion" become "information"). Keep a hyphen that belongs to the word ("well-known").
@@ -42,7 +45,7 @@ Rules for cutting the page into pieces:
 - In a label such as "Figure 3-2", "Table 5-1" or "(2-14)", a dash printed between the numbers is written as a plain hyphen, in the item's own label and wherever a paragraph cites it. The same label must read the same on every page.
 - Use straight quotation marks and apostrophes (" and '). Write a minus sign in front of a plain number as a hyphen (-0.5). Copy every other printed character as it is, including × and dashes.
 - A dollar sign is money and is copied as a plain $ with nothing in front of it.
-- Never write a backslash anywhere. Never write LaTeX.
+- Never write a backslash anywhere outside a code piece. Never write LaTeX.
 - Where a footnote marker is printed in the text, write it at that spot as [^1], using the printed marker (a number, or a symbol such as * or †).
 - A list keeps its printed numbers or bullets, one item per line.
 - If the first paragraph carries on a sentence from the previous page, start at the first printed word. If the last paragraph breaks off at the end of the page, stop at the last printed word. If the page ends in the middle of a word, write its first part with the hyphen as printed; if the page begins with the rest of a word, begin with that. Never add the missing part.
@@ -52,6 +55,17 @@ Rules for cutting the page into pieces:
 - text: the heading's words without its printed number. printed-number: that number as printed ("4.2"), or null.
 - On a chapter's opening page, the large chapter number printed beside the title is the title's printed-number. It is not the page number. It may be printed pale, or reversed out of a shaded block in a corner of the page, and the text layer may not have it, so look for it in the picture of the page before you decide there is none.
 - rank: 1 for a chapter title, 2 for a section, 3 for a sub-section, 4 for anything lower. A printed number decides it: "4.2" is rank 2 and "4.2.1" is rank 3. Without a number, judge by the size and weight of the type: of two headings on the page, the larger or heavier one has the lower rank number.
+
+# Code
+
+- label: the printed label, such as "Listing 3-2" or "Example 4.1", with a plain hyphen between numbers. Null when none is printed. caption: the printed title that goes with the label. Null when none is printed.
+- language: the language of the code in lower case, such as "python", "rust", "bash", "sql" or "c++", as the page names it or as the code shows. Null when you cannot tell.
+- code: the code exactly as printed. Each printed line is its own line. Keep the indentation of every line, written as spaces: never indent with a tab. Keep every character, including braces, dollar signs and percent signs. Keep straight quotation marks and apostrophes in code, even where the page prints curly ones. Write no Markdown fence and no line number printed in the margin.
+- A backslash printed in the code, as in "\n" or "\t" inside a string, is kept as the backslash and its letter. Never turn it into a line break or a tab.
+- A line that the page broke only because it ran out of width is joined back into one line, with one space where it broke.
+- The Words rules do not apply to the code: no *italic* or **bold** marks, and no joined lines except a line the page wrapped.
+- summary: one sentence saying what the code does.
+- A code listing always splits the text around it: the words before it are one text piece, the listing is its own piece, and the words after it start a new text piece.
 
 # Citations: the cites list of a text or footnote piece
 
@@ -66,7 +80,7 @@ List each figure, table or numbered equation that the paragraph refers to by its
 
 # Before you answer, check
 
-- If the page has any math notation, any expression on its own line, any figure or any table, needs-stronger-model is true and there are no pieces.
-- Otherwise every paragraph, heading and footnote on the page is there, once, in reading order, numbered 1, 2, 3 with no gaps.
+- If the page has any math notation, any expression on its own line that is not code, any figure or any table, needs-stronger-model is true and there are no pieces.
+- Otherwise every paragraph, heading, code listing and footnote on the page is there, once, in reading order, numbered 1, 2, 3 with no gaps.
 - No word came from the text layer that is not printed, no printed word is missing or changed, and no invisible soft-hyphen character was copied.
-- There is no backslash anywhere in your reply.
+- There is no backslash anywhere in your reply outside a code piece.

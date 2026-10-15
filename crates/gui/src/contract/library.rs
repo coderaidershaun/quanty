@@ -11,6 +11,13 @@ pub struct ItemCounts {
     pub formulas: u64,
     pub figures: u64,
     pub tables: u64,
+    pub code: u64,
+}
+
+impl ItemCounts {
+    pub const fn total(&self) -> u64 {
+        self.chunks + self.formulas + self.figures + self.tables + self.code
+    }
 }
 
 impl fmt::Display for ItemCounts {
@@ -21,14 +28,21 @@ impl fmt::Display for ItemCounts {
                 _ => format!("{number} {noun}s"),
             }
         }
-        write!(
-            formatter,
-            "{}, {}, {} and {}",
+        let (chunks, formulas, figures, tables) = (
             count(self.chunks, "passage"),
             count(self.formulas, "formula"),
             count(self.figures, "figure"),
-            count(self.tables, "table")
-        )
+            count(self.tables, "table"),
+        );
+        // Most documents hold no code, so a count of none is left out to keep their line short.
+        match self.code {
+            0 => write!(formatter, "{chunks}, {formulas}, {figures} and {tables}"),
+            code => write!(
+                formatter,
+                "{chunks}, {formulas}, {figures}, {tables} and {}",
+                count(code, "code listing")
+            ),
+        }
     }
 }
 

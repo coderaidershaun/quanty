@@ -40,6 +40,7 @@ icons! {
     FORMULA = FUNCTION,
     FIGURE = IMAGE,
     TABLE = TABLE,
+    CODE = CODE,
     MINUS = MINUS,
     PLUS = PLUS,
     FIT = ARROWS_HORIZONTAL,

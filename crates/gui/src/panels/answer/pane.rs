@@ -7,6 +7,7 @@ use super::heights::Heights;
 use super::listing::{Listing, Row};
 use super::phase::{AnswerTab, Phase};
 use crate::contract::{AskMode, Intent, Loadable, ResultItem, Usage};
+use crate::media::code;
 use crate::media::rich_text::{self, Clicked};
 use crate::panels::PanelCx;
 use crate::state::AskSession;
@@ -92,6 +93,11 @@ impl<'a> Pane<'a, '_> {
 
     pub(super) fn table(&mut self, ui: &mut egui::Ui, markdown: &str, role: TextRole) {
         let clicked = rich_text::table(ui, self.cx.media, markdown, role);
+        self.route(clicked);
+    }
+
+    pub(super) fn code(&mut self, ui: &mut egui::Ui, listing: &str, language: Option<&str>) {
+        let clicked = code::show(ui, listing, language);
         self.route(clicked);
     }
 

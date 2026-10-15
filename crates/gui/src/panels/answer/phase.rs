@@ -10,15 +10,17 @@ pub(super) enum AnswerTab {
     Formulas,
     Figures,
     Tables,
+    Code,
 }
 
 impl AnswerTab {
-    pub(super) const ALL: [AnswerTab; 5] = [
+    pub(super) const ALL: [AnswerTab; 6] = [
         AnswerTab::Answer,
         AnswerTab::Results,
         AnswerTab::Formulas,
         AnswerTab::Figures,
         AnswerTab::Tables,
+        AnswerTab::Code,
     ];
 
     pub(super) const fn opened_by(mode: AskMode) -> AnswerTab {
@@ -39,6 +41,7 @@ impl AnswerTab {
             AnswerTab::Formulas => "Formulas",
             AnswerTab::Figures => "Figures",
             AnswerTab::Tables => "Tables",
+            AnswerTab::Code => "Code",
         }
     }
 
@@ -49,6 +52,7 @@ impl AnswerTab {
             AnswerTab::Formulas => matches!(kind, ItemKind::Formula),
             AnswerTab::Figures => matches!(kind, ItemKind::Figure),
             AnswerTab::Tables => matches!(kind, ItemKind::Table),
+            AnswerTab::Code => matches!(kind, ItemKind::Code),
         }
     }
 }

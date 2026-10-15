@@ -19,6 +19,7 @@ use super::Media;
 use crate::theme::TextRole;
 
 pub use self::layouts::{LayoutStats, Layouts};
+pub(super) use self::paint::copy_is_chosen;
 
 /// A block of Markdown with the numbers of the results it cites.
 #[derive(Debug, Clone, Copy)]

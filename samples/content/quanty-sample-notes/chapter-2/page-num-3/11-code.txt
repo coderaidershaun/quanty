@@ -1,0 +1,5 @@
+def call_price(spot, strike, rate, volatility, years):
+    d1 = (log(spot / strike) + (rate + 0.5 * volatility ** 2) * years) / (volatility * sqrt(years))
+    d2 = d1 - volatility * sqrt(years)
+
+    return spot * norm_cdf(d1) - strike * exp(-rate * years) * norm_cdf(d2)

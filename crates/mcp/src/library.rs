@@ -96,14 +96,18 @@ pub(crate) struct PageView {
 struct PieceView {
     /// The place of the piece on the page, from 1.
     number: u32,
-    /// `heading`, `text`, `formula`, `figure`, `table` or `footnote`.
+    /// `heading`, `text`, `formula`, `figure`, `table`, `footnote` or `code`.
     kind: String,
     /// The headings the piece sits under, outermost first.
     section: Vec<String>,
-    /// The label as printed, such as "(7.3)". Formulas, figures and tables only.
+    /// The label as printed, such as "(7.3)". Formulas, figures, tables and code only.
     #[serde(skip_serializing_if = "Option::is_none")]
     label: Option<String>,
-    /// The piece as saved: Markdown, or LaTeX for a formula.
+    /// The language of a code listing in lower case, such as "python". Left out when the language
+    /// is not known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    language: Option<String>,
+    /// The piece as saved: Markdown, LaTeX for a formula, or the code as printed for code.
     content: String,
     /// The path of the picture of a figure, on the disk of the machine the server runs on.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -257,6 +261,7 @@ impl From<&ChapterPiece> for PieceView {
                 .map(|heading| heading.text.clone())
                 .collect(),
             label: label_of(&piece.detail),
+            language: language_of(&piece.detail),
             content: piece.content.clone(),
             picture: piece
                 .figure_image
@@ -317,9 +322,17 @@ fn label_of(detail: &PieceDetail) -> Option<String> {
     match detail {
         PieceDetail::Formula { label, .. }
         | PieceDetail::Figure { label, .. }
-        | PieceDetail::Table { label, .. } => label.clone(),
+        | PieceDetail::Table { label, .. }
+        | PieceDetail::Code { label, .. } => label.clone(),
         PieceDetail::Heading { .. } | PieceDetail::Text { .. } | PieceDetail::Footnote { .. } => {
             None
         }
+    }
+}
+
+fn language_of(detail: &PieceDetail) -> Option<String> {
+    match detail {
+        PieceDetail::Code { language, .. } => language.clone(),
+        _ => None,
     }
 }

@@ -80,6 +80,9 @@ fn write_hit(formatter: &mut fmt::Formatter<'_>, number: usize, hit: &SearchHit)
     if let Some(label) = &payload.label {
         writeln!(formatter, "label: {label}")?;
     }
+    if let Some(language) = &payload.language {
+        writeln!(formatter, "language: {language}")?;
+    }
     writeln!(formatter, "score: {:.3}", hit.item.score)?;
     match &hit.reason {
         Reason::Nearest => {}

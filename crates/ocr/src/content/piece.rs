@@ -70,6 +70,16 @@ pub enum PieceDetail {
         #[serde(default)]
         cites: Vec<Cite>,
     },
+    Code {
+        #[serde(default)]
+        label: Option<String>,
+        #[serde(default)]
+        caption: Option<String>,
+        /// The name of the language in lower case, such as `rust`, or none when it cannot be told.
+        #[serde(default)]
+        language: Option<String>,
+        summary: String,
+    },
 }
 
 impl PieceDetail {
@@ -82,13 +92,16 @@ impl PieceDetail {
             Self::Figure { .. } => "figure",
             Self::Table { .. } => "table",
             Self::Footnote { .. } => "footnote",
+            Self::Code { .. } => "code",
         }
     }
 
-    /// `tex` for a formula, so its file opens as LaTeX. Every other kind is Markdown.
+    /// `tex` for a formula, so its file opens as LaTeX, and `txt` for code, which is not Markdown.
+    /// Every other kind is Markdown.
     pub fn file_extension(&self) -> &'static str {
         match self {
             Self::Formula { .. } => "tex",
+            Self::Code { .. } => "txt",
             _ => "md",
         }
     }

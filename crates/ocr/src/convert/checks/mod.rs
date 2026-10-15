@@ -159,6 +159,7 @@ fn mid_sentence_flags(page: &TranscribedPage) -> Result<(), ReplyFault> {
             TranscribedPiece::Figure { .. }
                 | TranscribedPiece::Table { .. }
                 | TranscribedPiece::Footnote { .. }
+                | TranscribedPiece::Code { .. }
         )
     };
     let is_text =
@@ -180,7 +181,8 @@ fn displayed_math_in_text(page: &TranscribedPage) -> Result<(), ReplyFault> {
             | TranscribedPiece::Footnote { markdown, .. } => markdown,
             TranscribedPiece::Formula { .. }
             | TranscribedPiece::Figure { .. }
-            | TranscribedPiece::Table { .. } => continue,
+            | TranscribedPiece::Table { .. }
+            | TranscribedPiece::Code { .. } => continue,
         };
         if let Some(seen) = displayed_math(text) {
             return Err(ReplyFault::DisplayedMathInText {

@@ -94,7 +94,7 @@ fn pressing_delete_opens_a_sheet_that_says_what_goes(harness: &mut Window) {
         "the sheet names the document"
     );
     for words in [
-        "passages, formulas, figures and tables",
+        "passages, formulas, figures, tables and code listings",
         "converted pages",
         "is not touched",
         "cannot be undone",
@@ -252,7 +252,7 @@ fn pressing_delete_opens_a_sheet_that_counts_the_documents_that_go(harness: &mut
     );
     for words in [
         "3 documents",
-        "passages, formulas, figures and tables of each",
+        "passages, formulas, figures, tables and code listings of each",
         "converted pages of each",
         "cannot be undone",
     ] {

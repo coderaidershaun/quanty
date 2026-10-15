@@ -101,11 +101,12 @@ async fn a_chapter_pdf_is_converted_and_ingested_in_one_run_and_a_second_run_doe
     };
     assert!(
         printed.contains(&format!(
-            "items: {} chunks, {} formulas, {} figures, {} tables ({n} in all)",
+            "items: {} chunks, {} formulas, {} figures, {} tables, {} code ({n} in all)",
             of_kind(ItemKind::Chunk),
             of_kind(ItemKind::Formula),
             of_kind(ItemKind::Figure),
             of_kind(ItemKind::Table),
+            of_kind(ItemKind::Code),
         )),
         "{printed}"
     );

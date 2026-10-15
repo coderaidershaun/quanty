@@ -40,6 +40,7 @@ pub fn image_items(picture: &LoneImage<'_>) -> Vec<Item> {
             text: explanation,
             image_path: Some(image.picture.clone()),
             label: printed_label(image.index.label.as_deref()),
+            language: None,
             cites: Vec::new(),
             document_labels: DocumentLabels::default(),
         },

@@ -96,12 +96,21 @@ fn assert_known_pages(fake: &Fake) {
         .0
         .expect("page 3 of chapter 2 loads");
     assert_eq!(notes_page.printed_page.as_deref(), Some("7"));
-    assert_eq!(notes_page.pieces.len(), 10);
+    assert_eq!(notes_page.pieces.len(), 11);
     assert_eq!(notes_page.pieces[2].kind, PieceKind::Heading { rank: 2 });
     let formula = &notes_page.pieces[4];
     assert_eq!(formula.kind, PieceKind::Formula);
     assert_eq!(formula.label.as_deref(), Some("(2.4)"));
     assert_eq!(formula.name.as_deref(), Some("Black–Scholes call price"));
+    let listing = &notes_page.pieces[10];
+    assert_eq!(listing.kind, PieceKind::Code);
+    assert_eq!(listing.label.as_deref(), Some("Listing 2.1"));
+    assert_eq!(listing.language.as_deref(), Some("python"));
+    assert_eq!(
+        listing.text,
+        "def call_price(spot, strike, rate, volatility, years):\n    d1 = (log(spot / strike) + (rate + 0.5 * volatility ** 2) * years) / (volatility * sqrt(years))\n    d2 = d1 - volatility * sqrt(years)\n\n    return spot * norm_cdf(d1) - strike * exp(-rate * years) * norm_cdf(d2)",
+        "the code keeps its line breaks, its indentation and its blank line"
+    );
 
     let missing = load_page(fake, doc(3), 8)
         .0

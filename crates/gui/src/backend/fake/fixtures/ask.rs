@@ -89,6 +89,10 @@ fn item(samples: &Path, number: usize, hit: &Hit) -> Result<ResultItem, SampleEr
         printed_page: page.printed_page.clone(),
         label: piece.label.clone().filter(|_| !is_chunk),
         text: piece.text.clone(),
+        language: piece
+            .language
+            .clone()
+            .filter(|_| hit.kind == ItemKind::Code),
         image: piece.image.clone().filter(|_| hit.kind == ItemKind::Figure),
         piece: (!is_chunk).then_some(piece.number),
         caption: piece.caption.clone().filter(|_| !is_chunk),

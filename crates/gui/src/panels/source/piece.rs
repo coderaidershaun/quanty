@@ -6,6 +6,7 @@ use eframe::egui;
 use super::tabs::TabCx;
 use crate::contract::{Intent, PagePiece, PieceKind};
 use crate::media::Media;
+use crate::media::code;
 use crate::media::images;
 use crate::media::math::{self, MathRef};
 use crate::media::rich_text::{self, Clicked, RichText};
@@ -23,6 +24,7 @@ pub(super) const fn kind_name(kind: PieceKind) -> &'static str {
         PieceKind::Figure => "Figure",
         PieceKind::Table => "Table",
         PieceKind::Footnote => "Footnote",
+        PieceKind::Code => "Code",
     }
 }
 
@@ -61,6 +63,11 @@ pub(super) fn body(ui: &mut egui::Ui, piece: &PagePiece, cx: &mut TabCx<'_>) {
         }
         PieceKind::Table => {
             let clicked = rich_text::table(ui, media, &piece.text, TextRole::Small);
+            note(ui, piece.caption.as_deref());
+            clicked
+        }
+        PieceKind::Code => {
+            let clicked = code::show(ui, &piece.text, piece.language.as_deref());
             note(ui, piece.caption.as_deref());
             clicked
         }

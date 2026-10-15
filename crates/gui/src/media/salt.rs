@@ -1,5 +1,5 @@
-//! Salts made from what a formula or a table shows, so that its scroll place stays when things
-//! above it come and go.
+//! Salts made from what a formula, a table or a code listing shows, so that its scroll place
+//! stays when things above it come and go.
 
 use eframe::egui::Ui;
 

@@ -129,6 +129,7 @@ impl Chunk {
             printed_page: self.printed_page,
             kind: ItemKind::Chunk,
             label: None,
+            language: None,
             cites: self.cites,
             input: DocumentInput {
                 title: self.context,

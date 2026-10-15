@@ -39,6 +39,7 @@ pub enum ItemKind {
     Formula,
     Figure,
     Table,
+    Code,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -65,8 +66,11 @@ pub struct ResultItem {
     pub page: u32,
     pub printed_page: Option<String>,
     pub label: Option<String>,
-    /// Chunk Markdown, raw LaTeX, table Markdown, or a figure's explanation.
+    /// Chunk Markdown, raw LaTeX, table Markdown, a figure's explanation, or the code as printed.
     pub text: String,
+    /// The language of a code item, in lower case. `None` for any other item, and for code of an
+    /// unknown language.
+    pub language: Option<String>,
     pub image: Option<ImageRef>,
     /// The number of the piece. This and the next two are read from the chapter's folder on
     /// disk, and are `None` when the document has no folder or no piece on the page matches.
@@ -152,7 +156,7 @@ pub enum AnswerBlock {
         text: String,
         cites: Vec<usize>,
     },
-    /// The card of result n: a formula, a figure or a table.
+    /// The card of result n: a formula, a figure, a table or a code listing.
     Item(usize),
 }
 

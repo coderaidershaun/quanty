@@ -19,6 +19,8 @@ const LATEX: &str =
 const FIGURE_TEXT: &str =
     "A chart of the profit of a long straddle against the price of the stock.";
 const PICTURE: &str = "/content/option-volatility/page-num-5/01-figure.png";
+const CODE: &str =
+    "    def greeting(name):\n        return \"hello\\t\" + name\n\n    print(greeting(\"x\"))";
 
 fn hit(kind: ItemKind, position: u32, payload: ItemPayload, reason: Reason) -> SearchHit {
     SearchHit {
@@ -41,6 +43,7 @@ fn payload(document: &str, title: &str, kind: ItemKind, page: &str, text: &str) 
         text: text.to_owned(),
         image_path: None,
         label: None,
+        language: None,
         cites: Vec::new(),
         document_labels: DocumentLabels::default(),
     }
@@ -191,6 +194,43 @@ async fn an_answer_cites_document_and_printed_page_and_keeps_the_latex_of_a_form
 
 fn assert_send<T: Send>(value: T) -> T {
     value
+}
+
+#[tokio::test]
+async fn a_code_item_is_given_with_its_language_and_printed_under_its_source() {
+    let code = ItemPayload {
+        label: Some("Listing 2.1".to_owned()),
+        language: Some("python".to_owned()),
+        ..payload("notes", NOTES_TITLE, ItemKind::Code, "7", CODE)
+    };
+    let results = SearchResults {
+        hits: vec![hit(ItemKind::Code, 0, code, Reason::Nearest)],
+        usage: UsageTally::default(),
+    };
+    let llm = replying(json!([
+        { "text": "The listing prices a call option.", "sources": [1] },
+    ]));
+
+    let written = answer(&llm, "How is a call priced in code?", &results)
+        .await
+        .unwrap();
+
+    let asked = &llm.questions()[0];
+    let code_block = format!(
+        "Item 1\ndocument: {NOTES_TITLE}\npage: 7\nkind: code\nlabel: Listing 2.1\nlanguage: python\ncode:\n{CODE}"
+    );
+    assert!(
+        asked.input.contains(&code_block),
+        "{code_block}\n---\n{}",
+        asked.input
+    );
+    let printed = written.to_string();
+    assert!(
+        printed.contains(&format!(
+            "  source: {NOTES_TITLE}, page 7 (code Listing 2.1)\n{CODE}\n"
+        )),
+        "the code is printed as the document has it, under its source line:\n{printed}"
+    );
 }
 
 #[tokio::test]

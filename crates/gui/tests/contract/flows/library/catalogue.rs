@@ -74,6 +74,7 @@ fn dynamic_hedging() -> Catalogue {
             formulas: 3,
             figures: 1,
             tables: 0,
+            code: 0,
         },
         ingested_items,
         folder: Some(PathBuf::from("dynamic-hedging")),

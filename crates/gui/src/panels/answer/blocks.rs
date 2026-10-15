@@ -79,6 +79,7 @@ fn blocks(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, answer: &Answer) {
                     ItemKind::Formula => cards::formula,
                     ItemKind::Figure => cards::figure,
                     ItemKind::Table => cards::table,
+                    ItemKind::Code => cards::code,
                     ItemKind::Chunk => continue,
                 };
                 heights.show(ui, index, |ui| card(ui, pane, item, row));

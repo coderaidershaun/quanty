@@ -12,10 +12,12 @@ pub enum Kind {
     Formula,
     Figure,
     Table,
+    Code,
 }
 
 impl Kind {
-    /// Each kind has a tone of its own, so the colour alone tells one kind from another.
+    /// Each kind has a tone of its own, except that code shares Ink with text, and its icon tells
+    /// it apart.
     pub const fn tone(self) -> Tone {
         match self {
             Kind::Concept => Tone::Indigo,
@@ -24,6 +26,7 @@ impl Kind {
             Kind::Formula => Tone::Verdigris,
             Kind::Figure => Tone::Ochre,
             Kind::Table => Tone::Madder,
+            Kind::Code => Tone::Ink,
         }
     }
 
@@ -35,6 +38,7 @@ impl Kind {
             Kind::Formula => Icon::FORMULA,
             Kind::Figure => Icon::FIGURE,
             Kind::Table => Icon::TABLE,
+            Kind::Code => Icon::CODE,
         }
     }
 }
@@ -46,6 +50,7 @@ impl From<ItemKind> for Kind {
             ItemKind::Formula => Kind::Formula,
             ItemKind::Figure => Kind::Figure,
             ItemKind::Table => Kind::Table,
+            ItemKind::Code => Kind::Code,
         }
     }
 }
@@ -69,6 +74,7 @@ impl From<PieceKind> for Kind {
             PieceKind::Formula => Kind::Formula,
             PieceKind::Figure => Kind::Figure,
             PieceKind::Table => Kind::Table,
+            PieceKind::Code => Kind::Code,
         }
     }
 }

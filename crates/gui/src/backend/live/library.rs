@@ -261,6 +261,7 @@ fn document_of(record: DocumentRecord, entry: Option<ChapterEntry>) -> Listed {
             formulas: items.formulas,
             figures: items.figures,
             tables: items.tables,
+            code: items.code,
         },
         ingested_items,
         folder,

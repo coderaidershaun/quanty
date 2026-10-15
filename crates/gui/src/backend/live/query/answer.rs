@@ -1,5 +1,5 @@
 //! Turns the answer of the model into what the answer pane draws: headings, paragraphs with the
-//! numbers they cite, and one card for each formula, figure or table.
+//! numbers they cite, and one card for each formula, figure, table or code listing.
 
 use std::collections::HashSet;
 

@@ -1,5 +1,5 @@
-//! The one place the `claude` command is started to answer a single question, so every model call
-//! is locked down the same way and every caller gets the same errors and usage figures.
+//! Dispatches page questions to the selected agent and confines Claude's file access to the
+//! page folder. Both agents return the same reply and usage types.
 
 use std::path::{Path, PathBuf};
 use std::process::{ExitStatus, Output, Stdio};
@@ -59,7 +59,7 @@ pub struct Answer<T> {
 pub struct CallUsage {
     /// The model that answered when `claude` names exactly one, otherwise the one asked for.
     pub model: String,
-    pub cost_usd: f64,
+    pub cost_usd: Option<f64>,
     pub input_tokens: u64,
     pub output_tokens: u64,
     pub cache_read_tokens: u64,
@@ -70,6 +70,14 @@ pub struct CallUsage {
 
 #[derive(thiserror::Error, Debug)]
 pub enum ClaudeError {
+    #[error(transparent)]
+    Agent(#[from] rag_core::LlmError),
+    #[error("could not create a temporary folder for the page image")]
+    TemporaryFolder(#[source] std::io::Error),
+    #[error("could not prepare the page for codex")]
+    PagePreparation(#[from] crate::convert::PopplerError),
+    #[error("model settings could not be loaded")]
+    Configuration(#[from] rag_core::SettingsError),
     #[error(
         "ANTHROPIC_API_KEY is set, so claude could bill the API instead of the subscription; unset it and run again"
     )]
@@ -198,19 +206,33 @@ struct OutputTokenDetails {
     thinking_tokens: u64,
 }
 
-/// True when `ANTHROPIC_API_KEY` is set to something. `claude` would then bill the API instead
-/// of the subscription, so nothing may be started.
-pub(crate) fn api_key_is_set() -> bool {
-    std::env::var_os(API_KEY_VARIABLE).is_some_and(|value| !value.is_empty())
+/// Refuse a billing key when the selected provider would use it.
+pub(in crate::convert) fn check_subscription() -> Result<(), ClaudeError> {
+    let settings = rag_core::ModelSettings::load()?;
+    if settings.provider == "claude" {
+        check_claude_subscription()?;
+    }
+    Ok(())
 }
 
-/// The model gets one tool, `Read`, confined to the folder the page file sits in.
+// An API key makes Claude bill the API instead of the subscription, so nothing may be started.
+fn check_claude_subscription() -> Result<(), ClaudeError> {
+    if std::env::var_os(API_KEY_VARIABLE).is_some_and(|value| !value.is_empty()) {
+        return Err(ClaudeError::ApiKeySet);
+    }
+    Ok(())
+}
+
+/// Claude gets only `Read`, confined to the page folder; Codex receives attached images.
 pub(super) async fn run<T: DeserializeOwned>(
     call: &ClaudeCall<'_>,
 ) -> Result<Answer<T>, ClaudeError> {
-    if api_key_is_set() {
-        return Err(ClaudeError::ApiKeySet);
+    // SMELL: Each call reloads settings, so an external edit can change models during one conversion.
+    let settings = rag_core::ModelSettings::load()?;
+    if settings.provider == "codex" {
+        return super::codex::run(call, settings).await;
     }
+    check_claude_subscription()?;
     let file_unreadable = |source| ClaudeError::FileUnreadable {
         path: call.file.to_path_buf(),
         source,
@@ -224,7 +246,12 @@ pub(super) async fn run<T: DeserializeOwned>(
         ))
     })?;
     let prompt = user_prompt(call, &page_file, page_folder)?;
-    let mut command = locked_down_command(call, prompt, page_folder);
+    let configured = ClaudeCall {
+        model: &settings.model,
+        effort: Some(&settings.thinking),
+        ..*call
+    };
+    let mut command = locked_down_command(&configured, prompt, page_folder);
 
     let started = Instant::now();
     let child = command.spawn().map_err(ClaudeError::Spawn)?;
@@ -236,7 +263,7 @@ pub(super) async fn run<T: DeserializeOwned>(
         })?
         .map_err(ClaudeError::Wait)?;
 
-    read_answer(&output, call.model, started.elapsed())
+    read_answer(&output, &settings.model, started.elapsed())
 }
 
 fn user_prompt(
@@ -367,7 +394,7 @@ impl Envelope {
         };
         CallUsage {
             model,
-            cost_usd: self.total_cost_usd.unwrap_or(0.0),
+            cost_usd: self.total_cost_usd,
             input_tokens: self.usage.input_tokens,
             output_tokens: self.usage.output_tokens,
             cache_read_tokens: self.usage.cache_read_input_tokens,

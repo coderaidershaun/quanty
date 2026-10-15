@@ -19,6 +19,7 @@ pub enum FailureKind {
     EmbeddingKeyMissing,
     ConverterKeyMissing,
     EmbeddingFailed,
+    AgentFailed,
     ClaudeMissing,
     ClaudeSignedOut,
     ClaudeUsageLimit,
@@ -48,6 +49,9 @@ impl FailureKind {
             }
             FailureKind::EmbeddingFailed => {
                 "The embedding service did not answer. Check the network and try again."
+            }
+            FailureKind::AgentFailed => {
+                "Check the selected model and agent sign-in. Open Details for the reason."
             }
             FailureKind::ClaudeMissing => "Install the claude command, or add its folder to PATH.",
             FailureKind::ClaudeSignedOut => "Run claude in a terminal and sign in.",

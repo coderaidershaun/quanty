@@ -22,8 +22,7 @@ const API_KEY_SUFFIX: &str = "_API_KEY";
 // The variables a Claude Code session sets for its children. A child that inherits them thinks it
 // is a nested session. They are removed by name, not by prefix: `CLAUDE_CONFIG_DIR` and
 // `CLAUDE_CODE_OAUTH_TOKEN` are how some sign-ins work.
-// SMELL: the converter keeps its own copy of this list, and neither crate depends on the other,
-// so a change to one must be made in both.
+// SMELL: The converter duplicates this list, so changes must be made in both copies.
 const SESSION_VARIABLES: [&str; 13] = [
     "CLAUDECODE",
     "CLAUDE_CODE_ENTRYPOINT",
@@ -92,6 +91,7 @@ async fn auth_status(mut command: Command) -> Result<(), ClaudeCliError> {
 // services.
 pub struct ClaudeCli {
     model: String,
+    effort: Option<String>,
     environment: Vec<(OsString, OsString)>,
 }
 
@@ -112,11 +112,18 @@ impl ClaudeCli {
     {
         ClaudeCli {
             model: model.into(),
+            effort: None,
             environment: environment
                 .into_iter()
                 .map(|(name, value)| (name.into(), value.into()))
                 .collect(),
         }
+    }
+
+    /// Set explicit thinking effort instead of disabling thinking.
+    pub fn with_effort(mut self, effort: impl Into<String>) -> Self {
+        self.effort = Some(effort.into());
+        self
     }
 
     fn api_key_is_set(&self) -> bool {
@@ -162,9 +169,13 @@ impl ClaudeCli {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
-        // Without this, `claude` lets the model think for thousands of words before it answers
-        // an item: measured at ten times the cost and twenty times the time, for the same answer.
-        command.env("MAX_THINKING_TOKENS", "0");
+        // Unconfigured thinking was measured at ten times the cost and twenty times the time
+        // for the same answer, so keep it disabled unless effort is explicitly selected.
+        if let Some(effort) = &self.effort {
+            command.args(["--effort", effort]);
+        } else {
+            command.env("MAX_THINKING_TOKENS", "0");
+        }
         command
     }
 }
@@ -177,6 +188,12 @@ fn is_withheld(name: &OsStr) -> bool {
 }
 
 impl Llm for ClaudeCli {
+    fn cache_identity(&self) -> String {
+        self.effort.as_ref().map_or_else(
+            || self.model.clone(),
+            |effort| format!("claude:{}:{effort}", self.model),
+        )
+    }
     fn model(&self) -> &str {
         &self.model
     }

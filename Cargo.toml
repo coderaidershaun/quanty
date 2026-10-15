@@ -20,6 +20,7 @@ futures-util = { version = "0.3.34", default-features = false, features = ["std"
 graph = { path = "crates/graph" }
 gui = { path = "crates/gui" }
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
+model-settings = { path = "crates/model-settings" }
 ocr = { path = "crates/ocr" }
 proptest = { version = "1.11.0", default-features = false, features = ["std"] }
 qdrant-client = { version = "1.19.0", default-features = false, features = ["serde"] }

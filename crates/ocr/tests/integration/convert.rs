@@ -125,3 +125,40 @@ async fn chapter_converts_then_reruns_without_calls() {
         );
     }
 }
+
+#[test]
+fn claude_selection_rejects_api_key_before_conversion() {
+    for (selection, expected) in [
+        (
+            r#"{"provider":"claude","model":"sonnet","thinking":"medium"}"#,
+            "ANTHROPIC_API_KEY is set",
+        ),
+        (
+            r#"{"provider":"codex","model":"gpt-6.1-sol","thinking":"medium"}"#,
+            "CONVERTER_JEV_API_KEY",
+        ),
+        ("broken", "model settings"),
+    ] {
+        let folder = tempfile::tempdir().unwrap();
+        std::fs::write(folder.path().join(".quanty-model.json"), selection).unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_ocr"))
+            .args(["--book", "Guard test", "--out"])
+            .arg(folder.path().join("content"))
+            .arg(sample_pdf())
+            .current_dir(folder.path())
+            .env("ANTHROPIC_API_KEY", "test-key-must-not-be-used")
+            .env_remove("CONVERTER_JEV_API_KEY")
+            .env_remove("LLM_PROVIDER")
+            .env_remove("LLM_MODEL")
+            .env_remove("LLM_THINKING")
+            .output()
+            .unwrap();
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "{selection}: {error}");
+        assert!(error.contains(expected), "{selection}: {error}");
+        assert!(
+            !folder.path().join("content").exists(),
+            "conversion started: {selection}"
+        );
+    }
+}

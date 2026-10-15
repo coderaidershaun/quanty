@@ -1,5 +1,5 @@
 //! What a program may ask of a language model: one question in, one answer in JSON out. The
-//! question fits any model, but the failures are those of the `claude` command.
+//! question fits any model, and installed agent commands report their own failures.
 
 use serde_json::Value;
 
@@ -23,9 +23,13 @@ pub struct LlmReply {
 }
 
 pub trait Llm {
-    /// The name of the model that answers. A caller that keeps answers uses it to tell the
-    /// answers of two models apart.
+    /// The name of the model that answers. Use [`Self::cache_identity`] to keep answers apart.
     fn model(&self) -> &str;
+
+    /// Cache keys include the provider and thinking level when configured.
+    fn cache_identity(&self) -> String {
+        self.model().to_owned()
+    }
 
     /// Says whether a question could be asked now. It asks none, so it costs nothing: a caller
     /// asks this before it pays another service for work that only the model can finish. A usage
@@ -34,6 +38,7 @@ pub trait Llm {
     /// # Errors
     /// [`LlmError::ApiKeySet`], [`LlmError::Start`], [`LlmError::NotSignedIn`] and
     /// [`LlmError::TimedOut`] when no question can be answered until the person acts.
+    /// [`LlmError::Codex`] reports a Codex failure; [`LlmError::Configuration`] reports invalid settings.
     fn check_ready(&self) -> impl Future<Output = Result<(), LlmError>> + Send;
 
     /// A failed question reports no usage.
@@ -43,6 +48,7 @@ pub trait Llm {
     ///   [`LlmError::UsageLimit`] when no question can be answered until the person acts
     /// - [`LlmError::TimedOut`], [`LlmError::Wait`], [`LlmError::UnreadableOutput`] and
     ///   [`LlmError::Failed`] when this question failed and another may not
+    /// - [`LlmError::Codex`] for a Codex failure, or [`LlmError::Configuration`] for invalid settings
     fn ask(
         &self,
         question: Question<'_>,
@@ -51,6 +57,10 @@ pub trait Llm {
 
 #[derive(thiserror::Error, Debug)]
 pub enum LlmError {
+    #[error(transparent)]
+    Codex(#[from] crate::CodexError),
+    #[error("model settings could not be loaded")]
+    Configuration(#[source] std::sync::Arc<crate::SettingsError>),
     #[error(
         "ANTHROPIC_API_KEY is set, so claude could bill the API instead of the subscription; unset it and run again"
     )]
@@ -96,6 +106,8 @@ impl LlmError {
         matches!(
             self,
             LlmError::ApiKeySet
+                | LlmError::Codex(_)
+                | LlmError::Configuration(_)
                 | LlmError::Start(_)
                 | LlmError::NotSignedIn { .. }
                 | LlmError::UsageLimit { .. }

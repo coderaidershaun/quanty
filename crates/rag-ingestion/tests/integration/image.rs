@@ -231,3 +231,44 @@ async fn a_picture_whose_paid_call_fails_is_named_with_what_happened_to_the_call
         "the services were started, and it is the call that failed: {message}"
     );
 }
+
+#[tokio::test]
+async fn unknown_conversion_cost_survives_saved_image_and_usage() {
+    let folder = tempfile::tempdir().unwrap();
+    let services = StandInImageServices::default();
+    let image = convert_image_with(&support::sample_picture(), folder.path(), &services)
+        .await
+        .unwrap();
+    let index_path = image.picture.parent().unwrap().join("image.json");
+    let mut saved: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&index_path).unwrap()).unwrap();
+    assert_eq!(saved["calls"][0]["cost-usd"], json!(0.0));
+    saved["calls"][0]["cost-usd"] = serde_json::Value::Null;
+    std::fs::write(&index_path, serde_json::to_vec(&saved).unwrap()).unwrap();
+
+    let loaded = convert_image_with(&support::sample_picture(), folder.path(), &services)
+        .await
+        .unwrap();
+    assert_eq!(
+        services.calls(),
+        1,
+        "unknown cost must not invalidate the saved image"
+    );
+    assert_eq!(
+        serde_json::to_value(&loaded.index).unwrap()["calls"][0]["cost-usd"],
+        serde_json::Value::Null
+    );
+
+    let mut calls = image.calls;
+    calls.by_model.insert(
+        "custom-codex-model".into(),
+        ocr::convert::ModelCalls {
+            input_tokens: 100,
+            output_tokens: 10,
+            ..Default::default()
+        },
+    );
+    let usage = rag_ingestion::usage_of(&calls);
+    assert_eq!(usage.tokens().total(), 211);
+    assert_eq!(usage.cost_usd(), None);
+}

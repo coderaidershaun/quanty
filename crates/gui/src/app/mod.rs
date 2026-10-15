@@ -3,6 +3,7 @@
 
 pub mod launch;
 pub mod layout;
+mod model_picker;
 mod region;
 mod shell;
 mod shortcuts;

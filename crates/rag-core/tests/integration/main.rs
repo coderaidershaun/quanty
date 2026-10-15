@@ -3,6 +3,7 @@
 
 mod claude_cli;
 mod claude_live;
+mod codex_cli;
 mod concept_store;
 mod gemini_live;
 mod gemini_stub;

@@ -1878,6 +1878,7 @@ dependencies = [
  "graph",
  "gui",
  "image",
+ "model-settings",
  "ocr",
  "proptest",
  "rag-core",
@@ -2641,6 +2642,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "model-settings"
+version = "0.1.0"
+dependencies = [
+ "dotenvy",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "moxcms"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3080,6 +3092,7 @@ dependencies = [
  "dotenvy",
  "futures-util",
  "ocr",
+ "rag-core",
  "reqwest",
  "schemars",
  "serde",
@@ -3629,6 +3642,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "dotenvy",
+ "model-settings",
  "qdrant-client",
  "reqwest",
  "serde",
@@ -3675,6 +3689,7 @@ dependencies = [
  "rag-ingestion",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "toml",

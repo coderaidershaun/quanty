@@ -167,15 +167,16 @@ enum Prepared {
     ToDo { source_sha256: String },
 }
 
-/// Converts a chapter with the real services: `claude` for Haiku and Sonnet, and Jev.
+/// Converts a chapter with the selected agent and Jev.
 ///
 /// A chapter that is already finished is not touched: no service is started and no key is
 /// needed. An interrupted chapter resumes at the pages that are missing.
 ///
 /// # Errors
-/// - [`ConvertError::ApiKeySet`] if `ANTHROPIC_API_KEY` is set, even when the chapter is
-///   finished
-/// - [`ConvertError::Services`] if Jev cannot be reached or refuses its key
+/// - [`ConvertError::ApiKeySet`] if Claude is selected and `ANTHROPIC_API_KEY` is set, even
+///   when the chapter is finished
+/// - [`ConvertError::Services`] if model settings are invalid or Jev cannot be reached or
+///   refuses its key
 /// - [`ConvertError::ChapterBusy`] if another run is converting the same chapter
 /// - [`ConvertError::PageFailed`] for the lowest page that failed; finished pages stay saved
 pub async fn convert_chapter(job: &ChapterJob) -> Result<ConversionSummary, ConvertError> {
@@ -197,8 +198,10 @@ pub async fn convert_chapter_with_jev_key(
     jev_api_key: Option<&str>,
     on_progress: impl FnMut(PageProgress),
 ) -> Result<ConversionSummary, ConvertError> {
-    if services::api_key_is_set() {
-        return Err(ConvertError::ApiKeySet);
+    match services::check_subscription() {
+        Ok(()) => {}
+        Err(ClaudeError::ApiKeySet) => return Err(ConvertError::ApiKeySet),
+        Err(error) => return Err(ServiceError::from(error).into()),
     }
     match prepare(job)? {
         Prepared::Finished(summary) => Ok(summary),

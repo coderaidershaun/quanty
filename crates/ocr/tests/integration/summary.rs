@@ -89,11 +89,16 @@ pub fn assert_each_page_told_once_with_its_cost(
             PageProgress::PageDone { position, calls } => {
                 positions.push(*position);
                 for (model, used) in &calls.by_model {
-                    cost_usd += used.cost_usd;
+                    cost_usd += used
+                        .cost_usd
+                        .expect("stand-ins report the cost of every call");
                     let sum = told.entry(model.as_str()).or_default();
                     sum[0] += used.input_tokens;
                     sum[1] += used.output_tokens;
-                    sum[2] += cents(used.cost_usd);
+                    sum[2] += cents(
+                        used.cost_usd
+                            .expect("stand-ins report the cost of every call"),
+                    );
                 }
             }
             other => panic!("only finished pages should follow the cut pages, got {other:?}"),
@@ -103,7 +108,14 @@ pub fn assert_each_page_told_once_with_its_cost(
     assert_eq!(positions, (1..=7).collect::<Vec<u32>>());
     let in_summary: BTreeMap<&str, [u64; 3]> = (summary.calls.by_model.iter())
         .map(|(model, used)| {
-            let figures = [used.input_tokens, used.output_tokens, cents(used.cost_usd)];
+            let figures = [
+                used.input_tokens,
+                used.output_tokens,
+                cents(
+                    used.cost_usd
+                        .expect("stand-ins report the cost of every call"),
+                ),
+            ];
             (model.as_str(), figures)
         })
         .collect();
@@ -117,7 +129,10 @@ pub fn assert_each_page_told_once_with_its_cost(
         told, in_summary,
         "the pages tell the tokens and the cost of the run"
     );
-    let reported = summary.calls.by_model.values().map(|used| used.cost_usd);
+    let reported = summary.calls.by_model.values().map(|used| {
+        used.cost_usd
+            .expect("stand-ins report the cost of every call")
+    });
     let summary_cost: f64 = reported.sum();
     assert!(
         (cost_usd - summary_cost).abs() < 1e-9,

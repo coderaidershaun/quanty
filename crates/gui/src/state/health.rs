@@ -31,6 +31,7 @@ impl Health {
             facts,
             ..Health::default()
         };
+        // SMELL: Startup health assumes Claude even when Codex is selected; model changes do not refresh it.
         if health.facts.anthropic_api_key_set {
             health.states.insert(
                 Service::Claude,

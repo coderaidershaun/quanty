@@ -41,6 +41,7 @@ pub struct App {
     intents: Vec<Intent>,
     effects: Vec<Effect>,
     pick_file: FilePicker,
+    model_picker: super::model_picker::ModelPicker,
 }
 
 impl App {
@@ -62,6 +63,7 @@ impl App {
         })?;
         let mut intents = vec![Intent::RefreshCatalogue];
         intents.extend(opening);
+        let model_picker = super::model_picker::ModelPicker::new(&facts);
         Ok(App {
             shared: Shared::new(facts),
             locals: Locals::default(),
@@ -71,6 +73,7 @@ impl App {
             intents,
             effects: Vec::new(),
             pick_file: Box::new(|| None),
+            model_picker,
         })
     }
 
@@ -143,7 +146,11 @@ impl App {
             .exact_size(layout::TOP_BAR)
             .show_separator_line(false)
             .frame(egui::Frame::NONE)
-            .show(ui, |ui| top_bar::draw(ui, rects.top_bar, &mut cx));
+            .show(ui, |ui| {
+                top_bar::draw(ui, rects.top_bar, &mut cx);
+                self.model_picker
+                    .draw(ui, rects.top_bar, self.backend.is_idle());
+            });
         egui::CentralPanel::no_frame().show(ui, |ui| {
             ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
             draw_tab(ui, &rects, &mut self.locals, &mut cx);

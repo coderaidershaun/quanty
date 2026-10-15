@@ -139,5 +139,5 @@ async fn health_names_each_service_that_is_not_ready() {
     let lines = report["report"].as_str().unwrap();
     assert!(lines.contains("Qdrant: FAILED"), "{lines}");
     assert!(lines.contains("FalkorDB: FAILED"), "{lines}");
-    assert!(lines.contains("claude:"), "{lines}");
+    assert!(lines.contains("agent:"), "{lines}");
 }

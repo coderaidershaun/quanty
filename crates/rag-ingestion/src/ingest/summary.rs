@@ -60,8 +60,7 @@ impl<'a> Meter<'a> {
     }
 }
 
-/// What the paid calls of a conversion used, model by model, with what `claude` said each model
-/// cost.
+/// What the paid calls of a conversion used, model by model, with any reported cost.
 pub fn usage_of(calls: &CallTally) -> UsageTally {
     let mut usage = UsageTally::default();
     for (model, used) in &calls.by_model {
@@ -73,7 +72,7 @@ pub fn usage_of(calls: &CallTally) -> UsageTally {
         };
         let model_usage = ModelUsage {
             tokens,
-            reported_usd: Some(used.cost_usd),
+            reported_usd: used.cost_usd,
             estimated: false,
         };
         usage.add(model, model_usage);
@@ -177,6 +176,7 @@ impl IngestSummary {
             "relations written: {}, dropped: {}",
             concepts.relations_written, concepts.relations_dropped
         )?;
+        // SMELL: This output names Claude even when another agent answered.
         writeln!(
             formatter,
             "claude calls made: {}, cache hits: {}",

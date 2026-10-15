@@ -121,6 +121,7 @@ fn embed(error: &EmbedError) -> Verdict {
 
 fn llm(error: &LlmError) -> Verdict {
     match error {
+        LlmError::Codex(_) | LlmError::Configuration(_) => Verdict::of(Kind::AgentFailed),
         LlmError::ApiKeySet => Verdict::of(Kind::ClaudeApiKeySet),
         LlmError::Start(_) => Verdict::of(Kind::ClaudeMissing),
         LlmError::NotSignedIn { .. } => Verdict::of(Kind::ClaudeSignedOut),
@@ -142,6 +143,10 @@ fn claude_cli(error: &ClaudeCliError) -> Verdict {
 
 fn claude(error: &ClaudeError) -> Verdict {
     match error {
+        ClaudeError::Agent(_)
+        | ClaudeError::Configuration(_)
+        | ClaudeError::TemporaryFolder(_)
+        | ClaudeError::PagePreparation(_) => Verdict::of(Kind::AgentFailed),
         ClaudeError::ApiKeySet => Verdict::of(Kind::ClaudeApiKeySet),
         ClaudeError::Spawn(_) => Verdict::of(Kind::ClaudeMissing),
         ClaudeError::TimedOut { seconds } => timed_out(*seconds),

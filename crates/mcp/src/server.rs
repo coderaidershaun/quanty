@@ -58,7 +58,7 @@ impl<S: Services> Clone for QuantyServer<S> {
 /// Whether the services that a tool needs are ready.
 #[derive(Serialize, JsonSchema)]
 struct HealthResult {
-    /// True when Qdrant, FalkorDB and the `claude` sign-in are all ready.
+    /// True when Qdrant, FalkorDB and the selected agent sign-in are all ready.
     healthy: bool,
     /// One line for each service, saying whether it is ready.
     report: String,
@@ -208,9 +208,9 @@ impl<S: Services> QuantyServer<S> {
     }
 
     /// Writes an answer to a question from what `search` finds, with the items that each
-    /// statement rests on. It calls the `claude` command line tool, which spends the owner's
-    /// Claude subscription usage, and it embeds the question with Gemini. It can take a minute or
-    /// two. An agent that can write its own answer should call `search` instead.
+    /// statement rests on. It uses the selected agent's subscription and embeds the question
+    /// with Gemini. It can take a minute or two. An agent that can write its own answer should
+    /// call `search` instead.
     #[tool(annotations(read_only_hint = true))]
     async fn answer(
         &self,
@@ -240,7 +240,7 @@ impl<S: Services> QuantyServer<S> {
         Ok(Json(library::read_page(&self.shared.config, args)?))
     }
 
-    /// Says whether Qdrant, FalkorDB and the `claude` sign-in are ready. It costs nothing.
+    /// Says whether Qdrant, FalkorDB and the selected agent sign-in are ready. It costs nothing.
     #[tool(annotations(read_only_hint = true))]
     async fn health(&self) -> Json<HealthResult> {
         let report = health::check(&self.shared.config).await;
@@ -251,9 +251,9 @@ impl<S: Services> QuantyServer<S> {
     }
 
     /// Converts one PDF of a book, a paper or another media and stores it so that it can be
-    /// searched. It is PAID and slow: each page is read by `claude` and Jev, the items are
-    /// embedded by Gemini and the concepts are found by `claude`, which takes minutes for a
-    /// chapter. The call answers when that work has started, with a `job_id` for
+    /// searched. It is PAID and slow: each page is read by the selected agent and Jev, the items
+    /// are embedded by Gemini and the selected agent finds the concepts, which takes minutes
+    /// for a chapter. The call answers when that work has started, with a `job_id` for
     /// `ingest_status`. A PDF that is already ingested costs nothing. A book's chapter must be
     /// named `chapter-<number>-<name>.pdf`; a part of a book that is not a chapter, such as its
     /// index, takes `document_title` and can have any file name; a paper or other PDF can have
@@ -287,6 +287,6 @@ impl<S: Services> QuantyServer<S> {
 #[tool_handler(
     router = self.tool_router,
     name = "quanty",
-    instructions = "Search and read a library of books, papers and other media. Start with `search` for a question, then `read_page` to read around a result. `answer` writes a whole answer but spends Claude subscription usage. `ingest_pdf` adds a PDF, and `ingest_status` follows it."
+    instructions = "Search and read a library of books, papers and other media. Start with `search` for a question, then `read_page` to read around a result. `answer` writes a whole answer but spends the selected agent subscription usage. `ingest_pdf` adds a PDF, and `ingest_status` follows it."
 )]
 impl<S: Services> ServerHandler for QuantyServer<S> {}

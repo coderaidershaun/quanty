@@ -1,4 +1,4 @@
-//! Checks that Qdrant, FalkorDB and the sign-in of the `claude` program are ready. Every check
+//! Checks that Qdrant, FalkorDB and the selected agent's sign-in are ready. Every check
 //! is always run, so one report names everything that is wrong.
 
 use std::error::Error;
@@ -6,7 +6,7 @@ use std::fmt;
 use std::time::Duration;
 
 use graph::{FalkorGraph, GraphError};
-use rag_core::{ClaudeCliError, Config, ItemStore, StoreError, check_signed_in, error_chain};
+use rag_core::{AgentCli, Config, ItemStore, Llm, LlmError, StoreError, error_chain};
 
 const STORE_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -19,13 +19,13 @@ enum HealthError {
     FalkorDb(#[from] GraphError),
 
     #[error(transparent)]
-    Claude(#[from] ClaudeCliError),
+    Agent(#[from] LlmError),
 
     #[error("no answer within {seconds} seconds")]
     TimedOut { seconds: u64 },
 }
 
-/// `detail` says what was checked: the address of a store, or the sign-in state of claude.
+/// `detail` says what was checked: the address of a store, or the agent's sign-in state.
 #[derive(Debug)]
 struct Check {
     name: &'static str,
@@ -84,7 +84,10 @@ pub async fn check(config: &Config) -> HealthReport {
         Ok(())
     })
     .await;
-    let claude = check_signed_in().await.map_err(HealthError::from);
+    let agent = AgentCli::from_saved_settings()
+        .check_ready()
+        .await
+        .map_err(HealthError::from);
 
     HealthReport {
         checks: [
@@ -99,14 +102,14 @@ pub async fn check(config: &Config) -> HealthReport {
                 result: falkordb,
             },
             Check {
-                name: "claude",
-                detail: if claude.is_ok() {
+                name: "agent",
+                detail: if agent.is_ok() {
                     "signed in"
                 } else {
                     "not signed in"
                 }
                 .to_owned(),
-                result: claude,
+                result: agent,
             },
         ],
     }

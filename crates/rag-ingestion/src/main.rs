@@ -13,14 +13,12 @@ use clap::{CommandFactory, Parser};
 use graph::FalkorGraph;
 use ocr::{ChapterJob, PageProgress};
 use rag_core::{
-    ApiKey, Category, ClaudeCli, ConceptStore, Config, DocId, GeminiEmbedder, ItemStore,
-    MediaLabels,
+    AgentCli, ApiKey, Category, ConceptStore, Config, DocId, GeminiEmbedder, ItemStore, MediaLabels,
 };
 use rag_ingestion::{
-    ChapterFolder, ChapterPdf, ConceptExtractor, EXTRACTION_MODEL, IngestSummary, LoneImage,
-    MediaChange, Models, NamePdfError, Stores, TagChange, UnnamedPdf, delete_document,
-    delete_media, health, ingest_chapter, ingest_image, ingest_pdf, relabel_document_tags,
-    relabel_media,
+    ChapterFolder, ChapterPdf, ConceptExtractor, IngestSummary, LoneImage, MediaChange, Models,
+    NamePdfError, Stores, TagChange, UnnamedPdf, delete_document, delete_media, health,
+    ingest_chapter, ingest_image, ingest_pdf, relabel_document_tags, relabel_media,
 };
 use tracing::Level;
 use tracing_subscriber::filter::Targets;
@@ -106,10 +104,10 @@ async fn connect_stores(config: &Config) -> Result<Stores> {
     })
 }
 
-fn set_up_models(config: &Config) -> Result<Models<GeminiEmbedder, ClaudeCli>> {
+fn set_up_models(config: &Config) -> Result<Models<GeminiEmbedder, AgentCli>> {
     Ok(Models {
         embedder: GeminiEmbedder::from_config(config).context("could not set up the embedder")?,
-        concepts: ConceptExtractor::new(ClaudeCli::new(EXTRACTION_MODEL), config),
+        concepts: ConceptExtractor::new(AgentCli::from_saved_settings(), config),
     })
 }
 

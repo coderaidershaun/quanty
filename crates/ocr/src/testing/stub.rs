@@ -50,7 +50,7 @@ pub struct StubServices {
 fn usage(model: &str) -> CallUsage {
     CallUsage {
         model: model.to_owned(),
-        cost_usd: 0.01,
+        cost_usd: Some(0.01),
         input_tokens: 100,
         output_tokens: 10,
         cache_read_tokens: 0,

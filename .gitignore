@@ -20,3 +20,6 @@ crates/gui/tests/snapshots/**/*.old.png
 
 # Waste
 .scratch
+
+# Saved desktop/CLI model selection
+.quanty-model.json

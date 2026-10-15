@@ -52,7 +52,8 @@ impl Failure {
             FailureKind::FalkorDbDown => Some(Service::FalkorDb),
             FailureKind::EmbeddingKeyMissing => Some(Service::EmbeddingKey),
             FailureKind::ConverterKeyMissing => Some(Service::ConverterKey),
-            FailureKind::ClaudeMissing
+            FailureKind::AgentFailed
+            | FailureKind::ClaudeMissing
             | FailureKind::ClaudeSignedOut
             | FailureKind::ClaudeUsageLimit
             | FailureKind::ClaudeApiKeySet => Some(Service::Claude),

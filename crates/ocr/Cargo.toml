@@ -7,11 +7,13 @@ edition.workspace = true
 anyhow.workspace = true
 dotenvy.workspace = true
 futures-util.workspace = true
+rag-core.workspace = true
 reqwest.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+tempfile.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["macros", "process", "rt-multi-thread", "time"] }
 

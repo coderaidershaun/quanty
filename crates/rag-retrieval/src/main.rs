@@ -7,10 +7,10 @@ use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser};
 use graph::FalkorGraph;
 use rag_core::{
-    Category, ClaudeCli, ConceptStore, Config, GeminiEmbedder, ItemKind, ItemStore, LabelFilter,
+    AgentCli, Category, ConceptStore, Config, GeminiEmbedder, ItemKind, ItemStore, LabelFilter,
     Llm, Tag, WantedDocument,
 };
-use rag_retrieval::{ANSWER_MODEL, Retriever, SearchResults, answer};
+use rag_retrieval::{Retriever, SearchResults, answer};
 use tracing_subscriber::filter::{LevelFilter, Targets};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -138,18 +138,18 @@ async fn answer_question(
     kind: Option<ItemKind>,
     wanted: &LabelFilter,
 ) -> Result<()> {
-    let claude = ClaudeCli::new(ANSWER_MODEL);
+    let agent = AgentCli::from_saved_settings();
     // Asked before the search, which Gemini bills: this check costs nothing.
-    claude
+    agent
         .check_ready()
         .await
-        .context("claude cannot write an answer, so nothing was searched for")?;
+        .context("the selected agent cannot write an answer, so nothing was searched for")?;
     let results = search(question, kind, wanted).await?;
     if results.hits.is_empty() {
         println!("{results}");
         return Ok(());
     }
-    let written = answer(&claude, question, &results)
+    let written = answer(&agent, question, &results)
         .await
         .context("could not write an answer")?;
     println!("{written}");

@@ -1,7 +1,9 @@
 //! The pieces that ingestion and retrieval must agree on: the settings, the identifiers, the
 //! embedder, the item store, the concept store, the language model and the prices of the models.
 
+mod agent_cli;
 mod claude;
+mod codex;
 mod concept;
 mod concept_store;
 mod config;
@@ -14,7 +16,9 @@ mod llm;
 mod qdrant;
 mod usage;
 
+pub use agent_cli::AgentCli;
 pub use claude::{ClaudeCli, ClaudeCliError, check_signed_in};
+pub use codex::{CodexCli, CodexError};
 pub use concept::ConceptId;
 pub use concept_store::{ConceptHit, ConceptPoint, ConceptStore, concept_input};
 pub use config::{ApiKey, Config, ConfigError};
@@ -30,5 +34,6 @@ pub use labels::{
     WantedDocument, author_list, is_same_name,
 };
 pub use llm::{Llm, LlmError, LlmReply, Question};
+pub use model_settings::{ModelSettings, SettingsError};
 pub use qdrant::StoreError;
 pub use usage::{ModelPrice, ModelUsage, Usage, UsageTally, cost_text, price_of};

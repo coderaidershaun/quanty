@@ -48,5 +48,5 @@ fn health_names_each_store_it_cannot_reach_and_exits_non_zero() {
         "{}",
         lines[1]
     );
-    assert!(lines[2].starts_with("claude:"), "{}", lines[2]);
+    assert!(lines[2].starts_with("agent:"), "{}", lines[2]);
 }

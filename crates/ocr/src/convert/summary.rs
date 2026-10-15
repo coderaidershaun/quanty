@@ -12,7 +12,7 @@ use crate::content::{
     page_folder_name,
 };
 
-/// A Sonnet-written page whose copied words match the text layer less well than this, in either
+/// A transcribed page whose copied words match the text layer less well than this, in either
 /// direction, is listed as a page to check. The text layer is unreliable around math, charts and
 /// tables, so a middling match there is normal and is never a failure.
 const LOW_WORD_MATCH: f64 = 0.60;
@@ -38,14 +38,14 @@ pub enum PageProgress {
     PageFailed { position: u32 },
 }
 
-/// What the calls of one model used, as `claude` reported it.
+/// What the calls of one model used, with cost only when every call reported it.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct ModelCalls {
     pub input_tokens: u64,
     pub output_tokens: u64,
     pub cache_read_tokens: u64,
     pub cache_write_tokens: u64,
-    pub cost_usd: f64,
+    pub cost_usd: Option<f64>,
 }
 
 impl ModelCalls {
@@ -54,7 +54,10 @@ impl ModelCalls {
         self.output_tokens += other.output_tokens;
         self.cache_read_tokens += other.cache_read_tokens;
         self.cache_write_tokens += other.cache_write_tokens;
-        self.cost_usd += other.cost_usd;
+        self.cost_usd = self
+            .cost_usd
+            .zip(other.cost_usd)
+            .map(|(total, cost)| total + cost);
     }
 }
 
@@ -76,7 +79,10 @@ impl CallTally {
         self.copy += other.copy;
         self.transcribe += other.transcribe;
         for (model, calls) in &other.by_model {
-            self.by_model.entry(model.clone()).or_default().add(calls);
+            self.by_model
+                .entry(model.clone())
+                .and_modify(|total| total.add(calls))
+                .or_insert(*calls);
         }
     }
 
@@ -91,8 +97,8 @@ impl CallTally {
         };
         self.by_model
             .entry(usage.model.clone())
-            .or_default()
-            .add(&calls);
+            .and_modify(|total| total.add(&calls))
+            .or_insert(calls);
     }
 
     fn total(&self) -> u32 {
@@ -227,8 +233,8 @@ impl ConversionSummary {
 fn reasons_to_check(page: &PageIndex, conversion: &Conversion) -> Vec<&'static str> {
     let mut reasons = Vec::new();
     let word_match = conversion.checks.word_match;
-    let written_by_sonnet = conversion.route != Route::HaikuCopy;
-    if written_by_sonnet
+    let was_transcribed = conversion.route != Route::HaikuCopy;
+    if was_transcribed
         && (word_match.piece_words_in_text_layer < LOW_WORD_MATCH
             || word_match.text_layer_words_in_pieces < LOW_WORD_MATCH)
     {
@@ -332,8 +338,7 @@ impl fmt::Display for ConversionSummary {
             calls.copy,
             calls.transcribe
         )?;
-        // SMELL: the core crate keeps its own copy of these words, and this crate does not depend
-        // on it, so a change to one must be made in both.
+        // SMELL: The core crate duplicates these words, so changes must be made in both copies.
         for (model, used) in &calls.by_model {
             writeln!(
                 formatter,

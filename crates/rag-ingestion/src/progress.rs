@@ -70,7 +70,7 @@ mod tests {
                 ModelCalls {
                     input_tokens: 60_000,
                     output_tokens: 1_700,
-                    cost_usd: 0.5,
+                    cost_usd: Some(0.5),
                     ..ModelCalls::default()
                 },
             )]

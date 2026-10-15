@@ -3,6 +3,7 @@
 
 mod categorise;
 mod claude;
+mod codex;
 mod jev;
 mod schema;
 mod transcribe;
@@ -20,7 +21,7 @@ pub use categorise::categorise_page;
 pub use claude::{Answer, CallUsage, ClaudeError};
 pub use jev::{Jev, JevError, MathPlacement};
 
-pub(super) use claude::api_key_is_set;
+pub(super) use claude::check_subscription;
 pub(super) use jev::JEV_API_KEY_VARIABLE;
 
 const CLAUDE_RETRY_DELAYS: [Duration; 2] = [Duration::from_secs(30), Duration::from_secs(120)];
@@ -62,7 +63,7 @@ pub trait PageServices {
         page: &PageSource,
     ) -> impl Future<Output = Result<Option<MathPlacement>, ServiceError>> + Send;
 
-    /// A plain copy of the page's text, or a flag that the page needs the stronger model.
+    /// A plain copy of the page's text, or a flag that the page needs full transcription.
     fn copy(
         &self,
         page: &PageSource,
@@ -87,10 +88,10 @@ pub trait ImageServices {
     ) -> impl Future<Output = Result<Answer<TranscribedPage>, ServiceError>> + Send;
 }
 
-/// Sonnet through the `claude` command. It needs no Jev key.
+/// The selected model through its installed command. It needs no Jev key.
 pub struct LiveImageServices;
 
-/// Haiku and Sonnet through the `claude` command, and Jev over HTTP.
+/// The selected model through its installed command, and Jev over HTTP.
 pub struct LiveServices {
     jev: Jev,
 }

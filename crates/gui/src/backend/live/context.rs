@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use graph::FalkorGraph;
 use ocr::{ChapterJob, ConversionSummary, ConvertError, PageProgress};
-use rag_core::{ClaudeCli, ConceptStore, Config, Embedder, GeminiEmbedder, ItemStore, Llm};
+use rag_core::{AgentCli, ConceptStore, Config, Embedder, GeminiEmbedder, ItemStore, Llm};
 use rag_ingestion::{ConceptExtractor, EXTRACTION_MODEL, Models, Stores};
 use rag_retrieval::{ANSWER_MODEL, Retriever};
 
@@ -43,14 +43,14 @@ pub struct RealServices;
 
 impl Services for RealServices {
     type Embedder = GeminiEmbedder;
-    type Llm = ClaudeCli;
+    type Llm = AgentCli;
 
     fn embedder(&self, config: &Config) -> Result<GeminiEmbedder, Failure> {
         Ok(GeminiEmbedder::from_config(config)?)
     }
 
-    fn llm(&self, model: &str) -> ClaudeCli {
-        ClaudeCli::new(model)
+    fn llm(&self, _model: &str) -> AgentCli {
+        AgentCli::from_saved_settings()
     }
 
     async fn graph(&self, config: &Config) -> Result<FalkorGraph, Failure> {
@@ -177,12 +177,10 @@ impl<S: Services> LiveContext<S> {
         self.services.convert(job, key, on_page).await
     }
 
-    /// Asks `claude` whether it can answer, which costs nothing: a signed-out `claude` or a set
-    /// `ANTHROPIC_API_KEY` says no. It asks through the services, so a stand-in can answer in
-    /// its place.
+    /// Checks the selected agent without asking a question. The services can supply a stand-in.
     ///
     /// # Errors
-    /// A failure that says what the person must do before `claude` can answer.
+    /// A failure that says what the person must do before the selected agent can answer.
     pub async fn claude_ready(&self) -> Result<(), Failure> {
         self.services
             .llm(EXTRACTION_MODEL)

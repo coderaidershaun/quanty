@@ -22,4 +22,5 @@ tracing-subscriber.workspace = true
 [dev-dependencies]
 ocr.workspace = true
 rag-ingestion = { workspace = true, features = ["testing"] }
+tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }

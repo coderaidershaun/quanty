@@ -18,6 +18,7 @@ egui-phosphor.workspace = true
 egui_kittest = { workspace = true, optional = true }
 graph.workspace = true
 image.workspace = true
+model-settings.workspace = true
 ocr.workspace = true
 rag-core.workspace = true
 rag-ingestion.workspace = true

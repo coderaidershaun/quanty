@@ -87,17 +87,18 @@ pub enum MathCheck {
     NoAnswer,
 }
 
-/// Which model wrote the page.
+/// Whether the page was copied, transcribed, or copied then transcribed.
+/// Saved route names keep the Haiku and Sonnet labels for compatibility.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Route {
     HaikuCopy,
     Sonnet,
-    /// Haiku was tried first and its copy was not good enough.
+    /// A plain copy was tried first and was not good enough.
     HaikuThenSonnet,
 }
 
-/// Why a page went to Sonnet.
+/// Why a page needed full transcription.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RouteReason {
@@ -155,7 +156,7 @@ pub struct WordMatch {
 pub struct CallRecord {
     pub step: CallStep,
     pub model: String,
-    pub cost_usd: f64,
+    pub cost_usd: Option<f64>,
     /// A file saved before the input and cache counts were kept reads them as 0.
     #[serde(default)]
     pub input_tokens: u64,

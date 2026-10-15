@@ -21,6 +21,30 @@
   <sub>The desktop app on its built-in <code>black-scholes</code> fixture: sample data, no store, no model, no cost.</sub>
 </p>
 
+## Choose a model
+
+The **Model** and **Thinking** dropdowns in the desktop top bar change the model for
+answers, concept extraction and page conversion. The default is **Codex / GPT-6.1 Sol /
+Medium**. Claude models remain in the same menu. The controls use the app's existing
+dropdown styling and save immediately; finish any running operation before switching.
+
+All language-model calls run headlessly through the installed CLI. Run `codex login` once
+with your ChatGPT account, or sign in with `claude` when using Claude. No OpenAI API key is
+needed. Codex CLI 0.162.1 is tested; it must support `--ignore-user-config` and `--ignore-rules`.
+
+The saved choice is `.quanty-model.json` in the Quanty home folder. The desktop app, command
+line tools, OCR and MCP server read it before creating a model client, so no restart is needed.
+Without that file, `LLM_PROVIDER`, `LLM_MODEL` and `LLM_THINKING` in the environment or `.env`
+set the defaults. A saved UI choice takes precedence. Codex defaults to `gpt-6.1-sol` with
+`medium` thinking. Supported levels are `low`, `medium`, `high`, `xhigh`, `max` and, for
+models that support it, `ultra`. `CODEX_BIN` can name a custom Codex executable.
+
+PDF pages are rendered locally and attached as images, with their text layer, to headless
+Codex. No model shell tools are needed. Gemini embedding and Jev conversion settings keep
+their existing roles. Codex usage records tokens; dollar cost is unknown when no price is
+available. [Codex non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode)
+describes the CLI protocol.
+
 ## Why quanty
 
 On their own, LLMs cannot be trusted to automate post-trade analysis research: they hallucinate math and are not (yet) masters of quantitative trading end to end. A quant research team can instead give its agents a trusted knowledge base that it owns as its IP and moat.
@@ -28,7 +52,7 @@ On their own, LLMs cannot be trusted to automate post-trade analysis research: t
 quanty is an open-source answer:
 
 - Give it PDFs of books and papers.
-- Its OCR layer, run entirely by the software, uses Jev to find the math and Claude models to write it as LaTeX and describe each figure.
+- Its OCR layer, run entirely by the software, uses Jev to find the math and the selected Codex or Claude model to write it as LaTeX and describe each figure.
 - Everything is embedded into a multimodal RAG database and linked by concept, so the connections grow with the knowledge base.
 - It is 100% Rust, the UI included.
 
@@ -59,7 +83,7 @@ Set up once, then open the app with real stores. Run every command in the quanty
 | Rust (stable, with `cargo`)                                          | Builds every program                                                          |
 | Docker, with `docker compose`                                        | Runs the two stores: Qdrant (vectors) and FalkorDB (the graph)                |
 | [Poppler](https://poppler.freedesktop.org/) (`brew install poppler`) | Reads a PDF when it is converted                                              |
-| The `claude` CLI, signed in                                          | Reads pages, finds concepts and writes answers, on your `claude` subscription |
+| The `codex` CLI, signed in (or `claude`)                                          | Reads pages, finds concepts and writes answers, on your selected agent subscription |
 
 ### 2. Start the stores
 
@@ -85,7 +109,7 @@ unset ANTHROPIC_API_KEY    # must not be set, so that claude bills your subscrip
 | `CONVERTER_JEV_API_KEY`    | The Jev API, which is asked whether a page holds math: only when a PDF is converted |
 
 > [!IMPORTANT]
-> `ANTHROPIC_API_KEY` must not be set, in the shell or in `.env`. While it is set, quanty asks `claude` nothing, so that the work is billed to the subscription and not to the API. `unset ANTHROPIC_API_KEY` does nothing when it is not set.
+> `ANTHROPIC_API_KEY` must not be set, in the shell or in `.env`. When Claude is selected and it is set, quanty asks `claude` nothing, so that the work is billed to the subscription and not to the API. `unset ANTHROPIC_API_KEY` does nothing when it is not set.
 
 ### 4. Check the services
 
@@ -93,7 +117,7 @@ unset ANTHROPIC_API_KEY    # must not be set, so that claude bills your subscrip
 cargo run --release -p rag-ingestion --bin rag-ingest -- health
 ```
 
-`health` prints one line each for Qdrant, FalkorDB and `claude`: `ok`, or `FAILED` with what is wrong. It does not check the two keys or `ANTHROPIC_API_KEY`.
+`health` prints one line each for Qdrant, FalkorDB and the selected agent: `ok`, or `FAILED` with what is wrong. It does not check the Gemini or Jev keys. When Claude is selected, it refuses `ANTHROPIC_API_KEY`; Codex requires a ChatGPT subscription login.
 
 ### 5. Open the app
 
@@ -223,7 +247,7 @@ The six panels of Ask, every button and every key are in [docs/reference.md](doc
 
 - Ask a question in the mode **Answer** or **Results only**, with five filters: **Media**, **Document**, **Authors**, **Tags** and **Category**.
 - Read the answer with its citations, the page each citation stands on, the concept graph, the steps of the search, and questions to ask next.
-- **Answer** costs one Gemini embedding call and one Sonnet call on your `claude` subscription. **Results only** writes no answer and costs the embedding call alone.
+- **Answer** costs one Gemini embedding call and one call to the selected model on your selected agent subscription. **Results only** writes no answer and costs the embedding call alone.
 - **Maximise**, at the top right of the page's panel and of the concept graph, gives that panel the whole tab. **Restore**, in the same place, puts every panel back.
 
 ### Library
@@ -271,8 +295,8 @@ The server finds `.env`, `content/` and `data/` from the folder it starts in: th
 | `list_documents` | Lists every stored document                                      | Free                                               |
 | `search`         | Finds the stored items nearest to a question                     | One small Gemini call                              |
 | `read_page`      | Reads one page of a document, in reading order                   | Free                                               |
-| `answer`         | Writes an answer from what `search` finds, with its sources      | A Gemini call and your `claude` subscription usage |
-| `ingest_pdf`     | Converts one PDF of a media and stores it                        | Paid and slow: `claude`, Jev and Gemini            |
+| `answer`         | Writes an answer from what `search` finds, with its sources      | A Gemini call and your selected agent subscription usage |
+| `ingest_pdf`     | Converts one PDF of a media and stores it                        | Paid and slow: the selected agent, Jev and Gemini  |
 | `ingest_status`  | Says how an ingest job is going                                  | Free                                               |
 
 An agent that can write its own answer should call `search`, not `answer`. The arguments, the first calls to try, `.mcp.json`, HTTP and how to send a PDF are in [docs/mcp.md](docs/mcp.md).

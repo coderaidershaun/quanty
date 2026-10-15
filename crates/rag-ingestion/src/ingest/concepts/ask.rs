@@ -144,7 +144,7 @@ impl<L: Llm> ConceptExtractor<L> {
         let input = input_for(item);
         let key = key_of(
             &self.prompt_version,
-            self.llm.model(),
+            &self.llm.cache_identity(),
             Question {
                 system_prompt: SYSTEM_PROMPT,
                 schema: SCHEMA,

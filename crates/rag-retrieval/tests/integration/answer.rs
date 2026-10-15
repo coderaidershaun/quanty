@@ -356,10 +356,12 @@ fn rag_query_stops_before_the_search_when_claude_cannot_write_an_answer() {
     // Nothing listens on these ports, and the settings of a real `.env` stay out, so a run that
     // got as far as the search would name a store and could not reach the embedder. With the key
     // set, the check ends before any `claude` is started.
+    let working_folder = tempfile::tempdir().unwrap();
     let output = Command::new(env!("CARGO_BIN_EXE_rag-query"))
         .args(["--answer", "what is delta?"])
-        .current_dir(std::env::temp_dir())
+        .current_dir(working_folder.path())
         .env_clear()
+        .env("LLM_PROVIDER", "claude")
         .env("ANTHROPIC_API_KEY", "set-for-this-test")
         .env("QDRANT_URL", "http://127.0.0.1:1")
         .env("FALKORDB_URL", "falkor://127.0.0.1:1")

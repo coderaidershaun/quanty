@@ -45,7 +45,7 @@ impl<L: Llm> ConceptExtractor<L> {
             input: &input,
         };
         let asked = KeyedQuestion {
-            key: key_of(&self.prompt_version, self.llm.model(), question),
+            key: key_of(&self.prompt_version, &self.llm.cache_identity(), question),
             question,
         };
         self.answer(cache, &asked, |value| {

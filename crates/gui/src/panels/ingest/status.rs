@@ -16,7 +16,7 @@ use crate::widgets::{self, Button, Notice};
 
 const CHECKING: &str = "Checking the PDF";
 const CONNECTING: &str = "Connecting to the stores";
-const COST: &str = "Checking is free. Starting is paid work: claude and Jev convert each page, Gemini embeds the items, and claude reads the concepts.";
+const COST: &str = "Checking is free. Starting is paid work: the selected agent and Jev convert each page, Gemini embeds the items, and the selected agent reads the concepts.";
 const START_OFF_WHILE_DELETING: &str = "A delete is on its way. Start when it is done.";
 const KEEP_OPEN: &str = "Keep the app open until this is done. If it stops, start the same PDF again: pages that are converted are not paid for twice.";
 

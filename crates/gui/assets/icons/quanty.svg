@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <title>Quanty</title>
+  <desc>A paper-white Q with a vermilion bookmark tail on a rounded ink tile.</desc>
+  <defs>
+    <linearGradient id="ink" x1="160" y1="64" x2="864" y2="960" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34322F"/>
+      <stop offset="0.55" stop-color="#1C1B1A"/>
+      <stop offset="1" stop-color="#141312"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="512" y1="64" x2="512" y2="960" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.02"/>
+    </linearGradient>
+  </defs>
+  <path d="M288 64H736C891 64 960 133 960 288V736C960 891 891 960 736 960H288C133 960 64 891 64 736V288C64 133 133 64 288 64Z" fill="url(#ink)"/>
+  <path d="M288 66H736C889 66 958 135 958 288V736C958 889 889 958 736 958H288C135 958 66 889 66 736V288C66 135 135 66 288 66Z" stroke="url(#edge)" stroke-width="4"/>
+  <circle cx="486" cy="476" r="224" stroke="#FFFCF0" stroke-width="104"/>
+  <path d="M548 607L622 533L804 715L752 737L730 789L548 607Z" fill="#AF3029"/>
+</svg>

@@ -192,9 +192,12 @@ impl eframe::App for App {
 /// # Errors
 /// Whatever eframe reports when the window cannot be made.
 pub fn run(handler: impl Handler, facts: StartupFacts, opening: Vec<Intent>) -> eframe::Result {
+    let icon = eframe::icon_data::from_png_bytes(include_bytes!("../../assets/icons/icon.png"))
+        .expect("the embedded Quanty icon must be a valid PNG");
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("quanty")
+            .with_icon(icon)
             .with_inner_size(layout::DEFAULT_WINDOW)
             .with_min_inner_size(layout::MIN_WINDOW)
             .with_drag_and_drop(true),

@@ -13,6 +13,7 @@ use ocr::{Chapter, ChapterPiece, DocumentName, PieceDetail, PieceId, SectionHead
 use rag_core::{ItemId, is_same_name};
 use rag_ingestion::Item;
 use serde::{Deserialize, Serialize};
+use unicode_normalization::UnicodeNormalization;
 
 use crate::documents::ExportDocument;
 
@@ -163,6 +164,8 @@ impl SectionMaker<'_> {
             .map(inline_math)
             .collect::<Vec<_>>();
         format!("# {}", parts.join(HEADING_SEPARATOR))
+            .nfc()
+            .collect()
     }
 
     /// The items whose title is the context line of a piece of the section: the stored items

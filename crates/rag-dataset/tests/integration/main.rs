@@ -2,6 +2,7 @@
 //! the sample chapters and chapters written by hand.
 
 mod asker;
+mod checks;
 mod command;
 mod holdout;
 mod sections;

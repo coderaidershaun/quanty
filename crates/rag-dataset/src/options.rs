@@ -14,8 +14,10 @@ pub const DEFAULT_QUESTIONS: u32 = 2;
 pub const DEFAULT_MAX_SFT: u32 = 300;
 /// How many times the solver answers one question.
 pub const DEFAULT_SAMPLES: u32 = 3;
-/// A section whose worst page matches less of the text layer than this is rejected.
-pub const DEFAULT_MIN_PAGE_SCORE: f64 = 0.95;
+/// A section whose worst page matches less of the text layer than this is rejected. Inline math on
+/// a transcribed page counts as words that the text layer prints as symbols, so a good page of
+/// math matches less than a page of prose does.
+pub const DEFAULT_MIN_PAGE_SCORE: f64 = 0.90;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct BuildOptions {

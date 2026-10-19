@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "faithful": { "type": "boolean" },
+    "unsupported_claims": { "type": "array", "items": { "type": "string" } },
+    "score": { "type": "integer" }
+  },
+  "required": ["faithful", "unsupported_claims", "score"],
+  "additionalProperties": false
+}

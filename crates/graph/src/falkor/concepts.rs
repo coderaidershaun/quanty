@@ -1,6 +1,8 @@
 //! The statements that read concepts and the items that mention them, with the code that runs
 //! each one and the row it expects.
 
+use std::collections::HashMap;
+
 use falkordb::FalkorValue;
 use rag_core::{ConceptId, DocId, ItemId};
 
@@ -11,6 +13,8 @@ use crate::error::GraphError;
 const CONCEPT_ROW: &str = "a concept (an id, a name, a normalised name and a definition)";
 const ITEM_ROW: &str =
     "an item with the concepts it mentions (an item id and a list of concept ids)";
+const MENTION_COUNT_ROW: &str =
+    "a concept with a count (a concept id and one whole number that is not negative)";
 
 const FIND_CONCEPT: &str = "\
 MATCH (c:Concept)
@@ -37,6 +41,12 @@ WITH i, collect(c.id) AS shared
 RETURN i.id, shared
 ORDER BY size(shared) DESC, i.id
 LIMIT $limit";
+
+const MENTION_COUNTS: &str = "\
+MATCH (c:Concept)
+WHERE c.id IN $concepts
+OPTIONAL MATCH (i:Item)-[:MENTIONS]->(c)
+RETURN c.id, count(i)";
 
 const RELATED_CONCEPTS: &str = "\
 MATCH (a:Concept)-[:RELATES_TO]-(b:Concept)
@@ -137,6 +147,33 @@ impl FalkorGraph {
         ];
         let reply = self.run(action, ITEMS_FOR_CONCEPTS, parameters).await?;
         read_rows(self, action, ITEM_ROW, reply, item_mentions_from_row)
+    }
+
+    /// How many items mention each of these concepts. A concept that the graph holds and that no
+    /// item mentions counts 0, and an id that the graph does not hold is left out. An empty slice
+    /// makes no call.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   concept with a count
+    pub async fn mention_counts(
+        &self,
+        concepts: &[ConceptId],
+    ) -> Result<HashMap<ConceptId, u64>, GraphError> {
+        if concepts.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let action = "count the items that mention the concepts";
+        let parameters = vec![("concepts", id_list(concepts))];
+        let reply = self.run(action, MENTION_COUNTS, parameters).await?;
+        read_rows(
+            self,
+            action,
+            MENTION_COUNT_ROW,
+            reply,
+            mention_count_from_row,
+        )
     }
 
     /// The concepts that a `RELATES_TO` edge joins to one of these concepts, in either direction,
@@ -246,4 +283,14 @@ fn item_mentions_from_row(row: Vec<FalkorValue>) -> Result<ItemMentions, String>
         })
         .collect::<Result<_, _>>()?;
     Ok(ItemMentions { item, concepts })
+}
+
+fn mention_count_from_row(row: Vec<FalkorValue>) -> Result<(ConceptId, u64), String> {
+    let row = <[FalkorValue; 2]>::try_from(row).map_err(|row| format!("{row:?}"))?;
+    let [FalkorValue::String(concept), FalkorValue::I64(count)] = row else {
+        return Err(format!("{row:?}"));
+    };
+    let concept = concept.parse().map_err(|_| format!("{concept:?}"))?;
+    let count = u64::try_from(count).map_err(|_| count.to_string())?;
+    Ok((concept, count))
 }

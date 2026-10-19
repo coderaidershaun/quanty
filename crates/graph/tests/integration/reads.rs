@@ -1,5 +1,6 @@
-//! Reads what the Library, the concept graph and the source page ask of the store, on a throwaway
-//! graph, because only a real FalkorDB shows that it accepts the statements and orders their rows.
+//! Reads what the Library, the concept graph, the source page and the dataset build ask of the
+//! store, on a throwaway graph, because only a real FalkorDB shows that it accepts the statements
+//! and orders their rows.
 
 use std::collections::{BTreeSet, HashMap};
 use std::iter::repeat_n;
@@ -228,4 +229,59 @@ async fn media_come_back_by_title_and_only_an_update_changes_a_stored_one() {
 
     graph.update_media(&other_labels).await.unwrap();
     assert_eq!(graph.media().await.unwrap(), vec![book, other_labels]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local FalkorDB from docker compose and bills nothing; run with: cargo test -p graph --test integration -- --ignored reads::"]
+async fn mention_counts_count_the_items_that_mention_each_concept() {
+    let (_throwaway, graph) = throwaway("mention-counts").await;
+    let document = DocId::from_source_sha256("mention-counts");
+    let items: Vec<ItemNode> = (0u32..4)
+        .map(|position| item(document, ItemKind::Chunk, position, 1))
+        .collect();
+    let [
+        mentioned_thrice,
+        mentioned_once,
+        never_mentioned,
+        never_written,
+    ] = ["Delta", "Gamma", "Theta", "Vega"].map(concept);
+    graph
+        .upsert_document(&DocumentNode {
+            id: document,
+            title: "Mention counts".to_owned(),
+            labels: DocumentLabels::default(),
+        })
+        .await
+        .unwrap();
+    graph.upsert_items(document, &items).await.unwrap();
+    for written in [&mentioned_thrice, &mentioned_once, &never_mentioned] {
+        graph.upsert_concept(written).await.unwrap();
+    }
+    graph
+        .add_mentions(&[
+            mention(&items[0], &mentioned_thrice, "delta"),
+            mention(&items[1], &mentioned_thrice, "delta"),
+            mention(&items[2], &mentioned_thrice, "delta"),
+            mention(&items[3], &mentioned_once, "gamma"),
+        ])
+        .await
+        .unwrap();
+
+    // A concept that the graph holds and that no item mentions counts 0, and an id that the graph
+    // does not hold is not in the answer at all.
+    let asked = [
+        mentioned_thrice.id,
+        mentioned_once.id,
+        never_mentioned.id,
+        never_written.id,
+    ];
+    assert_eq!(
+        graph.mention_counts(&asked).await.unwrap(),
+        HashMap::from([
+            (mentioned_thrice.id, 3),
+            (mentioned_once.id, 1),
+            (never_mentioned.id, 0),
+        ])
+    );
+    assert_eq!(graph.mention_counts(&[]).await.unwrap(), HashMap::new());
 }

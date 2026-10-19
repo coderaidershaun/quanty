@@ -4,5 +4,6 @@
 mod asker;
 mod command;
 mod holdout;
+mod plan;
 mod sections;
 mod support;

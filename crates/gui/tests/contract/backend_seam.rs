@@ -10,10 +10,10 @@ use gui::app::layout::DEFAULT_WINDOW;
 use gui::backend::fake::{self, Fake};
 use gui::backend::{Backend, Handler, Reply};
 use gui::contract::{
-    AskDraft, Command, DocumentName, Event, Failure, FailureKind, Intent, Loadable, RequestId,
-    SearchReply, StartupFacts, Tab,
+    AskDraft, Command, DatasetStage, DocumentName, Event, Failure, FailureKind, Intent, Loadable,
+    RequestId, SearchReply, StartupFacts, Tab,
 };
-use gui::state::{HealthLevel, IngestJob, Shared};
+use gui::state::{DatasetJob, HealthLevel, IngestJob, Shared};
 use gui::testkit::{self, run_until, sample};
 
 use super::sample_pages;
@@ -94,9 +94,29 @@ fn assert_scene(name: &str, shared: &Shared) {
             );
             shared.tab == Tab::Ingest && is_checked
         }
+        "datasets-ready" => shared.tab == Tab::Datasets && shared.datasets == DatasetJob::Idle,
+        "datasets-running" => shared.tab == Tab::Datasets && is_at_the_stall_of_its_build(shared),
+        "datasets-failed" => {
+            let failure = match &shared.datasets {
+                DatasetJob::Finished {
+                    result: Err(failure),
+                    ..
+                } => Some(failure.kind),
+                _ => None,
+            };
+            shared.tab == Tab::Datasets && failure == Some(FailureKind::ClaudeUsageLimit)
+        }
         other => panic!("the test has no expectation for the scene `{other}`"),
     };
     assert!(ok, "scene `{name}` opened in the wrong state: {shared:#?}");
+}
+
+fn is_at_the_stall_of_its_build(shared: &Shared) -> bool {
+    matches!(
+        &shared.datasets,
+        DatasetJob::Running { progress: Some(progress), .. }
+            if progress.stage == DatasetStage::WritingSynthetic { done: 6, total: 12 }
+    )
 }
 
 fn open_scene(name: &str, rests: bool) -> Harness<'static, App> {
@@ -114,6 +134,7 @@ fn open_scene(name: &str, rests: bool) -> Harness<'static, App> {
         "ingest-running" => ("the check", |shared| {
             matches!(shared.ingest, IngestJob::Checked { .. })
         }),
+        "datasets-running" => ("the build at its stall", is_at_the_stall_of_its_build),
         _ => ("the ask to start", |shared| shared.ask.is_running()),
     };
     run_until(&mut harness, what, arrived);
@@ -122,7 +143,7 @@ fn open_scene(name: &str, rests: bool) -> Harness<'static, App> {
 
 #[test]
 fn every_scene_opens_and_every_sample_page_loads() {
-    assert_eq!(fake::scenes().len(), 20);
+    assert_eq!(fake::scenes().len(), 23);
     for scene in fake::scenes() {
         let mut harness = open_scene(scene.name, scene.rests);
         assert_scene(scene.name, harness.state().shared());

@@ -1,5 +1,6 @@
 //! The authors box and the tags boxes of a form: their names, the caption over a box, and the
-//! lists to and from the text a person types; the tokens and cost of a run; the words of a failure.
+//! lists to and from the text a person types; the tokens and cost of a run; the words of a failure
+//! and of a start that waits for a delete.
 
 use std::borrow::Borrow;
 
@@ -12,6 +13,7 @@ pub(super) const AUTHORS: &str = "Authors";
 pub(super) const TAGS: &str = "Tags";
 pub(super) const LIST_PLACEHOLDER: &str = "Optional, with commas between them";
 pub(super) const TRY_AGAIN: &str = "Try again";
+pub(super) const START_OFF_WHILE_DELETING: &str = "A delete is on its way. Start when it is done.";
 
 pub(super) fn caption(ui: &mut egui::Ui, text: &str) {
     ui.add_space(space::SM);

@@ -4,6 +4,7 @@
 mod chapters;
 mod context;
 mod convert;
+mod datasets;
 mod dispatch;
 mod failure;
 pub mod ingest;

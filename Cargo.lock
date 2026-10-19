@@ -1882,6 +1882,7 @@ dependencies = [
  "ocr",
  "proptest",
  "rag-core",
+ "rag-dataset",
  "rag-ingestion",
  "rag-retrieval",
  "ratex-layout",

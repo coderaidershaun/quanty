@@ -202,6 +202,12 @@ impl<S: Services> LiveContext<S> {
         self.services.llm(ANSWER_MODEL)
     }
 
+    /// A build asks the saved choice for every text it writes, as the concept reader does, so it
+    /// passes the concept reader's model name.
+    pub fn dataset_llm(&self) -> S::Llm {
+        self.services.llm(EXTRACTION_MODEL)
+    }
+
     /// Every kind of work converts its errors through it. A store that is down also drops what
     /// was kept, so the next command connects again.
     pub fn failure(&self, error: impl Into<Failure>) -> Failure {

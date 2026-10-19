@@ -14,6 +14,7 @@ fn label(tab: contract::Tab) -> &'static str {
         contract::Tab::Ask => "Ask",
         contract::Tab::Library => "Library",
         contract::Tab::Ingest => "Ingest",
+        contract::Tab::Datasets => "Datasets",
     }
 }
 

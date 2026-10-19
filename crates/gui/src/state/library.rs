@@ -141,9 +141,10 @@ impl Shared {
     }
 
     /// A delete removes what an ingest or another change may be writing, so none is taken while
-    /// an ingest runs or while any other change of the library is on its way.
+    /// an ingest runs or while any other change of the library is on its way. A build reads the
+    /// converted documents, so none is deleted while a build runs.
     pub fn can_delete(&self) -> bool {
-        self.can_edit_media() && self.library.busy.is_empty()
+        self.can_edit_media() && self.library.busy.is_empty() && !self.datasets.is_running()
     }
 
     pub(super) fn delete_document(&mut self, doc: DocId, effects: &mut Vec<Effect>) {

@@ -1,8 +1,9 @@
 //! The data the scenes answer with: a catalogue, the pages and their concepts, an ask and its
-//! reply, and the steps of an ingest.
+//! reply, and the steps of an ingest and of a dataset build.
 
 mod ask;
 mod concepts;
+pub(super) mod datasets;
 pub(super) mod ingest;
 mod library;
 mod reader;

@@ -1,6 +1,6 @@
-//! The ids, the item kind, the category, the document name, the label shapes and what a run used,
-//! to and from the types of the backend. Every part of the live backend converts through these and
-//! writes none of its own.
+//! The ids, the item kind, the category, the document name, the label shapes, the steps of a build
+//! and what a run used, to and from the types of the backend. Every part of the live backend
+//! converts through these and writes none of its own.
 
 use std::collections::BTreeSet;
 
@@ -9,8 +9,8 @@ use rag_core::{LabelFilter, MediaLabels, Tag, UsageTally, WantedDocument, author
 use rag_ingestion::{MediaChange, TagChange};
 
 use crate::contract::{
-    Category, ConceptId, DocId, DocumentName, DocumentTagsEdit, Filters, ItemId, ItemKind,
-    MediaEdit, ModelTokens, NewMedia, Usage,
+    Category, ConceptId, DatasetStage, DocId, DocumentName, DocumentTagsEdit, Filters, ItemId,
+    ItemKind, MediaEdit, ModelTokens, NewMedia, Usage,
 };
 
 impl From<rag_core::DocId> for DocId {
@@ -162,6 +162,38 @@ impl From<&MediaEdit> for MediaChange {
             category: Some(edit.category.into()),
             authors: Some(edit.authors.clone()),
             tags: Some(tags(&edit.tags).collect()),
+        }
+    }
+}
+
+impl From<rag_dataset::Step> for DatasetStage {
+    fn from(step: rag_dataset::Step) -> DatasetStage {
+        use rag_dataset::{GenerationKind, Step};
+        let count = |number: usize| u32::try_from(number).unwrap_or(u32::MAX);
+        match step {
+            Step::Exporting { done, total } => DatasetStage::Exporting {
+                done: count(done),
+                total: count(total),
+            },
+            Step::Checking => DatasetStage::Checking,
+            Step::Planning => DatasetStage::Planning,
+            Step::Writing {
+                kind: GenerationKind::Synthetic,
+                done,
+                total,
+            } => DatasetStage::WritingSynthetic {
+                done: count(done),
+                total: count(total),
+            },
+            Step::Writing {
+                kind: GenerationKind::Sft,
+                done,
+                total,
+            } => DatasetStage::WritingSft {
+                done: count(done),
+                total: count(total),
+            },
+            Step::WritingManifest => DatasetStage::WritingManifest,
         }
     }
 }

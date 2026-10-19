@@ -13,8 +13,8 @@ use crate::backend::{Backend, Handler};
 use crate::contract::{self, Effect, Intent, Panel, StartupFacts};
 use crate::media::Media;
 use crate::panels::{
-    Locals, PanelCx, answer, ask_bar, concept_graph, follow_up, ingest, library, retrieval_path,
-    source,
+    Locals, PanelCx, answer, ask_bar, concept_graph, datasets, follow_up, ingest, library,
+    retrieval_path, source,
 };
 use crate::state::Shared;
 use crate::theme::{self, color, space};
@@ -253,6 +253,9 @@ fn draw_tab(ui: &mut egui::Ui, rects: &ShellRects, locals: &mut Locals, cx: &mut
         }),
         contract::Tab::Ingest => region(ui, "ingest", rects.page, |ui| {
             ingest::show(ui, &mut locals.ingest, cx);
+        }),
+        contract::Tab::Datasets => region(ui, "datasets", rects.page, |ui| {
+            datasets::show(ui, &mut locals.datasets, cx);
         }),
     }
 }

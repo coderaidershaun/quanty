@@ -6,7 +6,10 @@ use super::concept_graph::ConceptGraph;
 use super::failure::Failure;
 use super::health::{Service, ServiceState};
 use super::ids::{ConceptId, DocId, NoticeId, RequestId};
-use super::ingest::{IngestOutcome, IngestProgress, IngestRequest, Preflight};
+use super::jobs::{
+    DatasetProgress, DatasetReport, DatasetRequest, IngestOutcome, IngestProgress, IngestRequest,
+    Preflight,
+};
 use super::library::{Catalogue, DocumentTagsEdit, MediaEdit, NewMedia};
 use super::source::{PageConcept, PageView};
 
@@ -16,10 +19,11 @@ pub enum Tab {
     Ask,
     Library,
     Ingest,
+    Datasets,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 3] = [Tab::Ask, Tab::Library, Tab::Ingest];
+    pub const ALL: [Tab; 4] = [Tab::Ask, Tab::Library, Tab::Ingest, Tab::Datasets];
 }
 
 /// The panels of the Ask tab that a person can maximise.
@@ -68,6 +72,8 @@ pub enum Intent {
     StartIngest,
     CancelIngest,
     ClearIngest,
+    StartDatasetBuild(DatasetRequest),
+    ClearDatasetBuild,
     DismissNotice(NoticeId),
     MarkNoticesRead,
     RecheckHealth,
@@ -119,6 +125,10 @@ pub enum Command {
         request: RequestId,
         ingest: IngestRequest,
     },
+    BuildDataset {
+        request: RequestId,
+        build: DatasetRequest,
+    },
     CheckHealth {
         request: RequestId,
     },
@@ -139,6 +149,7 @@ impl Command {
             | Command::DeleteMedia { request, .. }
             | Command::Preflight { request, .. }
             | Command::Ingest { request, .. }
+            | Command::BuildDataset { request, .. }
             | Command::CheckHealth { request } => *request,
             Command::Cancel(request) => *request,
         }
@@ -205,6 +216,10 @@ impl Command {
                 result: Err(failure.clone()),
             }],
             Command::Ingest { request, .. } => vec![Event::IngestFinished {
+                request: *request,
+                result: Err(failure.clone()),
+            }],
+            Command::BuildDataset { request, .. } => vec![Event::DatasetFinished {
                 request: *request,
                 result: Err(failure.clone()),
             }],
@@ -282,6 +297,14 @@ pub enum Event {
     IngestFinished {
         request: RequestId,
         result: Result<IngestOutcome, Failure>,
+    },
+    DatasetProgress {
+        request: RequestId,
+        progress: DatasetProgress,
+    },
+    DatasetFinished {
+        request: RequestId,
+        result: Result<DatasetReport, Failure>,
     },
     Health {
         request: RequestId,

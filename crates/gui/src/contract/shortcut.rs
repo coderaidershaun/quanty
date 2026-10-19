@@ -10,6 +10,7 @@ pub enum KeyName {
     Num1,
     Num2,
     Num3,
+    Num4,
     J,
     K,
     R,
@@ -27,6 +28,7 @@ impl KeyName {
             KeyName::Num1 => "1",
             KeyName::Num2 => "2",
             KeyName::Num3 => "3",
+            KeyName::Num4 => "4",
             KeyName::J => "J",
             KeyName::K => "K",
             KeyName::R => "R",
@@ -111,12 +113,13 @@ const fn row(
 /// Read from the top, so the most specific row comes first.
 // A table reads best with one row on each line.
 #[rustfmt::skip]
-pub static SHORTCUTS: [Shortcut; 14] = [
+pub static SHORTCUTS: [Shortcut; 15] = [
     row(Chord { command: true, shift: true, key: KeyName::S }, When::Always, false, Intent::ShareAnswer,
         "Copy the answer with its citations"),
     row(command(KeyName::Num1), When::Always, false, Intent::OpenTab(Tab::Ask), "Go to Ask"),
     row(command(KeyName::Num2), When::Always, false, Intent::OpenTab(Tab::Library), "Go to Library"),
     row(command(KeyName::Num3), When::Always, false, Intent::OpenTab(Tab::Ingest), "Go to Ingest"),
+    row(command(KeyName::Num4), When::Always, false, Intent::OpenTab(Tab::Datasets), "Go to Datasets"),
     row(command(KeyName::K), When::Always, false, Intent::FocusAskBar, "Write a question"),
     row(command(KeyName::Period), When::Always, false, Intent::CancelAsk, "Stop the search or the answer"),
     row(command(KeyName::CloseBracket), When::Always, true, Intent::TurnPage(1), "Next page of the source"),

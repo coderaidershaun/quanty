@@ -230,14 +230,7 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
                     .selected_text(shown)
                     .width(self.width)
                     .truncate()
-                    .icon(|ui, rect, _visuals, _is_open| {
-                        Icon::CARET_DOWN.paint(
-                            ui.painter(),
-                            rect.center(),
-                            size::ICON_SM,
-                            color::TEXT_SECONDARY,
-                        );
-                    })
+                    .icon(paint_caret)
                     .show_ui(ui, |ui| {
                         for (index, option) in self.options.iter().enumerate() {
                             let is_selected = self.selected == Some(index);
@@ -252,6 +245,16 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
             .accesskit_node_builder(response.response.id, |node| node.set_label(self.label));
         chosen
     }
+}
+
+/// The caret at the right end of a closed list, for `ComboBox::icon`.
+pub fn paint_caret(ui: &egui::Ui, rect: egui::Rect, _: &egui::style::WidgetVisuals, _: bool) {
+    Icon::CARET_DOWN.paint(
+        ui.painter(),
+        rect.center(),
+        size::ICON_SM,
+        color::TEXT_SECONDARY,
+    );
 }
 
 pub struct Slider<'a> {

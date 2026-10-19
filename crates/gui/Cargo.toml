@@ -21,6 +21,7 @@ image.workspace = true
 model-settings.workspace = true
 ocr.workspace = true
 rag-core.workspace = true
+rag-dataset.workspace = true
 rag-ingestion.workspace = true
 rag-retrieval.workspace = true
 ratex-layout.workspace = true

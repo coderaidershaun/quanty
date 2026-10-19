@@ -55,6 +55,7 @@ fn only_the_live_backend_and_main_name_a_backend_crate() {
         "graph::",
         "ocr::",
         "rag_core::",
+        "rag_dataset::",
         "rag_ingestion::",
         "rag_retrieval::",
     ];

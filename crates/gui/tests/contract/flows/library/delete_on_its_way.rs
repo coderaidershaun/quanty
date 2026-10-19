@@ -11,9 +11,11 @@ use gui::contract::{Category, Command, DocId, DocumentTagsEdit, Intent, MediaEdi
 use gui::state::Busy;
 use gui::testkit;
 
-use super::{click_on_the_card, delete_buttons, documents_of, hover_on};
+use super::{click_on_the_card, documents_of};
 use crate::flows::recording::{self, Seen};
-use crate::flows::{Window, click, has, is_enabled, node, says, shared, type_into};
+use crate::flows::{
+    Window, click, delete_buttons, has, hover_on, is_enabled, node, says, shared, type_into,
+};
 
 const UPDATING: &str = "Nothing can be deleted while the library is being updated.";
 const NOTES: &str = "Quanty Sample Notes";

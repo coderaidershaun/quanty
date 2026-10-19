@@ -11,11 +11,12 @@ use std::time::Duration;
 
 use super::{Handler, Reply};
 use crate::contract::{
-    AskDraft, AskMode, Catalogue, Command, DocId, Event, Failure, FailureKind, Filters,
-    IngestOutcome, IngestRequest, Intent, RequestId, Service, ServiceState, Tab, is_same_name,
+    AskDraft, AskMode, Catalogue, Command, DatasetRequest, DocId, Event, Failure, FailureKind,
+    Filters, IngestOutcome, IngestRequest, Intent, RequestId, Service, ServiceState, Tab,
+    is_same_name,
 };
 
-use scenes::{Answer, Concepts, Graph, Ingest, Opening, Pages, Search};
+use scenes::{Answer, Concepts, Datasets, Graph, Ingest, Opening, Pages, Search};
 pub use scenes::{Scene, scenes};
 
 const QDRANT_URL: &str = "http://localhost:6334";
@@ -28,7 +29,7 @@ const GRAPH_WAIT: Duration = Duration::from_millis(150);
 const ANSWER_WAIT: Duration = Duration::from_millis(1500);
 const PAGE_WAIT: Duration = Duration::from_millis(100);
 const PREFLIGHT_WAIT: Duration = Duration::from_millis(300);
-/// Before each step of an ingest, so a person can watch the bar fill.
+/// Before each step of an ingest or a build, so a person can watch the bar fill.
 const STEP_WAIT: Duration = Duration::from_millis(150);
 
 const MISSING_LABEL: &str = "no-such-tag";
@@ -128,6 +129,11 @@ impl Fake {
             Opening::ChecksAChapter => vec![
                 Intent::OpenTab(Tab::Ingest),
                 Intent::CheckIngest(fixtures::ingest::request()),
+            ],
+            Opening::OpensDatasets => vec![Intent::OpenTab(Tab::Datasets)],
+            Opening::BuildsADataset => vec![
+                Intent::OpenTab(Tab::Datasets),
+                Intent::StartDatasetBuild(fixtures::datasets::request()),
             ],
         }
     }
@@ -295,6 +301,8 @@ impl Fake {
         });
     }
 
+    // SMELL: this file is too long for one file. The plays of the long jobs below, the check and
+    // the ingest of a PDF and the build of a dataset, are the part to move out first.
     async fn preflight(&self, request: RequestId, ingest: &IngestRequest, reply: &Reply) {
         self.wait(PREFLIGHT_WAIT).await;
         reply.send(Event::Preflight {
@@ -320,6 +328,25 @@ impl Fake {
             Ingest::Stalls => std::future::pending().await,
         };
         reply.send(Event::IngestFinished { request, result });
+    }
+
+    async fn build_dataset(&self, request: RequestId, wanted: &DatasetRequest, reply: &Reply) {
+        let script = self.scene.script.datasets;
+        let played = match script {
+            Datasets::Stalls | Datasets::Fails(_) => fixtures::datasets::steps_to_the_stall(wanted),
+            Datasets::Done => fixtures::datasets::steps(wanted),
+        };
+        for progress in played {
+            self.wait(STEP_WAIT).await;
+            reply.send(Event::DatasetProgress { request, progress });
+        }
+        self.wait(STEP_WAIT).await;
+        let result = match script {
+            Datasets::Done => Ok(fixtures::datasets::report(wanted)),
+            Datasets::Fails(kind) => Err(self.failure(kind)),
+            Datasets::Stalls => std::future::pending().await,
+        };
+        reply.send(Event::DatasetFinished { request, result });
     }
 
     fn source_missing(&self, detail: String) -> Failure {
@@ -385,6 +412,9 @@ impl Handler for Fake {
                 self.preflight(request, &ingest, &reply).await;
             }
             Command::Ingest { request, ingest } => self.ingest(request, &ingest, &reply).await,
+            Command::BuildDataset { request, build } => {
+                self.build_dataset(request, &build, &reply).await;
+            }
             Command::Cancel(_) => {}
         }
     }

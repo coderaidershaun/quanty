@@ -3,7 +3,7 @@
 
 use eframe::egui;
 
-use super::can_edit;
+use super::can_delete;
 use crate::contract::{Catalogue, DocId, Document, Intent};
 use crate::state::Shared;
 use crate::theme::Icon;
@@ -19,6 +19,7 @@ const MEDIA_WITHOUT_DOCUMENT_BODY: &str =
 const MEDIA_WITH_ONE_DOCUMENT_BODY: &str = "Its 1 document goes with it: its passages, formulas, figures, tables and code listings go from the library, and its converted pages go from the disk, with the copy of its PDF if quanty keeps one. The PDF you picked from your own disk is not touched. This cannot be undone.";
 
 const OFF_WHILE_INGESTING: &str = "Nothing can be deleted while an ingest runs.";
+const OFF_WHILE_BUILDING: &str = "Nothing can be deleted while a dataset is being built.";
 const OFF_WHILE_UPDATING: &str = "Nothing can be deleted while the library is being updated.";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,7 +94,7 @@ pub(super) fn follow(question: &mut Option<Question>, shared: &Shared) {
             Target::Document(doc) => catalogue.document(*doc).is_some(),
             Target::Media(title) => catalogue.media_titled(title).is_some(),
         });
-    if !is_listed || !can_edit(shared) {
+    if !is_listed || !can_delete(shared) {
         *question = None;
     }
 }
@@ -137,7 +138,7 @@ pub(super) fn button(ui: &mut egui::Ui, name: &str, is_busy: bool, shared: &Shar
         .size(ControlSize::Small)
         .accessible_name(name)
         .loading(is_busy);
-    ui.add_enabled(can_edit(shared), button)
+    ui.add_enabled(can_delete(shared), button)
         .on_disabled_hover_text(why_off(shared))
         .clicked()
 }
@@ -145,6 +146,8 @@ pub(super) fn button(ui: &mut egui::Ui, name: &str, is_busy: bool, shared: &Shar
 fn why_off(shared: &Shared) -> &'static str {
     if shared.ingest.is_running() {
         OFF_WHILE_INGESTING
+    } else if shared.datasets.is_running() {
+        OFF_WHILE_BUILDING
     } else {
         OFF_WHILE_UPDATING
     }

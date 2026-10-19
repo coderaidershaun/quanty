@@ -26,6 +26,7 @@ pub(super) struct Script {
     pub(super) down: &'static [(Service, FailureKind)],
     pub(super) opening: Opening,
     pub(super) ingest: Ingest,
+    pub(super) datasets: Datasets,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -82,6 +83,15 @@ pub(super) enum Ingest {
     Stalls,
 }
 
+/// How a started build ends. Nothing is written either way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(super) enum Datasets {
+    Done,
+    Fails(FailureKind),
+    /// The build plays to the stall of the synthetic texts and never ends.
+    Stalls,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum Opening {
     Nothing,
@@ -91,6 +101,9 @@ pub(super) enum Opening {
     /// Asks, and opens page 5 of the third sample chapter, which holds a figure.
     AsksAndOpensASource,
     ChecksAChapter,
+    OpensDatasets,
+    /// Opens the Datasets tab and starts the build of the fixtures.
+    BuildsADataset,
 }
 
 const HEALTHY: Script = Script {
@@ -103,9 +116,10 @@ const HEALTHY: Script = Script {
     down: &[],
     opening: Opening::Asks,
     ingest: Ingest::Done,
+    datasets: Datasets::Done,
 };
 
-static SCENES: [Scene; 20] = [
+static SCENES: [Scene; 23] = [
     Scene {
         name: "idle",
         about: "Healthy, with the sample library and nothing asked.",
@@ -292,6 +306,35 @@ static SCENES: [Scene; 20] = [
         script: Script {
             ingest: Ingest::Stalls,
             opening: Opening::ChecksAChapter,
+            ..HEALTHY
+        },
+    },
+    Scene {
+        name: "datasets-ready",
+        about: "The Datasets tab, with an empty form and a build that runs to its end.",
+        rests: true,
+        script: Script {
+            opening: Opening::OpensDatasets,
+            ..HEALTHY
+        },
+    },
+    Scene {
+        name: "datasets-running",
+        about: "The Datasets tab, with a build that stops at the synthetic texts and never ends.",
+        rests: false,
+        script: Script {
+            datasets: Datasets::Stalls,
+            opening: Opening::BuildsADataset,
+            ..HEALTHY
+        },
+    },
+    Scene {
+        name: "datasets-failed",
+        about: "The Datasets tab, with a build that fails at the synthetic texts on the usage limit of the model.",
+        rests: true,
+        script: Script {
+            datasets: Datasets::Fails(FailureKind::ClaudeUsageLimit),
+            opening: Opening::BuildsADataset,
             ..HEALTHY
         },
     },

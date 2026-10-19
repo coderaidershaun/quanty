@@ -4,6 +4,8 @@
 //! Every `match` here ends with a catch-all arm. An error type that gains a variant still
 //! compiles, and the new variant is `Internal` until it is given a row.
 
+// SMELL: this file is near the 500-line limit, and each new kind of work adds a row. The rows of
+// the stores and the models, which the rows of every job call, are the part to move out first.
 use std::error::Error;
 use std::fmt::Display;
 use std::path::Path;
@@ -12,6 +14,8 @@ use graph::GraphError;
 use ocr::convert::services::{ClaudeError, JevError, ServiceError};
 use ocr::{ContentError, ConvertError, PopplerError, ReadChapterError};
 use rag_core::{ClaudeCliError, ConfigError, EmbedError, LlmError, StoreError, error_chain};
+use rag_dataset::BuildError;
+use rag_dataset::documents::SelectionError;
 use rag_ingestion::{ConceptError, DeleteError, IngestError, PdfError, RelabelError};
 use rag_retrieval::{AnswerError, SearchError};
 
@@ -353,6 +357,31 @@ fn answer(error: &AnswerError) -> Verdict {
     }
 }
 
+fn dataset(error: &BuildError) -> Verdict {
+    if let Some(error) = error.llm_error() {
+        return llm(error);
+    }
+    if let Some(error) = error.graph_error() {
+        return graph(error);
+    }
+    let hint = match error {
+        BuildError::Name { name } => format!(
+            "{name:?} cannot name a dataset folder. Use letters, digits, -, _ and . only, such as notes-v1."
+        ),
+        BuildError::Selection(SelectionError::UnknownMedia { entry }) => format!(
+            "The content folder holds no converted document of {entry}. Ingest one of its PDFs, or choose another media."
+        ),
+        BuildError::Selection(
+            SelectionError::UnknownDocument { entry } | SelectionError::UnknownHoldout { entry },
+        ) => format!(
+            "The document {entry} is not in the content folder. Ingest its PDF again, or do not hold it out."
+        ),
+        BuildError::NothingToExport => "The content folder holds no chapter or paper of this choice to export. Ingest a PDF first, or choose another media.".to_owned(),
+        _ => return Verdict::internal(),
+    };
+    Verdict::saying(Kind::BadFile, hint)
+}
+
 /// A settings error is raised before the window opens, so it has no row.
 fn config(_error: &ConfigError) -> Verdict {
     Verdict::internal()
@@ -385,6 +414,7 @@ failures_from!(
     ContentError => content,
     ReadChapterError => read_chapter,
     ConfigError => config,
+    BuildError => dataset,
 );
 
 #[cfg(test)]

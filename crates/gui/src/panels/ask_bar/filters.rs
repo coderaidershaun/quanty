@@ -8,8 +8,7 @@ use eframe::egui;
 use super::layout::{Rects, slot};
 use crate::contract::{Category, DocId, Document, Filters};
 use crate::state::Library;
-use crate::theme::{Icon, color, size};
-use crate::widgets::Dropdown;
+use crate::widgets::{Dropdown, paint_caret};
 
 const ALL_MEDIA: &str = "All media";
 const ALL_DOCUMENTS: &str = "All documents";
@@ -288,13 +287,4 @@ fn pick_several(ui: &mut egui::Ui, options: &[String], width: f32, chosen: &mut 
         ui.ctx()
             .accesskit_node_builder(combo.response.id, |node| node.set_label("Tags"));
     });
-}
-
-fn paint_caret(ui: &egui::Ui, rect: egui::Rect, _: &egui::style::WidgetVisuals, _: bool) {
-    Icon::CARET_DOWN.paint(
-        ui.painter(),
-        rect.center(),
-        size::ICON_SM,
-        color::TEXT_SECONDARY,
-    );
 }

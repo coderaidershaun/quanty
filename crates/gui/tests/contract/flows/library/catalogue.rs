@@ -18,11 +18,11 @@ use gui::state::SourceTarget;
 use gui::testkit;
 use uuid::Uuid;
 
-use super::{Ingests, delete_buttons, documents_of, open_switched};
+use super::{Ingests, documents_of, open_switched};
 use crate::flows::recording::Seen;
 use crate::flows::{
-    COMMAND, Window, are_stacked_in_order, click, copied_by, has, is_open_tab, node, press, says,
-    shared,
+    COMMAND, Window, are_stacked_in_order, click, copied_by, delete_buttons, has, is_open_tab,
+    node, press, says, shared,
 };
 
 /// Lists one catalogue that the test wrote by hand and refuses every other command.

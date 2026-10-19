@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use ocr::{Chapter, ChapterPiece, ImageShows, PieceDetail, PieceId, RelationshipKind};
+use unicode_normalization::UnicodeNormalization;
 
 use super::Provenance;
 use super::markdown::{
@@ -39,11 +40,18 @@ pub(super) struct Rendered {
     pub headings: Vec<String>,
 }
 
-/// The earlier half of a paragraph that a page break cut, the space, and the later half.
-// SMELL: a word that the page break cut in two with a hyphen stays in two parts, with the hyphen
-// and this space between them.
+/// The earlier half of a paragraph that a page break cut and the later half. A word that the
+/// break cut at a hyphen is joined whole, with no hyphen and no space. Anything else gets a space
+/// between the halves.
+// SMELL: a compound word that a page break cut at its own hyphen, such as well-known, loses the
+// hyphen.
 fn join_cut_text(earlier: &str, later: &str) -> String {
-    format!("{earlier} {later}")
+    match earlier.strip_suffix('-') {
+        Some(start_of_word) if later.starts_with(char::is_lowercase) => {
+            format!("{start_of_word}{later}")
+        }
+        _ => format!("{earlier} {later}"),
+    }
 }
 
 /// A block of the chapter before the footnotes are placed.
@@ -64,6 +72,7 @@ pub(super) fn render(chapter: &Chapter) -> Rendered {
     let mut blocks = place_footnotes(state.slots, &state.paragraph_of);
     mark_lead_ins(chapter, &mut blocks);
     for block in &mut blocks {
+        block.text = block.text.nfc().collect();
         block.tokens = estimated_tokens(&block.text);
     }
     Rendered {

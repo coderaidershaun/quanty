@@ -15,15 +15,17 @@ graph.workspace = true
 ocr.workspace = true
 rag-core.workspace = true
 rag-ingestion.workspace = true
+ratex-parser.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+tempfile.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
+unicode-normalization.workspace = true
 
 [dev-dependencies]
 rag-ingestion = { workspace = true, features = ["testing"] }
-tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }

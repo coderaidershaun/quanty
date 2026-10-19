@@ -13,42 +13,45 @@ use super::ConceptError;
 
 const FILE_EXTENSION: &str = "json";
 
-pub(super) struct Cache {
+/// The folder of kept answers, shared by every program that asks the model the same kind of
+/// question.
+pub struct Cache {
     folder: PathBuf,
 }
 
-/// The name that an answer is kept under. It is made from the prompt version, the model, the
-/// prompt, the schema and the input, so a person who edits the prompt or the schema and forgets
-/// to raise the version still gets fresh answers. The caller leaves out of the input what only
-/// helps the asking, such as the related material of an item that is alone in its document. With
-/// that in the name, the same item would be asked about again each time the stores had changed.
-pub(super) fn key_of(prompt_version: &str, model: &str, question: Question<'_>) -> String {
-    let mut hasher = Sha256::new();
-    for part in [
-        prompt_version,
-        model,
-        question.system_prompt,
-        question.schema,
-        question.input,
-    ] {
-        // The length goes first, so that the end of one part cannot be taken for the start of the
-        // next.
-        hasher.update(part.len().to_le_bytes());
-        hasher.update(part.as_bytes());
-    }
-    hasher
-        .finalize()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
-}
-
 impl Cache {
+    /// The name that an answer is kept under. It is made from the prompt version, the model, the
+    /// prompt, the schema and the input, so a person who edits the prompt or the schema and
+    /// forgets to raise the version still gets fresh answers. The caller leaves out of the input
+    /// what only helps the asking, such as the related material of an item that is alone in its
+    /// document. With that in the name, the same item would be asked about again each time the
+    /// stores had changed.
+    pub fn key_of(prompt_version: &str, model: &str, question: Question<'_>) -> String {
+        let mut hasher = Sha256::new();
+        for part in [
+            prompt_version,
+            model,
+            question.system_prompt,
+            question.schema,
+            question.input,
+        ] {
+            // The length goes first, so that the end of one part cannot be taken for the start of
+            // the next.
+            hasher.update(part.len().to_le_bytes());
+            hasher.update(part.as_bytes());
+        }
+        hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
+    }
+
     /// Makes the folder when it is missing.
     ///
     /// # Errors
     /// [`ConceptError::Cache`] when the folder cannot be made.
-    pub(super) fn open(folder: &Path) -> Result<Cache, ConceptError> {
+    pub fn open(folder: &Path) -> Result<Cache, ConceptError> {
         fs::create_dir_all(folder).map_err(|source| ConceptError::Cache {
             path: folder.to_path_buf(),
             source,
@@ -68,7 +71,7 @@ impl Cache {
     ///
     /// # Errors
     /// [`ConceptError::Cache`] when the file exists but cannot be read.
-    pub(super) fn get(&self, key: &str) -> Result<Option<Value>, ConceptError> {
+    pub fn get(&self, key: &str) -> Result<Option<Value>, ConceptError> {
         let path = self.path_of(key);
         let bytes = match fs::read(&path) {
             Ok(bytes) => bytes,
@@ -83,7 +86,7 @@ impl Cache {
     ///
     /// # Errors
     /// [`ConceptError::Cache`] when the file cannot be written.
-    pub(super) fn put(&self, key: &str, answer: &Value) -> Result<(), ConceptError> {
+    pub fn put(&self, key: &str, answer: &Value) -> Result<(), ConceptError> {
         let path = self.path_of(key);
         let temporary = self
             .folder

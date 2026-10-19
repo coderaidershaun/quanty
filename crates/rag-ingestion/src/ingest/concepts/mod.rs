@@ -17,10 +17,10 @@ use rag_core::{
     ConceptId, Config, EmbedError, Embedder, Embedding, ItemId, ItemKind, Llm, LlmError, StoreError,
 };
 
-use cache::Cache;
 use decision_log::DecisionLog;
 use resolve::Resolver;
 
+pub use cache::Cache;
 pub use question::EXTRACTION_MODEL;
 pub use resolve::{ASK_SCORE, LINK_SCORE};
 

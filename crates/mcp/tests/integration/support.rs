@@ -114,6 +114,8 @@ impl ClosedPorts {
             concept_cache_folder: folder.path().join("cache"),
             concept_decision_log: folder.path().join("decisions.jsonl"),
             content_folder: folder.path().join("content"),
+            dataset_folder: folder.path().join("datasets"),
+            dataset_cache_folder: folder.path().join("dataset-cache"),
             gemini_api_key: Some(ApiKey::new("a-made-up-key")),
             jev_api_key: None,
         };

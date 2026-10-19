@@ -186,14 +186,16 @@ impl UsageTally {
     }
 
     /// Each model at the table's price, or at what `claude` reported for a model that the table
-    /// does not have. `None` when a model has neither.
+    /// does not have. `None` when a model has neither. A tally with no model costs nothing.
     pub fn cost_usd(&self) -> Option<f64> {
+        // Do not use `sum` here: it starts at negative zero, so an empty tally would print as
+        // "$-0.00".
         self.models()
             .map(|(model, usage)| match price_of(model) {
                 Some(price) => Some(price.cost_usd(&usage.tokens)),
                 None => usage.reported_usd,
             })
-            .sum()
+            .try_fold(0.0, |total, cost| cost.map(|cost| total + cost))
     }
 }
 
@@ -333,5 +335,10 @@ mod tests {
         assert_eq!(cost_text(Some(0.004)), "under $0.01");
         assert_eq!(cost_text(Some(0.416)), "≈ $0.42");
         assert_eq!(cost_text(Some(0.0)), "≈ $0.00");
+        assert_eq!(
+            cost_text(UsageTally::default().cost_usd()),
+            "≈ $0.00",
+            "a tally with no model costs nothing, and not minus nothing"
+        );
     }
 }

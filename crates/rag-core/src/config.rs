@@ -14,6 +14,8 @@ const QDRANT_CONCEPTS_COLLECTION: &str = "QDRANT_CONCEPTS_COLLECTION";
 const CONCEPT_CACHE_DIR: &str = "CONCEPT_CACHE_DIR";
 const CONCEPT_DECISION_LOG: &str = "CONCEPT_DECISION_LOG";
 const CONTENT_DIR: &str = "CONTENT_DIR";
+const DATASET_DIR: &str = "DATASET_DIR";
+const DATASET_CACHE_DIR: &str = "DATASET_CACHE_DIR";
 
 const DEFAULT_QDRANT_URL: &str = "http://localhost:6334";
 const DEFAULT_FALKORDB_URL: &str = "falkor://localhost:6379";
@@ -23,6 +25,8 @@ const DEFAULT_CONCEPTS_COLLECTION: &str = "concepts";
 const DEFAULT_CONCEPT_CACHE_FOLDER: &str = "data/concept-cache";
 const DEFAULT_CONCEPT_DECISION_LOG: &str = "data/concept-decisions.jsonl";
 const DEFAULT_CONTENT_FOLDER: &str = "content";
+const DEFAULT_DATASET_FOLDER: &str = "datasets";
+const DEFAULT_DATASET_CACHE_FOLDER: &str = "data/dataset-cache";
 
 const DOTENV_FILE_NAME: &str = ".env";
 
@@ -73,6 +77,14 @@ pub struct Config {
     /// `rag-ingest pdf` converts, are saved. A relative path starts at the folder the command runs
     /// in. Tests set a temporary folder so they never touch the real one.
     pub content_folder: PathBuf,
+    /// Where `rag-dataset` writes the training datasets it builds, one folder for each dataset. A
+    /// relative path starts at the folder the command runs in. Tests set a temporary folder so
+    /// they never touch the real one.
+    pub dataset_folder: PathBuf,
+    /// Where the answers of the models that write a dataset are kept, so that the same question is
+    /// never paid for twice. A relative path starts at the folder the command runs in. Tests set
+    /// a temporary folder so they never touch the real one.
+    pub dataset_cache_folder: PathBuf,
     /// Not needed by every command, so a missing key is not an error here.
     pub gemini_api_key: Option<ApiKey>,
     /// The key of the Jev API, which the converter asks whether a page holds math. Only
@@ -143,6 +155,8 @@ impl Config {
             concept_cache_folder: or(CONCEPT_CACHE_DIR, DEFAULT_CONCEPT_CACHE_FOLDER).into(),
             concept_decision_log: or(CONCEPT_DECISION_LOG, DEFAULT_CONCEPT_DECISION_LOG).into(),
             content_folder: or(CONTENT_DIR, DEFAULT_CONTENT_FOLDER).into(),
+            dataset_folder: or(DATASET_DIR, DEFAULT_DATASET_FOLDER).into(),
+            dataset_cache_folder: or(DATASET_CACHE_DIR, DEFAULT_DATASET_CACHE_FOLDER).into(),
             gemini_api_key: setting(GEMINI_API_KEY).map(ApiKey::new),
             jev_api_key: setting(JEV_API_KEY).map(ApiKey::new),
         })

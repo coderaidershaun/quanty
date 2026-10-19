@@ -3656,6 +3656,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "rag-dataset"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "futures-util",
+ "graph",
+ "ocr",
+ "rag-core",
+ "rag-ingestion",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "rag-ingestion"
 version = "0.1.0"
 dependencies = [

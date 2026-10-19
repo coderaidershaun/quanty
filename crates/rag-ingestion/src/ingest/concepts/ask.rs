@@ -8,7 +8,7 @@ use futures_util::stream;
 use rag_core::{Embedding, ItemFilter, ItemId, ItemStore, Llm, LlmError, Question, UsageTally};
 use serde_json::Value;
 
-use super::cache::{Cache, key_of};
+use super::cache::Cache;
 use super::question::{Extraction, SCHEMA, SYSTEM_PROMPT, input_for, related_material};
 use super::{ConceptError, ConceptExtractor, EmbeddedItems, SkippedItem};
 use crate::ingest::items::Item;
@@ -142,7 +142,7 @@ impl<L: Llm> ConceptExtractor<L> {
         related: &str,
     ) -> Result<Reading<Extraction>, ConceptError> {
         let input = input_for(item);
-        let key = key_of(
+        let key = Cache::key_of(
             &self.prompt_version,
             &self.llm.cache_identity(),
             Question {

@@ -16,15 +16,15 @@ use rag_core::{
 };
 
 pub use concepts::{
-    ASK_SCORE, ConceptError, ConceptExtractor, ConceptSummary, EXTRACTION_MODEL, LINK_SCORE,
+    ASK_SCORE, Cache, ConceptError, ConceptExtractor, ConceptSummary, EXTRACTION_MODEL, LINK_SCORE,
     SkippedItem,
 };
-pub use items::{Item, LoneImage, chapter_items, image_items};
+pub use items::{Item, LoneImage, chapter_items, document_title, image_items};
 pub use summary::{IngestStep, IngestSummary, ItemCounts, usage_of};
 pub(crate) use summary::{Meter, OnStep, write_usage};
 
 use concepts::EmbeddedItems;
-use items::{document_id, document_title};
+use items::document_id;
 
 use crate::media::stored_or_added;
 use crate::stores::Stores;

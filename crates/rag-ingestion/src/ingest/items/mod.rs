@@ -83,7 +83,7 @@ pub(super) fn document_id(index: &ChapterIndex) -> DocId {
 
 /// The title is embedded with every item and is part of the key of the cached concepts, so the
 /// title of a chapter must not change.
-pub(super) fn document_title(index: &ChapterIndex) -> String {
+pub fn document_title(index: &ChapterIndex) -> String {
     match &index.name {
         DocumentName::Chapter { number, name } => {
             format!("{}, chapter {number}: {name}", index.media_title)

@@ -16,9 +16,10 @@ pub use delete::{
     DeleteError, DocumentDeleteSummary, MediaDeleteSummary, delete_document, delete_media,
 };
 pub use ingest::{
-    ASK_SCORE, ChapterFolder, ConceptError, ConceptExtractor, ConceptSummary, EXTRACTION_MODEL,
-    IngestError, IngestStep, IngestSummary, Item, ItemCounts, LINK_SCORE, LoneImage, Models,
-    SkippedItem, chapter_items, image_items, ingest_chapter, ingest_image, usage_of,
+    ASK_SCORE, Cache as AnswerCache, ChapterFolder, ConceptError, ConceptExtractor, ConceptSummary,
+    EXTRACTION_MODEL, IngestError, IngestStep, IngestSummary, Item, ItemCounts, LINK_SCORE,
+    LoneImage, Models, SkippedItem, chapter_items, document_title, image_items, ingest_chapter,
+    ingest_image, usage_of,
 };
 pub use labels::{RelabelError, Relabelled, TagChange, relabel_document_tags};
 pub use media::{MediaChange, MediaRelabelled, relabel_media};

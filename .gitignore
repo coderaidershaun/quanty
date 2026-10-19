@@ -9,6 +9,7 @@
 # Local store data
 /data/
 /content/
+/datasets/
 
 # Secrets
 .env

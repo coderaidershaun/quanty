@@ -155,6 +155,8 @@ pub fn closed_ports_config() -> Config {
         concept_cache_folder: folder.join("cache"),
         concept_decision_log: folder.join("decisions.jsonl"),
         content_folder: folder.join("content"),
+        dataset_folder: folder.join("datasets"),
+        dataset_cache_folder: folder.join("dataset-cache"),
         gemini_api_key: Some(ApiKey::new("a-made-up-key")),
         jev_api_key: None,
     }

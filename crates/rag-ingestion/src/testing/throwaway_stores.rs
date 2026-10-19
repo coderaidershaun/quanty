@@ -15,12 +15,13 @@ use crate::{ConceptExtractor, Models, Stores};
 const THROWAWAY_PREFIX: &str = "test-items-";
 const THROWAWAY_CONCEPTS_PREFIX: &str = "test-concepts-";
 
-/// A config that stores into two collections, a graph, a cache folder, a decision log and a
-/// content folder that no one else uses. The collections and the graph are deleted when this is
-/// dropped, and the folders and the log go with a temporary folder, so they go away also when the
-/// test fails. It never names a real collection, the real graph, the real cache folder, the real
-/// decision log or the real content folder, and every store a test touches is reached through
-/// this config and from nowhere else.
+/// A config that stores into two collections, a graph, a cache folder, a decision log, a content
+/// folder, a dataset folder and a dataset cache folder that no one else uses. The collections and
+/// the graph are deleted when this is dropped, and the folders and the log go with a temporary
+/// folder, so they go away also when the test fails. It never names a real collection, the real
+/// graph, the real cache folder, the real decision log, the real content folder or the real
+/// dataset folders, and every store a test touches is reached through this config and from
+/// nowhere else.
 pub struct ThrowawayStores {
     config: Config,
     temporary: TempDir,
@@ -40,6 +41,8 @@ impl ThrowawayStores {
             concept_cache_folder: temporary.path().join("cache"),
             concept_decision_log: temporary.path().join("concept-decisions.jsonl"),
             content_folder: temporary.path().join("content"),
+            dataset_folder: temporary.path().join("datasets"),
+            dataset_cache_folder: temporary.path().join("dataset-cache"),
             // The real key would be copied by `..settings`, and no test may hand it to the
             // converter, which bills for every call it makes.
             jev_api_key: None,
@@ -59,6 +62,8 @@ impl ThrowawayStores {
         assert!(config.concept_cache_folder.starts_with(temporary.path()));
         assert!(config.concept_decision_log.starts_with(temporary.path()));
         assert!(config.content_folder.starts_with(temporary.path()));
+        assert!(config.dataset_folder.starts_with(temporary.path()));
+        assert!(config.dataset_cache_folder.starts_with(temporary.path()));
         Self {
             config,
             temporary,
@@ -129,6 +134,11 @@ impl ThrowawayStores {
                 path_text(&self.config.concept_decision_log),
             ),
             ("CONTENT_DIR", path_text(&self.config.content_folder)),
+            ("DATASET_DIR", path_text(&self.config.dataset_folder)),
+            (
+                "DATASET_CACHE_DIR",
+                path_text(&self.config.dataset_cache_folder),
+            ),
         ];
         // The setting names are typed by hand. A mistyped name would make the command fall back
         // to the real collections, the real graph, the real cache folder, the real decision log
@@ -159,6 +169,11 @@ impl ThrowawayStores {
             self.config.concept_decision_log
         );
         assert_eq!(read_back.content_folder, self.config.content_folder);
+        assert_eq!(read_back.dataset_folder, self.config.dataset_folder);
+        assert_eq!(
+            read_back.dataset_cache_folder,
+            self.config.dataset_cache_folder
+        );
         settings
             .into_iter()
             .map(|(name, value)| (name, value.to_owned()))

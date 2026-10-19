@@ -6,6 +6,10 @@ use ocr::Symbol;
 /// The line the converter adds under a figure's explanation to list the words printed in it.
 const PRINTED_TEXT_MARK: &str = "\n\nText printed in the figure: ";
 
+/// The words between a figure's name and its model-written explanation. The cut of a section into
+/// passages finds a figure's note by these words, so that it never cuts inside the note.
+pub(super) const FIGURE_NOTE_MARK: &str = " — description (model-written): ";
+
 /// The converter marks math with `\(` and `\)`, so a `$` in its text is a dollar sign. That `$` is
 /// escaped as `\$`, and then the marks become `$`, so that every `$` left marks math.
 pub(super) fn inline_math(text: &str) -> String {

@@ -24,9 +24,10 @@
 ## Choose a model
 
 The **Model** and **Thinking** dropdowns in the desktop top bar change the model for
-answers, concept extraction and page conversion. The default is **Codex / GPT-6.1 Sol /
-Medium**. Claude models remain in the same menu. The controls use the app's existing
-dropdown styling and save immediately; finish any running operation before switching.
+answers, concept extraction, page conversion and dataset builds. The default is
+**Codex / GPT-6.1 Sol / Medium**. Claude models remain in the same menu. The controls use
+the app's existing dropdown styling and save immediately; finish any running operation
+before switching.
 
 All language-model calls run headlessly through the installed CLI. Run `codex login` once
 with your ChatGPT account, or sign in with `claude` when using Claude. No OpenAI API key is
@@ -56,7 +57,7 @@ quanty is an open-source answer:
 - Everything is embedded into a multimodal RAG database and linked by concept, so the connections grow with the knowledge base.
 - It is 100% Rust, the UI included.
 
-A person can ask it "what is the correct math for a multivariate Hawkes process and how has it been used to improve volatility forecasting?", and an agent can ask the same over MCP for a post-trade analytics or trading engine. The knowledge is not magically there: the business builds it. The point is that you know the math comes from data you gave. A next step is training datasets for a company's own LLMs, such as Gemma 4.
+A person can ask it "what is the correct math for a multivariate Hawkes process and how has it been used to improve volatility forecasting?", and an agent can ask the same over MCP for a post-trade analytics or trading engine. The knowledge is not magically there: the business builds it. The point is that you know the math comes from data you gave. quanty also builds training datasets for a company's own LLMs, such as Gemma 4, from the same converted documents: `rag-dataset`, the **Datasets** tab and the `build_dataset` tool. [docs/training.md](docs/training.md) says how to train on them.
 
 Whether the goal is maximising Sharpe ratio, increasing trade volume or reducing risk, quanty is a stepping stone between the robust modelling quant finance requires and the accelerating progress of QIS.
 
@@ -211,17 +212,18 @@ The whole system on one page: how a PDF becomes items, concepts and points, and 
 
 What each crate is, and how a search works step by step, is in [docs/reference.md](docs/reference.md#how-it-works). The folders of the repository:
 
-| Folder     | What it holds                                                                                               |
-| ---------- | ----------------------------------------------------------------------------------------------------------- |
-| `crates/`  | Seven crates: `ocr`, `rag-core`, `graph`, `rag-ingestion`, `rag-retrieval`, `gui` and `mcp`                 |
-| `docs/`    | [reference.md](docs/reference.md), every command in full, and [mcp.md](docs/mcp.md), the MCP server in full |
-| `samples/` | The sample PDF and converted sample chapters                                                                |
-| `content/` | The converted documents, in one folder for each media. Made on your machine, not in git                     |
-| `data/`    | The stores and the kept answers. Made on your machine, not in git                                           |
+| Folder      | What it holds                                                                                                                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/`   | Nine crates: `ocr`, `rag-core`, `model-settings`, `graph`, `rag-ingestion`, `rag-retrieval`, `rag-dataset`, `gui` and `mcp`                                                     |
+| `docs/`     | [reference.md](docs/reference.md), every command in full, [mcp.md](docs/mcp.md), the MCP server in full, and [training.md](docs/training.md), how to train Gemma 4 on a dataset |
+| `samples/`  | The sample PDF and converted sample chapters                                                                                                                                    |
+| `content/`  | The converted documents, in one folder for each media. Made on your machine, not in git                                                                                         |
+| `data/`     | The stores and the kept answers. Made on your machine, not in git                                                                                                               |
+| `datasets/` | The built training datasets (`DATASET_DIR`). Made on your machine, not in git                                                                                                   |
 
 ## The desktop app
 
-The app is for people. It opens one window with three tabs: **Ask**, **Library** and **Ingest**.
+The app is for people. It opens one window with four tabs: **Ask**, **Library**, **Ingest** and **Datasets**.
 
 ```bash
 cargo run --release -p gui    # builds and opens target/release/quanty
@@ -234,7 +236,7 @@ The six panels of Ask, every button and every key are in [docs/reference.md](doc
 
 | Key                                         | What it does                                                    |
 | ------------------------------------------- | --------------------------------------------------------------- |
-| <kbd>⌘1</kbd>, <kbd>⌘2</kbd>, <kbd>⌘3</kbd> | Go to **Ask**, **Library**, **Ingest**                          |
+| <kbd>⌘1</kbd> to <kbd>⌘4</kbd>              | Go to **Ask**, **Library**, **Ingest**, **Datasets**            |
 | <kbd>/</kbd> or <kbd>⌘K</kbd>               | Write a question (<kbd>Enter</kbd> asks it)                     |
 | <kbd>J</kbd>, <kbd>K</kbd>                  | Next and previous result                                        |
 | <kbd>⌘.</kbd> or <kbd>Esc</kbd>             | Stop the search or the answer                                   |
@@ -255,7 +257,7 @@ The six panels of Ask, every button and every key are in [docs/reference.md](doc
 - A card for each media, with its title, a badge for its category, its authors and its tags. Its pencil, **✎ Edit**, changes the category, the authors and the tags, as `rag-ingest media` does. The title cannot change, because it names the media's folder.
 - Each document shows its chapter or its title, its pages, its items and its own tags. **Copy id** copies its document id, which `rag-ingest tag` and `rag-ingest delete-document` take, **Read** opens it in Ask, **Edit tags** changes its own tags, as `rag-ingest tag` does, and **Delete** deletes it.
 - **Delete** on a media card deletes the media with every document of it. A sheet asks first, and a delete cannot be undone. It does what `rag-ingest delete-document` and `rag-ingest delete-media` do, and it never removes the PDF you picked from your own disk.
-- Every edit and every delete is free.
+- Every edit and every delete is free. **Delete** is off while a dataset is being built.
 
 ### Ingest
 
@@ -278,6 +280,12 @@ The percent is an estimate: it runs from the first page cut out to the last page
 
 </details>
 
+### Datasets
+
+- Fill in a form: the dataset's name, **Media** (or **All media**), the documents to hold out of training, the rewrites and the questions per section, the most SFT examples, and a dry-run box. The other options keep the defaults of `rag-dataset build`.
+- **Start build** is paid work on the model chosen in the top bar, the same as `rag-dataset build`. Tick the dry-run box and it is free: it exports, checks and plans, and asks no model.
+- While it runs the bar shows the stage in words with "about N%" and the spend so far. At the end a notice gives the counts and the dataset's folder, and **Try again** or **Build another** goes on from there.
+
 ## MCP server
 
 `quanty-mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server over the same stores, for agents. Build it and add it to Claude Code, with both lines run in the quanty folder.
@@ -298,18 +306,21 @@ The server finds `.env`, `content/` and `data/` from the folder it starts in: th
 | `answer`         | Writes an answer from what `search` finds, with its sources      | A Gemini call and your selected agent subscription usage |
 | `ingest_pdf`     | Converts one PDF of a media and stores it                        | Paid and slow: the selected agent, Jev and Gemini  |
 | `ingest_status`  | Says how an ingest job is going                                  | Free                                               |
+| `build_dataset`  | Builds a training dataset from the converted documents           | Paid and slow, it can take hours, unless `dry_run` is `true`, which is free |
+| `dataset_status` | Says how a dataset build is going and what it spent so far       | Free                                               |
 
-An agent that can write its own answer should call `search`, not `answer`. The arguments, the first calls to try, `.mcp.json`, HTTP and how to send a PDF are in [docs/mcp.md](docs/mcp.md).
+An agent that can write its own answer should call `search`, not `answer`. The arguments, the first calls to try, `.mcp.json`, HTTP, how to send a PDF and how to build a dataset are in [docs/mcp.md](docs/mcp.md).
 
 ## Command line
 
-Three programs. Every command and flag is in [docs/reference.md](docs/reference.md).
+Four programs. Every command and flag is in [docs/reference.md](docs/reference.md).
 
-| Program      | What it does                                                                                                                                                                                              |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rag-ingest` | Checks the services, ingests a PDF or a converted document, changes a media (`media`) or the own tags of a document (`tag`), and deletes a document (`delete-document`) or a whole media (`delete-media`) |
-| `rag-query`  | Asks the stored items of the whole library, or of one document (`--document`), a question, and `--answer` writes an answer                                                                                |
-| `ocr`        | Converts the PDF of a book's chapter into saved files under `content/`, and stores nothing                                                                                                                |
+| Program       | What it does                                                                                                                                                                                              |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rag-ingest`  | Checks the services, ingests a PDF or a converted document, changes a media (`media`) or the own tags of a document (`tag`), and deletes a document (`delete-document`) or a whole media (`delete-media`) |
+| `rag-query`   | Asks the stored items of the whole library, or of one document (`--document`), a question, and `--answer` writes an answer                                                                                |
+| `ocr`         | Converts the PDF of a book's chapter into saved files under `content/`, and stores nothing                                                                                                                |
+| `rag-dataset` | Builds a training dataset for Gemma 4 from the converted documents; `--dry-run` plans it for free                                                                                                         |
 
 Run each one through `cargo`:
 
@@ -317,26 +328,31 @@ Run each one through `cargo`:
 cargo run --release -p rag-ingestion --bin rag-ingest -- …
 cargo run --release -p rag-retrieval --bin rag-query -- …
 cargo run --release -p ocr -- …
+cargo run --release -p rag-dataset -- build --name <name> …
 ```
+
+The recipe for training on a dataset is in [docs/training.md](docs/training.md).
 
 ## Costs
 
-Three services bill for the work that quanty asks of them.
+These bill for the work that quanty asks of them.
 
-| What                        | Billed to                                                | When                                                     |
-| --------------------------- | -------------------------------------------------------- | -------------------------------------------------------- |
-| Gemini embeddings           | Your Gemini API key, by the token                        | Every ingest and every question                          |
-| Jev                         | Your Jev API key                                         | The pages of a PDF, when they are converted              |
-| `claude` (Haiku and Sonnet) | The subscription `claude` is signed in to, never the API | Converting pages, finding concepts and writing an answer |
+| What                        | Billed to                                                | When                                                                                          |
+| --------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Gemini embeddings           | Your Gemini API key, by the token                        | Every ingest and every question                                                               |
+| Jev                         | Your Jev API key                                         | The pages of a PDF, when they are converted                                                   |
+| `claude` (Haiku and Sonnet) | The subscription `claude` is signed in to, never the API | Converting pages, finding concepts and writing an answer                                      |
+| A dataset build             | The subscription of the selected agent, Codex or Claude  | `rag-dataset build`, `build_dataset` and **Start build** on the Datasets tab, never a dry run |
 
 Every ingest and every question reports the tokens each model used and about what they cost, such as `cost of this run: ≈ $1.75`. The figure comes from one table of prices per million tokens: it is what the API would charge, not what your subscription bills. The table, its date and how each figure is made are in [docs/reference.md](docs/reference.md#costs).
 
-Converted pages and the answers about concepts are kept on disk, so a run that stopped goes on without paying twice, and a PDF that is already ingested costs nothing. `rag-ingest pdf` checks the Gemini key and both stores before the first page is paid for.
+Converted pages and the answers about concepts are kept on disk, so a run that stopped goes on without paying twice, and a PDF that is already ingested costs nothing. The answers of a dataset build are kept in `DATASET_CACHE_DIR`, so a build asked again does not pay twice. `rag-ingest pdf` checks the Gemini key and both stores before the first page is paid for.
 
 These cost nothing:
 
 - The two stores, which run on your machine.
-- `health`, `--fixture`, `list_documents`, `read_page`, `ingest_status`, `media`, `tag`, `delete-document` and `delete-media`.
+- `health`, `--fixture`, `list_documents`, `read_page`, `ingest_status`, `dataset_status`, `media`, `tag`, `delete-document` and `delete-media`.
+- A dry run of a dataset: `rag-dataset build --dry-run`, `dry_run: true` in `build_dataset`, and the dry-run box of the Datasets tab.
 - The check, every edit and every delete of the desktop app.
 
 `delete-document`, `delete-media` and a delete in the desktop app cost nothing to run, but they remove the converted pages, so the same PDF ingested again is converted again, which is paid work.
@@ -346,7 +362,7 @@ These cost nothing:
 To empty the library and begin again, stop the stores and remove the two folders that quanty made on your machine.
 
 > [!CAUTION]
-> This deletes every stored media and document, every converted page (with the PDFs that the MCP server saved under `content/_uploads`), every kept answer about concepts and the log of concept decisions. It cannot be undone.
+> This deletes every stored media and document, every converted page (with the PDFs that the MCP server saved under `content/_uploads`), every kept answer about concepts, every kept answer of the dataset builds, and the log of concept decisions. It cannot be undone.
 
 ```bash
 docker compose down       # stops Qdrant and FalkorDB
@@ -355,7 +371,7 @@ docker compose up -d
 cargo run --release -p rag-ingestion --bin rag-ingest -- health
 ```
 
-Nothing in git is touched: `samples/` stays. To ingest the PDFs again is paid work again, because nothing is kept to go on from: see [Costs](#costs). When `.env` names other places with `CONTENT_DIR`, `CONCEPT_CACHE_DIR` or `CONCEPT_DECISION_LOG`, remove those too.
+Nothing in git is touched: `samples/` stays. To ingest the PDFs again is paid work again, because nothing is kept to go on from: see [Costs](#costs). The built datasets are in `datasets/`, which `rm -rf data content` leaves: remove it too to drop them. The kept answers of their models are in `data/dataset-cache`, so they go with `data`, and a dataset built again is paid work again. When `.env` names other places with `CONTENT_DIR`, `CONCEPT_CACHE_DIR`, `CONCEPT_DECISION_LOG`, `DATASET_DIR` or `DATASET_CACHE_DIR`, remove those too.
 
 ## Troubleshooting
 

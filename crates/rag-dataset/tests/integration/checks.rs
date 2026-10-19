@@ -284,6 +284,16 @@ async fn a_python_listing_that_does_not_compile_is_recorded_and_kept() {
     );
 }
 
+/// The text of a record after its heading line and the blank line that follows it.
+fn text_after_heading_line(record: &Value) -> &str {
+    record["text"]
+        .as_str()
+        .unwrap()
+        .split_once("\n\n")
+        .unwrap()
+        .1
+}
+
 fn sha256_hex(text: &str) -> String {
     Sha256::digest(text.as_bytes())
         .iter()
@@ -291,11 +301,38 @@ fn sha256_hex(text: &str) -> String {
         .collect()
 }
 
+/// Writes the chapter "Other Chapter" of "Check Notes" in `<content>/check-notes/chapter-2`: one
+/// page by hand with the same "Copy" section as `write_checked_chapter`. Its section sits under
+/// another document title, so its heading line differs and the text after that line does not.
+fn write_copy_chapter(content: &Path) {
+    let chapter = content.join("check-notes/chapter-2");
+    fs::create_dir_all(&chapter).unwrap();
+    write_json(
+        &chapter.join("chapter.json"),
+        &json!({
+            "format-version": 1,
+            "media-title": "Check Notes",
+            "name": { "chapter": { "number": 2, "name": "Other Chapter" } },
+            "source-file": "chapter-2-other-chapter.pdf",
+            "source-sha256": "3a".repeat(32),
+            "page-count": 1,
+            "finished": true,
+        }),
+    );
+    write_page(
+        &chapter,
+        1,
+        json!({}),
+        vec![heading("Copy"), text(paragraph("COPY", 1500))],
+    );
+}
+
 #[tokio::test]
 async fn the_second_copy_of_a_section_is_rejected_as_a_duplicate_of_the_first() {
     let work = tempfile::tempdir().unwrap();
     let content = work.path().join("content");
     write_checked_chapter(&content);
+    write_copy_chapter(&content);
     let out = work.path().join("out");
 
     let report = build_with(&dry_run_over(&content, &out)).await;
@@ -304,20 +341,40 @@ async fn the_second_copy_of_a_section_is_rejected_as_a_duplicate_of_the_first() 
     let first = record_with(&raw, "COPY abc");
     let first_section_id = first["id"].as_str().unwrap().strip_suffix(":raw").unwrap();
     let rejected = support::read_jsonl(&out.join("cpt/rejected.jsonl"));
-    let second = record_with(&rejected, "COPY abc");
+    let copies: Vec<&Value> = rejected
+        .iter()
+        .filter(|record| record["text"].as_str().unwrap().contains("COPY abc"))
+        .collect();
     assert_eq!(
-        second["rejected"],
-        format!("duplicate_of {first_section_id}")
+        copies.len(),
+        2,
+        "the second copy and the copy under another title"
     );
-    assert_eq!(report.rejected["duplicate_of"], 1);
+    for copy in &copies {
+        assert_eq!(copy["rejected"], format!("duplicate_of {first_section_id}"));
+    }
+    assert!(
+        copies
+            .iter()
+            .any(|copy| copy["source"]["document"] == "Check Notes, chapter 2: Other Chapter"),
+        "one of the copies is in the other document"
+    );
+    assert_eq!(report.rejected["duplicate_of"], 2);
 
-    let hash = sha256_hex(first["text"].as_str().unwrap());
+    let hash = sha256_hex(text_after_heading_line(first));
     assert_eq!(first["dedup"]["sha256"], hash);
-    assert_eq!(
-        second["dedup"]["sha256"], hash,
-        "a copy carries the hash too"
-    );
+    for copy in &copies {
+        assert_eq!(copy["dedup"]["sha256"], hash, "a copy carries the hash too");
+        assert_eq!(
+            text_after_heading_line(copy),
+            text_after_heading_line(first)
+        );
+    }
     assert_eq!(first["dedup"]["minhash_cluster"], Value::Null);
+
+    let manifest: Value =
+        serde_json::from_str(&fs::read_to_string(out.join("manifest.json")).unwrap()).unwrap();
+    assert_eq!(manifest["rejected"]["sections"]["duplicate_of"], 2);
 }
 
 #[tokio::test]

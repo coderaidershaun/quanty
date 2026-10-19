@@ -9,12 +9,11 @@ use serde::Deserialize;
 use crate::documents::Split;
 use crate::plan::{GenerationPlan, SectionPlan};
 use crate::sample::{CptKind, CptSample, Dedup, Gen, PIPELINE_VERSION, Quality, Source, sample_id};
-use crate::section::{Provenance, Section, estimated_tokens};
+use crate::section::{Provenance, Section, estimated_tokens, passages_of};
 
 use super::asker::{Answer, AskError, Asker};
 use super::entigraph::{self, ENTIGRAPH, passage_for};
 use super::judge::{self, JUDGE, Verdict};
-use super::passage::passages_of;
 use super::rewrite::writer_of;
 use super::role::Role;
 

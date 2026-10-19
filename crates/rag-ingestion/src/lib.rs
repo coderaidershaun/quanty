@@ -18,8 +18,8 @@ pub use delete::{
 pub use ingest::{
     ASK_SCORE, Cache as AnswerCache, ChapterFolder, ConceptError, ConceptExtractor, ConceptSummary,
     EXTRACTION_MODEL, IngestError, IngestStep, IngestSummary, Item, ItemCounts, LINK_SCORE,
-    LoneImage, Models, SkippedItem, chapter_items, document_title, image_items, ingest_chapter,
-    ingest_image, usage_of,
+    LoneImage, Models, SkippedItem, chapter_items, context_line, document_title, image_items,
+    ingest_chapter, ingest_image, usage_of,
 };
 pub use labels::{RelabelError, Relabelled, TagChange, relabel_document_tags};
 pub use media::{MediaChange, MediaRelabelled, relabel_media};

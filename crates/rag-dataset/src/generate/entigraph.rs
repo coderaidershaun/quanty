@@ -2,8 +2,8 @@
 //! section it reads.
 
 use crate::plan::RelationSeed;
+use crate::section::body_of;
 
-use super::passage::body_of;
 use super::role::Role;
 
 /// An explanation of one relation between two concepts, from the section that states it.

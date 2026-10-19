@@ -1,15 +1,16 @@
-//! Cuts a converted chapter into whole sections of Markdown, with the pages, pieces and stored
-//! items each section holds, so that a model trains on a book the way a reader meets it.
+//! Cuts a converted chapter into whole sections of Markdown, and each section into the passages a
+//! writer reads, so that a model trains on a book the way a reader meets it.
 
 mod cut;
 mod markdown;
+mod passage;
 mod render;
 mod tokens;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 
-use ocr::{Chapter, ChapterPiece, DocumentName, PieceDetail, PieceId, SectionHeading};
+use ocr::{Chapter, ChapterPiece, DocumentName, PieceDetail, PieceId};
 use rag_core::{ItemId, is_same_name};
 use rag_ingestion::Item;
 use serde::{Deserialize, Serialize};
@@ -18,9 +19,10 @@ use unicode_normalization::UnicodeNormalization;
 use crate::documents::ExportDocument;
 
 use cut::Unit;
-use markdown::{heading_text, inline_math};
+use markdown::inline_math;
 use render::{Block, Rendered};
 
+pub(crate) use passage::{body_of, passages_of};
 pub use tokens::estimated_tokens;
 
 /// A picture that a section's text points at: the file, and where in the text its note starts.
@@ -61,6 +63,17 @@ pub struct Section {
 
 const BLOCK_SEPARATOR: &str = "\n\n";
 const HEADING_SEPARATOR: &str = " › ";
+
+impl Section {
+    /// The text after the heading line and the blank line that follows it, or the whole text when
+    /// there is no blank line. The heading line names the media and the document, so two copies of
+    /// one text under two titles differ only there.
+    pub(crate) fn text_after_heading_line(&self) -> &str {
+        self.markdown
+            .split_once(BLOCK_SEPARATOR)
+            .map_or(self.markdown.as_str(), |(_, rest)| rest)
+    }
+}
 
 /// `<media folder>:<document folder>:s<index>` with a `:p<part>` after it when a long section was
 /// cut in parts. The index and the part start at 1.
@@ -175,7 +188,7 @@ impl SectionMaker<'_> {
             .iter()
             .filter_map(|id| self.pieces.get(id))
             .filter(|piece| !matches!(piece.detail, PieceDetail::Heading { .. }))
-            .map(|piece| context_line(&self.document.title, &piece.section))
+            .map(|piece| rag_ingestion::context_line(&self.document.title, &piece.section))
             .collect();
         self.items
             .iter()
@@ -213,19 +226,4 @@ fn provenance_of(blocks: &[&Block]) -> Provenance {
             .map(|block| block.provenance.model_written_tokens)
             .sum(),
     }
-}
-
-/// The document title and then the headings a piece sits under, outermost first. Ingestion titles
-/// the items of a chapter the same way, and a section finds its items by that title.
-// SMELL: a copy of the rule that ingestion titles its items by, which ingestion keeps private. The
-// two must stay the same, or the sections lose their items.
-fn context_line(document_title: &str, section: &[SectionHeading]) -> String {
-    std::iter::once(document_title.to_owned())
-        .chain(
-            section
-                .iter()
-                .map(|heading| heading_text(heading.printed_number.as_deref(), &heading.text)),
-        )
-        .collect::<Vec<_>>()
-        .join(" > ")
 }

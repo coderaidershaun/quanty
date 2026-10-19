@@ -10,3 +10,4 @@ mod sections;
 mod sft;
 mod support;
 mod synthetic;
+mod whole_build;

@@ -1,7 +1,8 @@
 //! Cuts a section into the passages that one text is written from, so that no model is asked to
 //! rewrite more than it writes well.
 
-use crate::section::{Section, estimated_tokens};
+use super::markdown::FIGURE_NOTE_MARK;
+use super::{Section, estimated_tokens};
 
 /// The most of a section's own text that one draft is written from, so that a rewrite of about
 /// the same length stays a size the models write well. The section's notes come on top.
@@ -12,15 +13,10 @@ const NOTES_OPEN: &str = "\n\nNotes:\n";
 const PARAGRAPH_SEPARATOR: &str = "\n\n";
 const MIN_FENCE_TICKS: usize = 3;
 const FORMULA_FENCE: &str = "$$";
-/// Where a figure's note starts to say what a model saw in the picture. The note can hold empty
-/// lines.
-// SMELL: a copy of the words that the section renderer writes into every figure's note. If the
-// renderer changes them, a figure's note is cut in two like plain text, and no error says so.
-const FIGURE_NOTE_MARK: &str = " — description (model-written): ";
 
 /// The passages of a section in reading order, each as the models read it: the section's own
 /// text, then its notes, between `<source>` and `</source>`. A section gives at least one.
-pub(super) fn passages_of(section: &Section) -> Vec<String> {
+pub(crate) fn passages_of(section: &Section) -> Vec<String> {
     let notes = if section.notes.trim().is_empty() {
         String::new()
     } else {
@@ -34,7 +30,7 @@ pub(super) fn passages_of(section: &Section) -> Vec<String> {
 
 /// The section's own text in a passage: without the tags around it and without the notes. A line
 /// that is only "Notes:" after an empty line in the section's own text ends the body early.
-pub(super) fn body_of(passage: &str) -> &str {
+pub(crate) fn body_of(passage: &str) -> &str {
     let inside = passage.strip_prefix(SOURCE_OPEN).unwrap_or(passage);
     match inside.split_once(NOTES_OPEN) {
         Some((body, _notes)) => body,

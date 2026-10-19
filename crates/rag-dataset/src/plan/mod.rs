@@ -29,7 +29,11 @@ pub struct SectionPlan {
     pub section_id: String,
     /// The concepts that the items of the section mention.
     pub concept_ids: Vec<ConceptId>,
-    /// How many texts of each kind to write. A kind with none is left out.
+    /// How many passages the section's text is cut into for the writers. Each kind of `rewrites`
+    /// is written that many times over, once from each passage.
+    pub passages: u32,
+    /// How many texts of each kind to write from each passage. A kind with none is left out. The
+    /// explanations of relations are one for each relation of `relations`.
     pub rewrites: BTreeMap<CptKind, u32>,
     /// The relations to explain, the rarest first. Only a training section has any, and an item of
     /// a training section stated each.
@@ -58,6 +62,7 @@ pub struct ConceptSeed {
 /// What the plan comes to, for a dry run to print.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlanTotals {
+    /// The texts of each kind that the writers are asked for, over every passage.
     pub texts: BTreeMap<CptKind, u32>,
     pub questions: u32,
     /// Each text and its judge, each question with its solver samples and its judge.

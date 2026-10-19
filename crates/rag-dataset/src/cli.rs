@@ -52,7 +52,8 @@ pub(super) struct GivenBuild {
     #[arg(long)]
     include_book_parts: bool,
 
-    /// How many rewritten texts each training section gets
+    /// How many rewritten texts are written from each passage of a training section. A passage is a
+    /// part of the section of at most 2,500 estimated tokens
     #[arg(long, default_value_t = DEFAULT_REWRITES)]
     rewrites: u32,
 

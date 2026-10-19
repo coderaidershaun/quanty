@@ -9,8 +9,8 @@ use unicode_normalization::UnicodeNormalization;
 
 use super::Provenance;
 use super::markdown::{
-    explanation_of, fenced, figure_name, formula_note, formula_text, heading_text, inline_math,
-    non_blank, with_label_line,
+    FIGURE_NOTE_MARK, explanation_of, fenced, figure_name, formula_note, formula_text,
+    heading_text, inline_math, non_blank, with_label_line,
 };
 use super::tokens::estimated_tokens;
 
@@ -194,10 +194,7 @@ impl Rendering {
         if let Some(caption) = non_blank(caption) {
             head = format!("{head}: {}", inline_math(caption));
         }
-        let text = format!(
-            "[{head} — description (model-written): {}]",
-            inline_math(explanation)
-        );
+        let text = format!("[{head}{FIGURE_NOTE_MARK}{}]", inline_math(explanation));
         let note = (!printed_text.is_empty()).then(|| {
             let quoted: Vec<String> = printed_text
                 .iter()

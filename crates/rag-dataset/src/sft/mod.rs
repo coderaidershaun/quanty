@@ -10,6 +10,7 @@ mod verify;
 use rag_core::{Llm, UsageTally};
 
 use crate::generate::asker::{AskError, Asker};
+use crate::generate::role::Role;
 use crate::layout::{DatasetFolder, WriteError, write_jsonl};
 use crate::options::BuildOptions;
 use crate::plan::GenerationPlan;
@@ -23,6 +24,9 @@ pub use python::ProgramError;
 pub use questions::QUESTIONS;
 pub use solve::{SOLVE_DIRECT, SOLVE_THINK};
 pub use verify::JUDGE_ANSWER;
+
+/// Every role this stage asks. The manifest lists their versions.
+pub(crate) const ROLES: [&Role; 4] = [&QUESTIONS, &SOLVE_THINK, &SOLVE_DIRECT, &JUDGE_ANSWER];
 
 /// How many sections are worked through together. The asker asks four questions at a time, so
 /// four sections fill one round of questions, and the progress moves after every step.

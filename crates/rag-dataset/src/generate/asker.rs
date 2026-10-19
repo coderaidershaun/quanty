@@ -47,7 +47,9 @@ pub enum AskError {
     #[error("the model can answer no question now")]
     Stopped(#[source] LlmError),
 
-    #[error(transparent)]
+    #[error(
+        "could not use the folder of kept answers; check that DATASET_CACHE_DIR names a folder that can be read and written"
+    )]
     Cache(#[from] ConceptError),
 }
 

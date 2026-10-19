@@ -92,8 +92,10 @@ pub fn document_title(index: &ChapterIndex) -> String {
     }
 }
 
-/// The document title followed by the headings the piece sits under, outermost first.
-fn context_line(doc_title: &str, section: &[SectionHeading]) -> String {
+/// The document title followed by the headings the piece sits under, outermost first, joined by
+/// " > ". Every item is titled with it, so a program that finds the items of a part of a chapter
+/// by their title uses this function.
+pub fn context_line(doc_title: &str, section: &[SectionHeading]) -> String {
     let headings = section.iter().map(heading_text);
     std::iter::once(doc_title.to_owned())
         .chain(headings)

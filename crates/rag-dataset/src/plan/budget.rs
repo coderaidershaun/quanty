@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 use crate::documents::Split;
 use crate::options::BuildOptions;
 use crate::sample::CptKind;
-use crate::section::Section;
+use crate::section::{Section, passages_of};
 
 use super::rarity::{SectionRarity, TYPICAL_FACTOR};
 use super::{PlanTotals, SectionPlan};
@@ -54,6 +54,7 @@ fn heldout_plan(section: &Section, rarity: SectionRarity, options: &BuildOptions
     SectionPlan {
         section_id: section.id.clone(),
         concept_ids: rarity.concept_ids,
+        passages: passage_count(section),
         rewrites: BTreeMap::new(),
         relations: Vec::new(),
         questions: options.questions.min(HELDOUT_QUESTIONS),
@@ -80,10 +81,16 @@ fn train_plan(section: &Section, rarity: SectionRarity, options: &BuildOptions) 
     SectionPlan {
         section_id: section.id.clone(),
         concept_ids: rarity.concept_ids,
+        passages: passage_count(section),
         rewrites,
         relations,
         questions: scaled(options.questions),
     }
+}
+
+/// How many passages the writers read the section in.
+fn passage_count(section: &Section) -> u32 {
+    u32::try_from(passages_of(section).len()).unwrap_or(u32::MAX)
 }
 
 /// A number made from the id alone. It is the same on every run, machine and version of Rust,
@@ -155,11 +162,32 @@ fn cap_questions(plans: &mut [SectionPlan], order: &[usize], max: u32) {
     }
 }
 
+/// The texts the writers are asked for under one kind: `count` from each passage, except the
+/// explanations of relations, which are one for each relation whatever the passages.
+fn texts_of_kind(plan: &SectionPlan, kind: CptKind, count: u32) -> u32 {
+    match kind {
+        CptKind::Entigraph => count,
+        _ => count.saturating_mul(planned_passages(plan)),
+    }
+}
+
+/// Never 0, because the cut to the cap divides by it. A section always has one passage at least,
+/// so this changes no plan that is made here.
+fn planned_passages(plan: &SectionPlan) -> u32 {
+    plan.passages.max(1)
+}
+
 fn texts_of(plan: &SectionPlan) -> u32 {
-    total(plan.rewrites.values().copied())
+    total(
+        plan.rewrites
+            .iter()
+            .map(|(&kind, &count)| texts_of_kind(plan, kind, count)),
+    )
 }
 
 /// Gives the texts out in the order, each section keeping what it asked for until the cap is used.
+/// A section keeps whole passages, so it can keep less than the cap leaves, and what it cannot use
+/// passes to the next section.
 fn cap_texts(plans: &mut [SectionPlan], order: &[usize], max: u32) {
     let planned = total(order.iter().map(|&position| texts_of(&plans[position])));
     let mut left = max;
@@ -167,12 +195,12 @@ fn cap_texts(plans: &mut [SectionPlan], order: &[usize], max: u32) {
     for &position in order {
         let plan = &mut plans[position];
         let asked = texts_of(plan);
-        let keep = asked.min(left);
-        left -= keep;
-        if keep < asked {
+        keep_texts(plan, asked.min(left));
+        let kept = texts_of(plan);
+        left = left.saturating_sub(kept);
+        if kept < asked {
             cut_sections += 1;
         }
-        keep_texts(plan, keep);
     }
     let kept = total(order.iter().map(|&position| texts_of(&plans[position])));
     if kept < planned {
@@ -183,15 +211,21 @@ fn cap_texts(plans: &mut [SectionPlan], order: &[usize], max: u32) {
     }
 }
 
-/// Cuts the section to `keep` texts. The rephrased texts are kept first, spread again over the
-/// three kinds so that a cut keeps them balanced. Then come the texts about relations, with the
-/// relations they explain, then the exercise, and last the notation variant.
+/// Cuts the section to at most `keep` texts, in whole passages: every kind but the relations is
+/// written once from each passage, so a kind keeps a count for each passage or none. The
+/// rephrased texts are kept first, spread again over the three kinds so that a cut keeps them
+/// balanced. Then come the texts about relations, with the relations they explain, then the
+/// exercise, and last the notation variant.
 fn keep_texts(plan: &mut SectionPlan, keep: u32) {
+    let passages = planned_passages(plan);
     let count = |kind: CptKind| plan.rewrites.get(&kind).copied().unwrap_or(0);
-    let rephrased = total(REWRITE_KINDS.iter().map(|&kind| count(kind))).min(keep);
-    let relations = count(CptKind::Entigraph).min(keep - rephrased);
-    let exercise = count(CptKind::Exercise).min(keep - rephrased - relations);
-    let notation = count(CptKind::NotationVariant).min(keep - rephrased - relations - exercise);
+    let rephrased = total(REWRITE_KINDS.iter().map(|&kind| count(kind))).min(keep / passages);
+    let mut left = keep - rephrased * passages;
+    let relations = count(CptKind::Entigraph).min(left);
+    left -= relations;
+    let exercise = count(CptKind::Exercise).min(left / passages);
+    left -= exercise * passages;
+    let notation = count(CptKind::NotationVariant).min(left / passages);
     plan.rewrites = rewrites_for(rephrased);
     plan.relations.truncate(relations as usize);
     for (kind, kept) in [
@@ -216,12 +250,14 @@ fn rewrites_for(count: u32) -> BTreeMap<CptKind, u32> {
         .collect()
 }
 
+/// What the plan comes to: the texts of each kind over every passage, the questions, and the calls
+/// to a model that they take.
 pub(super) fn totals_of(sections: &[SectionPlan], samples: u32) -> PlanTotals {
     let mut totals = PlanTotals::default();
     for section in sections {
-        for (kind, count) in &section.rewrites {
-            let texts = totals.texts.entry(*kind).or_insert(0);
-            *texts = texts.saturating_add(*count);
+        for (&kind, &count) in &section.rewrites {
+            let texts = totals.texts.entry(kind).or_insert(0);
+            *texts = texts.saturating_add(texts_of_kind(section, kind, count));
         }
         totals.questions = totals.questions.saturating_add(section.questions);
     }

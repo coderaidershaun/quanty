@@ -23,6 +23,11 @@ pub struct SftSample {
     pub pipeline_version: String,
 }
 
+/// `sft:<section id>:<n>`, with the number in four digits.
+pub fn sft_id(section_id: &str, n: u32) -> String {
+    format!("sft:{section_id}:{n:04}")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Task {

@@ -18,11 +18,13 @@ PDFs are turned into searchable items (text, LaTeX formulas, figures, tables and
 | --- | --- |
 | `ocr` | PDF to text, LaTeX, figures and figure descriptions |
 | `rag-core` | Shared types, IDs, config, `Embedder` and `Llm` traits, Qdrant wrapper |
+| `model-settings` | The saved choice of model and thinking that the desktop app, the command line programs, the MCP server and `ocr` read (`.quanty-model.json`) |
 | `graph` | FalkorDB graph store |
 | `rag-ingestion` | Chunking, embedding, concept extraction and resolution (`rag-ingest`) |
 | `rag-retrieval` | Vector search, graph expansion, ranking, answers with citations (`rag-query`) |
+| `rag-dataset` | Builds Gemma 4 training data from the converted documents: whole sections, synthetic texts, checked fine-tuning examples and a manifest (`rag-dataset`) |
 | `gui` | The desktop app: a question, its answer with citations, the page each one stands on, the concept graph and the path of the search (`quanty`) |
-| `mcp` | An MCP server, so that an AI agent can search, read pages, get answers and ingest a PDF (`quanty-mcp`) |
+| `mcp` | An MCP server, so that an AI agent can search, read pages, get answers, ingest a PDF and build a training dataset (`quanty-mcp`) |
 
 ## Getting started
 
@@ -284,13 +286,279 @@ The items of step 6 come after the others. They are not counted in the 8 or in t
 
 `--answer` asks Sonnet, `claude-sonnet-5-5`, to write an answer from the items that were found. It runs through the `claude` command on your subscription, with no tools, and it is not started while `ANTHROPIC_API_KEY` is set. It makes one call. Before the search, the command checks that the key is not set and runs `claude auth status` once, which is free and asks no question, so nothing is embedded when `claude` cannot answer: it prints `claude cannot write an answer, so nothing was searched for` and the reason. The model is given the question and the items, numbered: the document, the page, the kind, the label, the language of a code listing, and the text, the raw LaTeX of a formula, the code as printed, or the explanation of a figure with the path of its picture. It replies with claims, and each claim names the numbers of the items that support it. The command prints the answer, not the results, then a blank line, one line for the tokens of each model that the question used (the embedding and Sonnet) and `cost: ≈ $<cost>`. The tokens and the seconds of the `claude` call also go to standard error. After each claim it prints one line for each source: the title of the document (which names the book and the chapter, for a chapter), the printed page, and the kind and label of the item. Under the line of a formula, or of a code listing, it prints the LaTeX, or the code, exactly as the document has it, and under the line of a figure it prints the path of the picture. The program writes the citations, the LaTeX and the code, not the model, so a title, a page, a formula or a listing is never retyped. A reply with a claim that names no source, or an item that was not given, is an error, and the question is not asked again. When nothing is found, the command prints `no items found` and does not ask the model. When the model replies with no claim, the command prints `the stored items do not answer the question`. The prompt and the JSON Schema of the reply are in `crates/rag-retrieval/src/answer/prompts/`.
 
+## Building a training dataset
+
+```bash
+cargo run --release -p rag-dataset -- build --name smoke --dry-run
+cargo run --release -p rag-dataset -- build --name small --document "Option Volatility and Pricing, chapter 1: Sample Pages" --rewrites 1 --questions 1 --max-sft 5
+```
+
+`rag-dataset build` makes a training dataset for Gemma 4 from the documents that are converted under `CONTENT_DIR` (`content` unless set): whole sections of the books for continued pre-training, texts that a model rewrote from them, questions with answers that were checked, and a manifest that says what the dataset holds. It converts nothing again and writes to neither store. It reads the graph, to see how rarely the library mentions the concepts of each section, unless `--no-graph` is given. The model is the saved choice of model and thinking, as for every other program. How to train on the dataset is in [training.md](training.md). The same build is the **Datasets** tab of the desktop app (see "The desktop app") and the `build_dataset` tool of the MCP server, which [mcp.md](mcp.md#5-building-a-training-dataset) describes.
+
+The first command is a dry run: it exports, checks and plans, asks no model, and costs nothing. Its summary says how many texts, questions and model calls a full build would make, so run it first. The second is a small paid build of one chapter: it uses the selected agent, in time and in subscription usage.
+
+### The flags
+
+| Flag | What it gives |
+| --- | --- |
+| `--name <name>` | Required. The name of the dataset: letters, digits, `-`, `_` and `.`, and not `.` or `..`. It names the dataset's folder in `DATASET_DIR` |
+| `--media <title>` | Build from this media only, whatever the capitals. Repeat it for more. Without it every media is built |
+| `--document <id or title>` | Build from this document only: the document id that an ingest prints, or its whole stored title. Repeat it for more. Without it every document of the chosen media is built |
+| `--holdout <id or title>` | Keep this document out of training for evaluation. Named like `--document`. Repeat it for more |
+| `--include-book-parts` | Also build from the parts of a book that are not chapters, such as its index. A part with "appendix" in its title is always built |
+| `--rewrites <n>` | How many rewritten texts each training section gets from each passage of it, before the rarity of its concepts scales the number. 3 when left out |
+| `--questions <n>` | How many questions each section gets, before the rarity scales the number. 2 when left out |
+| `--max-sft <n>` | The most fine-tuning questions to ask of the training sections, so the most examples to write. 300 when left out |
+| `--max-synthetic <n>` | The most synthetic texts to write. Without it the plan decides |
+| `--samples <n>` | How many times the solver answers each question to think about. 3 when left out |
+| `--no-run-code` | Do not run the Python that a model wrote to check an answer |
+| `--dry-run` | Export, check and plan only: ask no model, and print what a full build would ask |
+| `--min-page-score <share>` | Reject a section whose worst page matches less of its text layer than this share, from 0 to 1. 0.90 when left out |
+| `--keep-unrendered` | Keep a section whose formulas do not render, instead of rejecting it |
+| `--no-graph` | Do not connect to the graph. The plan then ignores how rare a concept is |
+| `--out <folder>` | The dataset's own folder, where its files go. Without it, `DATASET_DIR/<name>` |
+
+### The folder and the files
+
+The files of a dataset are in `DATASET_DIR/<name>` (`datasets/<name>` unless `DATASET_DIR` is set), or in the folder that `--out` names:
+
+| File | What it holds | Written by | In a dry run |
+| --- | --- | --- | --- |
+| `cpt/raw.jsonl` | The kept sections of the training documents, as the book prints them | The checks, after the plan | Yes |
+| `cpt/heldout.jsonl` | The kept sections of the documents that are held out | The checks, after the plan | Yes |
+| `cpt/rejected.jsonl` | The sections that the checks kept out, each with its reason | The checks, after the plan | Yes |
+| `cpt/synthetic.jsonl` | The texts that a model rewrote and a judge kept | The synthetic texts | No |
+| `sft/train.jsonl` | The checked questions and answers of the training documents | The fine-tuning examples | No |
+| `sft/heldout.jsonl` | The checked questions and answers of the documents that are held out | The fine-tuning examples | No |
+| `sft/rejected.jsonl` | The questions that failed a check, each with its reason | The fine-tuning examples | No |
+| `plan.json` | What the plan asks the models to write for each section | The plan | Yes |
+| `manifest.json` | What the dataset holds, with the hashes of its files | The manifest | Yes |
+
+The three files of the sections hold what the checks decided, and they are written once the plan is made, so that each record carries the concepts that the plan found (`source.concept_ids`). A file is written whole or not at all: it is written beside its name and then renamed, so a run that is killed leaves no half-written file. `cpt/raw.jsonl`, `cpt/heldout.jsonl` and `cpt/rejected.jsonl` are written even when they are empty.
+
+A build first checks the name and the selection and, unless it is a dry run, that the model is ready. Only then does it remove the nine files of an earlier build in the same folder, and nothing else in it, and write its own. A name that cannot name a folder, a media or a document that no converted document matches, and a model that is not signed in stop the build before anything is removed.
+
+While it runs, the command prints one line on standard error for each stage, so that standard output holds only the summary at the end. The log lines of `rag_core` and `rag_dataset`, such as the tokens of each model question, go to standard error too.
+
+| Line | When |
+| --- | --- |
+| `exporting <n> documents` | The sections of the chosen documents are cut |
+| `checking the sections` | The checks run |
+| `planning the generation` | The plan is made |
+| `writing <n> synthetic texts` | The synthetic texts start. Not in a dry run |
+| `writing <n> SFT examples` | The fine-tuning examples start. Not in a dry run |
+| `writing the manifest` | The manifest is written |
+
+### Which documents
+
+A document is exported when it is finished, it is chosen by `--media` and `--document` (all are when neither is given), and it is not a part of a book that is left out. What a document is:
+
+| Role (`doc_role`) | What it is |
+| --- | --- |
+| `chapter` | A chapter of a book |
+| `part` | A part of a book that is not a chapter, such as its index. A titled document in a media that has chapters |
+| `document` | A whole work with no chapters, such as a paper |
+
+A `part` is exported only with `--include-book-parts`, or when its title has "appendix" in it, whatever the capitals. A document that is not finished is left out. A document whose `chapter.json` cannot be read is left out too, and named in a warning. A finished document whose pages cannot be read stops the build with `could not read the chapter in <folder>; convert it again`, once the files of an earlier build are removed.
+
+`--media` takes the title of a media, `--document` and `--holdout` take a document id or a whole stored title, such as "Option Volatility and Pricing, chapter 1: Sample Pages". The capitals do not matter, nor the space at the ends of a title. An entry that matches nothing in the content folder stops the build before anything is written: a misspelt hold-out would otherwise be trained on. The documents are taken in the order of the library. A document named by `--holdout` has the `split` `heldout`: its sections go to `cpt/heldout.jsonl`, it gets no synthetic text, and each of its sections gets at most two questions, which go to `sft/heldout.jsonl`. `--holdout` does not choose a document: with `--media` or `--document`, a held-out document must be chosen by them too, or it is not built.
+
+### Sections
+
+A section is the unit of the dataset. `section/` cuts the headings of a converted chapter into sections that are neither too short to teach anything nor too long to train on whole:
+
+- A heading with everything under it is one section when it comes to at most 8,000 estimated tokens. When it is longer, the text directly under the heading is one section and each heading under it is cut the same way.
+- A section of fewer than 500 tokens is joined to the next one when that sits under the same parent heading, and otherwise to the one before it. A short section with no neighbour under the same parent stays short.
+- A section that is still over 8,000 tokens is cut into parts at the edges of blocks, never between a text and the formula it leads into. A single block over the limit is a part by itself, and a footnote that no text carries goes last in its part.
+- The id of a section is `<media folder>:<document folder>:s001`, counted from 1 in reading order, with `:p1` after it for the first part of a section that was cut in parts.
+- The text opens with the heading line, `# <media> › <chapter name or document title> › <heading> › …`, where a paper that is named after its media says the name once. Then come the blocks of the section in reading order, each heading at its own rank.
+- Inline maths is `$…$`. The converter marks maths with `\(` and `\)`, so a `$` in the text of a page is a dollar sign, and it is written `\$`. A formula is a `$$` block, with its printed label on the next line in parentheses.
+- Code is fenced with its language, in a fence longer than any run of backticks inside it. A table is its saved Markdown text, under a line with its label and caption. A footnote is `[^marker]: text`, or `Footnote: text` without a marker, and it follows the text that shows its marker.
+- A figure is `[Figure <label>: <caption> — description (model-written): <explanation>]`, and the picture, when the figure was cut out of the page, is listed in `images` with the offset in characters of its `[`. What the model wrote is counted apart from what the book printed in `provenance`.
+- The running header and the printed page number are not in the text. A paragraph that a page break cut is joined again, and a word cut at a hyphen is joined without it. The text is in Unicode NFC.
+- A size is estimated at four characters to a token, rounded up, and every record says so with `tokens_estimated`.
+
+A section also has notes, which only the models that write from it read: what each formula is called, what it states and what its symbols mean, and the words that each figure prints. They are not in `text`.
+
+### The checks
+
+`checks/` runs every check on every section, whatever the first one finds, so that a rejected section still shows what each check made of it. The section is rejected for the first of these that applies:
+
+1. **Page gate** (`page_score`). The score of a section is the lowest `piece-words-in-text-layer` of its pages, which the conversion saved for each page: the share of the words of the page that its text layer also holds. A section takes the score of its worst page. The score is null for the whole section as soon as one of its pages was written by hand and has no conversion record, has the route reason `text-layer-almost-empty`, or cannot be read, and a section with a null score is kept. A section is rejected when its score is under `--min-page-score`.
+2. **Formulas** (`latex`). Every `$…$` and `$$…$$` outside the code listings is read with `ratex_parser`, the LaTeX parser of the typesetter that the desktop app draws formulas with. `latex_renders` is null when the section has no maths, and false when a formula does not parse or is opened and not closed. A section with `latex_renders` false is rejected, unless `--keep-unrendered` is given.
+3. **Copies** (`duplicate_of <id>`). `dedup.sha256` is the SHA-256 of the text of the section after its heading line, so the same text under another title is found. A section with the hash of a section that was kept is rejected as `duplicate_of <the id of the first>`. Only a kept section is remembered, so a copy of a rejected section is judged on its own pages. `dedup.minhash_cluster` is always null: near-duplicates are not looked for.
+
+`code_parses` is the result of compiling every `python` listing with `python3 -I -m py_compile`. It is null when the section has no Python listing or `python3` cannot be run, and false when a listing does not compile. It is recorded and never rejects a section.
+
+A rejected section is written to `cpt/rejected.jsonl` as the record it would have been, with `rejected` added: `page_score`, `latex` or `duplicate_of <id>`.
+
+The default of `--min-page-score` is 0.90. The page gate compares the copy with the text layer of the PDF, and inline maths counts as words that the text layer prints as symbols, so a good page of maths matches less than a page of prose. The seven pages of the sample chapter score 0.995, 0.974, 0.970, 0.943, 0.968, 0.997 and 0.913, and its one section scores 0.913, the lowest. A section inherits its worst page, so one weak page keeps a whole section out: change the default with a dry run in hand: its summary counts the sections that each reason rejects, and `cpt/rejected.jsonl` holds them.
+
+### The plan
+
+The plan decides, for each kept section, what the models are asked to write. It is written to `plan.json`:
+
+| Field | What it holds |
+| --- | --- |
+| `graph_read` | False when the build did not read the graph. Then no section has concepts or relations |
+| `sections[].section_id` | The section |
+| `sections[].concept_ids` | The concepts that the stored items of the section mention |
+| `sections[].passages` | How many passages the section is cut into for the writers |
+| `sections[].rewrites` | How many texts of each kind to write from each passage. The explanations of relations are counted once for each relation |
+| `sections[].relations` | The relations to explain, the rarest first: `kind`, the two concepts `from` and `to`, each with its `id`, `name` and `definition`, and the `item` that stated the relation |
+| `sections[].questions` | How many questions to ask |
+| `totals` | `texts` by kind, `questions`, and `model_calls` |
+
+The rules, for a training section:
+
+- The rarity factor says how rarely the library mentions the concepts of the section. It is the median, over the concepts of the section, of the typical mention count divided by the mention count of the concept. The typical count is the median, over the concepts that the training sections name, of the number of items that mention a concept, and a concept that two sections name counts twice. The factor is clipped to 0.5 to 3.0. It is 1.0 for a section with no concept, for a held-out section, and when no graph is read.
+- Rephrased texts: `round(rewrites × factor)` for each passage, taking turns at `rephrase_wiki`, `rephrase_lecture` and `rephrase_qa`.
+- Relations: up to `round(rewrites × factor)`, the rarest first, whatever the passages. Only a relation that an item of a training section stated is used.
+- One exercise from each passage when the factor is at least 1.
+- One notation variant from each passage, for about one section in twenty (picked by a hash of its id) that has a display formula.
+- Questions: `round(questions × factor)`.
+- A held-out section gets no texts and `min(questions, 2)` questions.
+- Each kind but the relations is written once from each passage of the section. A passage is the unit the writers read (see "The writers"), so a section of several passages gets that many times the texts.
+
+`--max-sft` and `--max-synthetic` cut the totals. The training sections are filled in the order of rarity, the rarest first, and a tie is settled by a hash of the section id, so that a cut is spread over the library and is the same on every run. A section keeps whole passages: a kind keeps a count for each passage or none, and what a section cannot use passes to the next. The questions of held-out sections are outside the cap.
+
+The totals count the texts of each kind over every passage and the questions. `model_calls` is an estimate of what the build asks: two for each text (the writer and the judge) and `--samples` plus 2 for each question. A question that has a straight answer needs one solver call, and a failed question is asked once more, so the real number differs.
+
+### The writers
+
+Eleven roles write and judge. Each has an id and a version, which `prompt_versions` lists as `id@version`. The prompts are in `crates/rag-dataset/src/generate/prompts/` and `crates/rag-dataset/src/sft/prompts/`.
+
+| Role | Is given | Writes |
+| --- | --- | --- |
+| `rephrase_wiki@1` | A passage | The section as an encyclopedia article |
+| `rephrase_lecture@1` | A passage | The section as a lecturer's notes |
+| `rephrase_qa@1` | A passage | The section as questions and answers |
+| `exercise@1` | A passage | Two to four exercises with worked solutions |
+| `notation@1` | A passage | The section with its quantities named by other symbols |
+| `entigraph@1` | One relation and the passage that names its concepts most | An explanation of how the two concepts are related |
+| `judge@1` | A passage, the kind of text and the text | The unsupported claims, whether the text is faithful, and a score from 1 to 5 |
+| `questions@1` | A section and how many questions to write at most | Questions, each with a task, a difficulty and a seed |
+| `solve_think@1` | The task, a question and its section | The working, the answer and the final value |
+| `solve_direct@1` | The task, a question and its section | The answer, straight out |
+| `judge_answer@1` | A section, a question, the working and an answer | Whether the answer is faithful, its unsupported claims and a score from 1 to 5 |
+
+A passage is at most 2,500 estimated tokens of the section's own text, its heading line included, so that no model is asked to rewrite more than it writes well. It is cut at the edges of paragraphs and never inside a code listing, a display formula or the note of a figure. A single paragraph or block that is longer is a passage by itself. The notes of the section are put under the text of every passage. When one kind is asked for more than once from a passage, the later asks end with the line `Version 2`, `Version 3` and so on, so that the writer writes another text.
+
+Each text is a draft that is written and judged on its own. The judge reads the draft against the passage it was written from, and the draft is kept only when the judge finds it faithful, finds no unsupported claim in it, and scores it 3 or more. A draft that is turned down, or whose writer or judge gave no answer, is left out and counted by the id of the role that wrote it, such as `notation`. The writers and the judges are asked four questions at a time. The texts are written to `cpt/synthetic.jsonl` in the order of the plan.
+
+### The fine-tuning examples
+
+The question writer is asked once for each section that has questions, for up to as many as the plan says, and may write fewer. Each question has a task, a difficulty from 0 to 1, and a seed: `book_worked_example` or `book_exercise` when the question turns an example or an exercise of the section into a question, otherwise `generated`, with the quote of the section that the question rests on.
+
+| Task | Reasoning | How the answer is checked |
+| --- | --- | --- |
+| `derivation` | `think` | `agreement+judge` |
+| `calculation` | `think` | `agreement+judge` |
+| `code_pot` | `think` | `python_exec`, or `judge` with `--no-run-code` |
+| `explain` | `direct` | `judge` |
+| `compare` | `direct` | `judge` |
+
+A `think` question gets `--samples` tries. Each try has its working, an answer and a final value. A `direct` question gets one straight answer. The three methods:
+
+- `agreement+judge`: more than half of the tries asked agree on the final value. Two numbers agree when they differ by at most a relative 1e-3, and anything else agrees when it is the same text once the spaces and the dollar signs are gone and the capitals are lower case. The example is made from the shortest try of the biggest group that agrees. Then the judge must find the answer faithful, with no unsupported claim, and score it 4 or more.
+- `python_exec`: the first fenced `python` block of each try is run as `python3 -I program.py`, in a new temporary folder that is removed afterwards, with only `PATH` in its environment, no input, and a limit of 10 seconds. A try passes when the program ends well and its output holds the final value of the try, and a try with no final value passes when the program ends well. No judge is asked. The example is made from the shortest try that passed.
+- `judge`: the judge alone, which must find the answer faithful, with no unsupported claim, and score it 4 or more.
+
+The generated Python runs with the rights of the person who builds: it is not sandboxed, so it can read their files and use the network. Only its environment, its folder and its time are limited. Build with `--no-run-code`, or `run_code: false` over MCP, to keep the build from running any. Then a `code_pot` question is checked by the judge alone. So is one when `python3` cannot be run, and the build says so in a warning.
+
+A question that passed goes to `sft/train.jsonl`, or to `sft/heldout.jsonl` when its document is held out. One that failed goes to `sft/rejected.jsonl` with `rejected`, which is one of `no_answer` (no solver gave an answer), `disagreement` (too few tries agree), `judge` (the judge found the answer wrong, or gave no verdict) or `python_exec` (no program printed the value). A rejected record whose question got no answer has the user message alone. When the question writer gives no answer for a section, its planned questions are counted as `no_answer` and have no record.
+
+### Kept answers
+
+Every good answer of a model is kept as a file in `DATASET_CACHE_DIR` (`data/dataset-cache` unless set). The name of the file is made from the role and its version, the model with its provider and thinking level, the prompt, the schema and the input, so a second build of the same sections asks nothing, and a change of prompt version, model or thinking level asks again. A question that fails is asked once more. A reply that does not fit the schema counts as a failed try, and a failed question is not kept, so the next build asks it again.
+
+Some failures stop the build at once, and are not tried again: a usage limit, a sign-in that is lost, `ANTHROPIC_API_KEY` set, a `claude` that cannot start, model settings that cannot be used, and any failure of a Codex model. The files of the stage that stopped and of the stages after it, and `manifest.json`, are not written; the files of the sections and `plan.json` are. The answers given before the stop are kept, so the same command goes on without paying twice. When the folder of kept answers cannot be made or used, the error names `DATASET_CACHE_DIR`.
+
+### The records
+
+Every file of `cpt/` holds one record on each line, with the fields below. The names are the names in the files.
+
+| Field | What it holds |
+| --- | --- |
+| `id` | `<section id>:raw` for a section. For a synthetic text, `<section id>:<kind>:<n>`, where `n` counts the drafts of that kind in the section from 1, so a draft that was turned down leaves a gap |
+| `kind` | `raw`, `rephrase_wiki`, `rephrase_lecture`, `rephrase_qa`, `entigraph`, `notation_variant` or `exercise` |
+| `source` | Where it came from: `media`, `document_id`, `document` (the stored title), `doc_role`, `section_path` (the headings as saved), `pages` (positions in the PDF, from 1), `item_ids` (the stored items of the section) and `concept_ids` |
+| `text` | Markdown with the maths between dollars |
+| `images` | The pictures of the section: `ref` (the file) and `pos` (the offset in characters of the figure's note). Empty for a synthetic text |
+| `n_tokens` | The estimated tokens of `text` |
+| `tokens_estimated` | Always true |
+| `provenance` | `transcribed_tokens` (what the book printed) and `model_written_tokens` (the explanations of figures, which a model wrote from the picture). For a synthetic text all the tokens are model-written |
+| `quality` | `page_score`, `latex_renders`, `code_parses` and `judge_score`, each null when its check was not run or does not apply. A synthetic text has `judge_score` only |
+| `dedup` | `sha256` and `minhash_cluster` (always null). For a synthetic text the hash is the hash of its text |
+| `gen` | How a model-written text was made: `model`, `prompt_id` (such as `rephrase_wiki@1`) and `faithfulness_checked`. The three fields are null for a raw section |
+| `split` | `train` or `heldout`. A synthetic text is always `train` |
+| `pipeline_version` | The version of `rag-dataset` that wrote the record |
+| `rejected` | In `cpt/rejected.jsonl` only: the reason |
+
+A line of `sft/` has these fields:
+
+| Field | What it holds |
+| --- | --- |
+| `id` | `sft:<section id>:0001`, the number counted from 1 in the order the question writer wrote the questions of the section |
+| `task` | `derivation`, `calculation`, `explain`, `compare` or `code_pot` |
+| `reasoning` | `think` or `direct` |
+| `messages` | The turns, each with `role` (`user` or `assistant`), `content` and, on the answer of a `think` example, `thinking`. There is no system turn and no thinking marker: [training.md](training.md) says how to render them |
+| `seed` | What the question rests on: `kind`, `item_ids` (the stored items of the section), `section_path` and `quote` |
+| `verification` | `method` (`agreement+judge`, `python_exec` or `judge`), `passed`, `n_teacher_samples` (how many tries were asked), `agreement` (the tries that agree, the programs that printed the value, or 1 for a judge that passed) and `judge_score` (null when no judge gave a verdict: always for `python_exec`, `no_answer` and `disagreement`) |
+| `known_by_cpt_model` | Always null |
+| `difficulty` | From 0 to 1 |
+| `ifd` | Always null |
+| `split` | `train` or `heldout` |
+| `pipeline_version` | The version of `rag-dataset` that wrote the record |
+| `rejected` | In `sft/rejected.jsonl` only: `no_answer`, `disagreement`, `judge` or `python_exec` |
+
+### The manifest
+
+`manifest.json` says what a build made. It is pretty JSON, with these fields:
+
+| Field | What it holds |
+| --- | --- |
+| `name` | The name of the dataset |
+| `created_at` | Seconds since 1970-01-01 UTC. The workspace has no date crate, so the time is a plain count. It is not part of `sha256` |
+| `pipeline_version` | The version of `rag-dataset` |
+| `prompt_versions` | The prompts a full build asks, as `id@version`: the seven roles of the synthetic texts, then the four of the fine-tuning examples. A dry run lists them too |
+| `options` | The options of the build, as `BuildOptions` writes them: `name`, `out`, `content_folder`, `cache_folder`, `selection` (`media`, `documents`, `holdout`), `include_book_parts`, `rewrites`, `questions`, `max_sft`, `max_synthetic`, `samples`, `run_code`, `generation` (false for a dry run), `min_page_score` and `keep_unrendered` |
+| `documents[]` | Each exported document: `document_id`, `title`, `doc_role`, `split`, `sections` (the sections that were kept) and `n_tokens` (of those sections) |
+| `files[]` | Each file of records that exists: `path`, `sha256`, `samples` (its lines) and `n_tokens` (the sum of the `n_tokens` of its lines, 0 for a file whose lines have none) |
+| `sha256` | The version of the dataset: the SHA-256 of one line `<file sha256>  <path>` for each entry of `files`, in order, written as `sha256sum` prints them. Two builds that wrote the same files have the same version, whenever they ran |
+| `mix` | `raw` and `heldout` (the kept sections by split), `synthetic_by_kind` (the synthetic texts written, by kind, such as `notation_variant`), `sft_by_task` (the kept examples by task, training and held out together), `think` and `direct` |
+| `rejected` | `sections` (`page_score`, `latex`, `duplicate_of`), `synthetic` (the drafts turned down or not answered, by the id of the role that wrote them, such as `notation`) and `sft` (`no_answer`, `disagreement`, `judge`, `python_exec`), each a count for each reason |
+| `judge_scores` | `synthetic` and `sft`, each with the keys `"1"` to `"5"` always present. They are read back from the files: `quality.judge_score` of `cpt/synthetic.jsonl`, and `verification.judge_score` of the three files of `sft/`. A record with no judge score is not counted. Only kept synthetic texts have a record, so `"1"` and `"2"` are always 0 for `synthetic`; a draft that was turned down shows in `rejected.synthetic` |
+| `usage[]` | One entry for each model that was asked: `model`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens` and `estimated` |
+| `cost_usd` | About what the build cost in US dollars at the prices of "Costs", or `null` when a model has no price. 0 for a dry run |
+| `notes` | What the dataset does not do, in plain sentences: no near-duplicates removed, estimated token counts, no packing, no sympy checks, `ifd` and `known_by_cpt_model` null, no decontamination, no replay data, and where the recipe is |
+
+The counts of `mix` and `rejected.sections` are the counts of the summary below. The summary does not print `rejected.synthetic` or `rejected.sft`.
+
+### The summary
+
+When the build ends, it prints a summary on standard output, one line for each fact:
+
+| Line | What it says |
+| --- | --- |
+| `dataset: <name>` and `folder: <folder>` | The dataset and where it is |
+| `documents: <n> for training, <n> held out` | The exported documents by split |
+| `sections: <n> for training, <n> held out, <n> rejected` | The kept sections by split, and the sections the checks kept out |
+| `rejected: <reason> <n>, …` | Only when a section was kept out: the count for each reason |
+| `planned texts: <kind> <n>, …` | The texts the plan asks for, by kind |
+| `planned questions: <n>` | The questions the plan asks for |
+| `planned model calls: <n>` and `dry run: no model was asked` | A dry run only |
+| `synthetic texts: <kind> <n>, …` and `SFT examples: <task> <n>, … (think <n>, direct <n>)` | A build only: what was written. `SFT examples: none` when no example passed |
+| `tokens of <model>: <input> in, <output> out, <cache read> cache read, <cache write> cache write` | One line for each model that was asked, ending ` (estimated)` when its tokens are estimated |
+| `cost of this run: ≈ $<cost>` | About what the models cost: `under $0.01` for a cost that would round to $0.00, and `unknown` when a model has no price, as a Codex model has none. A dry run prints `≈ $0.00` |
+
 ## The desktop app
 
 ```bash
 cargo run --release -p gui
 ```
 
-The program is `quanty`, built as `target/release/quanty`. It opens one window with three tabs, **Ask**, **Library** and **Ingest**. Ask is one screen of six panels:
+The program is `quanty`, built as `target/release/quanty`. It opens one window with four tabs, **Ask**, **Library**, **Ingest** and **Datasets**. Ask is one screen of six panels:
 
 | Panel | What it shows |
 | --- | --- |
@@ -305,7 +573,7 @@ The Source panel has the tabs Page, Figures, Formulas, Tables, Code and Concepts
 
 | Key | What it does |
 | --- | --- |
-| `⌘1`, `⌘2`, `⌘3` | Go to Ask, Library, Ingest |
+| `⌘1`, `⌘2`, `⌘3`, `⌘4` | Go to Ask, Library, Ingest, Datasets |
 | `/` or `⌘K` | Write a question (`Enter` asks it) |
 | `J`, `K` | Next and previous result |
 | `⌘.` or `Esc` | Stop the search or the answer |
@@ -330,11 +598,11 @@ A citation opens its page when the document's folder is found. The document is l
 
 The filters of the Ask bar are lists. **Media** offers "All media" and each media that has a document. **Document** offers "All documents" and the documents of the chosen media, in reading order: a chapter shows as "Chapter <number> · <name>", and any other document, such as a part of a book or a paper, by its own title. It is off until a media is chosen, and choosing another media clears it. With a document chosen, an ask looks at that document alone. **Authors** offers "All authors" and each author of a document, once. **Tags** lets you tick any number of tags, from the tags of the media and the own tags of the documents. **Category** offers "Any category", Book, Paper and Other. An ask looks only at the documents that match every filter, as the flags of `rag-query` do. The Source panel picks its page by **Media** and **Document**: a chapter shows as "Chapter <number> · <name>", and any other document by its title.
 
-`--fixture <scene>` runs the whole window on built-in data from `samples/content`, with no store, no model and no cost. `--fixture list` prints the scenes: each is one state of the screen, such as `black-scholes` (a full answer), `stores-down` or `first-run`.
+`--fixture <scene>` runs the whole window on built-in data from `samples/content`, with no store, no model and no cost. `--fixture list` prints the scenes: each is one state of the screen, such as `black-scholes` (a full answer), `stores-down` or `first-run`. The Datasets tab has three: `datasets-ready`, `datasets-running` and `datasets-failed`.
 
 The **Library** tab shows each media as a card: its title, a badge for its category (Book, Paper or Other), its authors and its tags. A media that was saved and has no document yet says so. The documents that belong to no media, such as a picture that stands alone, are under "No media". The pencil **✎ Edit** at the right end of a card opens the form of the media in the card: three chips for the category, then **Authors** and **Tags**, each with commas between them. It has no title box, because the title names the media's folder and cannot change. **Save media** is on once something has changed. It writes the labels to the `Media` node, to every document of the media and to every point, the way `rag-ingest media` does, but it replaces every label, so the authors and the tags can also be emptied here. **Cancel** closes the form. A save that is refused keeps the form open and says why. **Delete**, beside **✎ Edit**, deletes the media with every document of it. The group "No media" has no **Delete**: its documents are deleted one by one.
 
-In the card, each document shows its chapter, as "Chapter <number> · <name>", or its title; its pages and its items; and its own tags. The chapters of a book come first, by number, and then its other parts, by title. A part of a book shows its own title, such as "Index", without the book's title in front. A document whose ingest did not finish says that a search may miss parts of it. **Copy id** copies the document id. **Read** opens the document in the Source panel of Ask. **Edit tags** opens a box for its own tags, with commas between them, and **Save** writes them to both stores the way `rag-ingest tag` does. **Delete** deletes the document. Every edit is free: no embedding and no model call. No edit and no delete can be made while an ingest runs, or while another change of the library is on its way, and a **Delete** that is off says why when the pointer rests on it.
+In the card, each document shows its chapter, as "Chapter <number> · <name>", or its title; its pages and its items; and its own tags. The chapters of a book come first, by number, and then its other parts, by title. A part of a book shows its own title, such as "Index", without the book's title in front. A document whose ingest did not finish says that a search may miss parts of it. **Copy id** copies the document id. **Read** opens the document in the Source panel of Ask. **Edit tags** opens a box for its own tags, with commas between them, and **Save** writes them to both stores the way `rag-ingest tag` does. **Delete** deletes the document. Every edit is free: no embedding and no model call. No edit and no delete can be made while an ingest runs, or while another change of the library is on its way, and a **Delete** that is off says why when the pointer rests on it. A **Delete** is also off while a dataset is being built, because the build reads the documents that it would remove: it says "Nothing can be deleted while a dataset is being built." The pencil and **Edit tags** stay on during a build.
 
 A sheet asks before any delete. It is titled "Delete the document <name>?" or "Delete the media <title>?", says what goes and that it cannot be undone, and offers **Delete document** or **Delete media**, and **Cancel**. `Esc` and a click beside the sheet are **Cancel**, and nothing is deleted. The delete does what `rag-ingest delete-document` and `rag-ingest delete-media` do. What goes: the passages, formulas, figures, tables and code listings of the document from the library, its converted pages from the disk, and the copy of its PDF that the MCP server saved under `content/_uploads`, when there is one. For a media, that goes for every document of it, and the media goes too, and the sheet says how many documents go with it. What stays: the PDF that you picked from your own disk, the concepts, and every other media and document. A media whose last document is deleted stays in the list, with no document. A document that is being converted at this moment is refused, and nothing of it is removed: wait for that run to end, and delete again. A delete that fails says why on its card, and the library is read again, because the documents of a media before the one that failed are already gone. **Delete** again finishes it. A check of a PDF on the Ingest tab is made again after a delete, because a delete changes what is converted and what is ingested. A delete costs nothing, but the same PDF ingested again is converted again, which is paid work.
 
@@ -344,11 +612,31 @@ The **Ingest** tab is the **Add media** journey, in three steps:
 2. The PDF. **Choose a PDF** opens a file dialog. For a book, **Part of the book** offers **Chapter** and **Other part**. A chapter takes **Chapter number** and **Chapter name**, which are filled in from a file named `chapter-<number>-<name>.pdf` and else typed. **Other part** is for a part that is not a chapter, such as the index or the glossary: it takes a **Title**, filled in from the words of the file name when the file is not named as a chapter (`maths_appendix.pdf` gives "Maths Appendix"), and the PDF can have any name. The document is stored as "<book>, <title>". Choosing a file never switches the choice by itself, except that a file named as a chapter goes back to **Chapter**. The PDF of a paper or another media takes a **Title**, filled in with the title of the media. **Tags for this PDF** are its own tags; the tags of the media apply as well.
 3. The check and the ingest. The check runs by itself once a media and a PDF are chosen and the fields are filled, and again when one of them changes. It does not run on each key: a box is read once it no longer has the keyboard. While it runs, a bar moves. It is free: it counts the pages of the PDF, says how many are converted already, and shows a notice for what would stop a start, such as `claude` not signed in. **Start ingest** is paid work, the same as `rag-ingest pdf`. While the ingest runs, a bar shows the stage: "Connecting to the stores", "Checking what is already stored", "Opening the PDF", "Preparing the pages — 7 of 12 ready" while each page is cut out, and "Converting the pages — 3 of 12 done" once the models work; for the pages the words end with ", about N%", an estimate that runs from the first page cut out to the last page saved, with pages that an earlier run saved counted as done. Once pages are converted, the tokens and the cost so far are beside the words, such as `48k tokens, about $0.42 so far`. The later stages are "Writing the graph", "Embedding N items", "Storing the items", "Reading the concepts — N of M" and "Linking the concepts — N of M" (the last two also end with ", about N%"). Keep the app open while it runs. If it stops, start the same PDF again and it carries on. At the end, a notice says what was ingested, the tokens of each model and the cost of the run, and **Add another PDF** clears the PDF and keeps the media chosen.
 
+The **Datasets** tab (`⌘4`) builds a training dataset, as "Building a training dataset" describes. Under the title "Build a training dataset" it has a form:
+
+| Field | What it holds |
+| --- | --- |
+| **Dataset name** | Letters, digits, `-`, `_` and `.`. A blank name keeps **Start build** off, and the pointer on it reads "Type a name for the dataset first." |
+| **Media** | "All media", or one media that has a document |
+| **Hold out** | A box of ticks for the documents that have a folder, to keep out of training. "None held out" when none is ticked. Under "All media" each document is labelled "<media>, <chapter or title>" |
+| **Rewrites per section** | A stepper from 0 to 10 in steps of 1. 3 at the start, as `--rewrites` |
+| **Questions per section** | A stepper from 0 to 10 in steps of 1. 2 at the start, as `--questions` |
+| **Most SFT examples** | A stepper from 0 to 2000 in steps of 50. 300 at the start, as `--max-sft` |
+| **Dry run (export, check and plan only; asks no model)** | A box. Ticked, the build is free |
+
+Every other option has the default of `rag-dataset build`. The build reads the graph also in a dry run, so a graph that is down fails it.
+
+**Start build** is paid work, the same as `rag-dataset build`, unless the dry-run box is ticked: the line under it says "Paid work: the selected model writes the rewrites and the answers; a dry run is free." The model is the one chosen in the top bar. There is no Stop button. **Start build** is off while a delete is on its way. An ingest and a build can run together.
+
+While a build runs, the form is off and a bar shows the stage in words: "Starting the build", "Exporting the documents — 3 of 12", "Checking the sections", "Planning what to write", "Writing the synthetic texts — 6 of 12", "Writing the fine-tuning examples — 5 of 40" and "Writing the manifest". The stages that count end with ", about N%", such as "Writing the synthetic texts — 6 of 12, about 50%". Once the models have been asked, the tokens and the cost so far are beside the words, such as `31k tokens, about $0.12 so far`. Under the bar it says to keep the app open: "If it stops, start the same build again: answers already written are not paid for twice."
+
+At the end a notice says "Built <name>" with the counts, such as "2 documents, 4 sections for training and 2 held out, 1 rejected. 12 synthetic texts and 8 fine-tuning examples (5 think, 3 direct)." For a dry run it ends "Dry run: 70 model calls planned, none made." Then come the tokens of each model, the cost, and "Saved in" the folder of the dataset, `DATASET_DIR/<name>` made absolute. A build that failed shows "The build failed" with what to do. **Try again**, after a failure, starts the build that the form holds now. **Build another** clears the notice and brings **Start build** back.
+
 Not built yet: the notices tray, the help sheet and the health check.
 
 ## The MCP server
 
-`quanty-mcp` lets an AI agent search the stored library, read the pages of its documents, get a cited answer and send a PDF to be ingested, over the Model Context Protocol. How to build and start it, its tools and their costs are in [mcp.md](mcp.md).
+`quanty-mcp` lets an AI agent search the stored library, read the pages of its documents, get a cited answer, send a PDF to be ingested and build a training dataset, over the Model Context Protocol. `build_dataset` starts a build, and `dataset_status` gives its stage, its usage and its cost while it runs. How to build and start it, its tools and their costs are in [mcp.md](mcp.md).
 
 ## Costs
 
@@ -358,11 +646,12 @@ Every ingest and every question says what it used: the tokens of each model, and
 | --- | --- |
 | `rag-ingest <folder>`, `rag-ingest <picture>` and `rag-ingest pdf` | At the end of the summary, one line for each model, `tokens of <model>: <input> in, <output> out, <cache read> cache read, <cache write> cache write`, then `cost of this run: ≈ $<cost>` |
 | `rag-ingest pdf` while it runs | `page <n> converted ($<cost>)` for each page |
+| `rag-dataset build` | At the end of the summary, one line for each model that was asked, then `cost of this run: ≈ $<cost>`. A dry run asks no model and prints `cost of this run: ≈ $0.00` |
 | `rag-query` and `rag-query --answer` | The same lines after the results or the answer, then `cost: ≈ $<cost>` |
-| The desktop app | `48k tokens, about $0.42 so far` beside the running ingest; the tokens of each model and the cost in the notice at its end; `12k tokens, about $0.03` in the row of tabs of the Answer panel |
-| The MCP server | `usage` and `cost_usd` in `search`, `answer` and a `done` report of `ingest_status`, as [mcp.md](mcp.md) shows |
+| The desktop app | `48k tokens, about $0.42 so far` beside the running ingest, and the same beside a running dataset build; the tokens of each model and the cost in the notice at the end of each; `12k tokens, about $0.03` in the row of tabs of the Answer panel |
+| The MCP server | `usage` and `cost_usd` in `search`, `answer`, a `done` report of `ingest_status`, and every report of `dataset_status`, as [mcp.md](mcp.md) shows |
 
-A cost is the tokens of each model times the price of that model in the table below, added up. A model that the table does not have is counted at what `claude` reported for it. When a model has neither, the cost is `unknown` (`null` in the MCP server). A cost that would round to nothing shows as `under $0.01`.
+A cost is the tokens of each model times the price of that model in the table below, added up. A model that the table does not have is counted at what `claude` reported for it. When a model has neither, the cost is `unknown` (`null` in the MCP server). A Codex model has no price, so the summary of a dataset build on one ends with `cost of this run: unknown` after its tokens, while the running line of the desktop app shows its tokens alone, such as `31k tokens so far`. A cost that would round to nothing shows as `under $0.01`.
 
 These figures are what the API would charge for the tokens. `claude` runs on the subscription that it is signed in to, which bills in its own way, so they show the size of a run and are not a bill. `claude` reports a dollar figure of its own, which is not shown and can differ: for one, it writes some cache entries at the one-hour price, and the table has the five-minute price.
 

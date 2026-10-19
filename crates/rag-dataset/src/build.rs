@@ -185,16 +185,7 @@ pub async fn build(
         )
     };
 
-    on_step(Step::WritingManifest, &usage);
-    Manifest::of(
-        options,
-        &folder,
-        manifest_documents(&documents, &kept),
-        &usage,
-    )?
-    .write(&folder)?;
-
-    Ok(Report {
+    let report = Report {
         name: options.name.clone(),
         folder: options.out.clone(),
         documents: split_counts(documents.iter().map(|document| document.split)),
@@ -205,7 +196,16 @@ pub async fn build(
         synthetic,
         sft,
         usage,
-    })
+    };
+    on_step(Step::WritingManifest, &report.usage);
+    Manifest::of(
+        options,
+        &folder,
+        manifest_documents(&documents, &kept),
+        &report,
+    )?
+    .write(&folder)?;
+    Ok(report)
 }
 
 fn check_name(name: &str) -> Result<(), BuildError> {

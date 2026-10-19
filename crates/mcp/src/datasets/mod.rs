@@ -44,7 +44,8 @@ pub(crate) struct BuildDatasetArgs {
     /// Also export the parts of a book that are not chapters, such as its index. An appendix is
     /// always exported. False when left out.
     include_book_parts: Option<bool>,
-    /// How many rewritten texts each training section gets. 3 when left out.
+    /// How many rewritten texts are written from each passage of a training section, a part of it
+    /// of at most 2,500 estimated tokens. 3 when left out.
     rewrites: Option<u32>,
     /// How many questions each section gets. 2 when left out.
     questions: Option<u32>,
@@ -62,7 +63,7 @@ pub(crate) struct BuildDatasetArgs {
     /// the texts, questions and model calls that the full build would make. False when left out.
     dry_run: Option<bool>,
     /// A section whose worst page matches less of the PDF's own text than this share, from 0 to
-    /// 1, is rejected. 0.95 when left out.
+    /// 1, is rejected. 0.90 when left out.
     min_page_score: Option<f64>,
     /// Keep a section whose formulas do not render, instead of rejecting it. False when left out.
     keep_unrendered: Option<bool>,

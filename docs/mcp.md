@@ -166,14 +166,14 @@ Good to know:
 | `documents` | Only these documents, each a `document_id` or the whole `title` from `list_documents`. Every document of the chosen media when left out |
 | `holdout` | Documents kept out of training for evaluation, named like `documents`. Their sections go to `cpt/heldout.jsonl`, and no synthetic text is written from them |
 | `include_book_parts` | Also export the parts of a book that are not chapters, such as its index. An appendix is always exported. `false` when left out |
-| `rewrites` | How many rewritten texts each training section gets. 3 when left out |
+| `rewrites` | How many rewritten texts are written from each passage of a training section, a part of it of at most 2,500 estimated tokens. 3 when left out |
 | `questions` | How many questions each section gets. 2 when left out |
 | `max_sft` | The most fine-tuning examples the build writes. 300 when left out |
 | `max_synthetic` | The most synthetic texts the build writes. No limit when left out |
 | `samples` | How many times the model answers each question, to check that its answers agree. 3 when left out |
 | `run_code` | Run the Python that the model writes for an answer, to check it. `true` when left out |
 | `dry_run` | Export, check and plan only. `false` when left out |
-| `min_page_score` | A section whose worst page matches less of the PDF's own text than this share, from 0 to 1, is rejected. 0.95 when left out |
+| `min_page_score` | A section whose worst page matches less of the PDF's own text than this share, from 0 to 1, is rejected. 0.90 when left out |
 | `keep_unrendered` | Keep a section whose formulas do not render, instead of rejecting it. `false` when left out |
 
 In `media`, `documents` and `holdout`, each entry has its spaces at both ends cut off, and a blank entry is left out.
@@ -188,7 +188,7 @@ The call does not wait for the whole build. It answers once the build has begun,
 
 `summary` is what `rag-dataset build` prints: the dataset and its folder, the documents and the sections for training, held out and rejected (with the reason of each rejection), the texts and questions that were planned, then either `planned model calls` and `dry run: no model was asked`, or the synthetic texts and the SFT examples that were written, then one usage line for each model and the cost of the run.
 
-The build writes these files in the folder `<DATASET_DIR>/<name>` (`DATASET_DIR` defaults to `datasets/`): `cpt/raw.jsonl`, `cpt/heldout.jsonl`, `cpt/rejected.jsonl`, `cpt/synthetic.jsonl`, `sft/train.jsonl`, `sft/heldout.jsonl`, `sft/rejected.jsonl`, `plan.json` and `manifest.json`. A dry run writes only the three files of the sections (`cpt/raw.jsonl`, `cpt/heldout.jsonl` and `cpt/rejected.jsonl`), `plan.json` and `manifest.json`. The answers of the models are kept in `DATASET_CACHE_DIR` (default `data/dataset-cache`), so the same question is never paid for twice.
+The build writes these files in the folder `<DATASET_DIR>/<name>` (`DATASET_DIR` defaults to `datasets/`): `cpt/raw.jsonl`, `cpt/heldout.jsonl`, `cpt/rejected.jsonl`, `cpt/synthetic.jsonl`, `sft/train.jsonl`, `sft/heldout.jsonl`, `sft/rejected.jsonl`, `plan.json` and `manifest.json`. A dry run writes only the three files of the sections (`cpt/raw.jsonl`, `cpt/heldout.jsonl` and `cpt/rejected.jsonl`), `plan.json` and `manifest.json`. The answers of the models are kept in `DATASET_CACHE_DIR` (default `data/dataset-cache`), so the same question is never paid for twice. How to train Gemma 4 on the dataset is in [training.md](training.md).
 
 Good to know:
 

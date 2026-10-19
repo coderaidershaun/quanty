@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use rag_core::Config;
 use serde::Serialize;
 
-/// How many rewritten texts each training section gets.
+/// How many rewritten texts are written from each passage of a training section.
 pub const DEFAULT_REWRITES: u32 = 3;
 /// How many questions each section gets.
 pub const DEFAULT_QUESTIONS: u32 = 2;

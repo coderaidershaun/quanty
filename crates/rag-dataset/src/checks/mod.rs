@@ -35,7 +35,7 @@ pub enum Reason {
     PageScore,
     /// A formula of the section does not render.
     Latex,
-    /// The same text is in the section with this id, which came first.
+    /// The same text after the heading line is in the section with this id, which came first.
     DuplicateOf(String),
 }
 
@@ -62,8 +62,8 @@ impl fmt::Display for Reason {
 /// Runs every check on the section, whatever the first one finds, so that a rejected section still
 /// shows what each check made of it. The section is rejected for the first of these that applies:
 /// a page that matches too little of its text layer, a formula that does not render, or the same
-/// text as a section that was kept. Only a kept section is remembered, so a copy of a rejected
-/// section is judged on its own pages.
+/// text after the heading line as a section that was kept. Only a kept section is remembered, so a
+/// copy of a rejected section is judged on its own pages.
 pub fn check(section: &Section, seen: &mut Seen, options: &BuildOptions) -> Checked {
     let (prose, listings) = code::split_listings(&section.markdown);
     let quality = Quality {
@@ -72,9 +72,7 @@ pub fn check(section: &Section, seen: &mut Seen, options: &BuildOptions) -> Chec
         code_parses: code::python_compiles(&listings),
         ..Quality::default()
     };
-    // SMELL: the hash covers the heading line, which names the media and the document, so the same
-    // section text in another document is not found as a copy.
-    let sha256 = ocr::sha256_hex(section.markdown.as_bytes());
+    let sha256 = ocr::sha256_hex(section.text_after_heading_line().as_bytes());
     let reason = if quality
         .page_score
         .is_some_and(|score| score < options.min_page_score)

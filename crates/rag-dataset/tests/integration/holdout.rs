@@ -13,7 +13,8 @@ use serde_json::{Value, json};
 use crate::support;
 
 /// The three sample chapters, and a copy of the second chapter of the notes as the index of that
-/// book, in a content folder of their own.
+/// book, in a content folder of their own. The copy has a sentence more in its first paragraph,
+/// because a section whose text is the same as that of a kept section is left out as a copy.
 fn content_with_an_index(parent: &Path) -> PathBuf {
     let content = parent.join("content");
     for chapter in support::sample_chapters() {
@@ -22,6 +23,16 @@ fn content_with_an_index(parent: &Path) -> PathBuf {
     }
     let index = content.join("quanty-sample-notes/index");
     support::copy_folder(&support::in_depth_chapter(), &index);
+    let first_paragraph = index.join("page-num-1/02-text.md");
+    let text = fs::read_to_string(&first_paragraph).unwrap();
+    fs::write(
+        first_paragraph,
+        format!(
+            "{}\nThis index points into the chapters of the book.\n",
+            text.trim_end()
+        ),
+    )
+    .unwrap();
     let file = index.join("chapter.json");
     let mut saved: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
     saved["name"] = json!({ "title": "Quanty Sample Notes, Index" });

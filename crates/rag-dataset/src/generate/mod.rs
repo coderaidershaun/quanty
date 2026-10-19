@@ -7,7 +7,6 @@ pub mod role;
 mod draft;
 mod entigraph;
 mod judge;
-mod passage;
 mod rewrite;
 
 pub use entigraph::ENTIGRAPH;
@@ -25,6 +24,18 @@ use crate::section::Section;
 
 use asker::{AskError, Asker, few_at_a_time};
 use draft::Outcome;
+use role::Role;
+
+/// Every role this stage asks. The manifest lists their versions.
+pub(crate) const ROLES: [&Role; 7] = [
+    &REPHRASE_WIKI,
+    &REPHRASE_LECTURE,
+    &REPHRASE_QA,
+    &ENTIGRAPH,
+    &EXERCISE,
+    &NOTATION,
+    &JUDGE,
+];
 
 #[derive(thiserror::Error, Debug)]
 pub enum GenerateError {

@@ -8,7 +8,6 @@ use crate::documents::{DocRole, Split};
 use crate::section::{ImageRef, Provenance, Section};
 
 use super::PIPELINE_VERSION;
-use super::ids::sample_id;
 
 /// What a text is: the book as printed, or one of the ways a model rewrote it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -35,6 +34,14 @@ impl CptKind {
             CptKind::NotationVariant => "notation_variant",
             CptKind::Exercise => "exercise",
         }
+    }
+}
+
+/// `<section id>:<kind>`, with `:<n>` after it when a section has several samples of one kind.
+pub fn sample_id(section_id: &str, kind: CptKind, n: Option<u32>) -> String {
+    match n {
+        Some(n) => format!("{section_id}:{}:{n}", kind.as_str()),
+        None => format!("{section_id}:{}", kind.as_str()),
     }
 }
 

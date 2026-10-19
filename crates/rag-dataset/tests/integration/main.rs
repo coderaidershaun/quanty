@@ -6,3 +6,4 @@ mod command;
 mod holdout;
 mod sections;
 mod support;
+mod synthetic;

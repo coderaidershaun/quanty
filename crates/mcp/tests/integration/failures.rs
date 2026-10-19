@@ -32,6 +32,16 @@ async fn a_store_that_is_down_is_a_tool_error_that_points_at_health() {
     assert!(text.contains("falkor://127.0.0.1:1"), "{text}");
     assert!(text.contains("Call the `health` tool"), "{text}");
     assert!(text.contains("Send the same PDF again"), "{text}");
+    let build = call(
+        &client,
+        "build_dataset",
+        json!({ "name": "t", "dry_run": true }),
+    )
+    .await;
+    let text = error_text(&build);
+    assert!(text.contains("could not connect to the graph"), "{text}");
+    assert!(text.contains("falkor://127.0.0.1:1"), "{text}");
+    assert!(text.contains("Call the `health` tool"), "{text}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -113,6 +123,20 @@ async fn a_bad_argument_is_a_tool_error_that_says_what_is_allowed() {
     let text = error_text(&unknown_job);
     assert!(text.contains("no-such-job"), "{text}");
     assert!(text.contains("send the PDF again"), "{text}");
+
+    let unknown_build = call(
+        &client,
+        "dataset_status",
+        json!({ "job_id": "no-such-job" }),
+    )
+    .await;
+    let text = error_text(&unknown_build);
+    assert!(text.contains("no-such-job"), "{text}");
+    assert!(text.contains("`build_dataset`"), "{text}");
+
+    let no_name = call(&client, "build_dataset", json!({ "name": "  " })).await;
+    let text = error_text(&no_name);
+    assert!(text.contains("`name` is blank"), "{text}");
 
     let both = call(
         &client,

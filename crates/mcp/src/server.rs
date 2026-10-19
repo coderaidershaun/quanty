@@ -14,6 +14,9 @@ use rmcp::{ErrorData, Json, ServerHandler, tool, tool_handler, tool_router};
 use schemars::JsonSchema;
 use serde::Serialize;
 
+use crate::datasets::{
+    BuildDatasetArgs, DatasetReport, DatasetStatusArgs, DatasetToolError, Datasets,
+};
 use crate::ingest::{
     Ingest, IngestPdfArgs, IngestReport, IngestStatusArgs, PdfIngestError, base64_len,
 };
@@ -33,7 +36,7 @@ const REQUEST_EXTRA_BYTES: u64 = 1024 * 1024;
 const HEALTH_HINT: &str = "Call the `health` tool to see which service is not ready.";
 
 /// The tools of quanty over its stored library. It is cheap to clone: a clone shares the
-/// services and the ingest jobs with the original.
+/// services, the ingest jobs and the dataset builds with the original.
 pub struct QuantyServer<S: Services> {
     shared: Arc<Shared<S>>,
     tool_router: ToolRouter<Self>,
@@ -43,6 +46,7 @@ struct Shared<S> {
     config: Config,
     services: Arc<S>,
     ingest: Ingest<S>,
+    datasets: Datasets<S>,
     max_pdf_bytes: u64,
 }
 
@@ -75,6 +79,9 @@ enum ToolError {
 
     #[error(transparent)]
     Ingest(#[from] PdfIngestError),
+
+    #[error(transparent)]
+    Dataset(#[from] DatasetToolError),
 }
 
 impl ToolError {
@@ -128,6 +135,28 @@ impl ToolError {
                     | PdfIngestError::ReadMedia(_)
                     | PdfIngestError::Labels(_)
             ),
+            ToolError::Dataset(error) => match error {
+                DatasetToolError::Graph(_) | DatasetToolError::ModelNotReady(_) => true,
+                // A build that the model or the graph stopped points at `health`. A file, a folder
+                // or the content folder is not a service, and `health` would call every service
+                // ready.
+                DatasetToolError::Build(error) => {
+                    error.llm_error().is_some() || error.graph_error().is_some()
+                }
+                // None of these is a service. The text of a job that failed already got its hint,
+                // if it needed one, when the job ended.
+                DatasetToolError::BlankName
+                | DatasetToolError::Name { .. }
+                | DatasetToolError::UnknownMedia { .. }
+                | DatasetToolError::UnknownDocument { .. }
+                | DatasetToolError::UnknownHoldout { .. }
+                | DatasetToolError::NothingToExport
+                | DatasetToolError::Busy { .. }
+                | DatasetToolError::UnknownJob { .. }
+                | DatasetToolError::Lost
+                | DatasetToolError::Failed(_)
+                | DatasetToolError::Stopped(_) => false,
+            },
         }
     }
 }
@@ -172,11 +201,13 @@ impl<S: Services> QuantyServer<S> {
     pub fn with_max_pdf_bytes(config: Config, services: S, max_pdf_bytes: u64) -> QuantyServer<S> {
         let services = Arc::new(services);
         let ingest = Ingest::new(config.clone(), Arc::clone(&services), max_pdf_bytes);
+        let datasets = Datasets::new(config.clone(), Arc::clone(&services));
         QuantyServer {
             shared: Arc::new(Shared {
                 config,
                 services,
                 ingest,
+                datasets,
                 max_pdf_bytes,
             }),
             tool_router: Self::tool_router(),
@@ -282,11 +313,45 @@ impl<S: Services> QuantyServer<S> {
     ) -> Result<Json<IngestReport>, ToolError> {
         Ok(Json(self.shared.ingest.status(args)?))
     }
+
+    /// Builds a training dataset for Gemma 4 from the converted documents under the content
+    /// folder: whole book sections for continued pre-training, rewritten texts and checked
+    /// questions and answers for fine-tuning, and a manifest. It is PAID unless `dry_run` is true:
+    /// the selected agent writes every rewritten text and answers every question, which spends its
+    /// subscription usage and can take hours. A dry run exports, checks and plans, asks no model
+    /// and costs nothing, and its summary says what the full build would ask: run one first. The
+    /// call answers when the build has begun, with a `job_id` for `dataset_status`. One build runs
+    /// at a time in this server; an ingest can run beside it. A build with the name of an earlier
+    /// one replaces that dataset's files, and the answers a model already gave are kept and not
+    /// paid for twice.
+    #[tool(annotations(
+        read_only_hint = false,
+        destructive_hint = true,
+        idempotent_hint = true
+    ))]
+    async fn build_dataset(
+        &self,
+        Parameters(args): Parameters<BuildDatasetArgs>,
+    ) -> Result<Json<DatasetReport>, ToolError> {
+        let error_text = |error| ToolError::Dataset(error).text();
+        Ok(Json(self.shared.datasets.start(args, error_text).await?))
+    }
+
+    /// Says how a dataset build is going, or how it ended, with what its models spent so far. Ask
+    /// again every 20 to 30 seconds until the state is not `running`. Over stdio a build stops when
+    /// the client closes the server.
+    #[tool(annotations(read_only_hint = true))]
+    async fn dataset_status(
+        &self,
+        Parameters(args): Parameters<DatasetStatusArgs>,
+    ) -> Result<Json<DatasetReport>, ToolError> {
+        Ok(Json(self.shared.datasets.status(args)?))
+    }
 }
 
 #[tool_handler(
     router = self.tool_router,
     name = "quanty",
-    instructions = "Search and read a library of books, papers and other media. Start with `search` for a question, then `read_page` to read around a result. `answer` writes a whole answer but spends the selected agent subscription usage. `ingest_pdf` adds a PDF, and `ingest_status` follows it."
+    instructions = "Search and read a library of books, papers and other media. Start with `search` for a question, then `read_page` to read around a result. `answer` writes a whole answer but spends the selected agent subscription usage. `ingest_pdf` adds a PDF, and `ingest_status` follows it. `build_dataset` builds a training dataset from the converted documents and spends the selected agent subscription usage unless `dry_run` is true; `dataset_status` follows it."
 )]
 impl<S: Services> ServerHandler for QuantyServer<S> {}

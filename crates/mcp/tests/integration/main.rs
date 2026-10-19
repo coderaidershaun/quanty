@@ -1,6 +1,7 @@
 //! Tests of the `mcp` server through an MCP client: the wire, the stores, the disk and a child
 //! process.
 
+mod datasets;
 mod failures;
 mod ingest;
 mod library;

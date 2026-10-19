@@ -3,13 +3,16 @@
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use mcp::{QuantyServer, Services};
 use ocr::convert::convert_chapter_with;
 use ocr::testing::{Scenario, StubServices};
 use ocr::{ChapterJob, ConversionSummary, ConvertError};
-use rag_core::{ApiKey, Config, DocId, EmbedError, ItemKind, MediaLabels};
+use rag_core::{
+    ApiKey, Config, DocId, EmbedError, ItemKind, Llm, LlmError, LlmReply, MediaLabels, Question,
+};
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores, first_axis};
 use rag_ingestion::{ChapterFolder, MediaChange, chapter_items, ingest_chapter, relabel_media};
 use rmcp::model::{CallToolRequestParams, CallToolResult};
@@ -19,12 +22,14 @@ use serde_json::{Map, Value, json};
 use tempfile::TempDir;
 use tokio::sync::{Mutex, mpsc};
 
-/// Services that never reach a paid model. `convert` waits at the gate when a test set one.
+/// Services that never reach a paid model. `convert` waits at the gate when a test set one, and
+/// so does the free sign-in check of the model when a test set the ready gate.
 pub struct StandInServices {
     embedder: Box<dyn Fn() -> StandInEmbedder + Send + Sync>,
     llm: StandInLlm,
     pages: StubServices,
     gate: Option<Mutex<mpsc::UnboundedReceiver<()>>>,
+    ready_gate: Option<Arc<GateSide>>,
 }
 
 impl StandInServices {
@@ -34,6 +39,7 @@ impl StandInServices {
             llm: StandInLlm::finding_nothing(),
             pages: StubServices::new(Scenario::SampleChapter),
             gate: None,
+            ready_gate: None,
         }
     }
 
@@ -63,6 +69,28 @@ impl StandInServices {
         )
     }
 
+    /// The same services, and the gate that holds each free sign-in check of the model until the
+    /// test lets it go on. A build checks the model before its first step, so this holds a build
+    /// after its job is listed.
+    pub fn with_ready_gate(self) -> (StandInServices, ReadyGate) {
+        let (reached, test_reached) = mpsc::unbounded_channel();
+        let (open, gate) = mpsc::unbounded_channel();
+        let side = GateSide {
+            reached,
+            open: Mutex::new(gate),
+        };
+        (
+            StandInServices {
+                ready_gate: Some(Arc::new(side)),
+                ..self
+            },
+            ReadyGate {
+                reached: test_reached,
+                open,
+            },
+        )
+    }
+
     /// A clone of `llm` keeps what the server asks of it.
     pub fn with_llm(mut self, llm: StandInLlm) -> StandInServices {
         self.llm = llm;
@@ -70,16 +98,64 @@ impl StandInServices {
     }
 }
 
+/// What a test holds of the ready gate. `reached` gets one `()` for each sign-in check that came
+/// to the gate, and each `()` sent on `open` lets one check go on. A dropped `open` opens the
+/// gate, so a test that fails does not hang.
+pub struct ReadyGate {
+    pub reached: mpsc::UnboundedReceiver<()>,
+    pub open: mpsc::UnboundedSender<()>,
+}
+
+/// The model's side of the ready gate.
+struct GateSide {
+    reached: mpsc::UnboundedSender<()>,
+    open: Mutex<mpsc::UnboundedReceiver<()>>,
+}
+
+/// The stand-in model of `StandInServices`. Its free sign-in check waits at the ready gate when a
+/// test set one; everything else is the stand-in's.
+#[derive(Clone)]
+pub struct GatedLlm {
+    llm: StandInLlm,
+    gate: Option<Arc<GateSide>>,
+}
+
+impl Llm for GatedLlm {
+    fn model(&self) -> &str {
+        self.llm.model()
+    }
+
+    fn cache_identity(&self) -> String {
+        self.llm.cache_identity()
+    }
+
+    async fn check_ready(&self) -> Result<(), LlmError> {
+        if let Some(gate) = &self.gate {
+            // A test that does not count the checks may have dropped `reached`.
+            let _ = gate.reached.send(());
+            gate.open.lock().await.recv().await;
+        }
+        self.llm.check_ready().await
+    }
+
+    async fn ask(&self, question: Question<'_>) -> Result<LlmReply, LlmError> {
+        self.llm.ask(question).await
+    }
+}
+
 impl Services for StandInServices {
     type Embedder = StandInEmbedder;
-    type Llm = StandInLlm;
+    type Llm = GatedLlm;
 
     fn embedder(&self, _config: &Config) -> Result<StandInEmbedder, EmbedError> {
         Ok((self.embedder)())
     }
 
-    fn llm(&self, _model: &str) -> StandInLlm {
-        self.llm.clone()
+    fn llm(&self, _model: &str) -> GatedLlm {
+        GatedLlm {
+            llm: self.llm.clone(),
+            gate: self.ready_gate.clone(),
+        }
     }
 
     async fn convert(
@@ -326,13 +402,15 @@ fn written_answer() -> Value {
     })
 }
 
-/// How long a job may take to end in a test: seven pages of stand-in calls and an ingest.
+/// How long a job may take to end in a test: seven pages of stand-in calls and an ingest, or a
+/// build of the sample chapters.
 const JOB_WAIT: Duration = Duration::from_secs(180);
 
-pub async fn report_when_ended(client: &Client, job_id: &str) -> Value {
+/// Asks `status_tool` (`ingest_status` or `dataset_status`) about the job until it is not running.
+pub async fn report_when_ended(client: &Client, status_tool: &'static str, job_id: &str) -> Value {
     let started = Instant::now();
     loop {
-        let result = call(client, "ingest_status", json!({ "job_id": job_id })).await;
+        let result = call(client, status_tool, json!({ "job_id": job_id })).await;
         let report = structured(&result).clone();
         if report["state"] != "running" {
             return report;

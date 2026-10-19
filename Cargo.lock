@@ -2556,6 +2556,7 @@ dependencies = [
  "graph",
  "ocr",
  "rag-core",
+ "rag-dataset",
  "rag-ingestion",
  "rag-retrieval",
  "rmcp",

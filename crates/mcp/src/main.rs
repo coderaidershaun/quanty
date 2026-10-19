@@ -26,13 +26,15 @@ struct Cli {
 #[tokio::main]
 async fn main() -> ExitCode {
     // The standard output belongs to the protocol while the server talks over it, so every log
-    // line goes to the standard error. `rag_core` logs what each `claude` question used.
+    // line goes to the standard error. `rag_core` logs what each `claude` question used, and
+    // `rag_dataset` logs how a dataset build goes.
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
         .with(
             Targets::new()
                 .with_default(Level::WARN)
                 .with_target("rag_core", Level::INFO)
+                .with_target("rag_dataset", Level::INFO)
                 .with_target("quanty_mcp", Level::INFO),
         )
         .init();

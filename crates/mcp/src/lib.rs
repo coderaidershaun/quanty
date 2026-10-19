@@ -1,8 +1,11 @@
 //! A Model Context Protocol server, so that an AI agent can search the stored books, read their
-//! pages and send a chapter PDF to be ingested. `Services` gives it the paid services or stand-ins.
+//! pages, send a chapter PDF to be ingested and build a training dataset from the converted
+//! documents. `Services` gives it the paid services or stand-ins.
 
 mod args;
+mod datasets;
 mod ingest;
+mod jobs;
 mod library;
 mod retrieval;
 mod server;

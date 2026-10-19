@@ -9,3 +9,4 @@ mod plan;
 mod sections;
 mod sft;
 mod support;
+mod synthetic;

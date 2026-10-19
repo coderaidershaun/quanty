@@ -5,6 +5,7 @@
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
+use futures_util::Stream;
 use futures_util::StreamExt;
 use futures_util::stream;
 use rag_core::{Llm, LlmError, UsageTally, error_chain};
@@ -156,4 +157,11 @@ impl<'a, L: Llm> Asker<'a, L> {
     fn record(&self) -> MutexGuard<'_, Record> {
         self.record.lock().unwrap_or_else(PoisonError::into_inner)
     }
+}
+
+/// Runs the asks a few at a time, as many at once as [`Asker::ask_each`] asks, and gives their
+/// results in the order of the asks. Make every ask before the call, not with a closure inside
+/// the stream: the compiler then cannot prove that the caller's future is `Send`.
+pub(super) fn few_at_a_time<F: Future>(asks: Vec<F>) -> impl Stream<Item = F::Output> {
+    stream::iter(asks).buffered(CALLS_AT_A_TIME)
 }

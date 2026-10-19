@@ -4,7 +4,8 @@
 use eframe::egui;
 
 use super::{
-    answer, ask_bar, concept_graph, follow_up, ingest, library, notices, retrieval_path, source,
+    answer, ask_bar, concept_graph, datasets, follow_up, ingest, library, notices, retrieval_path,
+    source,
 };
 use crate::contract::{Intent, Panel};
 use crate::media::Media;
@@ -44,6 +45,7 @@ pub struct Locals {
     pub follow_up: follow_up::Local,
     pub library: library::Local,
     pub ingest: ingest::Local,
+    pub datasets: datasets::Local,
     pub notices: notices::Local,
 }
 

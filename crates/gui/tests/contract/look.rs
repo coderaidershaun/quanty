@@ -30,6 +30,8 @@ const FIRST_MEDIA_PENCIL: &str = "Edit Hawkes Processes in Finance";
 const FIRST_MEDIA_DELETE: &str = "Delete media Hawkes Processes in Finance";
 /// The ingest of its scene stops for ever at page 3, so its bar rests there.
 const BAR_AT_PAGE_3: &str = "Converting the pages — 3 of 12 done, about 36%";
+/// The build of its scene stops for ever at the synthetic texts, so its bar rests there.
+const BUILD_AT_ITS_STALL: &str = "Writing the synthetic texts — 6 of 12, about 50%";
 const LIMIT: Duration = Duration::from_secs(5);
 
 enum Start {
@@ -42,6 +44,9 @@ enum Start {
     AfterAClickOnAMediaPencil,
     AfterAClickOnAMediaDelete,
     AfterAClickOnMaximiseInTheConceptGraph,
+    /// The scene never rests, so it is looked at once its catalogue has loaded and its bar has
+    /// come to the stall.
+    AtTheStallOfItsBuild,
 }
 
 struct Row {
@@ -51,7 +56,7 @@ struct Row {
     start: Start,
 }
 
-const ROWS: [Row; 17] = [
+const ROWS: [Row; 19] = [
     Row {
         picture: "ask-idle",
         scene: "idle",
@@ -154,6 +159,18 @@ const ROWS: [Row; 17] = [
         window: DEFAULT_WINDOW,
         start: Start::AfterAClickOnMaximiseInTheConceptGraph,
     },
+    Row {
+        picture: "datasets-ready",
+        scene: "datasets-ready",
+        window: DEFAULT_WINDOW,
+        start: Start::AsItOpens,
+    },
+    Row {
+        picture: "datasets-running",
+        scene: "datasets-running",
+        window: DEFAULT_WINDOW,
+        start: Start::AtTheStallOfItsBuild,
+    },
 ];
 
 /// Turns the wheel over the Answer pane until the chip is wholly inside it, then clicks it. A chip
@@ -225,6 +242,24 @@ fn start_an_ingest_that_never_ends(harness: &mut Window) {
     }
 }
 
+/// The build never ends, so the app is never idle, and `settle` would wait for ever.
+fn wait_for_the_stall_of_the_build(harness: &mut Window) {
+    let started = Instant::now();
+    loop {
+        harness.run_ok();
+        let is_loaded = harness.state().shared().library.catalogue.ready().is_some();
+        let is_at_the_stall = harness
+            .query_all_by_role_and_label(Role::ProgressIndicator, BUILD_AT_ITS_STALL)
+            .next()
+            .is_some();
+        if is_loaded && is_at_the_stall {
+            return;
+        }
+        assert!(started.elapsed() < LIMIT, "the bar never came to its stall");
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}
+
 /// Escape at the end leaves no box with the keyboard: a box that has it draws a caret that
 /// blinks, and the picture must be the same on every run.
 fn type_a_new_media(harness: &mut Window) {
@@ -242,9 +277,12 @@ impl Row {
     /// Draws the scene at rest and compares it with the kept picture. The error says how.
     fn compare(&self, options: &SnapshotOptions) -> Result<(), String> {
         let mut harness = testkit::app_at(self.scene, self.window, PIXELS_PER_POINT);
-        testkit::settle(&mut harness);
         match self.start {
-            Start::AsItOpens => {}
+            Start::AtTheStallOfItsBuild => wait_for_the_stall_of_the_build(&mut harness),
+            _ => testkit::settle(&mut harness),
+        }
+        match self.start {
+            Start::AsItOpens | Start::AtTheStallOfItsBuild => {}
             Start::AfterAClickOnTheFigureCitation => {
                 click_the_figure_citation(&mut harness, self.window);
             }

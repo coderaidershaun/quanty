@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use super::{AskSession, Health, IngestJob, Library, SourceNav};
+use super::{AskSession, DatasetJob, Health, IngestJob, Library, SourceNav};
 use crate::contract::{
     Command, Effect, Event, Failure, Intent, Loadable, Notice, NoticeId, NoticeKind, Panel,
     RequestId, StartupFacts, Tab,
@@ -44,6 +44,7 @@ pub struct Shared {
     pub source: SourceNav,
     pub library: Library,
     pub ingest: IngestJob,
+    pub datasets: DatasetJob,
     /// Newest first, this session only.
     pub notices: Vec<Notice>,
     pub health: Health,
@@ -99,6 +100,8 @@ impl Shared {
             Intent::StartIngest => self.start_ingest(effects),
             Intent::CancelIngest => self.cancel_ingest(effects),
             Intent::ClearIngest => self.clear_ingest(effects),
+            Intent::StartDatasetBuild(request) => self.start_dataset_build(request, effects),
+            Intent::ClearDatasetBuild => self.clear_dataset_build(),
             Intent::DismissNotice(id) => self.notices.retain(|notice| notice.id != id),
             Intent::MarkNoticesRead => {
                 self.notices
@@ -141,6 +144,12 @@ impl Shared {
             Event::IngestFinished { request, result } => {
                 self.ingest_finished(request, result, effects)
             }
+            Event::DatasetProgress { request, progress } => {
+                self.dataset_progress_arrived(request, progress)
+            }
+            Event::DatasetFinished { request, result } => {
+                self.dataset_build_finished(request, result)
+            }
             Event::Health {
                 request,
                 service,
@@ -155,6 +164,7 @@ impl Shared {
             && !self.library_is_busy()
             && self.health.pending.is_none()
             && !self.ingest.is_working()
+            && !self.datasets.is_running()
     }
 
     pub(super) fn issue_request(&mut self) -> RequestId {

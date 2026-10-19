@@ -5,6 +5,7 @@ use egui_kittest::kittest::Queryable;
 use gui::contract::{self, Answer, ModelTokens, Usage};
 use gui::panels::answer;
 use gui::testkit::{self, sample};
+use rag_dataset::options::{DEFAULT_MAX_SFT, DEFAULT_QUESTIONS, DEFAULT_REWRITES};
 
 #[test]
 fn the_contract_compares_names_as_the_core_crate_does() {
@@ -56,6 +57,14 @@ fn the_contract_reads_a_chapter_file_name_as_the_converter_does() {
             "{name}"
         );
     }
+}
+
+#[test]
+fn the_dataset_form_starts_at_the_defaults_of_the_dataset_crate() {
+    let form = contract::DatasetRequest::default();
+    assert_eq!(form.rewrites, DEFAULT_REWRITES);
+    assert_eq!(form.questions, DEFAULT_QUESTIONS);
+    assert_eq!(form.max_sft, DEFAULT_MAX_SFT);
 }
 
 #[test]

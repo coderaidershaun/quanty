@@ -4,6 +4,7 @@
 
 mod app;
 mod copied_rules;
+mod datasets;
 mod ingest;
 mod library;
 mod media_images;

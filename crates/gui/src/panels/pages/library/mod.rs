@@ -66,8 +66,14 @@ fn reveal(ui: &egui::Ui, form_top: f32, should_reveal: &mut bool) {
 
 /// A save on its way must not lose its form, and a draft must not be made from labels that a
 /// catalogue on its way is about to replace. A delete on its way is a change too, and no other
-/// change or delete starts beside it.
+/// change or delete starts beside it. A build only reads the library, so it does not hold these
+/// forms back.
 fn can_edit(shared: &Shared) -> bool {
+    shared.can_edit_media() && shared.library.busy.is_empty() && shared.library.pending.is_none()
+}
+
+/// A delete also waits for the build that reads the documents it would remove.
+fn can_delete(shared: &Shared) -> bool {
     shared.can_delete() && shared.library.pending.is_none()
 }
 

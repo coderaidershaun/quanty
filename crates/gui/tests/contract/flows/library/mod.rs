@@ -13,7 +13,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use eframe::egui;
 use eframe::egui::accesskit::Role;
-use egui_kittest::Node;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::DEFAULT_WINDOW;
 use gui::backend::fake::Fake;
@@ -22,7 +21,9 @@ use gui::contract::{Category, Command, Document, Failure, FailureKind, Intent, M
 use gui::testkit;
 
 use crate::flows::recording::{self, Seen};
-use crate::flows::{Window, click, is_enabled, node, panels, says, shared};
+use crate::flows::{
+    Window, click, delete_buttons, hover_on, is_enabled, node, panels, says, shared,
+};
 
 const REFUSED_HINT: &str = "Start Qdrant at http://localhost:6334, then try again.";
 
@@ -109,25 +110,6 @@ fn bring_into_view(harness: &mut Window, role: Role, name: &str) {
 fn click_on_the_card(harness: &mut Window, role: Role, name: &str) {
     bring_into_view(harness, role, name);
     click(harness, role, name);
-}
-
-/// Every button of a card that deletes: `Delete document …` and `Delete media …`.
-fn delete_buttons(harness: &Window) -> Vec<Node<'_>> {
-    harness
-        .query_all_by_role(Role::Button)
-        .filter(|button| {
-            let name = button.accesskit_node().label();
-            name.is_some_and(|name| name.starts_with("Delete "))
-        })
-        .collect()
-}
-
-/// The text of a button that is off shows once the pointer has rested on it, and not for the
-/// button that was clicked last, so a test hovers another one. The app is never at rest when this
-/// is used, so `run_ok` runs the four frames that the rest takes.
-fn hover_on(harness: &mut Window, role: Role, name: &str) {
-    node(harness, role, name).hover();
-    harness.run_ok();
 }
 
 fn documents_of(harness: &Window) -> Vec<Document> {

@@ -1,6 +1,8 @@
 //! Checks the flows that cross two parts of the app, on the whole app: selection, follow-up,
-//! source, failures, ingest, the library, and that no control leads to a part that is not built.
+//! source, failures, ingest, datasets, the library, and that no control leads to a part that is not
+//! built.
 
+mod datasets;
 mod dead_controls;
 mod failures;
 mod follow_up;
@@ -16,7 +18,7 @@ use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_kittest::{Harness, Node};
 use gui::app::App;
 use gui::app::layout::{self, ShellRects};
-use gui::state::{IngestJob, Shared};
+use gui::state::{DatasetJob, IngestJob, Shared};
 use gui::testkit;
 
 type Window = Harness<'static, App>;
@@ -122,6 +124,25 @@ fn is_open_tab(harness: &Window, name: &str) -> bool {
         == Some(true)
 }
 
+/// Every button of a card that deletes: `Delete document …` and `Delete media …`.
+fn delete_buttons(harness: &Window) -> Vec<Node<'_>> {
+    harness
+        .query_all_by_role(Role::Button)
+        .filter(|button| {
+            let name = button.accesskit_node().label();
+            name.is_some_and(|name| name.starts_with("Delete "))
+        })
+        .collect()
+}
+
+/// The text of a button that is off shows once the pointer has rested on it, and not for the
+/// button that was clicked last, so a test hovers another one. The app is never at rest when this
+/// is used, so `run_ok` runs the four frames that the rest takes.
+fn hover_on(harness: &mut Window, role: Role, name: &str) {
+    node(harness, role, name).hover();
+    harness.run_ok();
+}
+
 #[derive(Clone, Copy)]
 enum Wheel {
     Down,
@@ -181,6 +202,13 @@ fn failures(shared: &Shared) -> Vec<&gui::contract::Failure> {
         } => vec![failure],
         _ => Vec::new(),
     };
+    let dataset_build = match &shared.datasets {
+        DatasetJob::Finished {
+            result: Err(failure),
+            ..
+        } => Some(failure),
+        _ => None,
+    };
     [
         shared.ask.search.failure(),
         shared.ask.graph.failure(),
@@ -192,6 +220,7 @@ fn failures(shared: &Shared) -> Vec<&gui::contract::Failure> {
     .into_iter()
     .flatten()
     .chain(ingest)
+    .chain(dataset_build)
     .collect()
 }
 

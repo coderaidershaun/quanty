@@ -1,10 +1,7 @@
 //! What a person asks an ingest to do, what is found out before it starts, how far it has got,
 //! and how it ended.
 
-use super::failure::Failure;
-use super::ids::DocId;
-use super::library::{Category, DocumentName, ItemCounts};
-use super::usage::Usage;
+use crate::contract::{Category, DocId, DocumentName, Failure, ItemCounts, Usage};
 
 /// The media and the name of the document name its folder. The labels of the media come from the
 /// stored media, which is saved before its first document. The tags are the document's own: they

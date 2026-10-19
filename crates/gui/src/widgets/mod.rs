@@ -17,7 +17,7 @@ mod tabs;
 pub use button::Button;
 pub use card::{Card, CardResponse};
 pub use chip::{Badge, Chip, CitationChip, StepMarker, StepState, dot};
-pub use field::{Dropdown, Slider, Step, Stepper, TextInput, TextInputResponse};
+pub use field::{Dropdown, Slider, Step, Stepper, TextInput, TextInputResponse, paint_caret};
 pub use logo::logo;
 pub use look::ControlSize;
 pub use modal::{Choice, Confirm, modal};

@@ -65,6 +65,7 @@ fn key_of(key: KeyName) -> egui::Key {
         KeyName::Num1 => egui::Key::Num1,
         KeyName::Num2 => egui::Key::Num2,
         KeyName::Num3 => egui::Key::Num3,
+        KeyName::Num4 => egui::Key::Num4,
         KeyName::J => egui::Key::J,
         KeyName::K => egui::Key::K,
         KeyName::R => egui::Key::R,

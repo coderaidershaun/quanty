@@ -6,7 +6,7 @@ mod concept_graph;
 mod failure;
 mod health;
 mod ids;
-mod ingest;
+mod jobs;
 mod library;
 mod message;
 mod notice;
@@ -22,9 +22,9 @@ pub use concept_graph::{ConceptGraph, EdgeKind, GraphEdge, GraphNode, NodeId, No
 pub use failure::{Failure, FailureKind, Loadable};
 pub use health::{Service, ServiceState, StartupFacts};
 pub use ids::{ConceptId, DocId, ItemId, NoticeId, RequestId};
-pub use ingest::{
-    ChapterState, IngestOutcome, IngestProgress, IngestReport, IngestRequest, IngestStage,
-    PageToCheck, Preflight,
+pub use jobs::{
+    ChapterState, DatasetProgress, DatasetReport, DatasetRequest, DatasetStage, IngestOutcome,
+    IngestProgress, IngestReport, IngestRequest, IngestStage, PageToCheck, Preflight,
 };
 pub use library::{
     Catalogue, Category, ChapterLabel, Document, DocumentName, DocumentTagsEdit, ItemCounts, Media,

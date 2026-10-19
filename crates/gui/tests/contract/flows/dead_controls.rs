@@ -35,6 +35,7 @@ fn key_of(key: KeyName) -> egui::Key {
         KeyName::Num1 => egui::Key::Num1,
         KeyName::Num2 => egui::Key::Num2,
         KeyName::Num3 => egui::Key::Num3,
+        KeyName::Num4 => egui::Key::Num4,
         KeyName::J => egui::Key::J,
         KeyName::K => egui::Key::K,
         KeyName::R => egui::Key::R,
@@ -58,6 +59,8 @@ fn modifiers_of(chord: Chord) -> egui::Modifiers {
     modifiers
 }
 
+// SMELL: this file is near the 500-line limit, and each new command adds a check to it. The
+// checks of the commands that were sent are the part to move out first.
 fn assert_start_up_sent_only_its_own_commands(scene: &str, seen: &Seen) {
     let opening = Fake::scene(scene, &testkit::samples_folder())
         .unwrap_or_else(|error| panic!("scene `{scene}`: {error}"))
@@ -73,6 +76,10 @@ fn assert_start_up_sent_only_its_own_commands(scene: &str, seen: &Seen) {
     let checks = opening
         .iter()
         .filter(|intent| matches!(intent, Intent::CheckIngest(_)))
+        .count();
+    let builds = opening
+        .iter()
+        .filter(|intent| matches!(intent, Intent::StartDatasetBuild(_)))
         .count();
     let counted = |is: fn(&Command) -> bool| seen.count(is);
     assert_eq!(
@@ -96,8 +103,13 @@ fn assert_start_up_sent_only_its_own_commands(scene: &str, seen: &Seen) {
         "`{scene}`"
     );
     assert_eq!(
+        counted(|c| matches!(c, Command::BuildDataset { .. })),
+        builds,
+        "`{scene}`"
+    );
+    assert_eq!(
         seen.all().len(),
-        1 + asks + pages + checks,
+        1 + asks + pages + checks + builds,
         "`{scene}` sent a command that its opening does not ask for: {:?}",
         seen.all()
     );
@@ -352,7 +364,7 @@ fn assert_nothing_unbuilt_was_reached(harness: &Window, scene: &str, seen: &Seen
         );
     }
     assert_no_unbuilt_name_is_drawn(harness, scene);
-    for name in ["Ask", "Library", "Ingest"] {
+    for name in ["Ask", "Library", "Ingest", "Datasets"] {
         assert!(
             harness
                 .query_all_by_role_and_label(Role::Tab, name)
@@ -447,7 +459,7 @@ fn every_key_and_control_of(scene: &str) {
     );
 
     press_every_control(&mut harness, scene);
-    for tab in ["Ask", "Library", "Ingest"] {
+    for tab in ["Ask", "Library", "Ingest", "Datasets"] {
         click_if_still_there(&mut harness, Role::Tab, tab, 0);
         assert!(
             is_open_tab(&harness, tab),

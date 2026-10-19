@@ -18,8 +18,9 @@ rag-ingestion.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+tempfile.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "process", "rt-multi-thread", "time"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 

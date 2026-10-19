@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "thinking": { "type": "string" },
+    "answer": { "type": "string" },
+    "final_value": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+  },
+  "required": ["thinking", "answer", "final_value"],
+  "additionalProperties": false
+}

@@ -1,0 +1,35 @@
+{
+  "type": "object",
+  "properties": {
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question": { "type": "string" },
+          "task": {
+            "type": "string",
+            "enum": ["derivation", "calculation", "explain", "compare", "code_pot"]
+          },
+          "difficulty": { "type": "number" },
+          "seed": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["book_worked_example", "book_exercise", "generated"]
+              },
+              "quote": { "type": "string" }
+            },
+            "required": ["kind", "quote"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["question", "task", "difficulty", "seed"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["questions"],
+  "additionalProperties": false
+}

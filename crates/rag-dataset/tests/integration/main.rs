@@ -5,4 +5,5 @@ mod asker;
 mod command;
 mod holdout;
 mod sections;
+mod sft;
 mod support;

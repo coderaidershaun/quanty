@@ -19,8 +19,10 @@ use crate::support::{ClosedPorts, call, error_text};
 /// How long the command may take to end once the client has closed its input.
 const END_WAIT: Duration = Duration::from_secs(20);
 
-const TOOL_NAMES: [&str; 7] = [
+const TOOL_NAMES: [&str; 9] = [
     "answer",
+    "build_dataset",
+    "dataset_status",
     "health",
     "ingest_pdf",
     "ingest_status",

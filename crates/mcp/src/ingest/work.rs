@@ -13,8 +13,8 @@ use rag_ingestion::{
 use tokio::sync::watch;
 
 use super::PdfIngestError;
-use super::jobs::{IngestReport, Stage};
 use super::pdf::{ReadyPdf, Upload};
+use super::report::{IngestReport, Stage};
 use crate::services::Services;
 
 /// One ingest job, with everything it needs to run on a task of its own.

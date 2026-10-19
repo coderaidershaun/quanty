@@ -52,6 +52,8 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         names,
         [
             "answer",
+            "build_dataset",
+            "dataset_status",
             "health",
             "ingest_pdf",
             "ingest_status",
@@ -60,7 +62,7 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
             "search"
         ]
     );
-    let expected: [(&str, &[&str], &[&str]); 7] = [
+    let expected: [(&str, &[&str], &[&str]); 9] = [
         (
             "answer",
             &[
@@ -68,6 +70,27 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
             ],
             &["question"],
         ),
+        (
+            "build_dataset",
+            &[
+                "documents",
+                "dry_run",
+                "holdout",
+                "include_book_parts",
+                "keep_unrendered",
+                "max_sft",
+                "max_synthetic",
+                "media",
+                "min_page_score",
+                "name",
+                "questions",
+                "rewrites",
+                "run_code",
+                "samples",
+            ],
+            &["name"],
+        ),
+        ("dataset_status", &["job_id"], &["job_id"]),
         ("health", &[], &[]),
         (
             "ingest_pdf",
@@ -124,6 +147,16 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         description("ingest_pdf").contains("PAID"),
         "{}",
         description("ingest_pdf")
+    );
+    assert!(
+        description("build_dataset").contains("PAID"),
+        "{}",
+        description("build_dataset")
+    );
+    assert!(
+        description("build_dataset").contains("dry_run"),
+        "{}",
+        description("build_dataset")
     );
 }
 

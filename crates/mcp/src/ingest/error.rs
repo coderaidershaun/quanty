@@ -9,7 +9,7 @@ use rag_core::{EmbedError, EmptyTag, StoreError, UnknownCategory};
 use rag_ingestion::{NamePdfError, PdfError, RelabelError};
 use tokio::task::JoinError;
 
-use super::jobs::KEPT_JOBS;
+use crate::jobs::{Busy, KEPT_JOBS};
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum PdfIngestError {
@@ -148,7 +148,15 @@ pub(crate) enum PdfIngestError {
     Labels(#[from] RelabelError),
 
     #[error("the ingest stopped without an answer")]
-    Stopped(#[source] JoinError),
+    Stopped(#[from] JoinError),
+}
+
+impl From<Busy> for PdfIngestError {
+    fn from(busy: Busy) -> PdfIngestError {
+        PdfIngestError::Busy {
+            job_id: busy.running_job.to_string(),
+        }
+    }
 }
 
 /// Each refusal of a name is worded for an agent, which sends arguments and not flags.

@@ -2,8 +2,8 @@
 //! limit on a tool call, so `ingest_pdf` starts a job and `ingest_status` reads it.
 
 mod error;
-mod jobs;
 mod pdf;
+mod report;
 mod work;
 
 use std::sync::Arc;
@@ -13,11 +13,12 @@ use rag_core::Config;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
+use crate::jobs::{self, Jobs};
 use crate::services::Services;
 pub(crate) use error::PdfIngestError;
-pub(crate) use jobs::IngestReport;
-use jobs::{JobState, Jobs};
 pub(crate) use pdf::base64_len;
+pub(crate) use report::IngestReport;
+use report::JobState;
 use work::Work;
 
 /// What an agent gives `ingest_pdf`. Give exactly one of `path` and `pdf_base64`.
@@ -77,7 +78,7 @@ pub(crate) struct Ingest<S> {
     config: Config,
     services: Arc<S>,
     max_pdf_bytes: u64,
-    jobs: Jobs,
+    jobs: Jobs<IngestReport>,
 }
 
 impl<S: Services> Ingest<S> {
@@ -92,7 +93,7 @@ impl<S: Services> Ingest<S> {
 
     /// Checks the PDF, starts a job and answers once the paid work has begun, or the job ended
     /// before it could. `error_text` turns the error of a job into the text that the agent
-    /// reads, so that the one place that words a tool error is not here.
+    /// reads. The server gives it, because the server words every tool error in one place.
     ///
     /// # Errors
     /// A PDF that is refused, a graph that cannot say which media the library has, an ingest that
@@ -110,7 +111,10 @@ impl<S: Services> Ingest<S> {
             .await
             .map_err(PdfIngestError::Stopped)??;
         let (ready, graph) = self.named(checked, error_text).await?;
-        let started = self.jobs.start(&ready.media, &ready.file_name)?;
+        let started = self
+            .jobs
+            .start(|id| IngestReport::running(id, &ready.media, &ready.file_name))?;
+        let report = started.report.clone();
         let work = Work {
             services: Arc::clone(&self.services),
             config: self.config.clone(),
@@ -118,7 +122,10 @@ impl<S: Services> Ingest<S> {
             graph,
             report: started.report,
         };
-        spawn(work, error_text);
+        jobs::spawn(report, work.run(), move |report, ended| match ended {
+            Ok(outcome) => report.finish(&outcome),
+            Err(error) => report.fail(format!("{} {GO_ON}", error_text(error))),
+        });
         let mut watcher = started.watcher;
         let report = watcher
             .wait_for(|report| report.stage.is_some() || report.state != JobState::Running)
@@ -166,25 +173,4 @@ impl<S: Services> Ingest<S> {
                 job_id: args.job_id,
             })
     }
-}
-
-/// Starts the two tasks of a job. The work task goes on after the tool call ends. The task that
-/// waits for it writes the end of the report, and it must not panic: without that end the report
-/// of the job would say `running` for ever.
-fn spawn<S: Services>(work: Work<S>, error_text: fn(PdfIngestError) -> String) {
-    let report = work.report.clone();
-    let running = tokio::spawn(async move { work.run().await });
-    tokio::spawn(async move {
-        let ended = match running.await {
-            Ok(ended) => ended,
-            Err(stopped) => Err(PdfIngestError::Stopped(stopped)),
-        };
-        match ended {
-            Ok(outcome) => report.send_modify(|report| report.finish(&outcome)),
-            Err(error) => {
-                let text = format!("{} {GO_ON}", error_text(error));
-                report.send_modify(|report| report.fail(text));
-            }
-        }
-    });
 }

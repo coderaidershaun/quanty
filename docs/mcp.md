@@ -1,6 +1,6 @@
 # The MCP server
 
-`quanty-mcp` lets an AI agent use quanty: search the stored library of books, papers and other media, read the pages of its documents, and send a PDF to be ingested. It speaks the [Model Context Protocol](https://modelcontextprotocol.io), over standard input and output (the default) or over HTTP on this machine.
+`quanty-mcp` lets an AI agent use quanty: search the stored library of books, papers and other media, read the pages of its documents, send a PDF to be ingested, and build a training dataset from the converted documents. It speaks the [Model Context Protocol](https://modelcontextprotocol.io), over standard input and output (the default) or over HTTP on this machine.
 
 ## 1. Before you start it
 
@@ -32,7 +32,7 @@ The HTTP server listens on `127.0.0.1` only, and it has **no login**: any progra
 
 ## 3. The tools
 
-Seven tools. A tool that costs money says so in its description, and so does this table.
+Nine tools. A tool that costs money says so in its description, and so does this table.
 
 | Tool | What it does | Costs |
 | --- | --- | --- |
@@ -43,6 +43,8 @@ Seven tools. A tool that costs money says so in its description, and so does thi
 | `health` | Whether Qdrant, FalkorDB and the `claude` sign-in are ready | Nothing |
 | `ingest_pdf` | Converts one PDF of a media and stores it | **Paid and slow**: Claude, Jev and Gemini; minutes for each PDF |
 | `ingest_status` | How an ingest job is going | Nothing |
+| `build_dataset` | Builds a training dataset for Gemma 4 from the converted documents | **Paid and slow** unless `dry_run` is `true`: the selected agent writes every rewritten text and answers every question, which can take hours. A dry run is free |
+| `dataset_status` | How a dataset build is going, and what it spent so far | Nothing |
 
 An optional argument can be left out or set to `null`. An optional text that is blank counts as left out.
 
@@ -102,6 +104,10 @@ No arguments. Gives `healthy` and `report`, one line for each of Qdrant, FalkorD
 
 See the next part.
 
+### `build_dataset` and `dataset_status`
+
+See part 5.
+
 ## 4. Sending a PDF
 
 `ingest_pdf` takes the media, the PDF and labels:
@@ -149,7 +155,51 @@ Good to know:
 - A store that is down, a missing Gemini key, and a PDF that is already ingested show in the answer of `ingest_pdf` itself. A missing Jev key, `ANTHROPIC_API_KEY` being set, Poppler not installed, and a file that starts with `%PDF-` but is not a PDF are found only after the paid work has begun. So they show in `ingest_status` as `failed`, or, when they are found at once, in the answer of `ingest_pdf` as a tool error with the same text.
 - Jobs live in the memory of the server. Over stdio a running job stops when the client closes the server, and a restarted server forgets its job ids. The server keeps only its last 100 jobs: when it holds 100 and a new one starts, the oldest, which has ended, is forgotten. Send the PDF again: a PDF that is ingested is not ingested twice, and a stopped one goes on from where it ended.
 
-## 5. When a call fails
+## 5. Building a training dataset
+
+`build_dataset` builds a training dataset for Gemma 4 from the documents that are converted under the content folder: whole book sections for continued pre-training, rewritten texts, checked questions and answers for fine-tuning, and a manifest that says what the dataset holds. It is the same build as `rag-dataset build`. Run a dry run first: `dry_run: true` exports, checks and plans, asks no model, costs nothing, and its `summary` says how many texts, questions and model calls the full build would make.
+
+| Argument | |
+| --- | --- |
+| `name` | Required. The name of the dataset: letters, digits, `-`, `_` and `.`, and not `.` or `..`. It is the name of its folder under the dataset folder. A build with the name of an earlier one replaces that dataset's files |
+| `media` | Only the documents of these media, each a title whatever the capitals. Every media when left out |
+| `documents` | Only these documents, each a `document_id` or the whole `title` from `list_documents`. Every document of the chosen media when left out |
+| `holdout` | Documents kept out of training for evaluation, named like `documents`. Their sections go to `cpt/heldout.jsonl`, and no synthetic text is written from them |
+| `include_book_parts` | Also export the parts of a book that are not chapters, such as its index. An appendix is always exported. `false` when left out |
+| `rewrites` | How many rewritten texts each training section gets. 3 when left out |
+| `questions` | How many questions each section gets. 2 when left out |
+| `max_sft` | The most fine-tuning examples the build writes. 300 when left out |
+| `max_synthetic` | The most synthetic texts the build writes. No limit when left out |
+| `samples` | How many times the model answers each question, to check that its answers agree. 3 when left out |
+| `run_code` | Run the Python that the model writes for an answer, to check it. `true` when left out |
+| `dry_run` | Export, check and plan only. `false` when left out |
+| `min_page_score` | A section whose worst page matches less of the PDF's own text than this share, from 0 to 1, is rejected. 0.95 when left out |
+| `keep_unrendered` | Keep a section whose formulas do not render, instead of rejecting it. `false` when left out |
+
+In `media`, `documents` and `holdout`, each entry has its spaces at both ends cut off, and a blank entry is left out.
+
+The call does not wait for the whole build. It answers once the build has begun, with a `job_id` and `state: "running"`, or `done` when the build ended before the call answered. A build that failed by then, such as one that a bad argument stopped before its first step, is a tool error. Then the agent asks `dataset_status` with that `job_id` every 20 to 30 seconds until `state` is not `running`. Both tools give the same report: `job_id`, `state`, `folder` (the dataset's folder, as the settings give it), `usage` and `cost_usd` (what the models used so far, in the shape that `search` gives them; `cost_usd` is `null` when a model has no price, as Codex has none) and, by `state`:
+
+| `state` | Meaning |
+| --- | --- |
+| `running` | Going on. `stage` says what the build is doing in words, such as `exporting 3 of 12 documents`, `checking the sections`, `planning the generation`, `writing 40 of 120 synthetic texts`, `writing 5 of 300 SFT examples` or `writing the manifest`. `done` and `total` give the counts for a stage that counts. With no `stage` the first step has not come yet. `usage` and `cost_usd` are what the models used until the last step |
+| `done` | Finished. `summary` says what the build wrote, and `usage` and `cost_usd` are what the whole build used |
+| `failed` | Stopped. `error` says why and what to do. `usage` and `cost_usd` are what was used until the last step before it stopped. The answers a model already gave are kept, so a build that is called again is not paid twice for them |
+
+`summary` is what `rag-dataset build` prints: the dataset and its folder, the documents and the sections for training, held out and rejected (with the reason of each rejection), the texts and questions that were planned, then either `planned model calls` and `dry run: no model was asked`, or the synthetic texts and the SFT examples that were written, then one usage line for each model and the cost of the run.
+
+The build writes these files in the folder `<DATASET_DIR>/<name>` (`DATASET_DIR` defaults to `datasets/`): `cpt/raw.jsonl`, `cpt/heldout.jsonl`, `cpt/rejected.jsonl`, `cpt/synthetic.jsonl`, `sft/train.jsonl`, `sft/heldout.jsonl`, `sft/rejected.jsonl`, `plan.json` and `manifest.json`. A dry run writes only the three files of the sections (`cpt/raw.jsonl`, `cpt/heldout.jsonl` and `cpt/rejected.jsonl`), `plan.json` and `manifest.json`. The answers of the models are kept in `DATASET_CACHE_DIR` (default `data/dataset-cache`), so the same question is never paid for twice.
+
+Good to know:
+
+- One build runs at a time in a server. A second `build_dataset` while one runs is refused, and the refusal names the running `job_id`. An ingest and a build can run together. This holds inside one server only: a second server, or `rag-dataset build`, is not stopped from building the same dataset at the same time.
+- A build with the name of an earlier one removes the files that the earlier build wrote, once it knows it can run, and then writes its own. Give a new `name` to keep the earlier dataset.
+- `run_code` is on by default. It runs Python that the model wrote, on the machine the server runs on, to check an answer. `run_code: false` turns that off, and such answers are then checked by the judge alone.
+- The graph is connected first, and the model's sign-in is checked before the job starts, unless `dry_run` is `true`: a dry run needs no model. So a graph that is down, or a model that is not signed in, shows in the answer of `build_dataset` as a tool error that ends with: call the `health` tool.
+- A blank `name` is refused before anything else. A `name` that cannot name a folder, a `media`, `documents` or `holdout` entry that no converted document matches, and a selection that leaves no document are found by the build before its first step, so the graph must be up to find them. They show in the answer of `build_dataset` as a tool error that says what to give instead.
+- Jobs live in the memory of the server. Over stdio a running build stops when the client closes the server, and a restarted server forgets its job ids. The server keeps only its last 100 builds. Call `build_dataset` again: the answers a model already gave are kept.
+
+## 6. When a call fails
 
 A failure comes back as a tool error (`isError: true`) with a text that says what to do. It never ends the connection.
 
@@ -164,8 +214,14 @@ A failure comes back as a tool error (`isError: true`) with a text that says wha
 | A PDF that is refused: no file at the path, not a file, not a PDF, too big, a `file_name` with a folder in it, a book's file name that is not `chapter-<number>-<name>.pdf` and has no `document_title` | The reason and the fix |
 | A store that is down when the PDF is named, before the job starts | `could not connect to the graph`, or `could not read from the graph which media the library has`, with the address it names, and: call the `health` tool, and send the same PDF again |
 | An ingest is already running | Its `job_id`, and: ask `ingest_status`, and send this PDF when that job has ended |
+| `dataset_status` for an unknown `job_id` | Job ids are forgotten when the server restarts, and the server keeps only its last 100 builds; call `build_dataset` again |
+| A bad `name` for a dataset, or a blank one | What the name may be made of |
+| A `media`, `documents` or `holdout` entry that no converted document matches, or no document left to build from | The entry, and: give a `document_id` or the whole `title` from `list_documents`, or the title of a media; for no document, check that the documents are converted to the end, and give `include_book_parts: true` for a part of a book |
+| The model is not signed in, for a build that is not a dry run | That it is not signed in, to sign it in or give `dry_run: true`, and: call the `health` tool |
+| The graph is down when a build starts | `could not connect to the graph` with the address it names, and: call the `health` tool |
+| A dataset build is already running | Its `job_id`, and: ask `dataset_status`, and start this build when that job has ended |
 
-## 6. Add it to Claude Code
+## 7. Add it to Claude Code
 
 Build it first (`cargo build --release -p mcp`), and replace `/path/to/quanty` with the quanty folder. The folder is in single quotes inside the `-c` text, so that a folder with a space in its name works.
 

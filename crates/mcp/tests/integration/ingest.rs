@@ -153,7 +153,7 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
     assert_eq!(started["file"], "hawkes-notes.pdf");
     let job_id = started["job_id"].as_str().unwrap();
     open_the_gate.send(()).unwrap();
-    let ended = report_when_ended(&client, job_id).await;
+    let ended = report_when_ended(&client, "ingest_status", job_id).await;
     assert_eq!(ended["state"], "done", "{ended}");
     assert_eq!(ended["document_id"], sample_document_id().to_string());
     assert!(ended["items"].as_u64().unwrap() > 0);
@@ -233,7 +233,12 @@ async fn a_part_of_a_book_is_named_by_its_document_title_whatever_its_file_name(
     let started = structured(&first);
     assert_eq!(started["state"], "running");
     open_the_gate.send(()).unwrap();
-    let ended = report_when_ended(&client, started["job_id"].as_str().unwrap()).await;
+    let ended = report_when_ended(
+        &client,
+        "ingest_status",
+        started["job_id"].as_str().unwrap(),
+    )
+    .await;
     assert_eq!(ended["state"], "done", "{ended}");
     let documents = call(&client, "list_documents", json!({})).await;
     let listed = &structured(&documents)["documents"];
@@ -273,7 +278,12 @@ async fn a_pdf_sent_as_base64_is_saved_under_the_content_folder_and_ingested() {
     let started = structured(&first);
     assert_eq!(started["state"], "running");
     open_the_gate.send(()).unwrap();
-    let ended = report_when_ended(&client, started["job_id"].as_str().unwrap()).await;
+    let ended = report_when_ended(
+        &client,
+        "ingest_status",
+        started["job_id"].as_str().unwrap(),
+    )
+    .await;
     assert_eq!(ended["state"], "done", "{ended}");
     assert_eq!(ended["document_id"], sample_document_id().to_string());
     let content = &stores.config().content_folder;
@@ -309,7 +319,7 @@ async fn a_second_pdf_is_refused_while_one_is_being_ingested() {
 
     open_the_gate.send(()).unwrap();
 
-    let ended = report_when_ended(&client, job_id).await;
+    let ended = report_when_ended(&client, "ingest_status", job_id).await;
     assert_eq!(ended["state"], "done", "{ended}");
 }
 
@@ -332,7 +342,7 @@ async fn a_job_that_fails_after_the_paid_work_began_says_failed_and_what_to_do()
     assert_eq!(started["state"], "running");
     let job_id = started["job_id"].as_str().unwrap();
     open_the_gate.send(()).unwrap();
-    let ended = report_when_ended(&client, job_id).await;
+    let ended = report_when_ended(&client, "ingest_status", job_id).await;
     assert_eq!(ended["state"], "failed", "{ended}");
     assert!(ended.get("stage").is_none(), "{ended}");
     let error = ended["error"].as_str().unwrap();
@@ -356,7 +366,8 @@ async fn a_job_that_fails_after_the_paid_work_began_says_failed_and_what_to_do()
     assert_eq!(again["state"], "running", "{again}");
     assert_ne!(again["job_id"], started["job_id"], "a job of its own");
     open_the_gate.send(()).unwrap();
-    let ended_again = report_when_ended(&client, again["job_id"].as_str().unwrap()).await;
+    let ended_again =
+        report_when_ended(&client, "ingest_status", again["job_id"].as_str().unwrap()).await;
     assert_eq!(ended_again["state"], "failed", "{ended_again}");
 }
 
@@ -377,7 +388,12 @@ async fn a_job_that_a_file_stops_does_not_point_at_health() {
     let started = structured(&first);
     assert_eq!(started["state"], "running");
     open_the_gate.send(()).unwrap();
-    let ended = report_when_ended(&client, started["job_id"].as_str().unwrap()).await;
+    let ended = report_when_ended(
+        &client,
+        "ingest_status",
+        started["job_id"].as_str().unwrap(),
+    )
+    .await;
     assert_eq!(ended["state"], "failed", "{ended}");
     let error = ended["error"].as_str().unwrap();
     assert!(error.contains(&in_the_way.display().to_string()), "{error}");
@@ -395,7 +411,7 @@ async fn a_job_is_forgotten_when_a_hundred_newer_jobs_were_started() {
     let sent = json!({ "book": "Option Volatility and Pricing", "path": sample_pdf() });
     let first = call(&client, "ingest_pdf", sent.clone()).await;
     let first_id = structured(&first)["job_id"].as_str().unwrap().to_owned();
-    let ended = report_when_ended(&client, &first_id).await;
+    let ended = report_when_ended(&client, "ingest_status", &first_id).await;
     assert_eq!(ended["state"], "done", "{ended}");
     // Each of these jobs finds the PDF in the stores, so it has ended when its call answers.
     let send_again = async || {

@@ -5,6 +5,7 @@ pub mod answer;
 pub mod ask_bar;
 pub mod concept_graph;
 pub mod follow_up;
+mod heights;
 mod labels;
 mod media_card;
 pub mod notices;

@@ -279,30 +279,44 @@ mod tests {
 
     #[test]
     fn opening_another_item_forgets_the_contents_and_the_insights_and_keeps_the_view() {
+        let is_load_of = |effects: &[Effect], wanted: DocId| match effects {
+            [Effect::Send(Command::LoadChapterContents { doc, .. })] => *doc == wanted,
+            _ => false,
+        };
         let mut shared = Shared::default();
         let mut effects = Vec::new();
         shared.apply_intent(Intent::OpenDocument(doc(1)), &mut effects);
         shared.apply_intent(Intent::ShowDocumentView(DocumentView::Code), &mut effects);
-        shared.contents.pending = Some(RequestId(90));
-        shared.contents.doc = Some(doc(1));
+        assert!(
+            is_load_of(&effects, doc(1)),
+            "the Code view loads the open document: {effects:?}"
+        );
+        let first = shared
+            .contents
+            .pending
+            .expect("the contents are on their way");
         shared.insights.pending = Some(RequestId(91));
         shared.insights.doc = Some(doc(1));
-        assert!(effects.is_empty(), "the views load nothing yet");
+        effects.clear();
 
         shared.apply_intent(Intent::OpenDocument(doc(2)), &mut effects);
-        assert_eq!(shared.contents, Contents::default());
+        assert_eq!(effects[..2], cancels([first.0, 91])[..]);
+        assert!(
+            is_load_of(&effects[2..], doc(2)),
+            "the view that stays loads the new document: {effects:?}"
+        );
+        assert_eq!(shared.contents.doc, Some(doc(2)));
         assert_eq!(shared.insights, Insights::default());
-        assert_eq!(effects, cancels([90, 91]));
         assert_eq!(shared.shelf.view, DocumentView::Code);
         assert_eq!(shared.tab, Tab::Library);
 
         effects.clear();
-        shared.contents.pending = Some(RequestId(92));
+        let pending = shared.contents.pending;
         shared.apply_intent(Intent::OpenDocument(doc(2)), &mut effects);
         assert!(
             effects.is_empty(),
             "the same document again forgets nothing"
         );
-        assert_eq!(shared.contents.pending, Some(RequestId(92)));
+        assert_eq!(shared.contents.pending, pending);
     }
 }

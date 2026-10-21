@@ -101,7 +101,8 @@ async fn document_records_come_back_with_their_labels_mark_folder_and_items_by_k
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local FalkorDB from docker compose and bills nothing; run with: cargo test -p graph --test integration -- --ignored reads::"]
-async fn the_edges_among_what_was_asked_and_the_concepts_of_a_page_come_back_and_nothing_else() {
+async fn the_edges_among_what_was_asked_and_the_concepts_of_a_page_and_of_a_document_come_back_and_nothing_else()
+ {
     let (_throwaway, graph) = throwaway("edges-and-page").await;
     let document_a = DocId::from_source_sha256("edges-and-page-a");
     let document_b = DocId::from_source_sha256("edges-and-page-b");
@@ -189,6 +190,16 @@ async fn the_edges_among_what_was_asked_and_the_concepts_of_a_page_come_back_and
         vec![c1.clone(), c2.clone()]
     );
     assert_eq!(graph.concepts_on_page(document_a, 3).await.unwrap(), vec![]);
+
+    // The concept that two items of the document mention comes first, then the two that one item
+    // mentions each, by name. The concept of the other document is left out, and a document the
+    // graph does not hold has none.
+    assert_eq!(
+        graph.concepts_in_document(document_a).await.unwrap(),
+        vec![c1.clone(), c2.clone(), c3.clone()]
+    );
+    let unknown = DocId::from_source_sha256("edges-and-page-unknown");
+    assert_eq!(graph.concepts_in_document(unknown).await.unwrap(), vec![]);
 
     assert_eq!(graph.relations_among(&[]).await.unwrap(), vec![]);
     assert_eq!(graph.mentions_between(&[], &[c1.id]).await.unwrap(), vec![]);

@@ -3,6 +3,7 @@
 #![recursion_limit = "256"]
 
 mod app;
+mod contents;
 mod copied_rules;
 mod datasets;
 mod ingest;

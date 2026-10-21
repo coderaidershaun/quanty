@@ -3,13 +3,13 @@
 
 use eframe::egui;
 
-use super::heights::Heights;
 use super::listing::{Listing, Row};
 use super::phase::{AnswerTab, Phase};
 use crate::contract::{AskMode, Intent, Loadable, ResultItem, Usage};
 use crate::media::code;
 use crate::media::rich_text::{self, Clicked};
 use crate::panels::PanelCx;
+use crate::panels::heights::Heights;
 use crate::state::AskSession;
 use crate::theme::TextRole;
 

@@ -4,13 +4,13 @@
 
 use std::collections::BTreeSet;
 
-use graph::MediaNode;
+use graph::{ConceptNode, MediaNode};
 use rag_core::{LabelFilter, MediaLabels, Tag, UsageTally, WantedDocument, author_list};
 use rag_ingestion::{MediaChange, TagChange};
 
 use crate::contract::{
     Category, ConceptId, DatasetStage, DocId, DocumentName, DocumentTagsEdit, Filters, ItemId,
-    ItemKind, MediaEdit, ModelTokens, NewMedia, Usage,
+    ItemKind, MediaEdit, ModelTokens, NewMedia, PageConcept, Usage,
 };
 
 impl From<rag_core::DocId> for DocId {
@@ -46,6 +46,16 @@ impl From<rag_core::ConceptId> for ConceptId {
 impl From<ConceptId> for rag_core::ConceptId {
     fn from(id: ConceptId) -> rag_core::ConceptId {
         rag_core::ConceptId(id.0)
+    }
+}
+
+impl From<ConceptNode> for PageConcept {
+    fn from(node: ConceptNode) -> PageConcept {
+        PageConcept {
+            id: node.id.into(),
+            name: node.name,
+            definition: node.definition,
+        }
     }
 }
 

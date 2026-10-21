@@ -1,9 +1,8 @@
-//! One piece of a page drawn by its kind, for the cards and for the text of a page that has no
-//! picture, and the scrolling that brings a piece into view.
+//! One piece of a page drawn by its kind, for the cards of the Source panel and of the Library, and
+//! for the text of a page that has no picture, and the scrolling that brings a piece into view.
 
 use eframe::egui;
 
-use super::tabs::TabCx;
 use crate::contract::{Intent, PagePiece, PieceKind};
 use crate::media::Media;
 use crate::media::code;
@@ -16,7 +15,7 @@ use crate::widgets::Card;
 const MIN_FIGURE_HEIGHT: f32 = 120.0;
 const MAX_FIGURE_HEIGHT: f32 = 320.0;
 
-pub(super) const fn kind_name(kind: PieceKind) -> &'static str {
+pub(in crate::panels) const fn kind_name(kind: PieceKind) -> &'static str {
     match kind {
         PieceKind::Heading { .. } => "Heading",
         PieceKind::Text => "Text",
@@ -28,8 +27,12 @@ pub(super) const fn kind_name(kind: PieceKind) -> &'static str {
     }
 }
 
-pub(super) fn body(ui: &mut egui::Ui, piece: &PagePiece, cx: &mut TabCx<'_>) {
-    let media = &mut *cx.media;
+pub(in crate::panels) fn body(
+    ui: &mut egui::Ui,
+    piece: &PagePiece,
+    media: &mut Media,
+    intents: &mut Vec<Intent>,
+) {
     let words = |role| RichText::new(&piece.text, role);
     let clicked = match piece.kind {
         PieceKind::Heading { rank } => {
@@ -72,7 +75,7 @@ pub(super) fn body(ui: &mut egui::Ui, piece: &PagePiece, cx: &mut TabCx<'_>) {
             clicked
         }
     };
-    forward(clicked, cx.intents);
+    forward(clicked, intents);
 }
 
 fn forward(clicked: Option<Clicked>, intents: &mut Vec<Intent>) {

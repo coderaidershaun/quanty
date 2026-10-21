@@ -20,6 +20,8 @@ use crate::widgets::{Surface, panel_frame};
 use follow::marked_piece;
 use tabs::{SourceTab, TabCx};
 
+pub(super) use piece::{body as piece_body, kind_name};
+
 #[derive(Debug, Default)]
 pub struct Local {
     /// The `generation` of the shared state that everything below belongs to.

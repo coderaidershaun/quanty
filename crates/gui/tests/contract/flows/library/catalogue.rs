@@ -28,7 +28,7 @@ use crate::flows::{
     shared,
 };
 
-/// What each of the six views that are not built yet says under its title.
+/// What the Insights view, which is not built yet, says under its title.
 const VIEW_ON_ITS_WAY: &str = "This view comes in a later version of quanty.";
 
 /// Lists one catalogue that the test wrote by hand and refuses every other command.
@@ -301,45 +301,39 @@ fn each_document_row_opens_its_page(harness: &mut Window) {
     click(harness, Role::Tab, "Library");
 }
 
-/// The six views that are not built yet say so with a placeholder, and none of them asks the
-/// backend for anything.
-fn the_other_views_show_their_placeholder_and_ask_for_nothing(harness: &mut Window, seen: &Seen) {
+/// The Insights view, which is not built yet, says so with a placeholder and asks the backend for
+/// nothing.
+fn the_insights_view_shows_its_placeholder_and_asks_for_nothing(harness: &mut Window, seen: &Seen) {
     open_document(harness, BOOK, SAMPLE_PAGES);
     assert!(
         is_open_tab(harness, "Overview"),
         "the Overview is the first view"
     );
-    for view in DocumentView::ALL.into_iter().skip(1) {
-        click(harness, Role::Tab, view.label());
-        assert!(
-            is_open_tab(harness, view.label()),
-            "`{}` is shown",
-            view.label()
-        );
-        assert_eq!(shared(harness).shelf.view, view);
-        let placeholder = format!("{}. {VIEW_ON_ITS_WAY}", view.label());
-        assert!(
-            has(harness, Role::Label, &placeholder),
-            "the view `{}` says that it comes later",
-            view.label()
-        );
-        assert!(
-            !says(harness, "not built"),
-            "`{}` is not an error",
-            view.label()
-        );
-    }
-    let asked = seen.count(|command| {
-        matches!(
-            command,
-            Command::LoadChapterContents { .. } | Command::LoadChapterInsights { .. }
-        )
-    });
-    assert_eq!(asked, 0, "no view asks for the contents of a chapter yet");
+    let view = DocumentView::Insights;
+    click(harness, Role::Tab, view.label());
+    assert!(
+        is_open_tab(harness, view.label()),
+        "`{}` is shown",
+        view.label()
+    );
+    assert_eq!(shared(harness).shelf.view, view);
+    let placeholder = format!("{}. {VIEW_ON_ITS_WAY}", view.label());
+    assert!(
+        has(harness, Role::Label, &placeholder),
+        "the view `{}` says that it comes later",
+        view.label()
+    );
+    assert!(
+        !says(harness, "not built"),
+        "`{}` is not an error",
+        view.label()
+    );
+    let asked = seen.count(|command| matches!(command, Command::LoadChapterInsights { .. }));
+    assert_eq!(asked, 0, "the Insights view asks for nothing yet");
 
     open_document(harness, NOTES, BLACK_SCHOLES);
     assert!(
-        is_open_tab(harness, DocumentView::Concepts.label()),
+        is_open_tab(harness, DocumentView::Insights.label()),
         "the view that was shown stays when another document opens"
     );
     click(harness, Role::Tab, DocumentView::Overview.label());
@@ -441,7 +435,7 @@ fn the_library_shows_each_media_on_the_shelf_and_each_document_on_its_page() {
     the_tab_opens_the_page_and_the_shelf_has_a_row_for_each_media(&mut harness);
     each_media_row_opens_its_page_and_unfolds_its_documents(&mut harness);
     each_document_row_opens_its_page(&mut harness);
-    the_other_views_show_their_placeholder_and_ask_for_nothing(&mut harness, &seen);
+    the_insights_view_shows_its_placeholder_and_asks_for_nothing(&mut harness, &seen);
     a_saved_book_with_no_document_is_a_row_with_none_and_says_so(&mut harness);
     let first = first_readable(&harness);
     copy_id_puts_the_open_document_id_on_the_clipboard(&mut harness, &first);

@@ -1,6 +1,7 @@
 //! A backend that answers every command from built-in data, so the whole app runs with no store
 //! and no model.
 
+mod contents;
 mod fixtures;
 mod library;
 mod scenes;
@@ -393,10 +394,8 @@ impl Handler for Fake {
             Command::LoadPage {
                 request, doc, page, ..
             } => self.load_page(request, doc, page, &reply).await,
-            Command::LoadChapterContents { .. } => {
-                for event in command.failed(&Failure::not_built("the contents of a chapter")) {
-                    reply.send(event);
-                }
+            Command::LoadChapterContents { request, doc, .. } => {
+                self.load_chapter_contents(request, doc, &reply).await;
             }
             Command::LoadCatalogue { request } => self.load_catalogue(request, &reply).await,
             Command::SetDocumentTags { request, edit } => {

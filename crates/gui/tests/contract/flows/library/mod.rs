@@ -4,6 +4,7 @@
 //! or a media after asking, and says what no sample shows.
 
 mod catalogue;
+mod contents;
 mod delete;
 mod delete_on_its_way;
 mod document_tags;

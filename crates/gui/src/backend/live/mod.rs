@@ -2,6 +2,7 @@
 //! work the window asks for.
 
 mod chapters;
+mod contents;
 mod context;
 mod convert;
 mod datasets;

@@ -12,7 +12,7 @@ use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::App;
 use gui::app::layout::DEFAULT_WINDOW;
 use gui::backend::fake;
-use gui::contract::{Intent, Tab};
+use gui::contract::{DocId, DocumentView, Intent, Tab};
 use gui::testkit;
 
 type Window = Harness<'static, App>;
@@ -38,6 +38,43 @@ fn press_the_first_delete_button(harness: &mut Window) -> bool {
     true
 }
 
+/// Shows every view of the first document that has a folder, and the Code view of the last one,
+/// so that a view which repaints while it reads or draws its chapter is found. Ends on the
+/// Overview, where the Delete of that document is.
+fn check_the_views_of_the_documents(harness: &mut Window, scene: &str) {
+    let catalogue = harness.state().shared().library.catalogue.ready();
+    let documents: Vec<DocId> = catalogue
+        .into_iter()
+        .flat_map(|catalogue| catalogue.documents())
+        .filter(|document| document.folder.is_some())
+        .map(|document| document.id)
+        .collect();
+    let (Some(&first), Some(&last)) = (documents.first(), documents.last()) else {
+        return;
+    };
+    let shown = DocumentView::ALL
+        .into_iter()
+        .skip(1)
+        .map(|view| (first, view))
+        .chain([(last, DocumentView::Code)]);
+    for (doc, view) in shown {
+        harness.state_mut().push(Intent::OpenDocument(doc));
+        harness.state_mut().push(Intent::ShowDocumentView(view));
+        testkit::settle(harness);
+        harness.step();
+        harness.step();
+        assert_eq!(
+            repaint_delay(harness),
+            Duration::MAX,
+            "the app asked for a repaint in scene `{scene}` on the {view:?} view of a document"
+        );
+    }
+    harness
+        .state_mut()
+        .push(Intent::ShowDocumentView(DocumentView::Overview));
+    testkit::settle(harness);
+}
+
 #[test]
 fn an_app_at_rest_asks_for_no_repaint() {
     let mut sheets = 0;
@@ -57,6 +94,9 @@ fn an_app_at_rest_asks_for_no_repaint() {
             let name = format!("app-{}-{}", scene.name, format!("{tab:?}").to_lowercase());
             testkit::save_png(&mut harness, &name);
 
+            if tab == Tab::Library {
+                check_the_views_of_the_documents(&mut harness, scene.name);
+            }
             if tab == Tab::Library && press_the_first_delete_button(&mut harness) {
                 assert!(
                     harness

@@ -116,6 +116,7 @@ fn graph(error: &GraphError) -> Verdict {
 fn embed(error: &EmbedError) -> Verdict {
     match error {
         EmbedError::MissingApiKey => Verdict::of(Kind::EmbeddingKeyMissing),
+        error if error.is_out_of_credit() => Verdict::of(Kind::EmbeddingOutOfCredit),
         EmbedError::Transport(_) | EmbedError::Rejected { .. } => {
             Verdict::of(Kind::EmbeddingFailed)
         }
@@ -162,6 +163,9 @@ fn service(error: &ServiceError) -> Verdict {
     match error {
         ServiceError::Claude(error) => claude(error),
         ServiceError::Jev(JevError::MissingApiKey) => Verdict::of(Kind::ConverterKeyMissing),
+        ServiceError::Jev(error) if error.is_out_of_credit() => {
+            Verdict::of(Kind::ConverterOutOfCredit)
+        }
         _ => Verdict::internal(),
     }
 }

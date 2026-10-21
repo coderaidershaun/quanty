@@ -6,9 +6,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use graph::FalkorGraph;
+use ocr::convert::services::{Jev, JevError};
 use ocr::{ChapterJob, ConversionSummary, ConvertError, PageProgress};
 use rag_core::{
-    AgentCli, ConceptStore, Config, Embedder, GeminiEmbedder, ItemStore, Llm, WorkKind,
+    AgentCli, ApiKey, ConceptStore, Config, EmbedError, Embedder, GeminiEmbedder, ItemStore, Llm,
+    WorkKind,
 };
 use rag_ingestion::{ConceptExtractor, Models, Stores};
 use rag_retrieval::Retriever;
@@ -39,6 +41,14 @@ pub trait Services: Send + Sync + 'static {
         jev_api_key: Option<&str>,
         on_page: &mut (dyn FnMut(PageProgress) + Send),
     ) -> impl Future<Output = Result<ConversionSummary, ConvertError>> + Send;
+
+    /// Asks Google whether it accepts `key`. It costs nothing, and it cannot see spent credit.
+    fn check_gemini_key(&self, key: &ApiKey)
+    -> impl Future<Output = Result<(), EmbedError>> + Send;
+
+    /// Asks Jev whether it accepts `key`. It costs nothing, and Jev documents no reply to it for
+    /// spent credit.
+    fn check_jev_key(&self, key: &ApiKey) -> impl Future<Output = Result<(), JevError>> + Send;
 }
 
 pub struct RealServices;
@@ -66,6 +76,14 @@ impl Services for RealServices {
         on_page: &mut (dyn FnMut(PageProgress) + Send),
     ) -> Result<ConversionSummary, ConvertError> {
         ocr::convert_chapter_with_jev_key(job, jev_api_key, on_page).await
+    }
+
+    async fn check_gemini_key(&self, key: &ApiKey) -> Result<(), EmbedError> {
+        GeminiEmbedder::new(key)?.check_key().await
+    }
+
+    async fn check_jev_key(&self, key: &ApiKey) -> Result<(), JevError> {
+        Jev::new(key.expose())?.check_key().await
     }
 }
 
@@ -177,6 +195,20 @@ impl<S: Services> LiveContext<S> {
     ) -> Result<ConversionSummary, ConvertError> {
         let key = self.config.jev_api_key.as_ref().map(|key| key.expose());
         self.services.convert(job, key, on_page).await
+    }
+
+    /// Asks Google whether it accepts the key of the settings, so that no caller holds the key.
+    /// `None` when the settings have no key.
+    pub async fn check_gemini_key(&self) -> Option<Result<(), EmbedError>> {
+        let key = self.config.gemini_api_key.as_ref()?;
+        Some(self.services.check_gemini_key(key).await)
+    }
+
+    /// Asks Jev whether it accepts the key of the settings, so that no caller holds the key.
+    /// `None` when the settings have no key.
+    pub async fn check_jev_key(&self) -> Option<Result<(), JevError>> {
+        let key = self.config.jev_api_key.as_ref()?;
+        Some(self.services.check_jev_key(key).await)
     }
 
     /// Checks the agent of the Ingest choice without asking a question. The services can supply a

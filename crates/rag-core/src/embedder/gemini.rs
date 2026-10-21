@@ -61,6 +61,30 @@ impl GeminiEmbedder {
         self
     }
 
+    /// Asks the API to describe the embedding model. The API does not bill that, so this costs
+    /// nothing, and it is tried once. It shows a key the API refuses, but not spent credit:
+    /// Google answers this read after the credit is gone.
+    ///
+    /// # Errors
+    /// [`EmbedError::Rejected`] with the status the API gave, and [`EmbedError::Transport`] when
+    /// the API could not be reached.
+    pub async fn check_key(&self) -> Result<(), EmbedError> {
+        let response = self
+            .client
+            .get(format!("{}/models/{EMBEDDING_MODEL}", self.base_url))
+            .header("x-goog-api-key", self.api_key.expose())
+            .send()
+            .await?;
+        let status = response.status();
+        if status.is_success() {
+            return Ok(());
+        }
+        Err(EmbedError::Rejected {
+            status: status.as_u16(),
+            body: response.text().await?,
+        })
+    }
+
     async fn embed_texts(&self, texts: Vec<String>) -> Result<Vec<Embedding>, EmbedError> {
         let expected = texts.len();
         let reply: BatchReply = self
@@ -129,6 +153,9 @@ impl GeminiEmbedder {
 }
 
 /// The description leaves out the reply body, so it is safe to log.
+// SMELL: Google sometimes sends the spent-credit message with status 429. That is tried four
+// more times, about 15 seconds, before the call fails as out of credit. Retrying a spent balance
+// cannot help, but the status alone does not tell it from a real rate limit.
 fn retry_reason(error: &EmbedError) -> Option<String> {
     match error {
         EmbedError::Transport(source) if !source.is_builder() => Some(source.to_string()),

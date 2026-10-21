@@ -13,6 +13,8 @@ pub const DEFAULT_WINDOW: [f32; 2] = [1536.0, 1024.0];
 
 /// The height of the top bar, in points.
 pub const TOP_BAR: f32 = size::CONTROL_LG + 2.0 * space::SM;
+/// The height of the footer, in points.
+pub const FOOTER: f32 = size::CONTROL_SM;
 /// The height of the Ask bar, in points.
 pub const ASK_BAR: f32 = 2.0 * space::MD + size::CONTROL_LG + space::SM + size::CONTROL_SM;
 
@@ -43,6 +45,8 @@ pub struct ShellRects {
     pub follow_up: Rect,
     /// The whole area under the top bar, for Library, Ingest and a maximised panel of Ask.
     pub page: Rect,
+    /// The whole width of the window, at its foot.
+    pub footer: Rect,
 }
 
 /// Extra height goes to the top row, which is what a person reads.
@@ -51,7 +55,13 @@ pub fn shell(window: Rect) -> ShellRects {
     // two neighbours never overlap and no border is blurred.
     let left = (window.left() + GUTTER).round();
     let right = (window.right() - GUTTER).round();
-    let bottom = (window.bottom() - GUTTER).round();
+    let footer = edges(
+        window.left(),
+        window.bottom() - FOOTER,
+        window.right(),
+        window.bottom(),
+    );
+    let bottom = (footer.top() - space::SM).round();
     let top_bar = Rect::from_min_size(window.min, vec2(window.width(), TOP_BAR));
     let ask_top = (top_bar.bottom() + space::XS).round();
     let ask_bar = edges(left, ask_top, right, ask_top + ASK_BAR);
@@ -80,6 +90,7 @@ pub fn shell(window: Rect) -> ShellRects {
         retrieval_path: edges(graph_right + GAP, lower_top, left_right, bottom),
         follow_up: edges(right_left, lower_top, right, bottom),
         page: edges(left, ask_top, right, bottom),
+        footer,
     }
 }
 

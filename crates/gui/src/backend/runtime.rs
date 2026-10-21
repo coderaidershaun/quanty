@@ -15,10 +15,18 @@ use crate::contract::{Command, Event, Failure, RequestId};
 const WORKER_THREADS: usize = 4;
 const SHUTDOWN_WAIT: Duration = Duration::from_secs(2);
 
+/// What a cancel and the question "is the backend idle" must know of a task.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TaskKind {
+    Ingest,
+    BalanceRead,
+    Other,
+}
+
 struct Task {
     handle: AbortHandle,
     stop: Stop,
-    is_ingest: bool,
+    kind: TaskKind,
 }
 
 type Spawn = Box<dyn Fn(Command) -> Task>;
@@ -60,7 +68,11 @@ impl Backend {
         let spawn: Spawn = Box::new(move |command| {
             let (stop, stopped) = Stop::pair();
             let reply = Reply::new(sender.clone(), Arc::clone(&wake), stopped);
-            let is_ingest = matches!(command, Command::Ingest { .. });
+            let kind = match command {
+                Command::Ingest { .. } => TaskKind::Ingest,
+                Command::ReadBalances { .. } => TaskKind::BalanceRead,
+                _ => TaskKind::Other,
+            };
             let handler = Arc::clone(&handler);
             let watch_reply = reply.clone();
             let watched = command.clone();
@@ -81,7 +93,7 @@ impl Backend {
             Task {
                 handle: abort,
                 stop,
-                is_ingest,
+                kind,
             }
         });
         Ok(Backend {
@@ -99,7 +111,7 @@ impl Backend {
                 // The task stays in the map until it is finished, so its `Stop` is not dropped
                 // before the abort has taken effect: a dropped `Stop` also ends `cancelled`.
                 if let Some(task) = self.tasks.get(&request) {
-                    if task.is_ingest {
+                    if task.kind == TaskKind::Ingest {
                         task.stop.ask();
                     } else {
                         task.handle.abort();
@@ -120,6 +132,14 @@ impl Backend {
 
     pub fn is_idle(&self) -> bool {
         self.tasks.values().all(|task| task.handle.is_finished())
+    }
+
+    /// A read of the balances may hang for as long as its limit, and nothing else waits for it,
+    /// so a control that only needs the other work to be done asks this.
+    pub fn is_idle_but_for_balance_reads(&self) -> bool {
+        self.tasks
+            .values()
+            .all(|task| task.kind == TaskKind::BalanceRead || task.handle.is_finished())
     }
 }
 

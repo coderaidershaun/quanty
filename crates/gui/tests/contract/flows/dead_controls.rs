@@ -82,6 +82,9 @@ fn assert_start_up_sent_only_its_own_commands(scene: &str, seen: &Seen) {
         .filter(|intent| matches!(intent, Intent::StartDatasetBuild(_)))
         .count();
     let counted = |is: fn(&Command) -> bool| seen.count(is);
+    // One read at start, and one after each ask and each build ends.
+    let reads = counted(|c| matches!(c, Command::ReadBalances { .. }));
+    assert_eq!(reads, 1 + asks + builds, "`{scene}`");
     assert_eq!(
         counted(|c| matches!(c, Command::LoadCatalogue { .. })),
         1,
@@ -109,7 +112,7 @@ fn assert_start_up_sent_only_its_own_commands(scene: &str, seen: &Seen) {
     );
     assert_eq!(
         seen.all().len(),
-        1 + asks + pages + checks + builds,
+        1 + asks + pages + checks + builds + reads,
         "`{scene}` sent a command that its opening does not ask for: {:?}",
         seen.all()
     );

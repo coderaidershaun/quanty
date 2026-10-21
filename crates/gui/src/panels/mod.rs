@@ -3,6 +3,7 @@
 
 pub mod answer;
 pub mod ask_bar;
+pub mod balances;
 pub mod concept_graph;
 pub mod follow_up;
 mod labels;

@@ -55,7 +55,9 @@ fn assert_scene(name: &str, shared: &Shared) {
     // With no seed the search stops at its first step, so no later step has a value.
     let stopped_at_the_first_step = trace.is_some_and(|trace| *trace == Default::default());
     let ok = match name {
-        "idle" | "gallery" => documents == Some(5) && ask.search == Loadable::Idle,
+        "idle" | "gallery" | "balances-unread" => {
+            documents == Some(5) && ask.search == Loadable::Idle
+        }
         "first-run" | "empty-library" => documents == Some(0) && ask.search == Loadable::Idle,
         "black-scholes" => results == Some(9) && nodes > Some(0) && blocks > Some(0),
         "no-answer" => results == Some(9) && blocks == Some(0),
@@ -64,6 +66,7 @@ fn assert_scene(name: &str, shared: &Shared) {
         "answering" => results == Some(9) && ask.answer.is_loading(),
         "no-sources" => results == Some(0) && stopped_at_the_first_step,
         "search-failed" => is_failed(&ask.search, FailureKind::EmbeddingFailed),
+        "out-of-credit" => is_failed(&ask.search, FailureKind::EmbeddingOutOfCredit),
         "answer-failed" => {
             results == Some(9) && is_failed(&ask.answer, FailureKind::ClaudeUsageLimit)
         }
@@ -143,7 +146,7 @@ fn open_scene(name: &str, rests: bool) -> Harness<'static, App> {
 
 #[test]
 fn every_scene_opens_and_every_sample_page_loads() {
-    assert_eq!(fake::scenes().len(), 23);
+    assert_eq!(fake::scenes().len(), 25);
     for scene in fake::scenes() {
         let mut harness = open_scene(scene.name, scene.rests);
         assert_scene(scene.name, harness.state().shared());

@@ -56,7 +56,7 @@ struct Row {
     start: Start,
 }
 
-const ROWS: [Row; 19] = [
+const ROWS: [Row; 21] = [
     Row {
         picture: "ask-idle",
         scene: "idle",
@@ -171,6 +171,18 @@ const ROWS: [Row; 19] = [
         window: DEFAULT_WINDOW,
         start: Start::AtTheStallOfItsBuild,
     },
+    Row {
+        picture: "balances-unread",
+        scene: "balances-unread",
+        window: DEFAULT_WINDOW,
+        start: Start::AsItOpens,
+    },
+    Row {
+        picture: "ask-out-of-credit",
+        scene: "out-of-credit",
+        window: DEFAULT_WINDOW,
+        start: Start::AsItOpens,
+    },
 ];
 
 /// Turns the wheel over the Answer pane until the chip is wholly inside it, then clicks it. A chip
@@ -242,12 +254,14 @@ fn start_an_ingest_that_never_ends(harness: &mut Window) {
     }
 }
 
-/// The build never ends, so the app is never idle, and `settle` would wait for ever.
+/// The build never ends, so the app is never idle, and `settle` would wait for ever. The footer
+/// must have its words too, or one run could draw it checking and the next with what it found.
 fn wait_for_the_stall_of_the_build(harness: &mut Window) {
     let started = Instant::now();
     loop {
         harness.run_ok();
-        let is_loaded = harness.state().shared().library.catalogue.ready().is_some();
+        let shared = harness.state().shared();
+        let is_loaded = shared.library.catalogue.ready().is_some() && !shared.balances.is_reading();
         let is_at_the_stall = harness
             .query_all_by_role_and_label(Role::ProgressIndicator, BUILD_AT_ITS_STALL)
             .next()

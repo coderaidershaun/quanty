@@ -23,4 +23,4 @@ testing = []
 [dev-dependencies]
 ocr = { workspace = true, features = ["testing"] }
 tempfile.workspace = true
-tokio = { workspace = true, features = ["macros", "rt", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "time"] }

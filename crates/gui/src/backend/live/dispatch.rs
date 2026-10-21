@@ -3,7 +3,7 @@
 
 use super::context::{LiveContext, Services};
 use super::source::PageTarget;
-use super::{datasets, ingest, library, query, source};
+use super::{balances, datasets, ingest, library, query, source};
 use crate::backend::{Handler, Reply};
 use crate::contract::{Command, RequestId, unknown_health};
 
@@ -49,6 +49,7 @@ impl<S: Services> Handler for LiveContext<S> {
             }
             Command::CheckHealth { request } => check_health(request, &reply),
             Command::Cancel(_) => {}
+            Command::ReadBalances { request } => balances::read(self, request, &reply).await,
         }
     }
 }

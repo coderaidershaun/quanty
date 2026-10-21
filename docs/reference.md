@@ -598,7 +598,7 @@ A citation opens its page when the document's folder is found. The document is l
 
 The filters of the Ask bar are lists. **Media** offers "All media" and each media that has a document. **Document** offers "All documents" and the documents of the chosen media, in reading order: a chapter shows as "Chapter <number> · <name>", and any other document, such as a part of a book or a paper, by its own title. It is off until a media is chosen, and choosing another media clears it. With a document chosen, an ask looks at that document alone. **Authors** offers "All authors" and each author of a document, once. **Tags** lets you tick any number of tags, from the tags of the media and the own tags of the documents. **Category** offers "Any category", Book, Paper and Other. An ask looks only at the documents that match every filter, as the flags of `rag-query` do. The Source panel picks its page by **Media** and **Document**: a chapter shows as "Chapter <number> · <name>", and any other document by its title.
 
-`--fixture <scene>` runs the whole window on built-in data from `samples/content`, with no store, no model and no cost. `--fixture list` prints the scenes: each is one state of the screen, such as `black-scholes` (a full answer), `stores-down` or `first-run`. The Datasets tab has three: `datasets-ready`, `datasets-running` and `datasets-failed`.
+`--fixture <scene>` runs the whole window on built-in data from `samples/content`, with no store, no model and no cost. `--fixture list` prints the scenes: each is one state of the screen, such as `black-scholes` (a full answer), `stores-down` or `first-run`. The Datasets tab has three: `datasets-ready`, `datasets-running` and `datasets-failed`. Two show the footer: `balances-unread`, where Google cannot be read and Jev refuses its key, and `out-of-credit`, where Google says the credit is spent in a search and Jev says so in an ingest.
 
 The **Library** tab shows each media as a card: its title, a badge for its category (Book, Paper or Other), its authors and its tags. A media that was saved and has no document yet says so. The documents that belong to no media, such as a picture that stands alone, are under "No media". The pencil **✎ Edit** at the right end of a card opens the form of the media in the card: three chips for the category, then **Authors** and **Tags**, each with commas between them. It has no title box, because the title names the media's folder and cannot change. **Save media** is on once something has changed. It writes the labels to the `Media` node, to every document of the media and to every point, the way `rag-ingest media` does, but it replaces every label, so the authors and the tags can also be emptied here. **Cancel** closes the form. A save that is refused keeps the form open and says why. **Delete**, beside **✎ Edit**, deletes the media with every document of it. The group "No media" has no **Delete**: its documents are deleted one by one.
 
@@ -631,6 +631,33 @@ Every other option has the default of `rag-dataset build`. The build reads the g
 While a build runs, the form is off and a bar shows the stage in words: "Starting the build", "Exporting the documents — 3 of 12", "Checking the sections", "Planning what to write", "Writing the synthetic texts — 6 of 12", "Writing the fine-tuning examples — 5 of 40" and "Writing the manifest". The stages that count end with ", about N%", such as "Writing the synthetic texts — 6 of 12, about 50%". Once the models have been asked, the tokens and the cost so far are beside the words, such as `31k tokens, about $0.12 so far`. Under the bar it says to keep the app open: "If it stops, start the same build again: answers already written are not paid for twice."
 
 At the end a notice says "Built <name>" with the counts, such as "2 documents, 4 sections for training and 2 held out, 1 rejected. 12 synthetic texts and 8 fine-tuning examples (5 think, 3 direct)." For a dry run it ends "Dry run: 70 model calls planned, none made." Then come the tokens of each model, the cost, and "Saved in" the folder of the dataset, `DATASET_DIR/<name>` made absolute. A build that failed shows "The build failed" with what to do. **Try again**, after a failure, starts the build that the form holds now. **Build another** clears the notice and brings **Start build** back.
+
+The **footer** is the strip at the foot of every tab, also while a panel is maximised. It has one entry for Google Gemini, the key `EMBEDDING_GEMINI_API_KEY` that embeds, and one for Jev, the key `CONVERTER_JEV_API_KEY` that finds the math on a page. An entry is a dot, the account and its state in words, a short hint, and a link: **Billing** opens https://aistudio.google.com/billing, and **Console** opens https://console.typesafe.ai/ in your browser, because Jev documents no billing page of its own. Clicking the entry reads it again.
+
+**It never shows an amount, a made-up one or an estimate, because neither provider gives a balance for an API key.** What the providers' documents say, read on 21 October 2026:
+
+- Google. https://ai.google.dev/gemini-api/docs/billing says that the Prepay credit balance is managed only in AI Studio, and that a spent balance stops every key of the billing account with HTTP 402. https://ai.google.dev/api/all-methods lists every method of the Gemini API, and none returns a balance, a credit or a spend. The Cloud Billing API needs OAuth and a billing account, and has no Prepay balance either, so it is not used.
+- Jev. https://api.typesafe.ai/openapi.json has two paths, `GET /v1/models` and `POST /v1/systemone`, and no account or billing path. The error table at https://docs.typesafe.ai/api/errors has 400, 401, 413, 415, 422, 429 and 529, and no 402 and no credit error.
+
+The one read that a provider allows with its key costs nothing, and it is the one the footer makes. Both are asked at the same time, and each gets 5 seconds:
+
+- Google: `GET <base>/models/gemini-embedding-2`, with the key in the `x-goog-api-key` header and never in the address. It is the description of the model, which Google does not bill.
+- Jev: `GET /v1/models`, with the key as a Bearer token. It lists the models and uses no tokens.
+
+| The entry says | The dot | Where it comes from |
+| --- | --- | --- |
+| checking… | orange | The first read has not ended |
+| balance not offered | green | The check was taken. The provider has no way to read a balance, so the hint points to its page |
+| key missing | orange | The key is not in the settings, and nothing was called. The hint names the variable |
+| key refused | red | The check got 401 or 403, or Google's 400 for an invalid key (`API_KEY_INVALID`) |
+| out of credit | red | A reply said so: HTTP 402 from either provider, or from Google any status with the words "prepayment credits are depleted" or "prepay credits are depleted", because Google also sends them with 429 |
+| could not read | orange | The provider could not be reached, did not answer in 5 seconds, or answered another status. The hint says which, and that a click tries again |
+
+A free read cannot see spent credit: Google answers it after the credit is gone. So "out of credit" comes from a paid reply, and from the footer's own read only when the provider refuses that read for spent credit too. A search that fails because Google says the credit is spent, and an ingest that fails because Google or Jev says so, put the note on the entry, and the failed panel says it in words of its own. The note stays through every read, and a read that finds the key missing or refused comes first. It clears after a later ask that works, which asked Google (an ask whose filters match no document asks nothing), and after an ingest that stored a document, which clears both. An ingest with no page left to convert never calls Jev, yet it clears the note too: the entry then says "balance not offered", which claims nothing about credit.
+
+The settings are read once, before the window opens, so a click does not pick up a key that was added to `.env` since, and the hint says to start quanty again.
+
+The footer reads at start, after an ask, an ingest run or a dataset build ends (also an ask that was stopped), and on a click. It never reads on a timer, and it draws static text with no spinner, so a window at rest asks for no repaint. A read that fails or hangs blocks nothing: the model lists in the top bar do not wait for it. No key is shown, logged or put in the name of a control.
 
 Not built yet: the notices tray, the help sheet and the health check.
 

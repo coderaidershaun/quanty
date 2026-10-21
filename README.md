@@ -294,6 +294,22 @@ The percent is an estimate: it runs from the first page cut out to the last page
 - **Start build** is paid work on the model chosen in the top bar, the same as `rag-dataset build`. Tick the dry-run box and it is free: it exports, checks and plans, and asks no model.
 - While it runs the bar shows the stage in words with "about N%" and the spend so far. At the end a notice gives the counts and the dataset's folder, and **Try again** or **Build another** goes on from there.
 
+### The footer
+
+Every tab has a strip at the foot of the window with one entry for **Google Gemini**, the embedding key, and one for **Jev**, the converter key. Each entry says what is known about that account, and has a link to the page where you see and top up your credit: **Billing** opens the Google AI Studio billing page, and **Console** opens the Jev console.
+
+It never shows an amount. Neither provider lets an API key read a balance. Google says that [you can only manage your Prepay credit balance in AI Studio](https://ai.google.dev/gemini-api/docs/billing), and [no method of its API](https://ai.google.dev/api/all-methods) returns one. The [API of Jev](https://api.typesafe.ai/openapi.json) has only `/v1/models` and `/v1/systemone`, and its [error table](https://docs.typesafe.ai/api/errors) has no credit error. So an entry says one of these instead:
+
+| It says | What it means |
+| --- | --- |
+| balance not offered | The provider took the key. See your credit on the page behind the link |
+| key missing | The key is not in `.env`. Add it, then start quanty again |
+| key refused | The provider did not take the key. Make a new one, put it in `.env`, then start quanty again |
+| out of credit | A reply of that provider said the credit is spent. The next ask (Google) or ingest (Jev) that works clears it |
+| could not read | The provider could not be reached, did not answer in time, or answered with an unexpected status. Click the entry to try again |
+
+The footer reads at start, after each ask, ingest and dataset build ends, and when you click an entry. It never reads on a timer. A read costs nothing, and a read that fails or hangs holds nothing else up. The key is never shown.
+
 ## MCP server
 
 `quanty-mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server over the same stores, for agents. Build it and add it to Claude Code, with both lines run in the quanty folder.

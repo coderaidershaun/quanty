@@ -1,6 +1,6 @@
 //! The scenes the fake backend can play, and what each one is for.
 
-use crate::contract::{FailureKind, Service};
+use crate::contract::{Balance, BalanceReads, FailureKind, ReadFailure, Service};
 
 /// One state the whole app can be shown in, from the name given to `--fixture`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -27,6 +27,8 @@ pub(super) struct Script {
     pub(super) opening: Opening,
     pub(super) ingest: Ingest,
     pub(super) datasets: Datasets,
+    /// What a read of the balances finds.
+    pub(super) balances: BalanceReads,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -117,9 +119,13 @@ const HEALTHY: Script = Script {
     opening: Opening::Asks,
     ingest: Ingest::Done,
     datasets: Datasets::Done,
+    balances: BalanceReads {
+        google: Balance::NotOffered,
+        jev: Balance::NotOffered,
+    },
 };
 
-static SCENES: [Scene; 23] = [
+static SCENES: [Scene; 25] = [
     Scene {
         name: "idle",
         about: "Healthy, with the sample library and nothing asked.",
@@ -217,6 +223,10 @@ static SCENES: [Scene; 23] = [
                 (Service::ConverterKey, FailureKind::ConverterKeyMissing),
             ],
             opening: Opening::Nothing,
+            balances: BalanceReads {
+                google: Balance::KeyMissing,
+                jev: Balance::KeyMissing,
+            },
             ..HEALTHY
         },
     },
@@ -335,6 +345,29 @@ static SCENES: [Scene; 23] = [
         script: Script {
             datasets: Datasets::Fails(FailureKind::ClaudeUsageLimit),
             opening: Opening::BuildsADataset,
+            ..HEALTHY
+        },
+    },
+    Scene {
+        name: "balances-unread",
+        about: "Healthy, with nothing asked: Google's account cannot be read and Jev refuses its key.",
+        rests: true,
+        script: Script {
+            opening: Opening::Nothing,
+            balances: BalanceReads {
+                google: Balance::Unread(ReadFailure::Unreachable),
+                jev: Balance::KeyRefused,
+            },
+            ..HEALTHY
+        },
+    },
+    Scene {
+        name: "out-of-credit",
+        about: "A question asked, and the search fails because Google says the prepaid credit is spent; an ingest started then fails because Jev says the same.",
+        rests: true,
+        script: Script {
+            search: Search::Fails(FailureKind::EmbeddingOutOfCredit),
+            ingest: Ingest::Fails(FailureKind::ConverterOutOfCredit),
             ..HEALTHY
         },
     },

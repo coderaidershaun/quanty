@@ -4,7 +4,7 @@
 use super::ask::{Answer, AskDraft, SearchReply};
 use super::concept_graph::ConceptGraph;
 use super::failure::Failure;
-use super::health::{Service, ServiceState};
+use super::health::{Balance, BalanceReads, Provider, ReadFailure, Service, ServiceState};
 use super::ids::{ConceptId, DocId, NoticeId, RequestId};
 use super::jobs::{
     DatasetProgress, DatasetReport, DatasetRequest, IngestOutcome, IngestProgress, IngestRequest,
@@ -80,6 +80,9 @@ pub enum Intent {
     RequestQuit,
     ConfirmQuit,
     DismissQuit,
+    /// What the footer's entries and the start of the app ask for.
+    ReadBalances,
+    OpenBillingPage(Provider),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -133,6 +136,9 @@ pub enum Command {
         request: RequestId,
     },
     Cancel(RequestId),
+    ReadBalances {
+        request: RequestId,
+    },
 }
 
 impl Command {
@@ -150,7 +156,8 @@ impl Command {
             | Command::Preflight { request, .. }
             | Command::Ingest { request, .. }
             | Command::BuildDataset { request, .. }
-            | Command::CheckHealth { request } => *request,
+            | Command::CheckHealth { request }
+            | Command::ReadBalances { request } => *request,
             Command::Cancel(request) => *request,
         }
     }
@@ -225,6 +232,17 @@ impl Command {
             }],
             Command::CheckHealth { request } => unknown_health(*request).collect(),
             Command::Cancel(_) => Vec::new(),
+            // A read that broke is answered, so the footer does not wait for it for ever.
+            Command::ReadBalances { request } => {
+                let unread = Balance::Unread(ReadFailure::Internal);
+                vec![Event::Balances {
+                    request: *request,
+                    found: BalanceReads {
+                        google: unread,
+                        jev: unread,
+                    },
+                }]
+            }
         }
     }
 }
@@ -311,6 +329,10 @@ pub enum Event {
         service: Service,
         state: ServiceState,
     },
+    Balances {
+        request: RequestId,
+        found: BalanceReads,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -319,4 +341,5 @@ pub enum Effect {
     CopyText(String),
     PickFile,
     CloseWindow,
+    OpenUrl(String),
 }

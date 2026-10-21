@@ -1,5 +1,5 @@
-//! Dispatches page questions to the selected agent and confines Claude's file access to the
-//! page folder. Both agents return the same reply and usage types.
+//! Dispatches page questions to the agent of the Ingest choice and confines Claude's file access to
+//! the page folder. Both agents return the same reply and usage types.
 
 use std::path::{Path, PathBuf};
 use std::process::{ExitStatus, Output, Stdio};
@@ -206,9 +206,9 @@ struct OutputTokenDetails {
     thinking_tokens: u64,
 }
 
-/// Refuse a billing key when the selected provider would use it.
+/// Refuse a billing key when the provider of the Ingest choice would use it.
 pub(in crate::convert) fn check_subscription() -> Result<(), ClaudeError> {
-    let settings = rag_core::ModelSettings::load()?;
+    let settings = rag_core::ModelSettings::load_for(rag_core::WorkKind::Ingest)?;
     if settings.provider == "claude" {
         check_claude_subscription()?;
     }
@@ -228,7 +228,7 @@ pub(super) async fn run<T: DeserializeOwned>(
     call: &ClaudeCall<'_>,
 ) -> Result<Answer<T>, ClaudeError> {
     // SMELL: Each call reloads settings, so an external edit can change models during one conversion.
-    let settings = rag_core::ModelSettings::load()?;
+    let settings = rag_core::ModelSettings::load_for(rag_core::WorkKind::Ingest)?;
     if settings.provider == "codex" {
         return super::codex::run(call, settings).await;
     }

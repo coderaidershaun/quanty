@@ -34,6 +34,6 @@ pub use labels::{
     WantedDocument, author_list, is_same_name,
 };
 pub use llm::{Llm, LlmError, LlmReply, Question};
-pub use model_settings::{ModelSettings, SettingsError};
+pub use model_settings::{ModelSettings, SettingsError, WorkKind};
 pub use qdrant::StoreError;
 pub use usage::{ModelPrice, ModelUsage, Usage, UsageTally, cost_text, price_of};

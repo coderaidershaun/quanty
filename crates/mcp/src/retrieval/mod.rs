@@ -7,9 +7,9 @@ mod written;
 use graph::{FalkorGraph, GraphError};
 use rag_core::{
     Category, ConceptStore, Config, EmbedError, EmptyTag, ItemKind, ItemStore, LabelFilter, Llm,
-    StoreError, UnknownCategory, UnknownItemKind, WantedDocument,
+    StoreError, UnknownCategory, UnknownItemKind, WantedDocument, WorkKind,
 };
-use rag_retrieval::{ANSWER_MODEL, AnswerError, Retriever, SearchError};
+use rag_retrieval::{AnswerError, Retriever, SearchError};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -171,7 +171,7 @@ pub(crate) async fn answer<S: Services>(
     args: QuestionArgs,
 ) -> Result<AnswerResult, RetrievalError> {
     let asked = args.read()?;
-    let llm = services.llm(ANSWER_MODEL);
+    let llm = services.llm(WorkKind::Ask);
     llm.check_ready().await.map_err(AnswerError::Llm)?;
     let retriever = retriever(config, services).await?;
     let results = retriever

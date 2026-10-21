@@ -7,7 +7,7 @@ use std::process::ExitCode;
 use anyhow::{Context, Result};
 use clap::Parser;
 use graph::FalkorGraph;
-use rag_core::{AgentCli, Config, UsageTally};
+use rag_core::{AgentCli, Config, UsageTally, WorkKind};
 use rag_dataset::{GenerationKind, Step};
 use tracing::Level;
 use tracing_subscriber::filter::Targets;
@@ -46,7 +46,7 @@ async fn run(cli: Cli) -> Result<()> {
 async fn build(given: &GivenBuild) -> Result<()> {
     let config = Config::load().context("could not read the settings")?;
     let options = given.options(&config);
-    let llm = AgentCli::from_saved_settings();
+    let llm = AgentCli::for_work(WorkKind::Datasets);
     let graph =
         if given.no_graph {
             None

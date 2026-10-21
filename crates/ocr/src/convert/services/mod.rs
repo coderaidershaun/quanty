@@ -88,10 +88,10 @@ pub trait ImageServices {
     ) -> impl Future<Output = Result<Answer<TranscribedPage>, ServiceError>> + Send;
 }
 
-/// The selected model through its installed command. It needs no Jev key.
+/// The model of the Ingest choice through its installed command. It needs no Jev key.
 pub struct LiveImageServices;
 
-/// The selected model through its installed command, and Jev over HTTP.
+/// The model of the Ingest choice through its installed command, and Jev over HTTP.
 pub struct LiveServices {
     jev: Jev,
 }

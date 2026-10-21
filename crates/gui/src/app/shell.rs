@@ -149,7 +149,7 @@ impl App {
             .show(ui, |ui| {
                 top_bar::draw(ui, rects.top_bar, &mut cx);
                 self.model_picker
-                    .draw(ui, rects.top_bar, self.backend.is_idle());
+                    .draw(ui, rects.top_bar, self.backend.is_idle(), cx.shared.tab);
             });
         egui::CentralPanel::no_frame().show(ui, |ui| {
             ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());

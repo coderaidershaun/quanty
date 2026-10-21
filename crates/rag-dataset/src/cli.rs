@@ -20,7 +20,7 @@ pub(super) struct Cli {
 pub(super) enum Command {
     /// Build a training dataset from the converted documents: whole sections for continued
     /// pre-training, and, unless this is a dry run, synthetic texts and fine-tuning examples
-    /// that the selected model writes
+    /// that the model of the Datasets choice writes
     Build(GivenBuild),
 }
 

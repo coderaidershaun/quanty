@@ -439,7 +439,7 @@ async fn a_signed_out_claude_blocks_the_check_of_a_new_pdf() {
     let services = support::StandInServices {
         stores,
         embedder: Box::new(StandInEmbedder::default),
-        llm: Box::new(|_model| StandInLlm::signed_out()),
+        llm: Box::new(|_work| StandInLlm::signed_out()),
         pages: Arc::clone(&pages),
     };
     let cx = LiveContext::new(config, services);

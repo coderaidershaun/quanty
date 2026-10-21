@@ -62,7 +62,7 @@ impl<S: Services> Clone for QuantyServer<S> {
 /// Whether the services that a tool needs are ready.
 #[derive(Serialize, JsonSchema)]
 struct HealthResult {
-    /// True when Qdrant, FalkorDB and the selected agent sign-in are all ready.
+    /// True when Qdrant, FalkorDB and the sign-in of the Ingest choice's agent are all ready.
     healthy: bool,
     /// One line for each service, saying whether it is ready.
     report: String,
@@ -239,9 +239,9 @@ impl<S: Services> QuantyServer<S> {
     }
 
     /// Writes an answer to a question from what `search` finds, with the items that each
-    /// statement rests on. It uses the selected agent's subscription and embeds the question
-    /// with Gemini. It can take a minute or two. An agent that can write its own answer should
-    /// call `search` instead.
+    /// statement rests on. It uses the subscription of the agent of the Ask choice and embeds the
+    /// question with Gemini. It can take a minute or two. An agent that can write its own answer
+    /// should call `search` instead.
     #[tool(annotations(read_only_hint = true))]
     async fn answer(
         &self,
@@ -271,7 +271,8 @@ impl<S: Services> QuantyServer<S> {
         Ok(Json(library::read_page(&self.shared.config, args)?))
     }
 
-    /// Says whether Qdrant, FalkorDB and the selected agent sign-in are ready. It costs nothing.
+    /// Says whether Qdrant, FalkorDB and the sign-in of the Ingest choice's agent are ready. It
+    /// costs nothing.
     #[tool(annotations(read_only_hint = true))]
     async fn health(&self) -> Json<HealthResult> {
         let report = health::check(&self.shared.config).await;
@@ -282,8 +283,8 @@ impl<S: Services> QuantyServer<S> {
     }
 
     /// Converts one PDF of a book, a paper or another media and stores it so that it can be
-    /// searched. It is PAID and slow: each page is read by the selected agent and Jev, the items
-    /// are embedded by Gemini and the selected agent finds the concepts, which takes minutes
+    /// searched. It is PAID and slow: each page is read by the agent of the Ingest choice and Jev,
+    /// the items are embedded by Gemini and that agent finds the concepts, which takes minutes
     /// for a chapter. The call answers when that work has started, with a `job_id` for
     /// `ingest_status`. A PDF that is already ingested costs nothing. A book's chapter must be
     /// named `chapter-<number>-<name>.pdf`; a part of a book that is not a chapter, such as its
@@ -317,13 +318,13 @@ impl<S: Services> QuantyServer<S> {
     /// Builds a training dataset for Gemma 4 from the converted documents under the content
     /// folder: whole book sections for continued pre-training, rewritten texts and checked
     /// questions and answers for fine-tuning, and a manifest. It is PAID unless `dry_run` is true:
-    /// the selected agent writes every rewritten text and answers every question, which spends its
-    /// subscription usage and can take hours. A dry run exports, checks and plans, asks no model
-    /// and costs nothing, and its summary says what the full build would ask: run one first. The
-    /// call answers when the build has begun, with a `job_id` for `dataset_status`. One build runs
-    /// at a time in this server; an ingest can run beside it. A build with the name of an earlier
-    /// one replaces that dataset's files, and the answers a model already gave are kept and not
-    /// paid for twice.
+    /// the agent of the Datasets choice writes every rewritten text and answers every question,
+    /// which spends its subscription usage and can take hours. A dry run exports, checks and
+    /// plans, asks no model and costs nothing, and its summary says what the full build would
+    /// ask: run one first. The call answers when the build has begun, with a `job_id` for
+    /// `dataset_status`. One build runs at a time in this server; an ingest can run beside it. A
+    /// build with the name of an earlier one replaces that dataset's files, and the answers a
+    /// model already gave are kept and not paid for twice.
     #[tool(annotations(
         read_only_hint = false,
         destructive_hint = true,
@@ -352,6 +353,6 @@ impl<S: Services> QuantyServer<S> {
 #[tool_handler(
     router = self.tool_router,
     name = "quanty",
-    instructions = "Search and read a library of books, papers and other media. Start with `search` for a question, then `read_page` to read around a result. `answer` writes a whole answer but spends the selected agent subscription usage. `ingest_pdf` adds a PDF, and `ingest_status` follows it. `build_dataset` builds a training dataset from the converted documents and spends the selected agent subscription usage unless `dry_run` is true; `dataset_status` follows it."
+    instructions = "Search and read a library of books, papers and other media. Start with `search` for a question, then `read_page` to read around a result. `answer` writes a whole answer but spends the subscription usage of the agent of the Ask choice. `ingest_pdf` adds a PDF, and `ingest_status` follows it. `build_dataset` builds a training dataset from the converted documents and spends the subscription usage of the agent of the Datasets choice unless `dry_run` is true; `dataset_status` follows it."
 )]
 impl<S: Services> ServerHandler for QuantyServer<S> {}

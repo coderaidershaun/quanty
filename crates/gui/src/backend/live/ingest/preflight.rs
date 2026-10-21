@@ -43,9 +43,9 @@ async fn check<S: Services>(
         });
     }
     let mut preflight = folder_check(cx, ingest, &job, &source_sha256).await?;
-    // `claude` is asked last, and only when the folder said nothing that already stops a start.
+    // The agent is asked last, and only when the folder said nothing that already stops a start.
     if preflight.state.is_some()
-        && let Err(failure) = cx.claude_ready().await
+        && let Err(failure) = cx.ingest_agent_ready().await
     {
         preflight.blockers.push(failure);
     }

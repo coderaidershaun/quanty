@@ -9,7 +9,7 @@ use gui::backend::live::{LiveContext, RealServices, Services};
 use gui::contract::{DocId, Failure};
 use ocr::testing::{Scenario, StubServices};
 use ocr::{ChapterIndex, ChapterJob, ConversionSummary, ConvertError, PageProgress};
-use rag_core::{ApiKey, Config, ItemKind, MediaLabels};
+use rag_core::{ApiKey, Config, ItemKind, MediaLabels, WorkKind};
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores, first_axis, vector_at};
 use rag_ingestion::{ChapterFolder, Item, chapter_items, ingest_chapter};
 use serde_json::json;
@@ -27,7 +27,7 @@ const THROWAWAY_GRAPH_PREFIX: &str = "test-graph-";
 pub struct StandInServices {
     pub stores: ThrowawayStores,
     pub embedder: Box<dyn Fn() -> StandInEmbedder + Send + Sync>,
-    pub llm: Box<dyn Fn(&str) -> StandInLlm + Send + Sync>,
+    pub llm: Box<dyn Fn(WorkKind) -> StandInLlm + Send + Sync>,
     pub pages: Arc<StubServices>,
 }
 
@@ -39,8 +39,8 @@ impl Services for StandInServices {
         Ok((self.embedder)())
     }
 
-    fn llm(&self, model: &str) -> StandInLlm {
-        (self.llm)(model)
+    fn llm(&self, work: WorkKind) -> StandInLlm {
+        (self.llm)(work)
     }
 
     async fn graph(&self, _config: &Config) -> Result<FalkorGraph, Failure> {
@@ -69,7 +69,7 @@ pub fn context_and_pages(test_name: &str) -> (LiveContext<StandInServices>, Arc<
     let services = StandInServices {
         stores,
         embedder: Box::new(StandInEmbedder::default),
-        llm: Box::new(|_model| StandInLlm::finding_nothing()),
+        llm: Box::new(|_work| StandInLlm::finding_nothing()),
         pages: Arc::clone(&pages),
     };
     (LiveContext::new(config, services), pages)
@@ -89,7 +89,7 @@ impl Services for StandInsOnClosedPorts {
         Ok(StandInEmbedder::default())
     }
 
-    fn llm(&self, _model: &str) -> StandInLlm {
+    fn llm(&self, _work: WorkKind) -> StandInLlm {
         StandInLlm::finding_nothing()
     }
 
@@ -243,7 +243,8 @@ pub fn context_with(
     context_over(config, stores, answering, embedder)
 }
 
-/// The settings of the context are given, but the graph is still the one of `stores`.
+/// The settings of the context are given, but the graph is still the one of `stores`. `answering`
+/// answers the ask; every other kind of work gets a signed-out model.
 pub fn context_over(
     config: Config,
     stores: ThrowawayStores,
@@ -254,7 +255,10 @@ pub fn context_over(
     let services = StandInServices {
         stores,
         embedder: Box::new(embedder),
-        llm: Box::new(move |_model| answering.clone()),
+        llm: Box::new(move |work| match work {
+            WorkKind::Ask => answering.clone(),
+            _ => StandInLlm::signed_out(),
+        }),
         pages: Arc::new(StubServices::new(Scenario::SampleChapter)),
     };
     LiveContext::new(config, services)

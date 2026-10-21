@@ -11,7 +11,7 @@ The server uses the same things as the other commands. Do the set up in [README.
 - `claude` is signed in, and `ANTHROPIC_API_KEY` is not set.
 - Poppler is installed (only `ingest_pdf` needs it).
 
-The `health` tool tells an agent whether Qdrant, FalkorDB and the `claude` sign-in are ready. It does not check the two keys, `ANTHROPIC_API_KEY` or Poppler.
+The `health` tool tells an agent whether Qdrant, FalkorDB and the sign-in of the Ingest choice's agent are ready. It does not check the two keys, `ANTHROPIC_API_KEY` or Poppler.
 
 ### Where it must start
 
@@ -40,11 +40,13 @@ Nine tools. A tool that costs money says so in its description, and so does this
 | `answer` | An answer written from what `search` finds, with its sources | A Gemini call and your Claude usage; a minute or two |
 | `list_documents` | Every stored document with its media, category, authors, tags and chapter | Nothing |
 | `read_page` | The pieces of one page of a document, in reading order | Nothing, and it needs no store |
-| `health` | Whether Qdrant, FalkorDB and the `claude` sign-in are ready | Nothing |
+| `health` | Whether Qdrant, FalkorDB and the sign-in of the Ingest choice's agent are ready | Nothing |
 | `ingest_pdf` | Converts one PDF of a media and stores it | **Paid and slow**: Claude, Jev and Gemini; minutes for each PDF |
 | `ingest_status` | How an ingest job is going | Nothing |
-| `build_dataset` | Builds a training dataset for Gemma 4 from the converted documents | **Paid and slow** unless `dry_run` is `true`: the selected agent writes every rewritten text and answers every question, which can take hours. A dry run is free |
+| `build_dataset` | Builds a training dataset for Gemma 4 from the converted documents | **Paid and slow** unless `dry_run` is `true`: the agent of the Datasets choice writes every rewritten text and answers every question, which can take hours. A dry run is free |
 | `dataset_status` | How a dataset build is going, and what it spent so far | Nothing |
+
+`search` and `answer` use the Ask choice, `ingest_pdf` the Ingest choice and `build_dataset` the Datasets choice.
 
 An optional argument can be left out or set to `null`. An optional text that is blank counts as left out.
 
@@ -98,7 +100,7 @@ Gives `document_id`, `media` (the title of its media), `chapter_number` and `cha
 
 ### `health`
 
-No arguments. Gives `healthy` and `report`, one line for each of Qdrant, FalkorDB and claude.
+No arguments. Gives `healthy` and `report`, one line for each of Qdrant, FalkorDB and the agent of the Ingest choice.
 
 ### `ingest_pdf` and `ingest_status`
 

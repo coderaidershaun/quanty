@@ -8,7 +8,7 @@ use clap::{CommandFactory, Parser};
 use graph::FalkorGraph;
 use rag_core::{
     AgentCli, Category, ConceptStore, Config, GeminiEmbedder, ItemKind, ItemStore, LabelFilter,
-    Llm, Tag, WantedDocument,
+    Llm, Tag, WantedDocument, WorkKind,
 };
 use rag_retrieval::{Retriever, SearchResults, answer};
 use tracing_subscriber::filter::{LevelFilter, Targets};
@@ -138,12 +138,11 @@ async fn answer_question(
     kind: Option<ItemKind>,
     wanted: &LabelFilter,
 ) -> Result<()> {
-    let agent = AgentCli::from_saved_settings();
+    let agent = AgentCli::for_work(WorkKind::Ask);
     // Asked before the search, which Gemini bills: this check costs nothing.
-    agent
-        .check_ready()
-        .await
-        .context("the selected agent cannot write an answer, so nothing was searched for")?;
+    agent.check_ready().await.context(
+        "the agent of the Ask choice cannot write an answer, so nothing was searched for",
+    )?;
     let results = search(question, kind, wanted).await?;
     if results.hits.is_empty() {
         println!("{results}");

@@ -5,10 +5,9 @@ use std::sync::Arc;
 
 use graph::FalkorGraph;
 use ocr::{ChapterJob, PageProgress};
-use rag_core::{ConceptStore, Config, ItemStore, UsageTally};
+use rag_core::{ConceptStore, Config, ItemStore, UsageTally, WorkKind};
 use rag_ingestion::{
-    ChapterPdf, ConceptExtractor, EXTRACTION_MODEL, Models, PdfOutcome, Stores, ingest_pdf,
-    relabel_document_tags,
+    ChapterPdf, ConceptExtractor, Models, PdfOutcome, Stores, ingest_pdf, relabel_document_tags,
 };
 use tokio::sync::watch;
 
@@ -49,7 +48,7 @@ impl<S: Services> Work<S> {
         // embedder fails before anything is paid for.
         let models = Models {
             embedder: services.embedder(&config)?,
-            concepts: ConceptExtractor::new(services.llm(EXTRACTION_MODEL), &config),
+            concepts: ConceptExtractor::new(services.llm(WorkKind::Ingest), &config),
         };
         let stores = Stores {
             items: ItemStore::connect(&config).map_err(PdfIngestError::ItemStore)?,

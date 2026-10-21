@@ -16,8 +16,7 @@ use rag_core::{
 };
 
 pub use concepts::{
-    ASK_SCORE, Cache, ConceptError, ConceptExtractor, ConceptSummary, EXTRACTION_MODEL, LINK_SCORE,
-    SkippedItem,
+    ASK_SCORE, Cache, ConceptError, ConceptExtractor, ConceptSummary, LINK_SCORE, SkippedItem,
 };
 pub use items::{Item, LoneImage, chapter_items, context_line, document_title, image_items};
 pub use summary::{IngestStep, IngestSummary, ItemCounts, usage_of};

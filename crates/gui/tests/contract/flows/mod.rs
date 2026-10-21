@@ -1,6 +1,6 @@
 //! Checks the flows that cross two parts of the app, on the whole app: selection, follow-up,
-//! source, failures, ingest, datasets, the library, and that no control leads to a part that is not
-//! built.
+//! source, failures, ingest, datasets, the library, the model picker, and that no control leads to
+//! a part that is not built.
 
 mod datasets;
 mod dead_controls;
@@ -8,6 +8,7 @@ mod failures;
 mod follow_up;
 mod ingest;
 mod library;
+mod model_picker;
 mod recording;
 mod selection;
 mod source;

@@ -7,9 +7,11 @@ use std::time::Duration;
 
 use graph::FalkorGraph;
 use ocr::{ChapterJob, ConversionSummary, ConvertError, PageProgress};
-use rag_core::{AgentCli, ConceptStore, Config, Embedder, GeminiEmbedder, ItemStore, Llm};
-use rag_ingestion::{ConceptExtractor, EXTRACTION_MODEL, Models, Stores};
-use rag_retrieval::{ANSWER_MODEL, Retriever};
+use rag_core::{
+    AgentCli, ConceptStore, Config, Embedder, GeminiEmbedder, ItemStore, Llm, WorkKind,
+};
+use rag_ingestion::{ConceptExtractor, Models, Stores};
+use rag_retrieval::Retriever;
 
 use crate::contract::{Failure, FailureKind};
 
@@ -22,7 +24,7 @@ pub trait Services: Send + Sync + 'static {
     type Llm: Llm + Send + Sync + 'static;
 
     fn embedder(&self, config: &Config) -> Result<Self::Embedder, Failure>;
-    fn llm(&self, model: &str) -> Self::Llm;
+    fn llm(&self, work: WorkKind) -> Self::Llm;
     fn graph(&self, config: &Config) -> impl Future<Output = Result<FalkorGraph, Failure>> + Send;
 
     /// Converts the pages of the chapter that are not converted yet, and tells each page to
@@ -49,8 +51,8 @@ impl Services for RealServices {
         Ok(GeminiEmbedder::from_config(config)?)
     }
 
-    fn llm(&self, _model: &str) -> AgentCli {
-        AgentCli::from_saved_settings()
+    fn llm(&self, work: WorkKind) -> AgentCli {
+        AgentCli::for_work(work)
     }
 
     async fn graph(&self, config: &Config) -> Result<FalkorGraph, Failure> {
@@ -177,13 +179,14 @@ impl<S: Services> LiveContext<S> {
         self.services.convert(job, key, on_page).await
     }
 
-    /// Checks the selected agent without asking a question. The services can supply a stand-in.
+    /// Checks the agent of the Ingest choice without asking a question. The services can supply a
+    /// stand-in.
     ///
     /// # Errors
-    /// A failure that says what the person must do before the selected agent can answer.
-    pub async fn claude_ready(&self) -> Result<(), Failure> {
+    /// A failure that says what the person must do before that agent can answer.
+    pub async fn ingest_agent_ready(&self) -> Result<(), Failure> {
         self.services
-            .llm(EXTRACTION_MODEL)
+            .llm(WorkKind::Ingest)
             .check_ready()
             .await
             .map_err(|error| self.failure(error))
@@ -194,18 +197,16 @@ impl<S: Services> LiveContext<S> {
     pub fn models(&self) -> Result<Models<S::Embedder, S::Llm>, Failure> {
         Ok(Models {
             embedder: self.services.embedder(&self.config)?,
-            concepts: ConceptExtractor::new(self.services.llm(EXTRACTION_MODEL), &self.config),
+            concepts: ConceptExtractor::new(self.services.llm(WorkKind::Ingest), &self.config),
         })
     }
 
     pub fn answer_llm(&self) -> S::Llm {
-        self.services.llm(ANSWER_MODEL)
+        self.services.llm(WorkKind::Ask)
     }
 
-    /// A build asks the saved choice for every text it writes, as the concept reader does, so it
-    /// passes the concept reader's model name.
     pub fn dataset_llm(&self) -> S::Llm {
-        self.services.llm(EXTRACTION_MODEL)
+        self.services.llm(WorkKind::Datasets)
     }
 
     /// Every kind of work converts its errors through it. A store that is down also drops what

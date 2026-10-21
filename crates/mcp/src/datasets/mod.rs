@@ -8,7 +8,7 @@ mod work;
 use std::sync::Arc;
 
 use graph::FalkorGraph;
-use rag_core::{Config, Llm};
+use rag_core::{Config, Llm, WorkKind};
 use rag_dataset::{BuildOptions, Selection};
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -20,10 +20,6 @@ pub(crate) use error::DatasetToolError;
 pub(crate) use report::DatasetReport;
 use report::DatasetState;
 use work::Work;
-
-/// The task name that `Services::llm` gets for a build. The paid services ignore it and use the
-/// saved model selection.
-const DATASET_MODEL: &str = "dataset";
 
 /// What an agent gives `build_dataset`. Only `name` is needed: every other argument has the
 /// default that `rag-dataset build` has.
@@ -142,7 +138,7 @@ impl<S: Services> Datasets<S> {
     ) -> Result<DatasetReport, DatasetToolError> {
         let options = args.options(&self.config)?;
         let graph = FalkorGraph::connect(&self.config).await?;
-        let llm = self.services.llm(DATASET_MODEL);
+        let llm = self.services.llm(WorkKind::Datasets);
         if options.generation {
             llm.check_ready()
                 .await

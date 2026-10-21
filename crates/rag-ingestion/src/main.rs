@@ -13,7 +13,8 @@ use clap::{CommandFactory, Parser};
 use graph::FalkorGraph;
 use ocr::{ChapterJob, PageProgress};
 use rag_core::{
-    AgentCli, ApiKey, Category, ConceptStore, Config, DocId, GeminiEmbedder, ItemStore, MediaLabels,
+    AgentCli, ApiKey, Category, ConceptStore, Config, DocId, GeminiEmbedder, ItemStore,
+    MediaLabels, WorkKind,
 };
 use rag_ingestion::{
     ChapterFolder, ChapterPdf, ConceptExtractor, IngestSummary, LoneImage, MediaChange, Models,
@@ -107,7 +108,7 @@ async fn connect_stores(config: &Config) -> Result<Stores> {
 fn set_up_models(config: &Config) -> Result<Models<GeminiEmbedder, AgentCli>> {
     Ok(Models {
         embedder: GeminiEmbedder::from_config(config).context("could not set up the embedder")?,
-        concepts: ConceptExtractor::new(AgentCli::from_saved_settings(), config),
+        concepts: ConceptExtractor::new(AgentCli::for_work(WorkKind::Ingest), config),
     })
 }
 

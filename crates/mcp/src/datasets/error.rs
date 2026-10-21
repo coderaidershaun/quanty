@@ -45,7 +45,7 @@ pub(crate) enum DatasetToolError {
     Graph(#[from] GraphError),
 
     #[error(
-        "the selected model is not ready to write the dataset; sign it in, or give `dry_run: true`, which asks no model"
+        "the model of the Datasets choice is not ready to write the dataset; sign it in, or give `dry_run: true`, which asks no model"
     )]
     ModelNotReady(#[source] LlmError),
 

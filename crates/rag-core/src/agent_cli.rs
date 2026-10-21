@@ -1,16 +1,18 @@
-//! Select the installed headless agent from the saved model choice.
-use crate::{ClaudeCli, CodexCli, Llm, LlmError, LlmReply, ModelSettings, Question};
+//! Select the installed headless agent from the saved choice of one kind of work.
+use crate::{ClaudeCli, CodexCli, Llm, LlmError, LlmReply, ModelSettings, Question, WorkKind};
 
-/// The selected agent, or a settings error reported before any question is asked.
+/// The agent of the saved choice of one kind of work, or a settings error reported before any
+/// question is asked.
 pub enum AgentCli {
     Claude(ClaudeCli),
     Codex(CodexCli),
     Invalid(std::sync::Arc<crate::SettingsError>),
 }
 impl AgentCli {
-    /// Use the saved selection, retaining any settings failure for readiness and question calls.
-    pub fn from_saved_settings() -> Self {
-        match ModelSettings::load() {
+    /// Use the saved choice of this kind of work, retaining any settings failure for readiness and
+    /// question calls.
+    pub fn for_work(work: WorkKind) -> Self {
+        match ModelSettings::load_for(work) {
             Ok(settings) if settings.provider == "codex" => {
                 Self::Codex(CodexCli::new(settings.model, settings.thinking))
             }

@@ -11,8 +11,6 @@ use crate::ingest::items::Item;
 pub(super) const SYSTEM_PROMPT: &str = include_str!("prompts/extract.md");
 pub(super) const SCHEMA: &str = include_str!("prompts/extract.schema.json");
 
-pub const EXTRACTION_MODEL: &str = "haiku";
-
 // Raise this to ask about every item again, for example after a change to how replies are read.
 // The answers that are kept under the old version are then no longer used.
 pub(super) const PROMPT_VERSION: &str = "1";

@@ -4,7 +4,7 @@
 use std::future::Future;
 
 use ocr::{ChapterJob, ConversionSummary, ConvertError};
-use rag_core::{AgentCli, ApiKey, Config, EmbedError, Embedder, GeminiEmbedder, Llm};
+use rag_core::{AgentCli, ApiKey, Config, EmbedError, Embedder, GeminiEmbedder, Llm, WorkKind};
 
 /// Makes the outside services of one tool call. The graph is not part of it: a call always opens
 /// the FalkorDB graph that its settings name, and a test points those settings at a throwaway one.
@@ -16,9 +16,8 @@ pub trait Services: Send + Sync + 'static {
     /// [`EmbedError::MissingApiKey`] when the settings hold no key for the embedder.
     fn embedder(&self, config: &Config) -> Result<Self::Embedder, EmbedError>;
 
-    /// The task's model name lets stand-ins distinguish answers from extraction. Real calls
-    /// use the saved model selection.
-    fn llm(&self, model: &str) -> Self::Llm;
+    /// The model client for one kind of work. Real calls load that kind's saved choice.
+    fn llm(&self, work: WorkKind) -> Self::Llm;
 
     /// Converts the pages of the chapter that are not converted yet. This is the part of an ingest
     /// that pays for a model call for every page.
@@ -42,8 +41,8 @@ impl Services for PaidServices {
         GeminiEmbedder::from_config(config)
     }
 
-    fn llm(&self, _model: &str) -> AgentCli {
-        AgentCli::from_saved_settings()
+    fn llm(&self, work: WorkKind) -> AgentCli {
+        AgentCli::for_work(work)
     }
 
     async fn convert(

@@ -137,6 +137,10 @@ fn claude_selection_rejects_api_key_before_conversion() {
             r#"{"provider":"codex","model":"gpt-6.1-sol","thinking":"medium"}"#,
             "CONVERTER_JEV_API_KEY",
         ),
+        (
+            r#"{"ask":{"provider":"codex","model":"gpt-6.1-sol","thinking":"medium"},"ingest":{"provider":"claude","model":"sonnet","thinking":"medium"},"datasets":{"provider":"codex","model":"gpt-6.1-sol","thinking":"medium"}}"#,
+            "ANTHROPIC_API_KEY is set",
+        ),
         ("broken", "model settings"),
     ] {
         let folder = tempfile::tempdir().unwrap();

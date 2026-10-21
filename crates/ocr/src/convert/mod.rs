@@ -167,14 +167,14 @@ enum Prepared {
     ToDo { source_sha256: String },
 }
 
-/// Converts a chapter with the selected agent and Jev.
+/// Converts a chapter with the agent of the Ingest choice and Jev.
 ///
 /// A chapter that is already finished is not touched: no service is started and no key is
 /// needed. An interrupted chapter resumes at the pages that are missing.
 ///
 /// # Errors
-/// - [`ConvertError::ApiKeySet`] if Claude is selected and `ANTHROPIC_API_KEY` is set, even
-///   when the chapter is finished
+/// - [`ConvertError::ApiKeySet`] if the Ingest choice is Claude and `ANTHROPIC_API_KEY` is set,
+///   even when the chapter is finished
 /// - [`ConvertError::Services`] if model settings are invalid or Jev cannot be reached or
 ///   refuses its key
 /// - [`ConvertError::ChapterBusy`] if another run is converting the same chapter

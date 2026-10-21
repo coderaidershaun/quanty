@@ -21,7 +21,6 @@ use decision_log::DecisionLog;
 use resolve::Resolver;
 
 pub use cache::Cache;
-pub use question::EXTRACTION_MODEL;
 pub use resolve::{ASK_SCORE, LINK_SCORE};
 
 use super::items::Item;

@@ -1,12 +1,13 @@
-//! The always-visible model and thinking choices. Saving takes effect on the next operation.
+//! The always-visible model and thinking choices of the tab on screen: Ask, Ingest and Datasets
+//! each keep their own, and Library shows none. Saving takes effect on the next operation.
 use super::region::region;
-use crate::contract::StartupFacts;
+use crate::contract::{StartupFacts, Tab};
 use crate::widgets::{ControlSize, Dropdown};
 use eframe::egui;
-use model_settings::{MODEL_CHOICES, MODEL_SETTINGS_FILE, ModelSettings, THINKING_LEVELS};
+use model_settings::{MODEL_CHOICES, MODEL_SETTINGS_FILE, THINKING_LEVELS, WorkChoices, WorkKind};
 
 pub(super) struct ModelPicker {
-    settings: ModelSettings,
+    choices: WorkChoices,
     path: Option<std::path::PathBuf>,
     error: Option<String>,
 }
@@ -14,55 +15,58 @@ impl ModelPicker {
     pub fn new(facts: &StartupFacts) -> Self {
         let path = facts.home.join(MODEL_SETTINGS_FILE);
         let loaded = if facts.fixture.is_some() {
-            Ok(ModelSettings::default())
+            Ok(WorkChoices::default())
         } else {
-            ModelSettings::load_from(&path)
+            WorkChoices::load_from(&path)
         };
         let error = loaded.as_ref().err().map(|error| error_message(error));
         Self {
-            settings: loaded.unwrap_or_default(),
+            choices: loaded.unwrap_or_default(),
             path: facts.fixture.is_none().then_some(path),
             error,
         }
     }
-    pub fn draw(&mut self, ui: &mut egui::Ui, bar: egui::Rect, is_idle: bool) {
+    pub fn draw(&mut self, ui: &mut egui::Ui, bar: egui::Rect, is_idle: bool, tab: Tab) {
+        let work = match tab {
+            Tab::Ask => WorkKind::Ask,
+            Tab::Ingest => WorkKind::Ingest,
+            Tab::Datasets => WorkKind::Datasets,
+            Tab::Library => return,
+        };
         let rect = egui::Rect::from_min_max(
             egui::pos2(bar.right() - 410.0, bar.top() + 8.0),
             egui::pos2(bar.right() - 16.0, bar.bottom() - 6.0),
         );
         region(ui, "model_picker", rect, |ui| {
-            let before = self.settings.clone();
+            let before = self.choices.clone();
+            let choice = self.choices.of_mut(work);
             ui.add_enabled_ui(is_idle, |ui| {
                 ui.horizontal(|ui| {
                     let models: Vec<_> = MODEL_CHOICES.iter().map(|(_, label)| *label).collect();
-                    let selected = MODEL_CHOICES
-                        .iter()
-                        .position(|(id, _)| *id == self.settings.model);
+                    let selected = MODEL_CHOICES.iter().position(|(id, _)| *id == choice.model);
                     if let Some(index) = Dropdown::new("Model", &models, 212.0)
                         .selected(selected)
                         .size(ControlSize::Small)
                         .show(ui)
                     {
-                        self.settings.select(MODEL_CHOICES[index].0);
+                        choice.select(MODEL_CHOICES[index].0);
                     }
                     let levels: Vec<_> = THINKING_LEVELS
                         .iter()
                         .copied()
-                        .filter(|level| *level != "ultra" || self.settings.supports_ultra())
+                        .filter(|level| *level != "ultra" || choice.supports_ultra())
                         .collect();
                     let labels: Vec<_> = levels
                         .iter()
                         .map(|level| format!("Thinking: {level}"))
                         .collect();
-                    let selected = levels
-                        .iter()
-                        .position(|level| *level == self.settings.thinking);
+                    let selected = levels.iter().position(|level| *level == choice.thinking);
                     if let Some(index) = Dropdown::new("Thinking level", &labels, 152.0)
                         .selected(selected)
                         .size(ControlSize::Small)
                         .show(ui)
                     {
-                        self.settings.thinking = levels[index].into();
+                        choice.thinking = levels[index].into();
                     }
                     if let Some(error) = &self.error {
                         ui.label("⚠").on_hover_text(error);
@@ -73,13 +77,13 @@ impl ModelPicker {
             .on_disabled_hover_text(
                 "Model changes are available when the current operation finishes.",
             );
-            if self.settings != before
+            if self.choices != before
                 && let Some(path) = &self.path
             {
-                match self.settings.save_to(path) {
+                match self.choices.save_to(path) {
                     Ok(()) => self.error = None,
                     Err(error) => {
-                        self.settings = before;
+                        self.choices = before;
                         self.error = Some(error_message(&error));
                     }
                 }

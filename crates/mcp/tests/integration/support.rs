@@ -12,6 +12,7 @@ use ocr::testing::{Scenario, StubServices};
 use ocr::{ChapterJob, ConversionSummary, ConvertError};
 use rag_core::{
     ApiKey, Config, DocId, EmbedError, ItemKind, Llm, LlmError, LlmReply, MediaLabels, Question,
+    WorkKind,
 };
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores, first_axis};
 use rag_ingestion::{ChapterFolder, MediaChange, chapter_items, ingest_chapter, relabel_media};
@@ -151,7 +152,7 @@ impl Services for StandInServices {
         Ok((self.embedder)())
     }
 
-    fn llm(&self, _model: &str) -> GatedLlm {
+    fn llm(&self, _work: WorkKind) -> GatedLlm {
         GatedLlm {
             llm: self.llm.clone(),
             gate: self.ready_gate.clone(),

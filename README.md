@@ -23,20 +23,28 @@
 
 ## Choose a model
 
-The **Model** and **Thinking** dropdowns in the desktop top bar change the model for
-answers, concept extraction, page conversion and dataset builds. The default is
-**Codex / GPT-6.1 Sol / Medium**. Claude models remain in the same menu. The controls use
-the app's existing dropdown styling and save immediately; finish any running operation
-before switching.
+The **Model** and **Thinking** dropdowns in the desktop top bar are for the tab on screen. Ask,
+Ingest and Datasets each keep their own Model and Thinking choice, which the top bar shows on that
+tab; Library has none. Ask is for answers, Ingest for page conversion and concept extraction, and
+Datasets for dataset builds. The default is **Codex / GPT-6.1 Sol / Medium**. Claude models remain
+in the same menu. The controls use the app's existing dropdown styling and save immediately;
+finish any running operation before switching.
 
 All language-model calls run headlessly through the installed CLI. Run `codex login` once
 with your ChatGPT account, or sign in with `claude` when using Claude. No OpenAI API key is
 needed. Codex CLI 0.162.1 is tested; it must support `--ignore-user-config` and `--ignore-rules`.
 
-The saved choice is `.quanty-model.json` in the Quanty home folder. The desktop app, command
-line tools, OCR and MCP server read it before creating a model client, so no restart is needed.
-Without that file, `LLM_PROVIDER`, `LLM_MODEL` and `LLM_THINKING` in the environment or `.env`
-set the defaults. A saved UI choice takes precedence. Codex defaults to `gpt-6.1-sol` with
+The saved choices are `.quanty-model.json` in the Quanty home folder. The file holds `ask`,
+`ingest` and `datasets`, one choice for each kind of work, each with `provider`, `model` and
+`thinking`. The desktop app, command line tools, OCR and MCP server read it before creating a model
+client, so no restart is needed. `rag-query` and the MCP `search` and `answer` tools use the Ask
+choice. `rag-ingest` (concepts, `pdf` and `health`), page conversion (`ocr` and the app's ingest)
+and the MCP `ingest_pdf` and `health` tools use the Ingest choice. `rag-dataset` and the MCP
+`build_dataset` tool use the Datasets choice. A file saved by an older version of quanty holds one
+choice and gives it to all three until a tab is changed; the next save writes the three choices. An
+MCP server that is still running from an older version must be restarted. Without that file,
+`LLM_PROVIDER`, `LLM_MODEL` and `LLM_THINKING` in the environment or `.env` set the defaults, the
+same for all three. A saved UI choice takes precedence. Codex defaults to `gpt-6.1-sol` with
 `medium` thinking. Supported levels are `low`, `medium`, `high`, `xhigh`, `max` and, for
 models that support it, `ultra`. `CODEX_BIN` can name a custom Codex executable.
 
@@ -84,7 +92,7 @@ Set up once, then open the app with real stores. Run every command in the quanty
 | Rust (stable, with `cargo`)                                          | Builds every program                                                          |
 | Docker, with `docker compose`                                        | Runs the two stores: Qdrant (vectors) and FalkorDB (the graph)                |
 | [Poppler](https://poppler.freedesktop.org/) (`brew install poppler`) | Reads a PDF when it is converted                                              |
-| The `codex` CLI, signed in (or `claude`)                                          | Reads pages, finds concepts and writes answers, on your selected agent subscription |
+| The `codex` CLI, signed in (or `claude`)                                          | Reads pages, finds concepts and writes answers, on the subscription of each agent you choose |
 
 ### 2. Start the stores
 
@@ -118,7 +126,7 @@ unset ANTHROPIC_API_KEY    # must not be set, so that claude bills your subscrip
 cargo run --release -p rag-ingestion --bin rag-ingest -- health
 ```
 
-`health` prints one line each for Qdrant, FalkorDB and the selected agent: `ok`, or `FAILED` with what is wrong. It does not check the Gemini or Jev keys. When Claude is selected, it refuses `ANTHROPIC_API_KEY`; Codex requires a ChatGPT subscription login.
+`health` prints one line each for Qdrant, FalkorDB and the agent of the Ingest choice: `ok`, or `FAILED` with what is wrong. It does not check the Gemini or Jev keys. When the Ingest choice is Claude, it refuses `ANTHROPIC_API_KEY`; Codex requires a ChatGPT subscription login.
 
 ### 5. Open the app
 
@@ -299,12 +307,12 @@ The server finds `.env`, `content/` and `data/` from the folder it starts in: th
 
 | Tool             | What it does                                                     | Cost                                               |
 | ---------------- | ---------------------------------------------------------------- | -------------------------------------------------- |
-| `health`         | Says whether Qdrant, FalkorDB and the `claude` sign-in are ready | Free                                               |
+| `health`         | Says whether Qdrant, FalkorDB and the sign-in of the Ingest choice's agent are ready | Free                                               |
 | `list_documents` | Lists every stored document                                      | Free                                               |
 | `search`         | Finds the stored items nearest to a question                     | One small Gemini call                              |
 | `read_page`      | Reads one page of a document, in reading order                   | Free                                               |
-| `answer`         | Writes an answer from what `search` finds, with its sources      | A Gemini call and your selected agent subscription usage |
-| `ingest_pdf`     | Converts one PDF of a media and stores it                        | Paid and slow: the selected agent, Jev and Gemini  |
+| `answer`         | Writes an answer from what `search` finds, with its sources      | A Gemini call and the subscription usage of the agent of the Ask choice |
+| `ingest_pdf`     | Converts one PDF of a media and stores it                        | Paid and slow: the agent of the Ingest choice, Jev and Gemini  |
 | `ingest_status`  | Says how an ingest job is going                                  | Free                                               |
 | `build_dataset`  | Builds a training dataset from the converted documents           | Paid and slow, it can take hours, unless `dry_run` is `true`, which is free |
 | `dataset_status` | Says how a dataset build is going and what it spent so far       | Free                                               |
@@ -342,7 +350,7 @@ These bill for the work that quanty asks of them.
 | Gemini embeddings           | Your Gemini API key, by the token                        | Every ingest and every question                                                               |
 | Jev                         | Your Jev API key                                         | The pages of a PDF, when they are converted                                                   |
 | `claude` (Haiku and Sonnet) | The subscription `claude` is signed in to, never the API | Converting pages, finding concepts and writing an answer                                      |
-| A dataset build             | The subscription of the selected agent, Codex or Claude  | `rag-dataset build`, `build_dataset` and **Start build** on the Datasets tab, never a dry run |
+| A dataset build             | The subscription of the agent of the Datasets choice, Codex or Claude | `rag-dataset build`, `build_dataset` and **Start build** on the Datasets tab, never a dry run |
 
 Every ingest and every question reports the tokens each model used and about what they cost, such as `cost of this run: ≈ $1.75`. The figure comes from one table of prices per million tokens: it is what the API would charge, not what your subscription bills. The table, its date and how each figure is made are in [docs/reference.md](docs/reference.md#costs).
 

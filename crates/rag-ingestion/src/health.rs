@@ -1,12 +1,12 @@
-//! Checks that Qdrant, FalkorDB and the selected agent's sign-in are ready. Every check
-//! is always run, so one report names everything that is wrong.
+//! Checks that Qdrant, FalkorDB and the sign-in of the Ingest choice's agent are ready. Every
+//! check is always run, so one report names everything that is wrong.
 
 use std::error::Error;
 use std::fmt;
 use std::time::Duration;
 
 use graph::{FalkorGraph, GraphError};
-use rag_core::{AgentCli, Config, ItemStore, Llm, LlmError, StoreError, error_chain};
+use rag_core::{AgentCli, Config, ItemStore, Llm, LlmError, StoreError, WorkKind, error_chain};
 
 const STORE_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -84,7 +84,7 @@ pub async fn check(config: &Config) -> HealthReport {
         Ok(())
     })
     .await;
-    let agent = AgentCli::from_saved_settings()
+    let agent = AgentCli::for_work(WorkKind::Ingest)
         .check_ready()
         .await
         .map_err(HealthError::from);

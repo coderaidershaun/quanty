@@ -1,6 +1,7 @@
 //! The look of the app at rest is kept as pictures on disk, and a change that moves a pixel by
 //! more than the tolerance fails here until a person looks at the new picture and approves it.
 
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use eframe::egui;
@@ -23,6 +24,9 @@ const FOLDER: &str = "tests/snapshots";
 /// The chip of the figure's result. Its click is what a person does to open the source.
 const FIGURE_CITATION: &str = "Citation 8";
 const START_INGEST: &str = "Start ingest";
+const SHARE: &str = "Share";
+const EXPORT_AS_PDF: &str = "Export as PDF…";
+const MISSING_FOLDER_FILE: &str = "/quanty-no-such-folder/answer.pdf";
 const MAXIMISE: &str = "Maximise";
 /// The pencil of the first media of the scene, whose form is on screen with no scroll.
 const FIRST_MEDIA_PENCIL: &str = "Edit Hawkes Processes in Finance";
@@ -37,6 +41,10 @@ const LIMIT: Duration = Duration::from_secs(5);
 enum Start {
     AsItOpens,
     AfterAClickOnTheFigureCitation,
+    AfterAClickOnShare,
+    /// The save dialog is stood in by a path in a folder that does not exist, so the export
+    /// fails the same way on every machine.
+    AfterAnExportThatFails,
     AfterAClickOnStartIngest,
     AfterAStartThatNeverEnds,
     AfterANewMediaIsTyped,
@@ -56,7 +64,7 @@ struct Row {
     start: Start,
 }
 
-const ROWS: [Row; 19] = [
+static ROWS: &[Row] = &[
     Row {
         picture: "ask-idle",
         scene: "idle",
@@ -74,6 +82,18 @@ const ROWS: [Row; 19] = [
         scene: "black-scholes",
         window: MIN_WINDOW,
         start: Start::AsItOpens,
+    },
+    Row {
+        picture: "ask-share-menu",
+        scene: "black-scholes",
+        window: DEFAULT_WINDOW,
+        start: Start::AfterAClickOnShare,
+    },
+    Row {
+        picture: "ask-export-failed",
+        scene: "black-scholes",
+        window: DEFAULT_WINDOW,
+        start: Start::AfterAnExportThatFails,
     },
     Row {
         picture: "ask-source",
@@ -285,6 +305,14 @@ impl Row {
             Start::AsItOpens | Start::AtTheStallOfItsBuild => {}
             Start::AfterAClickOnTheFigureCitation => {
                 click_the_figure_citation(&mut harness, self.window);
+            }
+            Start::AfterAClickOnShare => click(&mut harness, Role::Button, SHARE),
+            Start::AfterAnExportThatFails => {
+                harness
+                    .state_mut()
+                    .set_save_dialog(|_, _| Some(PathBuf::from(MISSING_FOLDER_FILE)));
+                click(&mut harness, Role::Button, SHARE);
+                click(&mut harness, Role::Button, EXPORT_AS_PDF);
             }
             Start::AfterAClickOnStartIngest => {
                 harness

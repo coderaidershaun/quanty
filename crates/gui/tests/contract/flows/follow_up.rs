@@ -249,7 +249,8 @@ fn copies_reach_the_clipboard(harness: &mut Window) {
         .answer_markdown()
         .expect("an answer to share");
     let texts = copied_by(harness, |harness| {
-        node(harness, Role::Button, "Share").click()
+        click(harness, Role::Button, "Share");
+        node(harness, Role::Button, "Copy as Markdown").click();
     });
     assert_eq!(
         texts,

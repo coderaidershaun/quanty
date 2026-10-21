@@ -1,0 +1,24 @@
+[package]
+name = "export"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+base64.workspace = true
+image.workspace = true
+krilla.workspace = true
+pulldown-cmark.workspace = true
+ratex-layout.workspace = true
+ratex-parser.workspace = true
+ratex-render.workspace = true
+ratex-types.workspace = true
+rustybuzz.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+lopdf.workspace = true
+tempfile.workspace = true
+
+[[test]]
+name = "integration"
+path = "tests/integration/main.rs"

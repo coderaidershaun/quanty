@@ -23,8 +23,9 @@ pub use failure::{Failure, FailureKind, Loadable};
 pub use health::{Service, ServiceState, StartupFacts};
 pub use ids::{ConceptId, DocId, ItemId, NoticeId, RequestId};
 pub use jobs::{
-    ChapterState, DatasetProgress, DatasetReport, DatasetRequest, DatasetStage, IngestOutcome,
-    IngestProgress, IngestReport, IngestRequest, IngestStage, PageToCheck, Preflight,
+    ChapterState, DatasetProgress, DatasetReport, DatasetRequest, DatasetStage, ExportFile,
+    ExportPlace, ExportRequest, IngestOutcome, IngestProgress, IngestReport, IngestRequest,
+    IngestStage, PageToCheck, Preflight,
 };
 pub use library::{
     Catalogue, Category, ChapterLabel, Document, DocumentName, DocumentTagsEdit, ItemCounts, Media,

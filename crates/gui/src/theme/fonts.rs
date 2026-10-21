@@ -7,8 +7,6 @@ use std::sync::{Arc, LazyLock};
 use eframe::egui::epaint::text::VariationCoords;
 use eframe::egui::{FontData, FontDefinitions, FontFamily, FontTweak};
 
-const STIX_MATH: &[u8] = include_bytes!("../../assets/fonts/STIXTwoMath-Regular.otf");
-
 /// A font file for text, and how far down the math fallback is drawn under it, as a share of the
 /// font size. egui centres a fallback font on the line of the font it stands in for, and STIX Two
 /// Math declares a shorter line than these files, so with no shift its signs float above the
@@ -21,11 +19,11 @@ struct TextFile {
 }
 
 const LITERATA: TextFile = TextFile {
-    bytes: include_bytes!("../../assets/fonts/Literata[opsz,wght].ttf"),
+    bytes: export::fonts::LITERATA,
     math_shift: 0.2975,
 };
 const LITERATA_ITALIC: TextFile = TextFile {
-    bytes: include_bytes!("../../assets/fonts/Literata-Italic[opsz,wght].ttf"),
+    bytes: export::fonts::LITERATA_ITALIC,
     math_shift: 0.2975,
 };
 const SOURCE_SANS: TextFile = TextFile {
@@ -33,7 +31,7 @@ const SOURCE_SANS: TextFile = TextFile {
     math_shift: 0.175,
 };
 const SOURCE_CODE: TextFile = TextFile {
-    bytes: include_bytes!("../../assets/fonts/SourceCodePro[wght].ttf"),
+    bytes: export::fonts::SOURCE_CODE,
     math_shift: 0.2185,
 };
 
@@ -86,10 +84,12 @@ impl Face {
 
     /// STIX Two Math, moved down so that its signs stand on the baseline of this face.
     fn math_data(&self) -> Arc<FontData> {
-        Arc::new(FontData::from_static(STIX_MATH).tweak(FontTweak {
-            y_offset_factor: self.file.math_shift,
-            ..FontTweak::default()
-        }))
+        Arc::new(
+            FontData::from_static(export::fonts::STIX_TWO_MATH).tweak(FontTweak {
+                y_offset_factor: self.file.math_shift,
+                ..FontTweak::default()
+            }),
+        )
     }
 }
 

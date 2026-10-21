@@ -65,6 +65,7 @@ impl Failure {
             | FailureKind::ChapterTaken
             | FailureKind::MediaExists
             | FailureKind::SourceMissing
+            | FailureKind::WriteFailed
             | FailureKind::Internal => None,
         }
     }

@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use super::{Handler, Reply};
+use super::{Handler, Reply, exporting};
 use crate::contract::{
     AskDraft, AskMode, Catalogue, Command, DatasetRequest, DocId, Event, Failure, FailureKind,
     Filters, IngestOutcome, IngestRequest, Intent, RequestId, Service, ServiceState, Tab,
@@ -390,6 +390,9 @@ impl Handler for Fake {
     async fn serve(&self, command: Command, reply: Reply) {
         match command {
             Command::Ask { request, ask } => self.ask(request, &ask, &reply).await,
+            Command::Export { request, file } => {
+                exporting::write_file(request, file, &reply).await;
+            }
             Command::LoadPage {
                 request, doc, page, ..
             } => self.load_page(request, doc, page, &reply).await,

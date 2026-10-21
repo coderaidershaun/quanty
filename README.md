@@ -222,7 +222,7 @@ What each crate is, and how a search works step by step, is in [docs/reference.m
 
 | Folder      | What it holds                                                                                                                                                                   |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `crates/`   | Nine crates: `ocr`, `rag-core`, `model-settings`, `graph`, `rag-ingestion`, `rag-retrieval`, `rag-dataset`, `gui` and `mcp`                                                     |
+| `crates/`   | Ten crates: `ocr`, `rag-core`, `model-settings`, `graph`, `rag-ingestion`, `rag-retrieval`, `rag-dataset`, `export`, `gui` and `mcp`                                            |
 | `docs/`     | [reference.md](docs/reference.md), every command in full, [mcp.md](docs/mcp.md), the MCP server in full, and [training.md](docs/training.md), how to train Gemma 4 on a dataset |
 | `samples/`  | The sample PDF and converted sample chapters                                                                                                                                    |
 | `content/`  | The converted documents, in one folder for each media. Made on your machine, not in git                                                                                         |
@@ -259,6 +259,7 @@ The six panels of Ask, every button and every key are in [docs/reference.md](doc
 - Read the answer with its citations, the page each citation stands on, the concept graph, the steps of the search, and questions to ask next.
 - **Answer** costs one Gemini embedding call and one call to the selected model on your selected agent subscription. **Results only** writes no answer and costs the embedding call alone.
 - **Maximise**, at the top right of the page's panel and of the concept graph, gives that panel the whole tab. **Restore**, in the same place, puts every panel back.
+- **Share** opens a menu: **Copy as Markdown**, or **Export as PDF…**, **Export as Markdown…** and **Export as HTML…**, which save the written answer, with its formulas, figures, tables, code and sources, as one file that stands alone. An export is free.
 
 ### Library
 

@@ -3,14 +3,13 @@
 
 use eframe::egui;
 
-use super::pane::{Copied, Pane};
-use super::phase::{AnswerTab, Phase, Written};
+use super::pane::Pane;
+use super::phase::AnswerTab;
+use super::share;
 use crate::contract::Usage;
 use crate::panels::labels::spent_text;
-use crate::theme::{self, Icon, TextRole, color, size, space};
-use crate::widgets::{self, ControlSize, TabStrip};
-
-const SHARE_WIDTH: f32 = 3.0 * size::CONTROL_MD;
+use crate::theme::{self, TextRole, color, size, space};
+use crate::widgets::{self, TabStrip};
 
 pub(super) fn show(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>) {
     let counts = pane.listing.map(|listing| listing.counts);
@@ -45,7 +44,7 @@ pub(super) fn show(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>) {
     let tabs_end = strip.response.rect.right();
     let right = egui::Layout::right_to_left(egui::Align::Center);
     ui.scope_builder(egui::UiBuilder::new().max_rect(row).layout(right), |ui| {
-        share(ui, pane);
+        share::show(ui, pane);
         if let Some(spent) = pane.spent() {
             spent_label(ui, spent, tabs_end);
         }
@@ -56,33 +55,6 @@ pub(super) fn show(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>) {
     let painter = ui.painter();
     let line = theme::hairline(painter, color::HAIRLINE);
     painter.hline(row.left()..=row.right(), row.bottom(), line);
-}
-
-fn share(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>) {
-    let is_copied = pane.view.copied == Some(Copied::Answer);
-    let (label, icon) = if is_copied {
-        ("Copied", Icon::CHECK)
-    } else {
-        ("Share", Icon::SHARE)
-    };
-    let button = widgets::Button::secondary(label)
-        .icon(icon)
-        .size(ControlSize::Small)
-        .min_width(SHARE_WIDTH);
-    let has_answer = matches!(
-        pane.phase,
-        Phase::Found {
-            written: Written::Ready(_)
-        }
-    );
-    let response = ui
-        .add_enabled(has_answer, button)
-        .on_disabled_hover_text("There is no answer to share yet.");
-    if response.clicked() {
-        pane.share();
-    } else if is_copied && !ui.rect_contains_pointer(response.rect) {
-        pane.view.copied = None;
-    }
 }
 
 /// What the ask used, in small words left of Share. It is left out when it would reach the tabs,

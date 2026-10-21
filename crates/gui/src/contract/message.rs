@@ -1,14 +1,16 @@
 //! The messages of the app: what a person asks for (`Intent`), what the backend is told to do
 //! (`Command`), what comes back (`Event`) and what the shared state asks the app to do (`Effect`).
 
+use export::Format;
+
 use super::ask::{Answer, AskDraft, SearchReply};
 use super::concept_graph::ConceptGraph;
 use super::failure::Failure;
 use super::health::{Service, ServiceState};
 use super::ids::{ConceptId, DocId, NoticeId, RequestId};
 use super::jobs::{
-    DatasetProgress, DatasetReport, DatasetRequest, IngestOutcome, IngestProgress, IngestRequest,
-    Preflight,
+    DatasetProgress, DatasetReport, DatasetRequest, ExportFile, ExportRequest, IngestOutcome,
+    IngestProgress, IngestRequest, Preflight,
 };
 use super::library::{Catalogue, DocumentTagsEdit, MediaEdit, NewMedia};
 use super::source::{PageConcept, PageView};
@@ -45,6 +47,13 @@ pub enum Intent {
     FocusAskBar,
     CopyText(String),
     ShareAnswer,
+    /// A panel asks to export a document. The shell asks where to save it.
+    Export(ExportRequest),
+    /// The shell's answer to `PickSavePath`: where the export is written.
+    ExportPathPicked {
+        export: ExportRequest,
+        path: std::path::PathBuf,
+    },
     Ask(AskDraft),
     CancelAsk,
     SelectResult(usize),
@@ -87,6 +96,10 @@ pub enum Command {
     Ask {
         request: RequestId,
         ask: AskDraft,
+    },
+    Export {
+        request: RequestId,
+        file: ExportFile,
     },
     LoadPage {
         request: RequestId,
@@ -140,6 +153,7 @@ impl Command {
     pub fn request(&self) -> RequestId {
         match self {
             Command::Ask { request, .. }
+            | Command::Export { request, .. }
             | Command::LoadPage { request, .. }
             | Command::LoadCatalogue { request }
             | Command::SetDocumentTags { request, .. }
@@ -175,6 +189,11 @@ impl Command {
                     result: Err(failure.clone()),
                 },
             ],
+            Command::Export { request, file } => vec![Event::Exported {
+                request: *request,
+                format: file.format,
+                result: Err(failure.clone()),
+            }],
             Command::LoadPage { request, .. } => vec![
                 Event::Page {
                     request: *request,
@@ -252,6 +271,12 @@ pub enum Event {
         request: RequestId,
         result: Result<Answer, Failure>,
     },
+    /// An export ended: `Ok` holds the path that was written.
+    Exported {
+        request: RequestId,
+        format: Format,
+        result: Result<std::path::PathBuf, Failure>,
+    },
     Page {
         request: RequestId,
         result: Result<PageView, Failure>,
@@ -318,5 +343,7 @@ pub enum Effect {
     Send(Command),
     CopyText(String),
     PickFile,
+    /// Ask where to save an export, and answer with `Intent::ExportPathPicked`.
+    PickSavePath(ExportRequest),
     CloseWindow,
 }

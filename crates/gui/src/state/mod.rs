@@ -5,6 +5,7 @@
 // they all import each other. Separating them means moving every rule onto its own type.
 mod ask;
 mod datasets;
+mod exporting;
 mod health;
 mod ingest;
 mod library;
@@ -13,6 +14,7 @@ mod source;
 
 pub use ask::AskSession;
 pub use datasets::DatasetJob;
+pub use exporting::{ExportJob, ExportState};
 pub use health::{Health, HealthLevel};
 pub use ingest::IngestJob;
 pub use library::{Busy, Library, MediaDelete, MediaEditing, MediaSave};

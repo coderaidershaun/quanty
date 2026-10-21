@@ -4,6 +4,7 @@
 
 mod datasets;
 mod dead_controls;
+mod exporting;
 mod failures;
 mod follow_up;
 mod ingest;

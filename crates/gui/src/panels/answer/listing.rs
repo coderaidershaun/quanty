@@ -68,7 +68,7 @@ impl Row {
             reason: reason(&item.reason),
             score: format!("{:.2}", item.score),
             open_label: format!("Result {}", item.number),
-            caption: caption(item),
+            caption: item.caption(),
         }
     }
 }
@@ -108,22 +108,5 @@ fn reason(reason: &Reason) -> String {
         Reason::Nearest => "Nearest to the question".to_owned(),
         Reason::Concept(name) => format!("Reached through the concept {name}"),
         Reason::Cited { by, label } => format!("Cited by result {by} as {label}"),
-    }
-}
-
-/// Only a figure, a table and a code listing have a caption. A formula shows its label beside it
-/// instead.
-fn caption(item: &ResultItem) -> String {
-    if !matches!(
-        item.kind,
-        ItemKind::Figure | ItemKind::Table | ItemKind::Code
-    ) {
-        return String::new();
-    }
-    match (item.label.as_deref(), item.caption.as_deref()) {
-        (Some(label), Some(caption)) => format!("**{label}** {caption}"),
-        (Some(label), None) => format!("**{label}**"),
-        (None, Some(caption)) => caption.to_owned(),
-        (None, None) => String::new(),
     }
 }

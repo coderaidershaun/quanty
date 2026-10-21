@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use eframe::egui;
+use export::Format;
 
 use super::layout::{self, ShellRects};
 use super::region::region;
@@ -31,6 +32,8 @@ const SOURCE_REGION: &str = "source";
 const GRAPH_REGION: &str = "concept_graph";
 
 type FilePicker = Box<dyn FnMut() -> Option<PathBuf>>;
+/// Asks where to save an export of a kind of file, offering the name it is given.
+type SaveDialog = Box<dyn FnMut(Format, &str) -> Option<PathBuf>>;
 
 pub struct App {
     shared: Shared,
@@ -41,6 +44,7 @@ pub struct App {
     intents: Vec<Intent>,
     effects: Vec<Effect>,
     pick_file: FilePicker,
+    save_dialog: SaveDialog,
     model_picker: super::model_picker::ModelPicker,
 }
 
@@ -73,6 +77,7 @@ impl App {
             intents,
             effects: Vec::new(),
             pick_file: Box::new(|| None),
+            save_dialog: Box::new(|_, _| None),
             model_picker,
         })
     }
@@ -88,6 +93,13 @@ impl App {
     pub fn with_file_picker(mut self, pick: impl FnMut() -> Option<PathBuf> + 'static) -> App {
         self.pick_file = Box::new(pick);
         self
+    }
+
+    pub fn set_save_dialog(
+        &mut self,
+        dialog: impl FnMut(Format, &str) -> Option<PathBuf> + 'static,
+    ) {
+        self.save_dialog = Box::new(dialog);
     }
 
     pub fn is_idle(&self) -> bool {
@@ -112,6 +124,11 @@ impl App {
                     Effect::PickFile => {
                         if let Some(path) = (self.pick_file)() {
                             self.intents.push(Intent::PdfPicked(path));
+                        }
+                    }
+                    Effect::PickSavePath(export) => {
+                        if let Some(path) = (self.save_dialog)(export.format, &export.file_name) {
+                            self.intents.push(Intent::ExportPathPicked { export, path });
                         }
                     }
                 }
@@ -208,10 +225,17 @@ pub fn run(handler: impl Handler, facts: StartupFacts, opening: Vec<Intent>) -> 
         "quanty",
         options,
         Box::new(move |creation| {
-            let app = App::new(creation, handler, facts, opening)?.with_file_picker(|| {
+            let mut app = App::new(creation, handler, facts, opening)?.with_file_picker(|| {
                 rfd::FileDialog::new()
                     .add_filter("PDF", &["pdf"])
                     .pick_file()
+            });
+            app.set_save_dialog(|format, file_name| {
+                rfd::FileDialog::new()
+                    .set_title("Export")
+                    .set_file_name(file_name)
+                    .add_filter(format.name(), &[format.extension()])
+                    .save_file()
             });
             Ok(Box::new(app))
         }),

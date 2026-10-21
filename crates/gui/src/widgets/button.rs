@@ -35,6 +35,7 @@ pub struct Button<'a> {
     is_selected: bool,
     is_loading: bool,
     min_width: f32,
+    is_start_aligned: bool,
     forced: Option<Look>,
 }
 
@@ -60,6 +61,7 @@ impl<'a> Button<'a> {
             is_selected: false,
             is_loading: false,
             min_width: 0.0,
+            is_start_aligned: false,
             forced: None,
         }
     }
@@ -127,6 +129,13 @@ impl<'a> Button<'a> {
         self
     }
 
+    /// The icon and the label start at the left padding and do not stand in the middle, for a
+    /// row of a menu.
+    pub fn start_aligned(mut self) -> Self {
+        self.is_start_aligned = true;
+        self
+    }
+
     /// The height in points, in place of the one its size gives. It is for a button that must
     /// fit inside another control.
     pub(super) fn height(mut self, height: f32) -> Self {
@@ -146,18 +155,23 @@ impl<'a> Button<'a> {
         self.icon.is_some() || self.is_loading
     }
 
+    /// The room left and right of the icon and the label.
+    fn padding(&self) -> f32 {
+        match self.variant {
+            Variant::Ghost => space::SM,
+            _ => space::LG,
+        }
+    }
+
     fn width_for_text(&self, text_width: f32, height: f32) -> f32 {
         // A primary, secondary or danger button with no icon draws its spinner in its wide
         // padding, so it keeps its width while it loads and nothing beside it moves. The padding
         // of a ghost button is too narrow for a spinner, so it makes room for one as for an icon.
-        let (padding, least_width, keeps_icon_room) = match self.variant {
-            Variant::Ghost => (space::SM, 0.0, self.has_icon_room()),
-            _ => (
-                space::LG,
-                MIN_WIDTH_PER_HEIGHT * height,
-                self.icon.is_some(),
-            ),
+        let (least_width, keeps_icon_room) = match self.variant {
+            Variant::Ghost => (0.0, self.has_icon_room()),
+            _ => (MIN_WIDTH_PER_HEIGHT * height, self.icon.is_some()),
         };
+        let padding = self.padding();
         let icon_room = if keeps_icon_room {
             self.size.icon() + space::SM
         } else {
@@ -254,7 +268,11 @@ impl<'a> Button<'a> {
             0.0
         };
         let icon_width = if has_icon { icon_size } else { 0.0 };
-        let mut x = rect.center().x - (icon_width + gap + text_width) / 2.0;
+        let mut x = if self.is_start_aligned {
+            rect.left() + self.padding()
+        } else {
+            rect.center().x - (icon_width + gap + text_width) / 2.0
+        };
         if has_icon {
             let centre = egui::pos2(x + icon_size / 2.0, rect.center().y);
             if self.is_loading {

@@ -8,6 +8,7 @@ mod listing;
 mod pane;
 mod phase;
 mod results;
+mod share;
 mod states;
 
 use eframe::egui;
@@ -15,8 +16,8 @@ use eframe::egui;
 use self::listing::Listing;
 use self::pane::{Pane, View};
 use self::phase::{AnswerTab, Phase};
-use crate::contract::Loadable;
-use crate::panels::PanelCx;
+use crate::contract::{ExportPlace, Loadable};
+use crate::panels::{PanelCx, exporting};
 use crate::theme::space;
 use crate::widgets;
 
@@ -55,6 +56,10 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
         .show(ui, |ui| {
             ui.set_min_size(ui.available_size());
             header::show(ui, &mut pane);
+            let place = ExportPlace::Answer {
+                generation: ask.generation,
+            };
+            exporting::strip(ui, pane.cx, place);
             body(ui, &mut pane);
         });
 }

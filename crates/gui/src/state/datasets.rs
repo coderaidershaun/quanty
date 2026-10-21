@@ -99,12 +99,14 @@ impl Shared {
         result: &Result<DatasetReport, Failure>,
     ) {
         match result {
-            Ok(report) => self.add_notice(
-                NoticeKind::Done,
-                format!("Built {}", report.name),
-                format!("{} Saved in {}.", report.summary(), report.folder.display()),
-                None,
-            ),
+            Ok(report) => {
+                self.add_notice(
+                    NoticeKind::Done,
+                    format!("Built {}", report.name),
+                    format!("{} Saved in {}.", report.summary(), report.folder.display()),
+                    None,
+                );
+            }
             Err(failure) => {
                 self.mark_down(failure);
                 self.add_notice(

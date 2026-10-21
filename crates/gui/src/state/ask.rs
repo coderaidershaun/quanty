@@ -3,11 +3,13 @@
 
 use std::collections::BTreeSet;
 
+use export::{Block, Document, Format, Source, fence_for};
+
 use super::HealthLevel;
 use super::shared::{Shared, push_cancel};
 use crate::contract::{
-    Answer, AnswerBlock, AskDraft, AskMode, Command, ConceptGraph, ConceptId, Effect, Failure,
-    Filters, ItemKind, Loadable, RequestId, ResultItem, SearchReply, Tab,
+    Answer, AnswerBlock, AskDraft, AskMode, Command, ConceptGraph, ConceptId, Effect, ExportPlace,
+    ExportRequest, Failure, Filters, ItemKind, Loadable, RequestId, ResultItem, SearchReply, Tab,
 };
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
@@ -82,6 +84,147 @@ impl AskSession {
         }
         Some(markdown)
     }
+
+    /// The written answer as a document that can be put in a file. `None` exactly when
+    /// `answer_markdown` is `None`.
+    pub fn answer_document(&self) -> Option<Document> {
+        let answer = self.answer.ready()?;
+        if answer.blocks.is_empty() {
+            return None;
+        }
+        let mut blocks = Vec::new();
+        let mut cited = BTreeSet::new();
+        for block in &answer.blocks {
+            match block {
+                AnswerBlock::Heading(heading) => blocks.push(Block::Heading(heading.clone())),
+                AnswerBlock::Paragraph { text, cites } => {
+                    blocks.push(Block::Text {
+                        markdown: dollar_math(text),
+                        cites: cites.clone(),
+                    });
+                    cited.extend(cites);
+                }
+                AnswerBlock::Item(number) => {
+                    if let Some(result) = self.result(*number) {
+                        blocks.extend(card_block(result));
+                        cited.insert(number);
+                    }
+                }
+            }
+        }
+        let sources = cited
+            .into_iter()
+            .filter_map(|number| self.result(*number))
+            .map(|result| Source {
+                number: result.number,
+                text: source_place(result),
+            })
+            .collect();
+        Some(Document {
+            title: answer
+                .title
+                .clone()
+                .unwrap_or_else(|| self.question.clone()),
+            origin: format!("Question: {}", self.question),
+            blocks,
+            sources,
+        })
+    }
+
+    /// What the answer asks of an export as `format`: the document, the file name the save dialog
+    /// offers, and the place that asked. `None` when there is no written answer.
+    pub fn export_request(&self, format: Format) -> Option<ExportRequest> {
+        Some(ExportRequest {
+            format,
+            document: self.answer_document()?,
+            file_name: format.file_name(&self.question),
+            place: ExportPlace::Answer {
+                generation: self.generation,
+            },
+        })
+    }
+}
+
+/// The block that draws the card of a result. A passage has no card.
+fn card_block(result: &ResultItem) -> Option<Block> {
+    let cite = Some(result.number);
+    match result.kind {
+        ItemKind::Formula => Some(Block::Formula {
+            latex: result.text.clone(),
+            label: result.label.clone(),
+            caption: "As printed in the source".to_owned(),
+            cite,
+        }),
+        ItemKind::Figure => Some(Block::Figure {
+            picture: result.image.as_ref().map(|image| image.path.clone()),
+            description: result.text.clone(),
+            caption: result.caption(),
+            cite,
+        }),
+        ItemKind::Table => Some(Block::Table {
+            markdown: result.text.clone(),
+            caption: result.caption(),
+            cite,
+        }),
+        ItemKind::Code => Some(Block::Code {
+            code: result.text.clone(),
+            language: result.language.clone(),
+            caption: result.caption(),
+            cite,
+        }),
+        ItemKind::Chunk => None,
+    }
+}
+
+/// The text of a paragraph for a reader of Markdown with dollar-sign formulas: `\( … \)` becomes
+/// `$…$`, a code span and a backslash escape stay as they are, and any other `$` is escaped so
+/// that an amount of money is not read as the start of a formula.
+fn dollar_math(text: &str) -> String {
+    let characters: Vec<char> = text.chars().collect();
+    let mut converted = String::with_capacity(text.len());
+    let mut at = 0;
+    while at < characters.len() {
+        match characters[at] {
+            '\\' => {
+                if characters.get(at + 1) == Some(&'(')
+                    && let Some(end) = (at + 2..characters.len().saturating_sub(1))
+                        .find(|&i| characters[i] == '\\' && characters[i + 1] == ')')
+                {
+                    let latex: String = characters[at + 2..end].iter().collect();
+                    let latex = latex.trim();
+                    if !latex.is_empty() {
+                        converted.push('$');
+                        converted.push_str(latex);
+                        converted.push('$');
+                        at = end + 2;
+                        continue;
+                    }
+                }
+                converted.push('\\');
+                if let Some(&escaped) = characters.get(at + 1) {
+                    converted.push(escaped);
+                    at += 2;
+                } else {
+                    at += 1;
+                }
+            }
+            '`' => {
+                let end = (at + 2..characters.len()).find(|&i| characters[i] == '`');
+                let stop = end.map_or(at + 1, |end| end + 1);
+                converted.extend(&characters[at..stop]);
+                at = stop;
+            }
+            '$' => {
+                converted.push_str("\\$");
+                at += 1;
+            }
+            other => {
+                converted.push(other);
+                at += 1;
+            }
+        }
+    }
+    converted
 }
 
 fn card_markdown(result: &ResultItem) -> String {
@@ -104,18 +247,8 @@ fn card_markdown(result: &ResultItem) -> String {
     format!("*{}* [{number}]", result.label.as_deref().unwrap_or(name))
 }
 
-/// Three backticks, or one more than the longest run of them in the code, so that a listing that
-/// holds a fence of its own cannot end the block early.
-fn fence_for(code: &str) -> String {
-    let longest_run = code
-        .split(|character| character != '`')
-        .map(str::len)
-        .max()
-        .unwrap_or(0);
-    "`".repeat(longest_run.max(2) + 1)
-}
-
-fn source_line(result: &ResultItem) -> String {
+/// The document and the page as printed, with the label of the item when it has one.
+fn source_place(result: &ResultItem) -> String {
     let pages = match (
         &result.printed_page,
         result.last_page,
@@ -126,11 +259,15 @@ fn source_line(result: &ResultItem) -> String {
         (Some(printed), None, _) => format!("p. {printed}"),
         (None, None, _) => format!("p. position {}", result.page),
     };
-    let mut line = format!("[{}] {}, {pages}", result.number, result.doc_title);
+    let mut place = format!("{}, {pages}", result.doc_title);
     if let Some(label) = &result.label {
-        line.push_str(&format!(" \u{2014} {label}"));
+        place.push_str(&format!(" \u{2014} {label}"));
     }
-    line
+    place
+}
+
+fn source_line(result: &ResultItem) -> String {
+    format!("[{}] {}", result.number, source_place(result))
 }
 
 fn stop_waiting<T>(slot: &mut Loadable<T>) {

@@ -3,6 +3,7 @@
 
 mod chunks;
 mod image;
+mod listings;
 mod pieces;
 
 use ocr::{Chapter, ChapterIndex, DocumentName, PieceId, SectionHeading};
@@ -26,6 +27,9 @@ struct Draft {
     /// Where the item starts. Items are put in reading order by it.
     first_piece: PieceId,
     printed_page: Option<String>,
+    /// Set only when the item runs over page breaks to a later page than the one it starts on.
+    last_page: Option<u32>,
+    last_printed_page: Option<String>,
     kind: ItemKind,
     text: String,
     label: Option<String>,
@@ -43,6 +47,8 @@ impl Draft {
                 doc_title: doc_title.to_owned(),
                 page: self.first_piece.page,
                 printed_page: self.printed_page,
+                last_page: self.last_page,
+                last_printed_page: self.last_printed_page,
                 kind: self.kind,
                 text: self.text,
                 image_path: self.input.image.clone(),
@@ -69,6 +75,7 @@ pub fn chapter_items(chapter: &Chapter) -> Vec<Item> {
             .iter()
             .filter_map(|piece| pieces::piece_draft(chapter, piece, &doc_title)),
     );
+    drafts.extend(listings::listing_drafts(chapter, &doc_title));
     drafts.sort_by_key(|draft| draft.first_piece);
 
     (0u32..)

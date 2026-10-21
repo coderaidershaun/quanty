@@ -192,6 +192,8 @@ impl Fixture {
                 doc_title: document.title.clone(),
                 page: 1,
                 printed_page: Some("1".to_owned()),
+                last_page: None,
+                last_printed_page: None,
                 kind: placed.kind,
                 text: placed.text,
                 image_path: placed.picture,

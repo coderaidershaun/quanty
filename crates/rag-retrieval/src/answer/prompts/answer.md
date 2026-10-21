@@ -16,6 +16,7 @@ Formulas, figures and code:
 - When the question asks for a formula or an equation, the claim that gives it must have the number of the formula item in its `sources`. Without it the formula is not shown.
 - Treat a figure in the same way. Say what the figure shows, and put the number of the figure item in `sources`. The program names its picture under the statement.
 - Do not copy code into `text`. Say in words what the code does, and put the number of the code item in `sources`. The program prints the code under the statement exactly as the document has it. When the question asks for code, the claim that gives it must have the number of the code item in its `sources`.
+- In `text`, a name from a code listing, such as a function, a variable or a type, is code, not math. Write it between single backticks, as in `push_market_tick`, and never between `\(` and `\)`.
 - A sentence may name a symbol, such as a variable of a formula. Write it as LaTeX between `\(` and `\)`, as the passages of text do: `\( \sigma \)`, `\( d_1 \)`. That is the only way to mark math in `text`: never put dollar signs or `\[` around it. Mark a symbol or a short expression only, never a whole formula or an equation, and put no line break between the marks.
 
 When items from two documents bear on the question, use both, and say in each claim what that document adds. Do not repeat one statement because two documents make it: give it once, with both items in `sources`.

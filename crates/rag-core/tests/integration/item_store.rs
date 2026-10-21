@@ -82,6 +82,8 @@ fn point(document: DocId, kind: ItemKind, position: u32) -> ItemPoint {
             doc_title: "A chapter".to_owned(),
             page: 1,
             printed_page: None,
+            last_page: None,
+            last_printed_page: None,
             kind,
             text: format!("item {position}"),
             image_path: None,

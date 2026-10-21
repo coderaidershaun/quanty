@@ -60,6 +60,13 @@ pub(super) struct ItemView {
     /// out when the page shows no number.
     #[serde(skip_serializing_if = "Option::is_none")]
     printed_page: Option<String>,
+    /// The place of the page where a code listing that page breaks cut ends. Left out for every
+    /// other item.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last_page: Option<u32>,
+    /// The number printed on that page.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last_printed_page: Option<String>,
     /// `chunk`, `formula`, `figure`, `table` or `code`.
     kind: String,
     /// The label as printed, such as "(7.3)" or "Figure 13-4". Formulas, figures, tables and code
@@ -171,6 +178,8 @@ impl From<&ItemPayload> for ItemView {
             tags: labels.tags.iter().map(ToString::to_string).collect(),
             page: payload.page,
             printed_page: payload.printed_page.clone(),
+            last_page: payload.last_page,
+            last_printed_page: payload.last_printed_page.clone(),
             kind: payload.kind.as_str().to_owned(),
             label: payload.label.clone(),
             language: payload.language.clone(),

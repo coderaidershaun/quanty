@@ -111,6 +111,8 @@ pub(super) fn result_items(hits: &[SearchHit], facts: Vec<Option<PieceFacts>>) -
                 media: payload.document_labels.media.clone(),
                 page: payload.page,
                 printed_page: payload.printed_page.clone(),
+                last_page: payload.last_page,
+                last_printed_page: payload.last_printed_page.clone(),
                 label: payload.label.clone(),
                 text: payload.text.clone(),
                 language: payload.language.clone(),

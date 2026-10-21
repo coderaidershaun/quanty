@@ -45,7 +45,8 @@ pub struct Claim {
     /// The name of the part of the answer that starts at this claim, such as "Key assumptions".
     /// Most claims have none.
     pub heading: Option<String>,
-    /// One or two sentences. A symbol in it is LaTeX between `\(` and `\)`.
+    /// One or two sentences. A symbol in it is LaTeX between `\(` and `\)`. A name from code in
+    /// it is between backticks.
     pub text: String,
     pub sources: Vec<Source>,
 }
@@ -82,7 +83,7 @@ pub(super) fn read(
     for (index, claim) in reply.claims.iter().enumerate() {
         claims.push(Claim {
             heading: one_line(&claim.heading),
-            text: with_backslashes_restored(&claim.text),
+            text: code_names_out_of_math(&with_backslashes_restored(&claim.text)),
             sources: sources_of(index + 1, &claim.sources, results)?,
         });
     }
@@ -188,6 +189,40 @@ fn with_backslashes_restored(text: &str) -> String {
         follows_backslash = character == '\\' && !follows_backslash;
     }
     restored
+}
+
+/// Writes a name from code that the model put between `\(` and `\)` as code between backticks.
+/// LaTeX sets only one character below the line after `_`, so a part of two or more characters
+/// after an underscore is not a subscript that anyone meant: the span can only be a name.
+fn code_names_out_of_math(text: &str) -> String {
+    let mut written = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some((before, opened)) = rest.split_once("\\(") {
+        let Some((inside, after)) = opened.split_once("\\)") else {
+            break;
+        };
+        written.push_str(before);
+        let content = inside.trim();
+        if is_name_from_code(content) {
+            written.push('`');
+            written.push_str(content);
+            written.push('`');
+        } else {
+            written.push_str("\\(");
+            written.push_str(inside);
+            written.push_str("\\)");
+        }
+        rest = after;
+    }
+    written.push_str(rest);
+    written
+}
+
+fn is_name_from_code(content: &str) -> bool {
+    content
+        .chars()
+        .all(|character| character.is_ascii_alphanumeric() || character == '_')
+        && content.split('_').skip(1).any(|part| part.len() >= 2)
 }
 
 impl fmt::Display for Answer {

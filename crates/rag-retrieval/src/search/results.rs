@@ -61,10 +61,20 @@ pub(crate) fn write_usage(formatter: &mut fmt::Formatter<'_>, usage: &UsageTally
     )
 }
 
+/// The page of the item, or its first and last page when a code listing runs over page breaks.
 pub(crate) fn page_text(payload: &ItemPayload) -> String {
-    match &payload.printed_page {
-        Some(printed) => printed.clone(),
-        None => format!(
+    match (
+        &payload.printed_page,
+        payload.last_page,
+        &payload.last_printed_page,
+    ) {
+        (Some(printed), Some(_), Some(last_printed)) => format!("{printed} to {last_printed}"),
+        (Some(printed), None, _) => printed.clone(),
+        (_, Some(last_page), _) => format!(
+            "{} to {last_page} (positions in the chapter, no printed number)",
+            payload.page
+        ),
+        (None, None, _) => format!(
             "{} (position in the chapter, no printed number)",
             payload.page
         ),

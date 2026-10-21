@@ -159,6 +159,13 @@ pub struct ItemPayload {
     /// The page number as printed, such as "147" or "xii". Use it to cite.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub printed_page: Option<String>,
+    /// The position of the page where the item ends, when that is a later page than `page`. Only a
+    /// code listing that page breaks cut into parts has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_page: Option<u32>,
+    /// The page number printed on that last page.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_printed_page: Option<String>,
     pub kind: ItemKind,
     /// The item as the reader would quote it: the raw LaTeX for a formula, the Markdown body for
     /// a table, the explanation for a figure, the code as printed for code.

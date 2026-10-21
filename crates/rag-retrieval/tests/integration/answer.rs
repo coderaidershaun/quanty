@@ -39,6 +39,8 @@ fn payload(document: &str, title: &str, kind: ItemKind, page: &str, text: &str) 
         doc_title: title.to_owned(),
         page: 1,
         printed_page: Some(page.to_owned()),
+        last_page: None,
+        last_printed_page: None,
         kind,
         text: text.to_owned(),
         image_path: None,
@@ -199,6 +201,8 @@ fn assert_send<T: Send>(value: T) -> T {
 #[tokio::test]
 async fn a_code_item_is_given_with_its_language_and_printed_under_its_source() {
     let code = ItemPayload {
+        last_page: Some(3),
+        last_printed_page: Some("9".to_owned()),
         label: Some("Listing 2.1".to_owned()),
         language: Some("python".to_owned()),
         ..payload("notes", NOTES_TITLE, ItemKind::Code, "7", CODE)
@@ -217,7 +221,7 @@ async fn a_code_item_is_given_with_its_language_and_printed_under_its_source() {
 
     let asked = &llm.questions()[0];
     let code_block = format!(
-        "Item 1\ndocument: {NOTES_TITLE}\npage: 7\nkind: code\nlabel: Listing 2.1\nlanguage: python\ncode:\n{CODE}"
+        "Item 1\ndocument: {NOTES_TITLE}\npage: 7 to 9\nkind: code\nlabel: Listing 2.1\nlanguage: python\ncode:\n{CODE}"
     );
     assert!(
         asked.input.contains(&code_block),
@@ -227,10 +231,11 @@ async fn a_code_item_is_given_with_its_language_and_printed_under_its_source() {
     let printed = written.to_string();
     assert!(
         printed.contains(&format!(
-            "  source: {NOTES_TITLE}, page 7 (code Listing 2.1)\n{CODE}\n"
+            "  source: {NOTES_TITLE}, page 7 to 9 (code Listing 2.1)\n{CODE}\n"
         )),
-        "the code is printed as the document has it, under its source line:\n{printed}"
+        "the code is printed as the document has it, under its source line with both pages:\n{printed}"
     );
+    assert_eq!(printed.matches(CODE).count(), 1, "{printed}");
 }
 
 #[tokio::test]
@@ -348,6 +353,24 @@ async fn a_line_break_between_the_math_marks_is_the_lost_backslash_of_a_command(
         written.claims[0].text,
         "The vega \\( \\nu \\) and the slope \\(\\nabla V\\) are named.\nNothing else is.",
         "a line break before a letter is put back between the marks, and one outside them is kept"
+    );
+}
+
+#[tokio::test]
+async fn a_name_from_code_written_as_math_is_given_as_code() {
+    let llm = replying(json!([
+        {
+            "text": "The producer calls \\( push_market_tick \\), and \\( d_1 \\) and \\( \\sigma_{ij} \\) stay math.",
+            "sources": [1],
+        },
+    ]));
+
+    let written = answer(&llm, QUESTION, &found_items()).await.unwrap();
+
+    assert_eq!(
+        written.claims[0].text,
+        "The producer calls `push_market_tick`, and \\( d_1 \\) and \\( \\sigma_{ij} \\) stay math.",
+        "a math span that can only be a name from code becomes code, and a symbol stays math"
     );
 }
 

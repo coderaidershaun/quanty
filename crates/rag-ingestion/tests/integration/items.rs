@@ -5,12 +5,47 @@ use std::fs;
 use std::path::Path;
 
 use ocr::read_chapter;
-use rag_core::ItemKind;
+use rag_core::{ItemKind, ItemPayload};
 use rag_ingestion::chapter_items;
 use serde_json::{Value, json};
 
 fn write_json(file: &Path, value: &Value) {
     fs::write(file, serde_json::to_string_pretty(value).unwrap()).unwrap();
+}
+
+/// A piece entry of `page.json`. The file is named the way the converter names it.
+fn piece(number: u32, kind: &str, fields: Value) -> Value {
+    let extension = if kind == "code" { "txt" } else { "md" };
+    let mut entry = json!({
+        "number": number,
+        "file": format!("{number:02}-{kind}.{extension}"),
+        "kind": kind,
+    });
+    entry
+        .as_object_mut()
+        .unwrap()
+        .extend(fields.as_object().unwrap().clone());
+    entry
+}
+
+/// A page whose printed number is its position, with each piece and the text of its file.
+fn write_page(chapter: &Path, position: u32, pieces: &[(Value, &str)]) {
+    let page = chapter.join(format!("page-num-{position}"));
+    fs::create_dir(&page).unwrap();
+    let entries: Vec<&Value> = pieces.iter().map(|(entry, _)| entry).collect();
+    write_json(
+        &page.join("page.json"),
+        &json!({
+            "format-version": 1,
+            "page-position": position,
+            "printed-page-number": position.to_string(),
+            "pieces": entries,
+        }),
+    );
+    for (entry, text) in pieces {
+        let file = entry["file"].as_str().unwrap();
+        fs::write(page.join(file), format!("{text}\n")).unwrap();
+    }
 }
 
 #[test]
@@ -159,4 +194,149 @@ fn a_code_piece_becomes_one_code_item() {
         "the code is an item of its own and is not packed into the chunk"
     );
     assert!(!items[0].payload.text.contains("def "), "{items:#?}");
+}
+
+#[test]
+fn a_code_listing_that_page_breaks_cut_is_one_item_from_its_first_page_to_its_last() {
+    let first_part = "template <typename T>\nclass RingBuffer {\npublic:";
+    let second_part = "    bool push(const T& value) noexcept;\n    bool pop(T& out) noexcept;";
+    let third_part = "private:\n    alignas(64) std::atomic<size_t> head_{0};\n};";
+    let caption_opens = "int main() {\n    RingBuffer<int> buffer;\n}";
+    let language_opens = "def feed(buffer):\n    return buffer.pop()";
+    let passage_before = "def drain(buffer):\n    while buffer:\n        buffer.pop()";
+    let label_opens = "print(drain(feed))";
+    let same_page = "print(\"done\")";
+    let folder = tempfile::tempdir().unwrap();
+    write_json(
+        &folder.path().join("chapter.json"),
+        &json!({
+            "format-version": 1,
+            "media-title": "Notes on Listings",
+            "name": { "chapter": { "number": 2, "name": "A Long Listing" } },
+            "source-file": "chapter-2-a-long-listing.pdf",
+            "source-sha256": "1009100910091009100910091009100910091009100910091009100910091009",
+            "page-count": 7,
+            "finished": true,
+        }),
+    );
+    let text = |number| piece(number, "text", json!({}));
+    let code = |number, summary: &str, mut fields: Value| {
+        fields["summary"] = json!(summary);
+        piece(number, "code", fields)
+    };
+    let python = json!({ "language": "python" });
+    write_page(
+        folder.path(),
+        1,
+        &[
+            (text(1), "The listing below is one ring buffer."),
+            (
+                code(2, "S1", json!({ "caption": "C++", "language": "c++" })),
+                first_part,
+            ),
+        ],
+    );
+    // A footnote between two parts does not stop the listing.
+    write_page(
+        folder.path(),
+        2,
+        &[
+            (code(1, "S2", json!({ "language": "c++" })), second_part),
+            (piece(2, "footnote", json!({ "marker": "1" })), "Noexcept."),
+        ],
+    );
+    // A part whose language is not known joins the listing.
+    write_page(folder.path(), 3, &[(code(1, "S3", json!({})), third_part)]);
+    // A caption opens a new listing.
+    write_page(
+        folder.path(),
+        4,
+        &[(
+            code(1, "S4", json!({ "caption": "C++", "language": "c++" })),
+            caption_opens,
+        )],
+    );
+    // Another known language opens a new listing.
+    write_page(
+        folder.path(),
+        5,
+        &[(code(1, "S5", python.clone()), language_opens)],
+    );
+    // A piece other than a footnote between two code pieces opens a new listing.
+    write_page(
+        folder.path(),
+        6,
+        &[
+            (text(1), "Now the buffer is drained."),
+            (code(2, "S6", python.clone()), passage_before),
+        ],
+    );
+    // A label opens a new listing. A code piece on the same page is not a cut, so it opens one too.
+    write_page(
+        folder.path(),
+        7,
+        &[
+            (
+                code(
+                    1,
+                    "S7",
+                    json!({ "label": "Listing 2", "language": "python" }),
+                ),
+                label_opens,
+            ),
+            (code(2, "S8", python), same_page),
+        ],
+    );
+
+    let items = chapter_items(&read_chapter(folder.path()).unwrap());
+
+    let codes: Vec<_> = items
+        .iter()
+        .filter(|item| item.payload.kind == ItemKind::Code)
+        .collect();
+    let texts: Vec<&str> = codes
+        .iter()
+        .map(|item| item.payload.text.as_str())
+        .collect();
+    let joined = format!("{first_part}\n{second_part}\n{third_part}");
+    assert_eq!(
+        texts,
+        [
+            joined.as_str(),
+            caption_opens,
+            language_opens,
+            passage_before,
+            label_opens,
+            same_page
+        ],
+        "{items:#?}"
+    );
+
+    let listing = codes[0];
+    assert_eq!(listing.payload.page, 1);
+    assert_eq!(listing.payload.printed_page.as_deref(), Some("1"));
+    assert_eq!(listing.payload.last_page, Some(3));
+    assert_eq!(listing.payload.last_printed_page.as_deref(), Some("3"));
+    assert_eq!(listing.payload.language.as_deref(), Some("c++"));
+    assert_eq!(listing.payload.label, None);
+    assert_eq!(
+        listing.input.text,
+        format!("C++\n\nLanguage: c++\n\nS1\n\nS2\n\nS3\n\n{joined}")
+    );
+    for alone in &codes[1..] {
+        assert_eq!(alone.payload.last_page, None, "{alone:#?}");
+        assert_eq!(alone.payload.last_printed_page, None, "{alone:#?}");
+    }
+
+    // The JSON of an item on one page is what a point stored before the fields held.
+    let stored = serde_json::to_value(&codes[1].payload).unwrap();
+    assert!(stored.get("last_page").is_none(), "{stored}");
+    assert!(stored.get("last_printed_page").is_none(), "{stored}");
+    assert_eq!(
+        serde_json::from_value::<ItemPayload>(stored).unwrap(),
+        codes[1].payload
+    );
+    let spanning = serde_json::to_value(&listing.payload).unwrap();
+    assert_eq!(spanning["last_page"], json!(3));
+    assert_eq!(spanning["last_printed_page"], json!("3"));
 }

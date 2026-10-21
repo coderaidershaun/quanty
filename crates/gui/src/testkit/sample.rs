@@ -42,6 +42,8 @@ fn result(number: usize, kind: ItemKind, doc: u128, title: &str, text: &str) -> 
         media: None,
         page: 3,
         printed_page: Some("7".to_owned()),
+        last_page: None,
+        last_printed_page: None,
         label: None,
         text: text.to_owned(),
         language: None,

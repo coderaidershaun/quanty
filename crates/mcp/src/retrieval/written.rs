@@ -34,7 +34,8 @@ struct ClaimView {
     /// The name of the part of the answer that starts here, such as "Key assumptions".
     #[serde(skip_serializing_if = "Option::is_none")]
     heading: Option<String>,
-    /// One or two sentences. A symbol in it is LaTeX between `\(` and `\)`.
+    /// One or two sentences. A symbol in it is LaTeX between `\(` and `\)`. A name from code in
+    /// it is between backticks.
     text: String,
     /// The numbers of the `sources` that this statement rests on.
     sources: Vec<usize>,

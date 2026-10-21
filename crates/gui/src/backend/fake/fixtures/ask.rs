@@ -87,6 +87,8 @@ fn item(samples: &Path, number: usize, hit: &Hit) -> Result<ResultItem, SampleEr
         media: page.media.clone(),
         page: hit.page,
         printed_page: page.printed_page.clone(),
+        last_page: None,
+        last_printed_page: None,
         label: piece.label.clone().filter(|_| !is_chunk),
         text: piece.text.clone(),
         language: piece

@@ -101,7 +101,8 @@ impl Chunk {
         Self {
             first_piece: paragraph.pieces[0],
             // SMELL: a chunk that runs over a page break keeps only the page it starts on, so its
-            // text from the next page is cited with the page before. An item holds one page number.
+            // text from the next page is cited with the page before. Only a code listing records
+            // the page it ends on.
             printed_page: paragraph.printed_page.clone(),
             context: paragraph.context.clone(),
             text,
@@ -127,6 +128,8 @@ impl Chunk {
         Draft {
             first_piece: self.first_piece,
             printed_page: self.printed_page,
+            last_page: None,
+            last_printed_page: None,
             kind: ItemKind::Chunk,
             label: None,
             language: None,

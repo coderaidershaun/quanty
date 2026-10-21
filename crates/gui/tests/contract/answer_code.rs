@@ -20,6 +20,8 @@ fn a_code_result_has_its_tab_its_row_its_card_and_its_fence_in_share() {
     listing.label = Some("Listing 2.1".to_owned());
     listing.caption = Some("The call price in Python".to_owned());
     listing.language = Some("python".to_owned());
+    listing.last_page = Some(5);
+    listing.last_printed_page = Some("9".to_owned());
     listing.name = None;
     listing.text = CODE.to_owned();
     reply.results.push(listing);
@@ -88,9 +90,18 @@ fn a_code_result_has_its_tab_its_row_its_card_and_its_fence_in_share() {
         harness.query_by_label(CODE).is_some(),
         "the row shows the code, indented as printed"
     );
+    assert!(
+        harness.query_by_label_contains("pp. 7\u{2013}9").is_some(),
+        "the row names the first and the last page of the listing"
+    );
 
     assert!(
         shared_markdown.contains(&format!("*Listing 2.1* [4]\n\n```python\n{CODE}\n```")),
         "Share fences the code with its language:\n{shared_markdown}"
+    );
+    assert!(
+        shared_markdown
+            .contains("[4] Quanty Sample Notes, chapter 2: Black Scholes In Depth, pp. 7\u{2013}9"),
+        "Share names the first and the last page of the listing:\n{shared_markdown}"
     );
 }

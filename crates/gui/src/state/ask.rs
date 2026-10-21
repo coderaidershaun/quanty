@@ -116,11 +116,17 @@ fn fence_for(code: &str) -> String {
 }
 
 fn source_line(result: &ResultItem) -> String {
-    let page = result
-        .printed_page
-        .clone()
-        .unwrap_or_else(|| format!("position {}", result.page));
-    let mut line = format!("[{}] {}, p. {page}", result.number, result.doc_title);
+    let pages = match (
+        &result.printed_page,
+        result.last_page,
+        &result.last_printed_page,
+    ) {
+        (Some(first), Some(_), Some(last)) => format!("pp. {first}\u{2013}{last}"),
+        (_, Some(last_page), _) => format!("pp. positions {}\u{2013}{last_page}", result.page),
+        (Some(printed), None, _) => format!("p. {printed}"),
+        (None, None, _) => format!("p. position {}", result.page),
+    };
+    let mut line = format!("[{}] {}, {pages}", result.number, result.doc_title);
     if let Some(label) = &result.label {
         line.push_str(&format!(" \u{2014} {label}"));
     }

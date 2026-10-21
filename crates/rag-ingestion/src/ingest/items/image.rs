@@ -36,6 +36,8 @@ pub fn image_items(picture: &LoneImage<'_>) -> Vec<Item> {
             doc_title: doc_title.clone(),
             page: 1,
             printed_page: None,
+            last_page: None,
+            last_printed_page: None,
             kind: ItemKind::Figure,
             text: explanation,
             image_path: Some(image.picture.clone()),

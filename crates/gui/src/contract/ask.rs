@@ -65,6 +65,11 @@ pub struct ResultItem {
     /// Its position in the chapter, counting from 1.
     pub page: u32,
     pub printed_page: Option<String>,
+    /// The position of the page where a code listing that page breaks cut ends. `None` for every
+    /// other item.
+    pub last_page: Option<u32>,
+    /// The number printed on that page.
+    pub last_printed_page: Option<String>,
     pub label: Option<String>,
     /// Chunk Markdown, raw LaTeX, table Markdown, a figure's explanation, or the code as printed.
     pub text: String,

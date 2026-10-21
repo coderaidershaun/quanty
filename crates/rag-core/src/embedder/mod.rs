@@ -109,3 +109,28 @@ pub enum EmbedError {
     #[error("expected vectors of {expected} numbers but the embeddings API sent one of {got}")]
     WrongVectorLength { expected: usize, got: usize },
 }
+
+impl EmbedError {
+    /// True when Google says the prepaid credit is spent: HTTP 402, or the depleted message that
+    /// it also sends with other statuses, such as 429.
+    pub fn is_out_of_credit(&self) -> bool {
+        let Self::Rejected { status, body } = self else {
+            return false;
+        };
+        let body = body.to_lowercase();
+        *status == 402
+            || body.contains("prepayment credits are depleted")
+            || body.contains("prepay credits are depleted")
+    }
+
+    /// True when Google does not accept the key: HTTP 401 or 403, or HTTP 400 with its message
+    /// for an invalid key, because Google answers an invalid key with 400.
+    pub fn is_key_refused(&self) -> bool {
+        let Self::Rejected { status, body } = self else {
+            return false;
+        };
+        matches!(*status, 401 | 403)
+            || (*status == 400
+                && (body.contains("API_KEY_INVALID") || body.contains("API key not valid")))
+    }
+}

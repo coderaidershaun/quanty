@@ -10,7 +10,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 pub(crate) const JEV_API_KEY_VARIABLE: &str = "CONVERTER_JEV_API_KEY";
-const ENDPOINT: &str = "https://api.typesafe.ai/v1/systemone";
+const BASE_URL: &str = "https://api.typesafe.ai/v1";
 // Pinned because the questions were tuned against this version; a newer one may answer differently.
 const MODEL: &str = "jev-1.13.0";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -27,6 +27,7 @@ const WORDS_QUESTION: &str = "Does `line` contain words of an ordinary sentence,
 pub struct Jev {
     http: reqwest::Client,
     api_key: Box<str>,
+    base_url: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -70,6 +71,23 @@ impl JevError {
             }),
         }
     }
+
+    /// True when Jev answered 402, Payment Required. Jev documents no reply at all for spent
+    /// credit, so no other reply is guessed to mean it.
+    pub fn is_out_of_credit(&self) -> bool {
+        matches!(self, Self::Rejected { status: 402, .. })
+    }
+
+    /// True when Jev answered 401 or 403, which means it does not accept the key.
+    pub fn is_key_refused(&self) -> bool {
+        matches!(
+            self,
+            Self::Rejected {
+                status: 401 | 403,
+                ..
+            }
+        )
+    }
 }
 
 // Written by hand so the API key never shows up in logs or debug output. Do not derive it.
@@ -87,12 +105,44 @@ impl Jev {
         Ok(Self {
             http,
             api_key: api_key.into().into_boxed_str(),
+            base_url: BASE_URL.to_owned(),
         })
+    }
+
+    /// Points the client at another server, such as a stand-in in a test. `base_url` is
+    /// everything before `/models` and `/systemone`.
+    pub fn with_base_url(mut self, base_url: &str) -> Self {
+        self.base_url = base_url.trim_end_matches('/').to_owned();
+        self
     }
 
     pub fn from_env() -> Result<Self, JevError> {
         let api_key = std::env::var(JEV_API_KEY_VARIABLE).map_err(|_| JevError::MissingApiKey)?;
         Self::new(api_key)
+    }
+
+    /// Lists the models Jev offers, which uses no tokens, so this costs nothing and is tried
+    /// once. It shows a key Jev refuses. Jev gives no balance, and documents no reply to this read
+    /// for spent credit.
+    ///
+    /// # Errors
+    /// [`JevError::Rejected`] with the status Jev gave, and [`JevError::Http`] when Jev could not
+    /// be reached.
+    pub async fn check_key(&self) -> Result<(), JevError> {
+        let response = self
+            .http
+            .get(format!("{}/models", self.base_url))
+            .bearer_auth(&*self.api_key)
+            .send()
+            .await?;
+        let status = response.status();
+        if status.is_success() {
+            return Ok(());
+        }
+        Err(JevError::Rejected {
+            status: status.as_u16(),
+            body: response.text().await?,
+        })
     }
 
     /// Reports whether `page` holds symbolic math and where it sits. `page` is the text of one
@@ -116,7 +166,7 @@ impl Jev {
         }
         let response = self
             .http
-            .post(ENDPOINT)
+            .post(format!("{}/systemone", self.base_url))
             .bearer_auth(&*self.api_key)
             .json(&request_body(&lines))
             .send()

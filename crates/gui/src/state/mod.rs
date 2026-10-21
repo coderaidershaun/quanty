@@ -4,6 +4,7 @@
 // SMELL: `Shared` holds the type of each file here, and each file adds its rules to `Shared`, so
 // they all import each other. Separating them means moving every rule onto its own type.
 mod ask;
+mod balances;
 mod contents;
 mod datasets;
 mod exporting;
@@ -16,6 +17,7 @@ mod shelf;
 mod source;
 
 pub use ask::AskSession;
+pub use balances::Balances;
 pub use contents::Contents;
 pub use datasets::DatasetJob;
 pub use exporting::{ExportJob, ExportState};

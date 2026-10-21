@@ -1,6 +1,7 @@
 //! The backend that reads the real stores and calls the real models, one module for each kind of
 //! work the window asks for.
 
+mod balances;
 mod chapters;
 mod context;
 mod convert;

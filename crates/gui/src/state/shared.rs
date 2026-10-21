@@ -4,8 +4,8 @@
 use std::path::PathBuf;
 
 use super::{
-    AskSession, Contents, DatasetJob, ExportJob, Health, IngestJob, Insights, Library, Shelf,
-    SourceNav,
+    AskSession, Balances, Contents, DatasetJob, ExportJob, Health, IngestJob, Insights, Library,
+    Shelf, SourceNav,
 };
 use crate::contract::{
     Command, Effect, Event, Failure, Intent, Loadable, Notice, NoticeId, NoticeKind, Panel,
@@ -56,6 +56,7 @@ pub struct Shared {
     /// Newest first, this session only.
     pub notices: Vec<Notice>,
     pub health: Health,
+    pub balances: Balances,
     next_request: u64,
     next_notice: u64,
 }
@@ -69,6 +70,7 @@ impl Shared {
     }
 
     pub fn apply_intent(&mut self, intent: Intent, effects: &mut Vec<Effect>) {
+        let before = self.paid_jobs();
         match intent {
             Intent::OpenTab(tab) => self.open_tab(tab),
             Intent::Maximise(panel) => self.maximised = Some(panel),
@@ -125,11 +127,18 @@ impl Shared {
             Intent::RequestQuit => self.request_quit(effects),
             Intent::ConfirmQuit => self.confirm_quit(effects),
             Intent::DismissQuit => self.quit = Quit::No,
+            Intent::ReadBalances => self.read_balances(effects),
+            Intent::OpenBillingPage(provider) => {
+                effects.push(Effect::OpenUrl(provider.billing_page().to_owned()));
+            }
         }
+        self.read_after_a_paid_job(before, effects);
     }
 
     /// An event whose request is not the one its slot waits for changes nothing.
     pub fn apply_event(&mut self, event: Event, effects: &mut Vec<Effect>) {
+        let before = self.paid_jobs();
+        self.hear_paid_reply(&event);
         match event {
             Event::Search { request, result } => self.search_arrived(request, result, effects),
             Event::Graph { request, result } => self.graph_arrived(request, result),
@@ -184,7 +193,9 @@ impl Shared {
                 service,
                 state,
             } => self.health_arrived(request, service, state),
+            Event::Balances { request, found } => self.balances_arrived(request, found),
         }
+        self.read_after_a_paid_job(before, effects);
     }
 
     pub fn is_at_rest(&self) -> bool {
@@ -197,6 +208,7 @@ impl Shared {
             && self.health.pending.is_none()
             && !self.ingest.is_working()
             && !self.datasets.is_running()
+            && !self.balances.is_reading()
     }
 
     pub(super) fn issue_request(&mut self) -> RequestId {

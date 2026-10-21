@@ -12,7 +12,7 @@ axum = { version = "0.8.9", default-features = false, features = ["http1", "toki
 base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 clap = { version = "4.6.7", default-features = false, features = ["derive", "error-context", "help", "std", "usage"] }
 dotenvy = "0.15.7"
-eframe = { version = "=0.36.2", default-features = false, features = ["accesskit", "default_fonts", "wgpu"] }
+eframe = { version = "=0.36.2", default-features = false, features = ["accesskit", "default_fonts", "links", "wgpu"] }
 egui-phosphor = { version = "=0.14.0", default-features = false, features = ["light"] }
 egui_kittest = { version = "=0.36.2", default-features = false, features = ["eframe", "snapshot", "wgpu"] }
 export = { path = "crates/export" }

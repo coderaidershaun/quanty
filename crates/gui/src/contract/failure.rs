@@ -33,6 +33,8 @@ pub enum FailureKind {
     SourceMissing,
     WriteFailed,
     Internal,
+    EmbeddingOutOfCredit,
+    ConverterOutOfCredit,
 }
 
 impl FailureKind {
@@ -84,6 +86,12 @@ impl FailureKind {
             }
             FailureKind::Internal => {
                 "Something went wrong inside quanty. Try again; if it stays, rest the pointer on this message to read the error."
+            }
+            FailureKind::EmbeddingOutOfCredit => {
+                "Your Google Gemini prepaid credit is used up. Add credit on the billing page linked at the foot of the window, then try again."
+            }
+            FailureKind::ConverterOutOfCredit => {
+                "Your Jev credit is used up. Add credit in the console linked at the foot of the window, then try again."
             }
         }
     }

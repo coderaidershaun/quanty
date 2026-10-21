@@ -25,7 +25,9 @@ pub use ask::{
 pub use concept_graph::{ConceptGraph, EdgeKind, GraphEdge, GraphNode, NodeId, NodeKind};
 pub use contents::{ChapterContents, ChapterItem};
 pub use failure::{Failure, FailureKind, Loadable};
-pub use health::{Service, ServiceState, StartupFacts};
+pub use health::{
+    Balance, BalanceReads, Provider, ReadFailure, Service, ServiceState, StartupFacts,
+};
 pub use ids::{ConceptId, DocId, ItemId, NoticeId, RequestId};
 pub use insights::{ChapterInsights, Insight};
 pub use jobs::{

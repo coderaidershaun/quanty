@@ -1,7 +1,8 @@
 //! Checks the flows that cross two parts of the app, on the whole app: selection, follow-up,
-//! source, failures, ingest, datasets, the library, the model picker, and that no control leads to
-//! a part that is not built.
+//! source, failures, ingest, datasets, the library, the model picker, the footer's balances, and
+//! that no control leads to a part that is not built.
 
+mod balances;
 mod datasets;
 mod dead_controls;
 mod exporting;

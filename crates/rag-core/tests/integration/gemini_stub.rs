@@ -1,5 +1,5 @@
-//! A stand-in for the Gemini embeddings API on a local port, so the retries can be checked without
-//! the network or a key.
+//! A stand-in for the Gemini embeddings API on a local port, so the retries and the key check can
+//! be tried without the network or a key.
 
 use std::sync::{Arc, Mutex};
 
@@ -9,6 +9,11 @@ use tokio::net::{TcpListener, TcpStream};
 
 #[derive(Clone)]
 pub struct RecordedRequest {
+    pub method: String,
+    /// The path with its query, as it was sent.
+    pub target: String,
+    pub api_key: Option<String>,
+    /// `Value::Null` for a request that has no body, such as a GET.
     pub body: Value,
 }
 
@@ -21,21 +26,30 @@ impl GeminiStub {
     /// Answers with `first_statuses` one by one, then with a good reply to every request. A
     /// vector's first value is the last word of the text it is for, read as a number.
     pub async fn start(first_statuses: Vec<u16>) -> GeminiStub {
+        let first_replies = first_statuses
+            .into_iter()
+            .map(|status| (status, "stub"))
+            .collect();
+        GeminiStub::start_answering(first_replies).await
+    }
+
+    /// Like [`GeminiStub::start`], with the error message each failing status carries.
+    pub async fn start_answering(first_replies: Vec<(u16, &'static str)>) -> GeminiStub {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let requests = Arc::new(Mutex::new(Vec::new()));
         let recorded = Arc::clone(&requests);
         tokio::spawn(async move {
-            let mut statuses = first_statuses.into_iter();
+            let mut replies = first_replies.into_iter();
             loop {
                 let (mut socket, _) = listener.accept().await.unwrap();
                 let Some(request) = read_request(&mut socket).await else {
                     continue;
                 };
-                let (status, reply) = match statuses.next() {
-                    Some(status) => (
+                let (status, reply) = match replies.next() {
+                    Some((status, message)) => (
                         status,
-                        json!({"error": {"code": status, "message": "stub"}}),
+                        json!({"error": {"code": status, "message": message}}),
                     ),
                     None => (200, good_reply(&request)),
                 };
@@ -82,7 +96,14 @@ async fn read_request(socket: &mut TcpStream) -> Option<RecordedRequest> {
                 .then(|| value.trim().to_owned())
         })
     };
-    let length: usize = header("content-length")?.parse().ok()?;
+    let request_line = head.lines().next()?;
+    let mut parts = request_line.split_whitespace();
+    let method = parts.next()?.to_owned();
+    let target = parts.next()?.to_owned();
+    let length: usize = match header("content-length") {
+        Some(length) => length.parse().ok()?,
+        None => 0,
+    };
     while received.len() < head_end + length {
         let mut chunk = [0u8; 16384];
         let read = socket.read(&mut chunk).await.ok()?;
@@ -91,8 +112,15 @@ async fn read_request(socket: &mut TcpStream) -> Option<RecordedRequest> {
         }
         received.extend_from_slice(&chunk[..read]);
     }
+    let body = match length {
+        0 => Value::Null,
+        _ => serde_json::from_slice(&received[head_end..head_end + length]).ok()?,
+    };
     Some(RecordedRequest {
-        body: serde_json::from_slice(&received[head_end..head_end + length]).ok()?,
+        method,
+        target,
+        api_key: header("x-goog-api-key"),
+        body,
     })
 }
 

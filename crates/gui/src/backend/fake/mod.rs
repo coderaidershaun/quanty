@@ -1,6 +1,7 @@
 //! A backend that answers every command from built-in data, so the whole app runs with no store
 //! and no model.
 
+mod balances;
 mod fixtures;
 mod library;
 mod scenes;
@@ -429,6 +430,7 @@ impl Handler for Fake {
                 }
             }
             Command::Cancel(_) => {}
+            Command::ReadBalances { request } => self.read_balances(request, &reply).await,
         }
     }
 }

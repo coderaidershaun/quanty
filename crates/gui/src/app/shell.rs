@@ -14,8 +14,8 @@ use crate::backend::{Backend, Handler};
 use crate::contract::{self, Effect, Intent, Panel, StartupFacts};
 use crate::media::Media;
 use crate::panels::{
-    Locals, PanelCx, answer, ask_bar, concept_graph, datasets, follow_up, ingest, library,
-    retrieval_path, source,
+    Locals, PanelCx, answer, ask_bar, balances, concept_graph, datasets, follow_up, ingest,
+    library, retrieval_path, source,
 };
 use crate::state::Shared;
 use crate::theme::{self, color, space};
@@ -65,7 +65,7 @@ impl App {
             let ctx = ctx.clone();
             move || ctx.request_repaint()
         })?;
-        let mut intents = vec![Intent::RefreshCatalogue];
+        let mut intents = vec![Intent::RefreshCatalogue, Intent::ReadBalances];
         intents.extend(opening);
         let model_picker = super::model_picker::ModelPicker::new(&facts);
         Ok(App {
@@ -121,6 +121,7 @@ impl App {
                     Effect::Send(command) => self.backend.send(command),
                     Effect::CopyText(text) => ctx.copy_text(text),
                     Effect::CloseWindow => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+                    Effect::OpenUrl(url) => ctx.open_url(egui::OpenUrl::new_tab(url)),
                     Effect::PickFile => {
                         if let Some(path) = (self.pick_file)() {
                             self.intents.push(Intent::PdfPicked(path));
@@ -165,12 +166,17 @@ impl App {
             .frame(egui::Frame::NONE)
             .show(ui, |ui| {
                 top_bar::draw(ui, rects.top_bar, &mut cx);
-                self.model_picker
-                    .draw(ui, rects.top_bar, self.backend.is_idle(), cx.shared.tab);
+                self.model_picker.draw(
+                    ui,
+                    rects.top_bar,
+                    self.backend.is_idle_but_for_balance_reads(),
+                    cx.shared.tab,
+                );
             });
         egui::CentralPanel::no_frame().show(ui, |ui| {
             ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
             draw_tab(ui, &rects, &mut self.locals, &mut cx);
+            region(ui, "footer", rects.footer, |ui| balances::show(ui, &mut cx));
         });
     }
 }

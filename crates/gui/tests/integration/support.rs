@@ -3,13 +3,15 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use graph::{ConceptNode, FalkorGraph, Mention, Relation, RelationKind};
 use gui::backend::live::{LiveContext, RealServices, Services};
 use gui::contract::{DocId, Failure};
+use ocr::convert::services::{Jev, JevError};
 use ocr::testing::{Scenario, StubServices};
 use ocr::{ChapterIndex, ChapterJob, ConversionSummary, ConvertError, PageProgress};
-use rag_core::{ApiKey, Config, ItemKind, MediaLabels, WorkKind};
+use rag_core::{ApiKey, Config, EmbedError, GeminiEmbedder, ItemKind, MediaLabels, WorkKind};
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores, first_axis, vector_at};
 use rag_ingestion::{ChapterFolder, Item, Models, chapter_items, ingest_chapter};
 use serde_json::json;
@@ -54,6 +56,14 @@ impl Services for StandInServices {
         on_page: &mut (dyn FnMut(PageProgress) + Send),
     ) -> Result<ConversionSummary, ConvertError> {
         ocr::convert::convert_chapter_with_progress(job, &*self.pages, on_page).await
+    }
+
+    async fn check_gemini_key(&self, _key: &ApiKey) -> Result<(), EmbedError> {
+        Ok(())
+    }
+
+    async fn check_jev_key(&self, _key: &ApiKey) -> Result<(), JevError> {
+        Ok(())
     }
 }
 
@@ -116,6 +126,14 @@ impl Services for StandInsOnClosedPorts {
     ) -> Result<ConversionSummary, ConvertError> {
         ocr::convert::convert_chapter_with_progress(job, &*self.pages, on_page).await
     }
+
+    async fn check_gemini_key(&self, _key: &ApiKey) -> Result<(), EmbedError> {
+        Ok(())
+    }
+
+    async fn check_jev_key(&self, _key: &ApiKey) -> Result<(), JevError> {
+        Ok(())
+    }
 }
 
 /// The app after it is started again: a second context made from a throwaway one. It shares
@@ -173,12 +191,100 @@ pub fn closed_ports_config() -> Config {
     }
 }
 
-pub fn closed(content_folder: &Path) -> LiveContext<RealServices> {
+// SMELL: this file is near the 500-line limit, and each new stand-in adds to it. The stand-in key
+// checks below are the part to move out first.
+/// How a key check answers.
+#[derive(Debug, Clone, Copy)]
+pub enum Check {
+    Accepted,
+    Rejected {
+        status: u16,
+        body: &'static str,
+    },
+    /// The real client runs against a port that nothing listens on.
+    Unreachable,
+}
+
+/// `inner` does all the work except the two key checks, which answer as the test chose. No check
+/// ever reaches a provider.
+pub struct KeyChecks<S> {
+    pub inner: S,
+    pub gemini: Check,
+    pub jev: Check,
+}
+
+const CLOSED_PORT: &str = "http://127.0.0.1:1";
+
+impl<S: Services> Services for KeyChecks<S> {
+    type Embedder = S::Embedder;
+    type Llm = S::Llm;
+
+    fn embedder(&self, config: &Config) -> Result<S::Embedder, Failure> {
+        self.inner.embedder(config)
+    }
+
+    fn llm(&self, work: WorkKind) -> S::Llm {
+        self.inner.llm(work)
+    }
+
+    fn graph(&self, config: &Config) -> impl Future<Output = Result<FalkorGraph, Failure>> + Send {
+        self.inner.graph(config)
+    }
+
+    fn convert(
+        &self,
+        job: &ChapterJob,
+        jev_api_key: Option<&str>,
+        on_page: &mut (dyn FnMut(PageProgress) + Send),
+    ) -> impl Future<Output = Result<ConversionSummary, ConvertError>> + Send {
+        self.inner.convert(job, jev_api_key, on_page)
+    }
+
+    async fn check_gemini_key(&self, key: &ApiKey) -> Result<(), EmbedError> {
+        match self.gemini {
+            Check::Accepted => Ok(()),
+            Check::Rejected { status, body } => Err(EmbedError::Rejected {
+                status,
+                body: body.to_owned(),
+            }),
+            Check::Unreachable => {
+                let embedder = GeminiEmbedder::new(key)?;
+                embedder
+                    .with_endpoint(CLOSED_PORT, Duration::ZERO)
+                    .check_key()
+                    .await
+            }
+        }
+    }
+
+    async fn check_jev_key(&self, key: &ApiKey) -> Result<(), JevError> {
+        match self.jev {
+            Check::Accepted => Ok(()),
+            Check::Rejected { status, body } => Err(JevError::Rejected {
+                status,
+                body: body.to_owned(),
+            }),
+            Check::Unreachable => {
+                let jev = Jev::new(key.expose())?;
+                jev.with_base_url(CLOSED_PORT).check_key().await
+            }
+        }
+    }
+}
+
+/// The real services over stores that are down, with key checks that find the provider
+/// unreachable, so that no test reaches a provider.
+pub fn closed(content_folder: &Path) -> LiveContext<KeyChecks<RealServices>> {
     let config = Config {
         content_folder: content_folder.to_path_buf(),
         ..closed_ports_config()
     };
-    LiveContext::new(config, RealServices)
+    let services = KeyChecks {
+        inner: RealServices,
+        gemini: Check::Unreachable,
+        jev: Check::Unreachable,
+    };
+    LiveContext::new(config, services)
 }
 
 /// A committed chapter, as the path that the page carries: ingestion keeps the canonical path of

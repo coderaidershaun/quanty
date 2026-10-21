@@ -1,9 +1,12 @@
-//! Calls the real Jev API on sample pages, because nothing offline can tell whether its answers
-//! still pick out the math, or how it replies to a bad key.
+//! The live tests call the real Jev API on sample pages, because nothing offline can tell whether
+//! its answers still pick out the math, or how it replies to a bad key. The key check is tried
+//! against a stand-in on a local port, so it never reaches the real API.
 
 use std::path::PathBuf;
 
-use ocr::convert::services::{Jev, MathPlacement};
+use ocr::convert::services::{Jev, JevError, MathPlacement};
+
+use crate::jev_stub::JevStub;
 
 const RUN_COMMAND: &str = "set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p ocr --test integration -- --ignored jev::";
 
@@ -59,4 +62,50 @@ async fn contains_math_matches_sample_pages() {
     }
 
     assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
+}
+
+#[tokio::test]
+async fn a_key_check_costs_nothing_and_tells_a_refused_key_from_spent_credit() {
+    let jev_for = |stub: &JevStub| {
+        Jev::new("not-a-real-key")
+            .unwrap()
+            .with_base_url(&stub.base_url())
+    };
+
+    let accepting = JevStub::start(vec![]).await;
+    jev_for(&accepting).check_key().await.unwrap();
+    let requests = accepting.requests();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(
+        requests[0].method, "GET",
+        "listing the models uses no tokens"
+    );
+    assert_eq!(requests[0].target, "/v1/models");
+    assert_eq!(
+        requests[0].authorization.as_deref(),
+        Some("Bearer not-a-real-key")
+    );
+
+    // Status, whether the key is refused, whether the credit is spent.
+    let answers = [
+        (401, true, false),
+        (403, true, false),
+        (402, false, true),
+        (503, false, false),
+    ];
+    for (status, is_key_refused, is_out_of_credit) in answers {
+        let stub = JevStub::start(vec![status]).await;
+        let error = jev_for(&stub).check_key().await.unwrap_err();
+        assert!(
+            matches!(error, JevError::Rejected { status: got, .. } if got == status),
+            "{error:?}"
+        );
+        assert_eq!(error.is_key_refused(), is_key_refused, "{status}");
+        assert_eq!(error.is_out_of_credit(), is_out_of_credit, "{status}");
+        assert_eq!(
+            stub.requests().len(),
+            1,
+            "a check is not repeated, even on {status}"
+        );
+    }
 }

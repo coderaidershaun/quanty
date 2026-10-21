@@ -80,6 +80,7 @@ pub(in crate::backend::fake) fn steps() -> Vec<IngestProgress> {
         at(IngestStage::WritingGraph, every_page.clone()),
         at(IngestStage::Embedding { items: ITEMS }, every_page.clone()),
         at(IngestStage::Storing, every_page.clone()),
+        at(IngestStage::WritingInsights, every_page.clone()),
     ]);
     let quarters = || (1..=4).map(|quarter| ITEMS / 4 * quarter);
     steps.extend(quarters().map(|done| {

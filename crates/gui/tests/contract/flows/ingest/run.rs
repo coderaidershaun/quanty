@@ -272,7 +272,7 @@ struct Shown {
     cost: Option<&'static str>,
 }
 
-fn every_stage() -> [Shown; 12] {
+fn every_stage() -> [Shown; 13] {
     let spent = Some("192k tokens, about $1.68 so far");
     let shown = |progress, words, share, cost| Shown {
         progress,
@@ -360,6 +360,12 @@ fn every_stage() -> [Shown; 12] {
         shown(
             Some(progress(IngestStage::Storing, 12)),
             "Storing the items",
+            None,
+            spent,
+        ),
+        shown(
+            Some(progress(IngestStage::WritingInsights, 12)),
+            "Writing the insights, takeaways and cheat sheet",
             None,
             spent,
         ),

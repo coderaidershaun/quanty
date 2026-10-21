@@ -21,7 +21,8 @@ use serde_json::{Value, json};
 
 pub use decisions::{decision_for_mention, decisions_in, mentions_of};
 pub use rag_ingestion::testing::{
-    StandInEmbedder, StandInLlm, ThrowawayStores, chapter_at, first_axis, vector_at,
+    StandInEmbedder, StandInLlm, ThrowawayStores, chapter_at, first_axis, stand_in_insights_reply,
+    vector_at,
 };
 pub use stand_in_image_services::{CAPTION, LABEL, StandInImageServices};
 
@@ -71,6 +72,15 @@ pub trait RunRagIngest {
         &self,
         arguments: impl IntoIterator<Item = impl AsRef<OsStr>>,
     ) -> Output;
+
+    /// Like [`RunRagIngest::rag_ingest`], with a stand-in `claude` that answers every question
+    /// as the stand-in model answers a question about a whole document. The Ingest choice is
+    /// claude with the model sonnet, and the command starts in the temporary folder, so that it
+    /// finds no saved model choice of this project and starts no other agent.
+    fn rag_ingest_writing_insights(
+        &self,
+        arguments: impl IntoIterator<Item = impl AsRef<OsStr>>,
+    ) -> Output;
 }
 
 impl RunRagIngest for ThrowawayStores {
@@ -88,6 +98,41 @@ impl RunRagIngest for ThrowawayStores {
             .env("CONVERTER_JEV_API_KEY", "not-a-key");
         output_of(command)
     }
+
+    fn rag_ingest_writing_insights(
+        &self,
+        arguments: impl IntoIterator<Item = impl AsRef<OsStr>>,
+    ) -> Output {
+        let mut command = rag_ingest_command(self, arguments);
+        let answer = json!({
+            "type": "result",
+            "subtype": "success",
+            "is_error": false,
+            "structured_output": stand_in_insights_reply(),
+            "total_cost_usd": 0,
+        });
+        fs::write(
+            stand_in_claude_work_folder(self).join("stdout"),
+            answer.to_string(),
+        )
+        .expect("the stand-in answer should be written");
+        command
+            .current_dir(self.temporary_folder())
+            .env("LLM_PROVIDER", "claude")
+            .env("LLM_MODEL", "sonnet");
+        output_of(command)
+    }
+}
+
+/// How many times the command started the stand-in `claude`, the check of the sign-in included.
+pub fn stand_in_claude_runs(stores: &ThrowawayStores) -> usize {
+    fs::read_to_string(stand_in_claude_work_folder(stores).join("calls"))
+        .map(|calls| calls.lines().count())
+        .unwrap_or(0)
+}
+
+fn stand_in_claude_work_folder(stores: &ThrowawayStores) -> PathBuf {
+    stores.temporary_folder().join("stand-in-claude")
 }
 
 fn rag_ingest_command(
@@ -107,7 +152,7 @@ fn output_of(mut command: Command) -> Output {
 }
 
 fn put_stand_in_claude_first(command: &mut Command, stores: &ThrowawayStores) {
-    let work = stores.temporary_folder().join("stand-in-claude");
+    let work = stand_in_claude_work_folder(stores);
     fs::create_dir_all(&work).expect("the stand-in folder should be made");
     fs::write(work.join("stdout"), STAND_IN_ANSWER).expect("the stand-in answer should be written");
     let path = format!(

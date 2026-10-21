@@ -7,6 +7,7 @@ use ocr::convert::CallTally;
 use rag_core::{DocId, ItemKind, ModelUsage, Usage, UsageTally, cost_text};
 
 use super::concepts::ConceptSummary;
+use super::insights::InsightsSummary;
 use super::items::Item;
 
 /// One step of an ingest, told as it happens.
@@ -25,6 +26,9 @@ pub enum IngestStep {
     Embedding { items: usize },
     /// The points are about to be stored.
     Storing,
+    /// The agent of the Ingest choice is about to be asked for the chapter's insights, takeaways
+    /// and cheat sheet.
+    WritingInsights,
     /// `done` of `total` items were read for their concepts (a skipped item counts as read).
     ReadingConcepts { done: usize, total: usize },
     /// The concepts of `done` of `total` read items were written to the graph.
@@ -118,8 +122,11 @@ pub struct IngestSummary {
     /// The count of the whole collection after the run, not only of this chapter.
     pub points_in_collection: u64,
     pub concepts: ConceptSummary,
-    /// What this ingest used: the embedding of its items and concepts and the concept questions,
-    /// and for a picture its conversion.
+    /// What became of the chapter's insights. `None` when this run writes none: a picture that
+    /// stands alone, or an ingest that was given no insights writer.
+    pub insights: Option<InsightsSummary>,
+    /// What this ingest used: the embedding of its items and concepts, the concept questions and
+    /// the insights question, and for a picture its conversion.
     pub usage: UsageTally,
 }
 
@@ -192,6 +199,9 @@ impl IngestSummary {
                 skipped.id,
                 skipped.reason
             )?;
+        }
+        if let Some(insights) = &self.insights {
+            write!(formatter, "\n{}", insights.outcome.line(self.doc_id))?;
         }
         Ok(())
     }

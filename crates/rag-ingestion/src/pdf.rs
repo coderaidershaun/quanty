@@ -1,6 +1,6 @@
 //! Takes one PDF all the way into the stores in one run: name it by the category of its media,
 //! convert its pages, then ingest the converted document. A PDF that is already ingested is not
-//! touched.
+//! converted or stored again; only its missing insights are written.
 
 use std::fmt;
 use std::path::Path;
@@ -9,22 +9,27 @@ use graph::{FalkorGraph, GraphError};
 use ocr::content::parse_chapter_file_name;
 use ocr::{
     ChapterJob, ContentError, ConversionSummary, ConvertError, DocumentName, MediaDocument,
-    PageProgress,
+    PageProgress, gets_insights,
 };
 use rag_core::{Category, DocId, Embedder, Llm, MediaLabels, StoreError, UsageTally};
 
 use crate::ingest::{
-    ChapterFolder, IngestError, IngestStep, IngestSummary, Models, ingest_chapter_reporting,
-    usage_of, write_usage,
+    ChapterFolder, IngestError, IngestStep, IngestSummary, InsightsSummary, InsightsWriter, Meter,
+    Models, OnStep, ingest_chapter_reporting, usage_of, write_usage,
 };
 use crate::media::media_category;
 use crate::stores::Stores;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PdfOutcome {
-    /// Both stores already hold the whole document, so nothing was converted, embedded, asked or
-    /// written.
-    AlreadyIngested { doc_id: DocId, items: u64 },
+    /// Both stores already hold the whole document, so nothing was converted, embedded or stored.
+    /// Its insights were written only when the document gets them and they were not saved yet.
+    /// `insights` says what became of them, and is `None` when the models hold no insights writer.
+    AlreadyIngested {
+        doc_id: DocId,
+        items: u64,
+        insights: Option<InsightsSummary>,
+    },
     /// The chapter was converted, or was found converted, and then ingested.
     Ingested(Box<PdfSummary>),
 }
@@ -40,7 +45,7 @@ pub enum PdfError {
     #[error("could not convert the chapter pdf")]
     Convert(#[from] ConvertError),
 
-    #[error("could not read from the graph whether the document is already ingested")]
+    #[error("could not read the document from the graph")]
     Graph(#[from] GraphError),
 
     #[error("could not check the items collection for the document")]
@@ -93,7 +98,8 @@ pub struct ChapterPdf<'a, C, O> {
     /// hears the count of the pages, then each page as it is cut out and as it ends.
     pub convert: C,
     /// Hears each step of the run as it happens, with what the run used up to and with that step.
-    /// A PDF that is ingested already hears only the check of the stores.
+    /// A PDF that is ingested already hears only the check of the stores, and the writing of its
+    /// insights when it gets them and they are not saved yet.
     pub on_step: O,
 }
 
@@ -102,6 +108,18 @@ impl PdfOutcome {
         match self {
             PdfOutcome::AlreadyIngested { doc_id, .. } => *doc_id,
             PdfOutcome::Ingested(summary) => summary.ingest.doc_id,
+        }
+    }
+
+    /// What the whole run used: for a run that ingested, the conversion and the ingest; for a run
+    /// that found the document ingested, only the insights that it wrote.
+    pub fn usage(&self) -> UsageTally {
+        match self {
+            PdfOutcome::AlreadyIngested { insights, .. } => insights
+                .as_ref()
+                .map(|insights| insights.usage.clone())
+                .unwrap_or_default(),
+            PdfOutcome::Ingested(summary) => summary.usage(),
         }
     }
 }
@@ -132,12 +150,33 @@ impl fmt::Display for PdfSummary {
 impl fmt::Display for PdfOutcome {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PdfOutcome::AlreadyIngested { doc_id, items } => {
+            PdfOutcome::AlreadyIngested {
+                doc_id,
+                items,
+                insights: Some(insights),
+            } if insights.outcome.tried_to_write() => {
+                writeln!(formatter, "document id: {doc_id}")?;
+                writeln!(
+                    formatter,
+                    "already ingested: both stores hold all {items} items of this document, so nothing was converted, embedded or stored"
+                )?;
+                write!(formatter, "{}", insights.outcome.line(*doc_id))?;
+                write_usage(formatter, &insights.usage, insights.usage.cost_usd())
+            }
+            PdfOutcome::AlreadyIngested {
+                doc_id,
+                items,
+                insights,
+            } => {
                 writeln!(formatter, "document id: {doc_id}")?;
                 write!(
                     formatter,
                     "already ingested: both stores hold all {items} items of this document, so nothing was converted, embedded, asked or written"
-                )
+                )?;
+                if let Some(insights) = insights {
+                    write!(formatter, "\n{}", insights.outcome.line(*doc_id))?;
+                }
+                Ok(())
             }
             PdfOutcome::Ingested(summary) => summary.fmt(formatter),
         }
@@ -153,11 +192,13 @@ impl fmt::Display for PdfOutcome {
 /// the ingest used.
 ///
 /// Both stores are checked before the first page is converted, so a store that is down fails the
-/// run before a page is paid for. A second call on the same PDF converts, embeds, asks and
-/// writes nothing. A call that stopped in the conversion, or in the ingest, is finished by the
-/// same call again: the pages that were converted are kept, and an ingest writes the same points
-/// and nodes over themselves. A document that was ingested with an item that was skipped is not
-/// taken as ingested, so the next call asks about that item again.
+/// run before a page is paid for. A second call on the same PDF converts, embeds and stores
+/// nothing, and asks nothing, unless the chapter's insights are not saved yet: then it asks for
+/// those alone and writes only that file. A part of a book that is not a chapter gets no
+/// insights, so it never asks. A call that stopped in the conversion, or in the ingest, is
+/// finished by the same call again: the pages that were converted are kept, and an ingest writes
+/// the same points and nodes over themselves. A document that was ingested with an item that was
+/// skipped is not taken as ingested, so the next call asks about that item again.
 ///
 /// # Errors
 /// - [`PdfError::Convert`] when the PDF cannot be read or converted; a page that fails stops the
@@ -188,9 +229,16 @@ where
     // while Qdrant is down, and so that a collection that was removed counts as holding no points.
     stores.items.ensure_collection().await?;
     if let Some(items) = items_of_ingested_document(document, stores).await? {
+        let insights = match &models.insights {
+            Some(writer) => {
+                Some(insights_of_ingested(writer, job, document, stores, &mut on_step).await?)
+            }
+            None => None,
+        };
         return Ok(PdfOutcome::AlreadyIngested {
             doc_id: document,
             items,
+            insights,
         });
     }
     on_step(IngestStep::OpeningPdf, &UsageTally::default());
@@ -217,6 +265,29 @@ where
         conversion,
         ingest,
     })))
+}
+
+/// The insights of a document that is ingested already: written when they are missing, and not
+/// asked for at all when the document is a part of a book that is not a chapter.
+async fn insights_of_ingested<L: Llm>(
+    writer: &InsightsWriter<L>,
+    job: &ChapterJob,
+    document: DocId,
+    stores: &Stores,
+    on_step: OnStep<'_>,
+) -> Result<InsightsSummary, PdfError> {
+    let category = stores
+        .graph
+        .document(document)
+        .await?
+        .and_then(|node| node.labels.category);
+    if !gets_insights(job.name(), category) {
+        return Ok(InsightsSummary::none_for_book_part());
+    }
+    let mut meter = Meter::new(on_step, UsageTally::default());
+    Ok(writer
+        .write_missing_reporting(&job.chapter_folder(), &mut meter)
+        .await)
 }
 
 impl UnnamedPdf<'_> {

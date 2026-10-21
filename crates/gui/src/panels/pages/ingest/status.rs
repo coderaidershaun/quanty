@@ -114,6 +114,9 @@ fn checked_line(ui: &mut egui::Ui, preflight: &Preflight) {
         Some(ChapterState::Ingested { items }) => Some(format!(
             "Already ingested with {items} items: a start converts nothing and pays for nothing."
         )),
+        Some(ChapterState::IngestedWithoutInsights { items }) => Some(format!(
+            "Already ingested with {items} items, but its insights are not saved yet: a start pays only for the insights, takeaways and cheat sheet."
+        )),
     };
     if let Some(words) = words {
         line.push_str(". ");
@@ -138,6 +141,9 @@ fn stage_words(stage: Option<IngestStage>) -> String {
         IngestStage::WritingGraph => "Writing the graph".to_owned(),
         IngestStage::Embedding { items } => format!("Embedding {items} items"),
         IngestStage::Storing => "Storing the items".to_owned(),
+        IngestStage::WritingInsights => {
+            "Writing the insights, takeaways and cheat sheet".to_owned()
+        }
         IngestStage::ReadingConcepts { done, items } => {
             format!("Reading the concepts — {done} of {items}")
         }

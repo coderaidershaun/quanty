@@ -41,7 +41,7 @@ Nine tools. A tool that costs money says so in its description, and so does this
 | `list_documents` | Every stored document with its media, category, authors, tags and chapter | Nothing |
 | `read_page` | The pieces of one page of a document, in reading order | Nothing, and it needs no store |
 | `health` | Whether Qdrant, FalkorDB and the sign-in of the Ingest choice's agent are ready | Nothing |
-| `ingest_pdf` | Converts one PDF of a media and stores it | **Paid and slow**: Claude, Jev and Gemini; minutes for each PDF |
+| `ingest_pdf` | Converts one PDF of a media, stores it and writes its insights | **Paid and slow**: Claude, Jev and Gemini; minutes for each PDF |
 | `ingest_status` | How an ingest job is going | Nothing |
 | `build_dataset` | Builds a training dataset for Gemma 4 from the converted documents | **Paid and slow** unless `dry_run` is `true`: the agent of the Datasets choice writes every rewritten text and answers every question, which can take hours. A dry run is free |
 | `dataset_status` | How a dataset build is going, and what it spent so far | Nothing |
@@ -140,21 +140,23 @@ Rules:
 - It must be an existing file that starts with `%PDF-` and is at most 50 MiB.
 - An upload (`pdf_base64`) is saved under the content folder, in `_uploads/<media folder>/<file name>`, and never at a path that the caller chooses. A `file_name` with a folder in it is refused.
 - The converted pages are saved under the content folder, in `<media folder>/chapter-<number>/` for a book's chapter and in `<media folder>/<document title folder>/` for any other document, which for a part of a book is `<media folder>/<part title folder>/`, made from the title of the part alone. The folders are made from the titles: lower case, with one dash for each run of characters that are not letters or digits.
+- The ingest also writes `insights.json` in that folder: the insights, the takeaways and the cheat sheet that the agent of the Ingest choice wrote about the whole document, from its converted text, in one question. A document whose file is saved is not asked about again. A part of a book that is not a chapter (its index, table of contents, front cover, glossary or preface) gets no insights and no file, and the agent is not asked; a chapter, and a document of another media such as a paper, does get them. Its fields are in the reference, under "Ingesting a converted document".
 
 The call does not wait for the whole ingest, which takes minutes. It answers once the paid work has begun, with a `job_id` and `state: "running"`. Then the agent asks `ingest_status` with that `job_id` every 20 to 30 seconds until `state` is not `running`. Both tools give the same report: `job_id`, `state`, `media` (the title of the media), `file` (the file name) and, by `state`:
 
 | `state` | Meaning |
 | --- | --- |
-| `running` | Going on. `stage` is `converting` (the pages are read: the slow part) or `ingesting` (the converted document is embedded, stored and searched for concepts). With no `stage` the stores are being checked |
+| `running` | Going on. `stage` is `converting` (the pages are read: the slow part), `ingesting` (the converted document is embedded, stored and searched for concepts) or `writing_insights` (the agent is writing the document's insights, takeaways and cheat sheet, after the items are stored and before the concepts are read). With no `stage` the stores are being checked |
 | `done` | Finished. `document_id`, `items`, `summary` (what `rag-ingest pdf` prints), and `usage` and `cost_usd` (what the whole ingest used, in the shape that `search` gives them) are there |
-| `already_ingested` | Both stores already held this PDF, so nothing was converted or embedded, and it costs nothing. `document_id` and `items` are there. The `document_tags` that were sent are still written |
+| `already_ingested` | Both stores already held this PDF, so nothing was converted, embedded or stored. `document_id` and `items` are there. The `document_tags` that were sent are still written. When the document's `insights.json` was not saved yet, the agent was asked for it: `summary` (with an `insights:` line that says whether the file was written, and why not when it was not) and `usage` and `cost_usd` are there too, and the job was `running` with the stage `writing_insights` while the agent was asked. Otherwise it cost nothing, a part of a book that is not a chapter included, which gets no insights |
 | `failed` | Stopped. `error` says why. Send the same PDF again to go on: converted pages and kept answers are not paid for twice |
 
 Good to know:
 
 - One ingest runs at a time in a server. A second `ingest_pdf` while one runs is refused, and the refusal names the running `job_id`. This holds inside one server only: do not send the same PDF through two servers, or beside `rag-ingest pdf`, at the same time.
 - The graph is read before the PDF is named, because a stored media's category says how the PDF is named. So a store that is down shows before a file name that breaks the rule for a book, as a tool error whose text names the store, says to call `health`, and says to send the same PDF again.
-- A store that is down, a missing Gemini key, and a PDF that is already ingested show in the answer of `ingest_pdf` itself. A missing Jev key, `ANTHROPIC_API_KEY` being set, Poppler not installed, and a file that starts with `%PDF-` but is not a PDF are found only after the paid work has begun. So they show in `ingest_status` as `failed`, or, when they are found at once, in the answer of `ingest_pdf` as a tool error with the same text.
+- A store that is down, a missing Gemini key, and a PDF that is already ingested with its insights saved, or that gets none, show in the answer of `ingest_pdf` itself. A PDF that is already ingested without its insights is answered as `running` with the stage `writing_insights`, and its end is read with `ingest_status`. A missing Jev key, `ANTHROPIC_API_KEY` being set, Poppler not installed, and a file that starts with `%PDF-` but is not a PDF are found only after the paid work has begun. So they show in `ingest_status` as `failed`, or, when they are found at once, in the answer of `ingest_pdf` as a tool error with the same text.
+- A PDF that was ingested before insights were written has no `insights.json`. Sending it again writes that file and nothing else, unless it is a part of a book that is not a chapter, which gets none. To write the files of many stored chapters at once, without sending their PDFs, run `rag-ingest insights --all`; `--dry-run` lists what it would write and costs nothing. The command skips the parts of a book that are not chapters and says so for each.
 - Jobs live in the memory of the server. Over stdio a running job stops when the client closes the server, and a restarted server forgets its job ids. The server keeps only its last 100 jobs: when it holds 100 and a new one starts, the oldest, which has ended, is forgotten. Send the PDF again: a PDF that is ingested is not ingested twice, and a stopped one goes on from where it ended.
 
 ## 5. Building a training dataset

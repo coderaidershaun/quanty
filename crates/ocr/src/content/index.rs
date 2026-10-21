@@ -94,7 +94,7 @@ impl ImageIndex {
     }
 }
 
-fn read_json<T: DeserializeOwned>(path: &Path) -> Result<T, ContentError> {
+pub(super) fn read_json<T: DeserializeOwned>(path: &Path) -> Result<T, ContentError> {
     let text = std::fs::read_to_string(path).map_err(|source| ContentError::Read {
         path: path.to_path_buf(),
         source,
@@ -106,7 +106,7 @@ fn read_json<T: DeserializeOwned>(path: &Path) -> Result<T, ContentError> {
 }
 
 /// Writes pretty json to a neighbouring `.tmp` file and renames it into place.
-fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), ContentError> {
+pub(super) fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), ContentError> {
     let write_error = |source| ContentError::Write {
         path: path.to_path_buf(),
         source,

@@ -8,9 +8,9 @@ use super::{BLOCK_SEPARATOR, Draft, context_line};
 
 const MAX_CHUNK_TOKENS: usize = 500;
 
-/// A rough count, four characters to a token. It only shapes chunks, and the embedding model
-/// accepts far more than a chunk holds, so a better count is not worth a tokenizer.
-fn estimated_tokens(text: &str) -> usize {
+/// A rough count, four characters to a token. It only shapes chunks and bounds the size of a
+/// question, so a better count is not worth a tokenizer.
+pub(crate) fn estimated_tokens(text: &str) -> usize {
     text.chars().count().div_ceil(4)
 }
 

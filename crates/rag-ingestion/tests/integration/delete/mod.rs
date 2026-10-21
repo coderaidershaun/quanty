@@ -88,7 +88,7 @@ fn ids_of(items: &[Item]) -> BTreeSet<String> {
 /// Copies a sample chapter folder, `<media folder>/<document folder>`, to the same two folder
 /// names under the content folder. It copies and never links, so a delete cannot reach the
 /// samples. Returns the folder of the copy.
-fn copy_sample_chapter(sample: &Path, content_folder: &Path) -> PathBuf {
+pub(super) fn copy_sample_chapter(sample: &Path, content_folder: &Path) -> PathBuf {
     let document_folder = sample.file_name().unwrap();
     let media_folder = sample.parent().unwrap().file_name().unwrap();
     let copy = content_folder.join(media_folder).join(document_folder);

@@ -7,7 +7,8 @@ use graph::FalkorGraph;
 use ocr::{ChapterJob, PageProgress};
 use rag_core::{ConceptStore, Config, ItemStore, UsageTally, WorkKind};
 use rag_ingestion::{
-    ChapterPdf, ConceptExtractor, Models, PdfOutcome, Stores, ingest_pdf, relabel_document_tags,
+    ChapterPdf, ConceptExtractor, IngestStep, InsightsWriter, Models, PdfOutcome, Stores,
+    ingest_pdf, relabel_document_tags,
 };
 use tokio::sync::watch;
 
@@ -49,6 +50,7 @@ impl<S: Services> Work<S> {
         let models = Models {
             embedder: services.embedder(&config)?,
             concepts: ConceptExtractor::new(services.llm(WorkKind::Ingest), &config),
+            insights: Some(InsightsWriter::new(services.llm(WorkKind::Ingest))),
         };
         let stores = Stores {
             items: ItemStore::connect(&config).map_err(PdfIngestError::ItemStore)?,
@@ -67,7 +69,14 @@ impl<S: Services> Work<S> {
                         report.send_modify(|report| report.stage = Some(Stage::Ingesting));
                         Ok(summary)
                     },
-                on_step: |_, _: &UsageTally| {},
+                on_step: |step, _: &UsageTally| match step {
+                    IngestStep::WritingInsights => set_stage(&report, Stage::WritingInsights),
+                    // The concepts come after the insights, so the stage goes back to ingesting.
+                    IngestStep::ReadingConcepts { .. } | IngestStep::LinkingConcepts { .. } => {
+                        set_stage(&report, Stage::Ingesting);
+                    }
+                    _ => {}
+                },
             },
             &models,
             &stores,
@@ -81,6 +90,16 @@ impl<S: Services> Work<S> {
         }
         Ok(outcome)
     }
+}
+
+/// Tells the watchers only when the stage changes, because the concept steps come once for each
+/// item.
+fn set_stage(report: &watch::Sender<IngestReport>, stage: Stage) {
+    report.send_if_modified(|report| {
+        let changed = report.stage != Some(stage);
+        report.stage = Some(stage);
+        changed
+    });
 }
 
 fn save(upload: &Upload) -> Result<(), PdfIngestError> {

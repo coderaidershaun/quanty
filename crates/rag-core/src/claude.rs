@@ -15,6 +15,9 @@ use crate::usage::{ModelUsage, Usage, UsageTally};
 
 const STATUS_TIMEOUT: Duration = Duration::from_secs(10);
 const QUESTION_TIMEOUT: Duration = Duration::from_secs(120);
+/// A whole chapter's notes are a long answer, and a model that thinks first can take more than
+/// the usual limit to write them.
+const LONG_QUESTION_TIMEOUT: Duration = Duration::from_secs(300);
 
 const API_KEY_VARIABLE: &str = "ANTHROPIC_API_KEY";
 const API_KEY_SUFFIX: &str = "_API_KEY";
@@ -216,19 +219,30 @@ impl Llm for ClaudeCli {
     }
 
     async fn ask(&self, question: Question<'_>) -> Result<LlmReply, LlmError> {
+        self.ask_within(question, QUESTION_TIMEOUT).await
+    }
+
+    async fn ask_long(&self, question: Question<'_>) -> Result<LlmReply, LlmError> {
+        self.ask_within(question, LONG_QUESTION_TIMEOUT).await
+    }
+}
+
+impl ClaudeCli {
+    async fn ask_within(
+        &self,
+        question: Question<'_>,
+        limit: Duration,
+    ) -> Result<LlmReply, LlmError> {
         if self.api_key_is_set() {
             return Err(LlmError::ApiKeySet);
         }
         let started = Instant::now();
         // Dropping the future of a question that timed out kills the process.
-        let output = tokio::time::timeout(
-            QUESTION_TIMEOUT,
-            run(self.command(question), question.input),
-        )
-        .await
-        .map_err(|_| LlmError::TimedOut {
-            seconds: QUESTION_TIMEOUT.as_secs(),
-        })??;
+        let output = tokio::time::timeout(limit, run(self.command(question), question.input))
+            .await
+            .map_err(|_| LlmError::TimedOut {
+                seconds: limit.as_secs(),
+            })??;
         read_answer(&output, &self.model, started.elapsed())
     }
 }

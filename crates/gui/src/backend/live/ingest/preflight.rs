@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use ocr::content::{PageIndex, page_folder_name};
-use ocr::{ChapterIndex, ChapterJob, ContentError, ConvertError};
+use ocr::{ChapterIndex, ChapterInsights, ChapterJob, ContentError, ConvertError, gets_insights};
 
 use super::{chapter_job, file_name_of};
 use crate::backend::Reply;
@@ -33,14 +33,8 @@ async fn check<S: Services>(
     let ingested = rag_ingestion::items_of_ingested_document(document, &stores)
         .await
         .map_err(|error| cx.failure(error))?;
-    // A start of an ingested document pays for nothing, so nothing can block it.
     if let Some(items) = ingested {
-        return Ok(Preflight {
-            name: ingest.name.clone(),
-            pages: None,
-            state: Some(ChapterState::Ingested { items }),
-            blockers: Vec::new(),
-        });
+        return Ok(ingested_check(cx, ingest, &job, items).await);
     }
     let mut preflight = folder_check(cx, ingest, &job, &source_sha256).await?;
     // The agent is asked last, and only when the folder said nothing that already stops a start.
@@ -50,6 +44,35 @@ async fn check<S: Services>(
         preflight.blockers.push(failure);
     }
     Ok(preflight)
+}
+
+/// A document that is ingested is converted and stored, so a start pays for nothing unless its
+/// insights are not saved: then it pays for those alone, and the agent must be ready. A part of a
+/// book that is not a chapter gets no insights, so a start asks nothing for it.
+async fn ingested_check<S: Services>(
+    cx: &LiveContext<S>,
+    ingest: &IngestRequest,
+    job: &ChapterJob,
+    items: u64,
+) -> Preflight {
+    let mut blockers = Vec::new();
+    let gets = gets_insights(job.name(), Some(ingest.category.into()));
+    // A file that cannot be read counts as none, as it does when the insights are written.
+    let missing = gets && !matches!(ChapterInsights::read(&job.chapter_folder()), Ok(Some(_)));
+    let state = if missing {
+        if let Err(failure) = cx.ingest_agent_ready().await {
+            blockers.push(failure);
+        }
+        ChapterState::IngestedWithoutInsights { items }
+    } else {
+        ChapterState::Ingested { items }
+    };
+    Preflight {
+        name: ingest.name.clone(),
+        pages: None,
+        state: Some(state),
+        blockers,
+    }
 }
 
 /// What the folder of the document says: how far it is converted, or, when it holds another

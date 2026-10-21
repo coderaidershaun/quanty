@@ -127,6 +127,7 @@ fn assert_progress_of_one_run(progress: &[IngestProgress], items: u32, used: &Us
         IngestStage::WritingGraph,
         IngestStage::Embedding { items },
         IngestStage::Storing,
+        IngestStage::WritingInsights,
     ]);
     expected.extend((1..=items).map(|done| IngestStage::ReadingConcepts { done, items }));
     expected.extend((1..=items).map(|done| IngestStage::LinkingConcepts { done, items }));
@@ -295,6 +296,23 @@ async fn a_checked_chapter_is_ingested_with_its_labels_and_a_second_start_finds_
         })
     );
     assert_eq!(pages.calls(), calls_so_far, "no page was converted again");
+
+    // A chapter stored before insights existed has no file: a start writes only that file.
+    let folder = cx.config().content_folder.join(support::SAMPLE_PAGES);
+    let file = folder.join("insights.json");
+    std::fs::remove_file(&file).expect("the first start should have saved the insights");
+    let without = checked(&cx, &wanted).await.unwrap();
+    let (progress, writing) = started(&cx, &wanted).await;
+
+    let missing = ChapterState::IngestedWithoutInsights { items };
+    assert_eq!(without.state, Some(missing));
+    assert!(without.blockers.is_empty(), "{without:?}");
+    let stages: Vec<IngestStage> = progress.iter().map(|progress| progress.stage).collect();
+    let writes_only_the_file = [IngestStage::CheckingStored, IngestStage::WritingInsights];
+    assert_eq!(stages, writes_only_the_file);
+    assert_eq!(writing, again);
+    assert_eq!(pages.calls(), calls_so_far, "no page was converted again");
+    assert!(file.is_file(), "the insights are written again");
 }
 
 #[tokio::test(flavor = "multi_thread")]

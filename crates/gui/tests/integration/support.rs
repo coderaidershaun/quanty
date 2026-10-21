@@ -11,7 +11,7 @@ use ocr::testing::{Scenario, StubServices};
 use ocr::{ChapterIndex, ChapterJob, ConversionSummary, ConvertError, PageProgress};
 use rag_core::{ApiKey, Config, ItemKind, MediaLabels, WorkKind};
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores, first_axis, vector_at};
-use rag_ingestion::{ChapterFolder, Item, chapter_items, ingest_chapter};
+use rag_ingestion::{ChapterFolder, Item, Models, chapter_items, ingest_chapter};
 use serde_json::json;
 
 pub const QUESTION: &str = "How is a call option priced?";
@@ -59,6 +59,17 @@ impl Services for StandInServices {
 
 pub fn context(test_name: &str) -> LiveContext<StandInServices> {
     context_and_pages(test_name).0
+}
+
+/// The models of the live backend with no insights writer. A test that ingests the committed
+/// samples where they are uses these, so that no insights file is written into the samples.
+pub fn models_without_insights(
+    cx: &LiveContext<StandInServices>,
+) -> Models<StandInEmbedder, StandInLlm> {
+    Models {
+        insights: None,
+        ..cx.models().expect("the models should be made")
+    }
 }
 
 /// Also returns the stub pages, so a test can read the calls they got.

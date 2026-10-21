@@ -1,10 +1,12 @@
 //! The saved shape of a converted chapter and of a picture that stands alone: folder and file
-//! names, and the `chapter.json`, `page.json` and `image.json` files that index them.
+//! names, and the `chapter.json`, `page.json` and `image.json` files that index them. It also
+//! holds the `insights.json` that an ingest saves beside `chapter.json`.
 
 mod catalogue;
 mod conversion;
 mod figure_image;
 mod index;
+mod insights;
 mod piece;
 
 use std::path::{Path, PathBuf};
@@ -19,6 +21,7 @@ pub use conversion::{
 pub(crate) use figure_image::figure_image_file_name;
 pub use figure_image::{FigureImage, ImageShows, PageBox};
 pub use index::{ChapterIndex, ImageIndex, PageIndex};
+pub use insights::{ChapterInsights, Insight, gets_insights};
 pub use piece::{Cite, CiteKind, PieceDetail, PieceEntry, Relationship, RelationshipKind, Symbol};
 
 /// Bumped whenever a saved shape changes in a way an older reader would misread.
@@ -229,6 +232,9 @@ pub fn is_partial_page_folder_name(folder_name: &str) -> bool {
 }
 
 pub const CHAPTER_INDEX_FILE: &str = "chapter.json";
+/// What the model wrote about the whole chapter: its insights, takeaways and cheat sheet. It is
+/// written by the ingest, not by the conversion.
+pub const INSIGHTS_FILE: &str = "insights.json";
 pub const PAGE_INDEX_FILE: &str = "page.json";
 pub const PAGE_PDF_FILE: &str = "page.pdf";
 pub const PAGE_IMAGE_FILE: &str = "page.png";

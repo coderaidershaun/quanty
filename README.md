@@ -38,15 +38,15 @@ The saved choices are `.quanty-model.json` in the Quanty home folder. The file h
 `ingest` and `datasets`, one choice for each kind of work, each with `provider`, `model` and
 `thinking`. The desktop app, command line tools, OCR and MCP server read it before creating a model
 client, so no restart is needed. `rag-query` and the MCP `search` and `answer` tools use the Ask
-choice. `rag-ingest` (concepts, `pdf` and `health`), page conversion (`ocr` and the app's ingest)
-and the MCP `ingest_pdf` and `health` tools use the Ingest choice. `rag-dataset` and the MCP
-`build_dataset` tool use the Datasets choice. A file saved by an older version of quanty holds one
-choice and gives it to all three until a tab is changed; the next save writes the three choices. An
-MCP server that is still running from an older version must be restarted. Without that file,
-`LLM_PROVIDER`, `LLM_MODEL` and `LLM_THINKING` in the environment or `.env` set the defaults, the
-same for all three. A saved UI choice takes precedence. Codex defaults to `gpt-6.1-sol` with
-`medium` thinking. Supported levels are `low`, `medium`, `high`, `xhigh`, `max` and, for
-models that support it, `ultra`. `CODEX_BIN` can name a custom Codex executable.
+choice. `rag-ingest` (concepts, the insights of a chapter, `pdf`, `insights` and `health`), page
+conversion (`ocr` and the app's ingest) and the MCP `ingest_pdf` and `health` tools use the Ingest
+choice. `rag-dataset` and the MCP `build_dataset` tool use the Datasets choice. A file saved by an
+older version of quanty holds one choice and gives it to all three until a tab is changed; the next
+save writes the three choices. An MCP server that is still running from an older version must be
+restarted. Without that file, `LLM_PROVIDER`, `LLM_MODEL` and `LLM_THINKING` in the environment or
+`.env` set the defaults, the same for all three. A saved UI choice takes precedence. Codex defaults
+to `gpt-6.1-sol` with `medium` thinking. Supported levels are `low`, `medium`, `high`, `xhigh`,
+`max` and, for models that support it, `ultra`. `CODEX_BIN` can name a custom Codex executable.
 
 PDF pages are rendered locally and attached as images, with their text layer, to headless
 Codex. No model shell tools are needed. Gemini embedding and Jev conversion settings keep
@@ -160,7 +160,9 @@ cargo run --release -p rag-retrieval --bin rag-query -- "What is the Black–Sch
 cargo run --release -p rag-retrieval --bin rag-query -- --document "Option Volatility and Pricing, chapter 1: Sample Pages" "Which pages cover volatility?"
 ```
 
-A 20-page PDF takes about 15 minutes. If it stops, run the same command again and it carries on. On a finished PDF it does nothing and costs nothing.
+A 20-page PDF takes about 15 minutes. If it stops, run the same command again and it carries on. On a finished PDF it does nothing and costs nothing, unless the chapter has no insights yet: then it writes only those.
+
+Every chapter or paper that is ingested also gets a file, `insights.json`, in its folder under `content/`. The model of the Ingest choice writes it from the whole converted text: the insights (short paragraphs, each with the pages it rests on), the takeaways (one line each) and a cheat sheet (headed sections, formulas and small tables). A chapter that has the file is not asked again. A part of a book that is not a chapter, such as its index, table of contents, front cover, glossary or preface, gets none, because it has no argument to summarise: the run says so and asks the model nothing. A paper does get them. A picture that stands alone gets none. Chapters that were ingested before this existed get theirs with `rag-ingest insights`; see [the command](docs/reference.md#writing-the-insights-of-stored-chapters).
 
 <details>
 <summary>What the ingest prints while it runs</summary>
@@ -175,8 +177,9 @@ Its progress goes to standard error, one line for each step. The summary comes l
 6. `writing the graph`
 7. `embedding <n> items`
 8. `storing the items`
-9. `reading the concepts of <n> items`
-10. `linking the concepts of <n> items`
+9. `writing the insights, takeaways and cheat sheet`
+10. `reading the concepts of <n> items`
+11. `linking the concepts of <n> items`
 
 Every line, and when it shows, is in [docs/reference.md](docs/reference.md#ingesting-a-pdf).
 
@@ -272,7 +275,7 @@ The six panels of Ask, every button and every key are in [docs/reference.md](doc
 
 - The **Add media** journey. Choose a media in the **Media** list, or choose **Add new media…**, pick its category, type its title, authors and tags, and press **Save media**.
 - Press **Choose a PDF**. For a book, **Part of the book** offers **Chapter** and **Other part**. A chapter's number and name are filled in from a file named `chapter-<number>-<name>.pdf`. An other part, such as the index or the glossary, takes a **Title**. **Tags for this PDF** are the document's own tags.
-- The check then runs by itself and is free: it says how many pages the PDF has and how many are converted already, or what would stop a start.
+- The check then runs by itself and is free: it says how many pages the PDF has and how many are converted already, or what would stop a start. For a chapter that is stored but has no insights yet, it says that a start pays only for the insights, takeaways and cheat sheet; for a part of a book that is not a chapter it says that a start pays for nothing.
 - **Start ingest** is paid work, the same as `rag-ingest pdf`. Keep the app open while it runs; if it stops, start the same PDF again and it carries on. **Add another PDF** keeps the media chosen for the next PDF.
 
 <details>
@@ -283,7 +286,7 @@ The bar shows the stage and how far it has got:
 1. "Checking what is already stored" and "Opening the PDF"
 2. "Preparing the pages — 7 of 12 ready · about 9%"
 3. "Converting the pages — 3 of 12 done · about 36%", with what the pages have cost so far
-4. The later stages, up to "Linking the concepts"
+4. The later stages, such as "Writing the insights, takeaways and cheat sheet", up to "Linking the concepts"
 
 The percent is an estimate: it runs from the first page cut out to the last page saved.
 
@@ -324,12 +327,12 @@ An agent that can write its own answer should call `search`, not `answer`. The a
 
 Four programs. Every command and flag is in [docs/reference.md](docs/reference.md).
 
-| Program       | What it does                                                                                                                                                                                              |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rag-ingest`  | Checks the services, ingests a PDF or a converted document, changes a media (`media`) or the own tags of a document (`tag`), and deletes a document (`delete-document`) or a whole media (`delete-media`) |
-| `rag-query`   | Asks the stored items of the whole library, or of one document (`--document`), a question, and `--answer` writes an answer                                                                                |
-| `ocr`         | Converts the PDF of a book's chapter into saved files under `content/`, and stores nothing                                                                                                                |
-| `rag-dataset` | Builds a training dataset for Gemma 4 from the converted documents; `--dry-run` plans it for free                                                                                                         |
+| Program       | What it does                                                                                                                                                                                                                                                           |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rag-ingest`  | Checks the services, ingests a PDF or a converted document, writes the missing insights of stored chapters (`insights`), changes a media (`media`) or the own tags of a document (`tag`), and deletes a document (`delete-document`) or a whole media (`delete-media`) |
+| `rag-query`   | Asks the stored items of the whole library, or of one document (`--document`), a question, and `--answer` writes an answer                                                                                                                                             |
+| `ocr`         | Converts the PDF of a book's chapter into saved files under `content/`, and stores nothing                                                                                                                                                                             |
+| `rag-dataset` | Builds a training dataset for Gemma 4 from the converted documents; `--dry-run` plans it for free                                                                                                                                                                      |
 
 Run each one through `cargo`:
 
@@ -350,17 +353,17 @@ These bill for the work that quanty asks of them.
 | --------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | Gemini embeddings           | Your Gemini API key, by the token                        | Every ingest and every question                                                               |
 | Jev                         | Your Jev API key                                         | The pages of a PDF, when they are converted                                                   |
-| `claude` (Haiku and Sonnet) | The subscription `claude` is signed in to, never the API | Converting pages, finding concepts and writing an answer                                      |
+| `claude` (Haiku and Sonnet) | The subscription `claude` is signed in to, never the API | Converting pages, finding concepts, writing the insights of a chapter and writing an answer   |
 | A dataset build             | The subscription of the agent of the Datasets choice, Codex or Claude | `rag-dataset build`, `build_dataset` and **Start build** on the Datasets tab, never a dry run |
 
 Every ingest and every question reports the tokens each model used and about what they cost, such as `cost of this run: ≈ $1.75`. The figure comes from one table of prices per million tokens: it is what the API would charge, not what your subscription bills. The table, its date and how each figure is made are in [docs/reference.md](docs/reference.md#costs).
 
-Converted pages and the answers about concepts are kept on disk, so a run that stopped goes on without paying twice, and a PDF that is already ingested costs nothing. The answers of a dataset build are kept in `DATASET_CACHE_DIR`, so a build asked again does not pay twice. `rag-ingest pdf` checks the Gemini key and both stores before the first page is paid for.
+Converted pages and the answers about concepts are kept on disk, so a run that stopped goes on without paying twice, and a PDF that is already ingested costs nothing once its `insights.json` is saved. `rag-ingest insights` is paid work too, for each chapter whose file is missing, unless it is a dry run. The answers of a dataset build are kept in `DATASET_CACHE_DIR`, so a build asked again does not pay twice. `rag-ingest pdf` checks the Gemini key and both stores before the first page is paid for.
 
 These cost nothing:
 
 - The two stores, which run on your machine.
-- `health`, `--fixture`, `list_documents`, `read_page`, `ingest_status`, `dataset_status`, `media`, `tag`, `delete-document` and `delete-media`.
+- `health`, `--fixture`, `list_documents`, `read_page`, `ingest_status`, `dataset_status`, `media`, `tag`, `delete-document`, `delete-media` and `insights --dry-run`.
 - A dry run of a dataset: `rag-dataset build --dry-run`, `dry_run: true` in `build_dataset`, and the dry-run box of the Datasets tab.
 - The check, every edit and every delete of the desktop app.
 

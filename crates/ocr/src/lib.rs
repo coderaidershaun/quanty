@@ -9,9 +9,9 @@ pub mod reader;
 pub mod testing;
 
 pub use content::{
-    Catalogue, ChapterEntry, ChapterIndex, Cite, CiteKind, ContentError, DocumentName, FigureImage,
-    ImageEntry, ImageIndex, ImageShows, MediaDocument, PageBox, PieceDetail, RelationshipKind,
-    Symbol, saved_images,
+    Catalogue, ChapterEntry, ChapterIndex, ChapterInsights, Cite, CiteKind, ContentError,
+    DocumentName, FigureImage, ImageEntry, ImageIndex, ImageShows, Insight, MediaDocument, PageBox,
+    PieceDetail, RelationshipKind, Symbol, gets_insights, saved_images,
 };
 pub use convert::{
     ChapterJob, ChapterLock, ConversionSummary, ConvertError, ConvertedImage, PageError,

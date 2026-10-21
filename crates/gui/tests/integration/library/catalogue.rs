@@ -21,7 +21,7 @@ use crate::support::{self, IN_DEPTH, INTUITION, SAMPLE_PAGES, copy_folder, sampl
 async fn the_catalogue_joins_stored_documents_with_their_chapter_folders() {
     let cx = support::context("library-join");
     let stores = cx.stores().await.expect("the stores should open");
-    let models = cx.models().expect("the models should be made");
+    let models = support::models_without_insights(&cx);
     let content = cx.config().content_folder.clone();
     // The first chapter is ingested where it is committed, and the graph keeps that folder.
     let intuition = sample_chapter(INTUITION);
@@ -65,7 +65,7 @@ async fn the_catalogue_joins_stored_documents_with_their_chapter_folders() {
 async fn a_chapter_that_is_not_finished_is_not_taken_for_the_folder_of_its_document() {
     let cx = support::context("library-unfinished");
     let stores = cx.stores().await.expect("the stores should open");
-    let models = cx.models().expect("the models should be made");
+    let models = support::models_without_insights(&cx);
     let content = cx.config().content_folder.clone();
     let finished = content.join(IN_DEPTH);
     copy_folder(&sample_chapter(IN_DEPTH), &finished);
@@ -104,7 +104,7 @@ async fn a_saved_book_is_listed_after_a_second_start_shows_its_chapter_and_is_no
     // second one, so a saved book that is only in the memory of the first is not found.
     let first = support::context("library-books");
     let stores = first.stores().await.expect("the stores should open");
-    let models = first.models().expect("the models should be made");
+    let models = support::models_without_insights(&first);
     let sample_pages = sample_chapter(SAMPLE_PAGES);
     let stored = ingest_chapter(chapter_at(&sample_pages), &models, &stores).await;
     stored.expect("the first chapter should be ingested");

@@ -4,13 +4,16 @@
 use super::context::{LiveContext, Services};
 use super::source::PageTarget;
 use super::{datasets, ingest, library, query, source};
-use crate::backend::{Handler, Reply};
+use crate::backend::{Handler, Reply, exporting};
 use crate::contract::{Command, Event, Failure, RequestId, unknown_health};
 
 impl<S: Services> Handler for LiveContext<S> {
     async fn serve(&self, command: Command, reply: Reply) {
         match command {
             Command::Ask { request, ask } => query::ask(self, request, &ask, &reply).await,
+            Command::Export { request, file } => {
+                exporting::write_file(request, file, &reply).await;
+            }
             Command::LoadPage {
                 request,
                 doc,

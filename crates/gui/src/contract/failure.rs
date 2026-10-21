@@ -31,6 +31,7 @@ pub enum FailureKind {
     ChapterTaken,
     MediaExists,
     SourceMissing,
+    WriteFailed,
     Internal,
 }
 
@@ -77,6 +78,9 @@ impl FailureKind {
             }
             FailureKind::SourceMissing => {
                 "The document's files are not where they were. Ingest its PDF again."
+            }
+            FailureKind::WriteFailed => {
+                "The file could not be written. Choose another folder, then export again."
             }
             FailureKind::Internal => {
                 "Something went wrong inside quanty. Try again; if it stays, rest the pointer on this message to read the error."

@@ -4,7 +4,8 @@
 use std::path::PathBuf;
 
 use super::{
-    AskSession, Contents, DatasetJob, Health, IngestJob, Insights, Library, Shelf, SourceNav,
+    AskSession, Contents, DatasetJob, ExportJob, Health, IngestJob, Insights, Library, Shelf,
+    SourceNav,
 };
 use crate::contract::{
     Command, Effect, Event, Failure, Intent, Loadable, Notice, NoticeId, NoticeKind, Panel,
@@ -50,6 +51,8 @@ pub struct Shared {
     pub insights: Insights,
     pub ingest: IngestJob,
     pub datasets: DatasetJob,
+    /// The export being written, or the one that ended last.
+    pub export: Option<ExportJob>,
     /// Newest first, this session only.
     pub notices: Vec<Notice>,
     pub health: Health,
@@ -82,6 +85,8 @@ impl Shared {
                     effects.push(Effect::CopyText(markdown));
                 }
             }
+            Intent::Export(export) => self.ask_where_to_export(export, effects),
+            Intent::ExportPathPicked { export, path } => self.start_export(export, path, effects),
             Intent::Ask(draft) => self.start_ask(draft, effects),
             Intent::CancelAsk => self.cancel_ask(effects),
             Intent::SelectResult(number) => self.select_result(number, effects),
@@ -129,6 +134,11 @@ impl Shared {
             Event::Search { request, result } => self.search_arrived(request, result, effects),
             Event::Graph { request, result } => self.graph_arrived(request, result),
             Event::Answer { request, result } => self.answer_arrived(request, result),
+            Event::Exported {
+                request,
+                format,
+                result,
+            } => self.export_finished(request, format, result),
             Event::Page { request, result } => self.page_arrived(request, result),
             Event::PageConcepts { request, result } => self.page_concepts_arrived(request, result),
             Event::ChapterContents { request, result } => {
@@ -179,6 +189,7 @@ impl Shared {
 
     pub fn is_at_rest(&self) -> bool {
         !self.ask.is_running()
+            && !self.is_exporting()
             && !self.source_is_busy()
             && !self.library_is_busy()
             && !self.contents_is_busy()
@@ -199,12 +210,13 @@ impl Shared {
         title: String,
         detail: String,
         failure: Option<Failure>,
-    ) {
+    ) -> NoticeId {
         self.next_notice += 1;
+        let id = NoticeId(self.next_notice);
         self.notices.insert(
             0,
             Notice {
-                id: NoticeId(self.next_notice),
+                id,
                 kind,
                 title,
                 detail,
@@ -212,6 +224,7 @@ impl Shared {
                 read: false,
             },
         );
+        id
     }
 
     /// A failure also marks its service down, so a failed panel and the health display agree.

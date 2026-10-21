@@ -23,6 +23,7 @@ PDFs are turned into searchable items (text, LaTeX formulas, figures, tables and
 | `rag-ingestion` | Chunking, embedding, concept extraction and resolution, and the insights of a chapter (`rag-ingest`) |
 | `rag-retrieval` | Vector search, graph expansion, ranking, answers with citations (`rag-query`) |
 | `rag-dataset` | Builds Gemma 4 training data from the converted documents: whole sections, synthetic texts, checked fine-tuning examples and a manifest (`rag-dataset`) |
+| `export` | Writes a document, which is a title, blocks of Markdown, formulas, figures, tables and code, and the sources it cites, to one file that stands alone: a PDF, a Markdown file or an HTML file. It depends on no other crate of the workspace and on no window code, so the desktop app uses it today and any other front door can use it. It carries the fonts that its PDFs are printed with |
 | `gui` | The desktop app: a question, its answer with citations, the page each one stands on, the concept graph and the path of the search (`quanty`) |
 | `mcp` | An MCP server, so that an AI agent can search, read pages, get answers, ingest a PDF and build a training dataset (`quanty-mcp`) |
 
@@ -597,7 +598,7 @@ The program is `quanty`, built as `target/release/quanty`. It opens one window w
 | Retrieval Path | The path of the search in five rows, with what each step produced |
 | Follow up | Questions to ask next and a box for your own: each is a new search with the same mode and filters |
 
-The Source panel has the tabs Page, Figures, Formulas, Tables, Code and Concepts, and the Answer panel has Answer, Results, Formulas, Figures, Tables and Code. A tab of a kind is there even when it holds nothing. A code listing is drawn as it was printed, in fixed-width type on a shaded bed, with its language at the right above it; a line that is wider than the room scrolls sideways. A secondary click on it offers **Copy code**. **Share** writes it as a fenced block with its language. A listing that page breaks cut is one result, and its row and its line in **Share** name its first and last page, such as `pp. 155–159`. **Open in Library**, beside **Maximise** in the panel's title, opens the page of the document that the panel shows in the Library tab; it is there while a page is open or loading, and off while the library does not list the document.
+The Source panel has the tabs Page, Figures, Formulas, Tables, Code and Concepts, and the Answer panel has Answer, Results, Formulas, Figures, Tables and Code. A tab of a kind is there even when it holds nothing. A code listing is drawn as it was printed, in fixed-width type on a shaded bed, with its language at the right above it; a line that is wider than the room scrolls sideways. A secondary click on it offers **Copy code**. **Copy as Markdown** in the **Share** menu writes it as a fenced block with its language. A listing that page breaks cut is one result, and its row and its line in that copy name its first and last page, such as `pp. 155–159`. **Open in Library**, beside **Maximise** in the panel's title, opens the page of the document that the panel shows in the Library tab; it is there while a page is open or loading, and off while the library does not list the document.
 
 | Key | What it does |
 | --- | --- |
@@ -606,7 +607,7 @@ The Source panel has the tabs Page, Figures, Formulas, Tables, Code and Concepts
 | `J`, `K` | Next and previous result |
 | `⌘.` or `Esc` | Stop the search or the answer |
 | `Esc` | Put a maximised panel back, when no search or answer is running |
-| `⇧⌘S` | Copy the answer with its citations |
+| `⇧⌘S` | Copy the answer with its citations, as **Copy as Markdown** in **Share** does |
 | `⌘]`, `⌘[` | Next and previous page of the source |
 | `⌘+`, `⌘−`, `⌘0` | Zoom the page while the pointer is over it |
 
@@ -619,6 +620,12 @@ Two other buttons put a view back and leave the panels where they are. **Reset v
 It needs what `rag-query --answer` needs: Qdrant and FalkorDB, `EMBEDDING_GEMINI_API_KEY`, and `claude` signed in with `ANTHROPIC_API_KEY` not set. An ask makes one embedding call and one Sonnet call. In the mode **Results only** it makes the embedding call alone. When a service is not ready, the part of the window that needed it says which one and what to do.
 
 Once the answer has landed, the row of tabs of the Answer panel says what the ask used, left of **Share**, such as `12k tokens, about $0.03`. In the mode **Results only** it says what the search used, such as `12 tokens, under $0.01`. In a window too narrow for it beside the tabs, it is left out.
+
+**Share**, at the right end of the row of tabs of the Answer panel, opens a menu. It is off until the answer is written, and the pointer on it reads "There is no answer to share yet." **Copy as Markdown** copies the answer with its citations, as `⇧⌘S` does: the menu stays open, and the item reads **Copied** until the pointer leaves it. **Export as PDF…**, **Export as Markdown…** and **Export as HTML…** open the save dialog of the system, which offers a name made from the question (without the characters a file name may not hold, and at most 80 characters long) and the extension `.pdf`, `.md` or `.html`. Once a place is chosen, one file is written there, and the dialog asks before it replaces a file of that name. An export is free: it asks no store and no model.
+
+Each file holds the question, the title of the answer, its headings and paragraphs, its formulas, figures, tables and code listings with their captions, the citation numbers as `[1]`, and under "Sources" one line for each source that the answer cites, with the document and the page as printed. A file stands alone: the pictures are inside it, and it needs no network and no other file to be read. The formulas are typeset in the PDF and in the HTML, as pictures in black ink made the way the window makes its formulas, and a formula that cannot be typeset is shown as its LaTeX in code type. The Markdown file keeps them as `$…$` and `$$…$$`, and holds a figure as a data address. The PDF is made in the app, with no outside program: A4 pages with the page number at the foot, the text in Literata, the code in Source Code Pro and the signs that those two lack in STIX Two Math, which are the app's own fonts. A figure is drawn at half the size of its pixels and at most as tall as 45% of the text area of a page. The HTML file has one inline style sheet, names its fonts and carries none, and runs no script.
+
+Only one export is written at a time, and while one is, the three **Export** items are off and the pointer on one reads "A file is being exported." A strip under the row of tabs says how the last export ended, until it is dismissed with its cross: "Exported the answer as PDF" with "Saved to <path>.", or, when the file could not be written, "Could not export the answer as PDF" with the path and the reason that the system gave, such as "No such file or directory".
 
 The program reads `.env`, `content/` and `data/` from its home folder. It finds that folder in this order: the folder given with `--home <folder>`; the folder that `QUANTY_HOME` names; the nearest folder at or above the current one that holds a `.env`; the nearest folder at or above the program's own folder that holds one, which is what a start from Finder uses; and last the current folder, with no `.env`.
 

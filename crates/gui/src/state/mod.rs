@@ -6,6 +6,7 @@
 mod ask;
 mod contents;
 mod datasets;
+mod exporting;
 mod health;
 mod ingest;
 mod insights;
@@ -17,6 +18,7 @@ mod source;
 pub use ask::AskSession;
 pub use contents::Contents;
 pub use datasets::DatasetJob;
+pub use exporting::{ExportJob, ExportState};
 pub use health::{Health, HealthLevel};
 pub use ingest::IngestJob;
 pub use insights::Insights;

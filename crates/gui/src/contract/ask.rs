@@ -84,6 +84,26 @@ pub struct ResultItem {
     pub name: Option<String>,
 }
 
+impl ResultItem {
+    /// The words under a figure, a table or a code listing: `**{label}** {caption}`, either part
+    /// left out when the chapter does not have it. A formula shows its label beside it instead,
+    /// and a passage has no caption.
+    pub fn caption(&self) -> String {
+        if !matches!(
+            self.kind,
+            ItemKind::Figure | ItemKind::Table | ItemKind::Code
+        ) {
+            return String::new();
+        }
+        match (self.label.as_deref(), self.caption.as_deref()) {
+            (Some(label), Some(caption)) => format!("**{label}** {caption}"),
+            (Some(label), None) => format!("**{label}**"),
+            (None, Some(caption)) => caption.to_owned(),
+            (None, None) => String::new(),
+        }
+    }
+}
+
 /// `None` means the search did not reach that step.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct RetrievalTrace {

@@ -3,10 +3,10 @@
 
 use std::path::{Path, PathBuf};
 
-use ocr::content::{CHAPTER_INDEX_FILE, PAGE_IMAGE_FILE, PageIndex, own_title, page_folder_name};
+use ocr::content::{PAGE_IMAGE_FILE, PageIndex, own_title, page_folder_name};
 use ocr::{Chapter, ChapterPiece, ContentError, ImageShows, PieceDetail, ReadChapterError};
 
-use super::chapters::chapters_on_disk;
+use super::chapters::{FolderFault, chapter_folder};
 use super::{LiveContext, Services};
 use crate::backend::Reply;
 use crate::contract::{
@@ -46,7 +46,7 @@ pub async fn load_page<S: Services>(
 #[derive(Debug)]
 enum PageFault {
     Read(ReadChapterError),
-    FolderUnknown,
+    Folder(FolderFault),
     NoSuchPage { page_count: u32 },
 }
 
@@ -66,17 +66,7 @@ impl PageFault {
     fn failure<S: Services>(self, cx: &LiveContext<S>, target: &PageTarget) -> Failure {
         match self {
             PageFault::Read(error) => cx.failure(error),
-            PageFault::FolderUnknown => {
-                let content_folder = &cx.config().content_folder;
-                let searched = content_folder.display();
-                Failure {
-                    detail: format!(
-                        "no folder was found for document {}: none was given that holds a {CHAPTER_INDEX_FILE}, and no converted folder that could be read under {searched} is its own",
-                        target.doc.0
-                    ),
-                    ..Failure::pages_not_found(content_folder)
-                }
-            }
+            PageFault::Folder(fault) => fault.failure(cx, target.doc.into()),
             PageFault::NoSuchPage { page_count } => Failure {
                 detail: format!(
                     "page {} is not in document {}, which has {page_count} pages",
@@ -113,18 +103,12 @@ async fn page_concepts<S: Services>(
         .concepts_on_page(target.doc.into(), target.page)
         .await
         .map_err(|error| cx.failure(error))?;
-    Ok(concepts
-        .into_iter()
-        .map(|node| PageConcept {
-            id: node.id.into(),
-            name: node.name,
-            definition: node.definition,
-        })
-        .collect())
+    Ok(concepts.into_iter().map(PageConcept::from).collect())
 }
 
 fn page_from_disk(target: &PageTarget, content_folder: &Path) -> Result<PageView, PageFault> {
-    let folder = chapter_folder(target, content_folder)?;
+    let folder = chapter_folder(target.doc.into(), target.folder.as_deref(), content_folder)
+        .map_err(PageFault::Folder)?;
     let Chapter { index, pieces } = ocr::read_chapter(&folder)?;
     if !(1..=index.page_count).contains(&target.page) {
         return Err(PageFault::NoSuchPage {
@@ -159,32 +143,6 @@ fn page_from_disk(target: &PageTarget, content_folder: &Path) -> Result<PageView
     })
 }
 
-/// The folder is made canonical, as ingestion does, so a picture has one path whichever way the
-/// folder was found, and one place in the cache of decoded pictures.
-fn chapter_folder(target: &PageTarget, content_folder: &Path) -> Result<PathBuf, PageFault> {
-    let stored = target
-        .folder
-        .as_deref()
-        .filter(|folder| folder.join(CHAPTER_INDEX_FILE).is_file());
-    let folder = match stored {
-        Some(folder) => folder.to_path_buf(),
-        None => {
-            let doc = rag_core::DocId::from(target.doc);
-            let mut found = chapters_on_disk([(doc, None)], content_folder);
-            found
-                .remove(&doc)
-                .map(|entry| entry.folder)
-                .ok_or(PageFault::FolderUnknown)?
-        }
-    };
-    std::fs::canonicalize(&folder).map_err(|source| {
-        PageFault::from(ContentError::Read {
-            path: folder,
-            source,
-        })
-    })
-}
-
 /// The picture of a page, only when the file is there: a chapter written by hand has none.
 fn picture(folder: &Path, page: u32) -> Option<ImageRef> {
     existing(folder.join(page_folder_name(page)).join(PAGE_IMAGE_FILE))
@@ -194,7 +152,7 @@ fn existing(path: PathBuf) -> Option<ImageRef> {
     path.is_file().then_some(ImageRef { path })
 }
 
-fn piece_view(piece: ChapterPiece) -> PagePiece {
+pub(super) fn piece_view(piece: ChapterPiece) -> PagePiece {
     let ChapterPiece {
         id,
         content,

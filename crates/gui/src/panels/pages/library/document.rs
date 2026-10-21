@@ -4,9 +4,10 @@
 use eframe::egui;
 
 use super::{Local, concepts, contents, insights, overview};
-use crate::contract::{Document, DocumentView, Intent, ItemCounts, Media};
+use crate::contract::{Document, DocumentView, Intent, Media};
 use crate::panels::PanelCx;
 use crate::panels::media_card::{self, NO_MEDIA};
+use crate::state::Contents;
 use crate::theme::{TextRole, Tone, space};
 use crate::widgets::{Tab, TabStrip};
 
@@ -62,7 +63,7 @@ fn facts(document: &Document) -> String {
 }
 
 fn strip(ui: &mut egui::Ui, document: &Document, cx: &mut PanelCx<'_>) {
-    let tabs = DocumentView::ALL.map(|view| match count_of(view, &document.items) {
+    let tabs = DocumentView::ALL.map(|view| match count_of(view, document, &cx.shared.contents) {
         Some(count) => Tab::new(view.label()).count(count),
         None => Tab::new(view.label()),
     });
@@ -77,8 +78,23 @@ fn strip(ui: &mut egui::Ui, document: &Document, cx: &mut PanelCx<'_>) {
     }
 }
 
-/// What the catalogue counts for the views that list pieces. The other views have no count.
-fn count_of(view: DocumentView, items: &ItemCounts) -> Option<usize> {
+/// What each view counts: what the views read for this document, once they have read it, and else
+/// what the catalogue counts for the views that list pieces.
+fn count_of(view: DocumentView, document: &Document, contents: &Contents) -> Option<usize> {
+    if contents.is_for(Some(document.id)) {
+        let read = match view.piece_kind() {
+            Some(kind) => contents
+                .items
+                .ready()
+                .map(|chapter| chapter.of_kind(kind).count()),
+            None if view == DocumentView::Concepts => contents.concepts.ready().map(Vec::len),
+            None => None,
+        };
+        if read.is_some() {
+            return read;
+        }
+    }
+    let items = &document.items;
     let count = match view {
         DocumentView::Code => items.code,
         DocumentView::Formulas => items.formulas,

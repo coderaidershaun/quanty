@@ -3,7 +3,6 @@
 mod blocks;
 mod cards;
 mod header;
-mod heights;
 mod listing;
 mod pane;
 mod phase;

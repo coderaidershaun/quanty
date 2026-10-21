@@ -61,6 +61,12 @@ WITH c, count(i) AS mentions
 RETURN c.id, c.name, c.normalised_name, c.definition
 ORDER BY mentions DESC, c.normalised_name";
 
+const CONCEPTS_IN_DOCUMENT: &str = "\
+MATCH (d:Document {id: $document})-[:HAS_ITEM]->(i:Item)-[:MENTIONS]->(c:Concept)
+WITH c, count(i) AS mentions
+RETURN c.id, c.name, c.normalised_name, c.definition
+ORDER BY mentions DESC, c.normalised_name";
+
 impl FalkorGraph {
     /// The concept that has exactly this text as its normalised name or as one of its normalised
     /// aliases, or `None`. The text is compared as it is given, so a name that is not in its
@@ -223,6 +229,28 @@ impl FalkorGraph {
             self,
             "read the concepts that the items on a page mention",
             CONCEPTS_ON_PAGE,
+            parameters,
+        )
+        .await
+    }
+
+    /// The concepts that the items of this document mention, each once. They are ordered by how
+    /// many of its items mention them, the most first, and then by normalised name. A document
+    /// that is not in the graph gives no concept.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   concept
+    pub async fn concepts_in_document(
+        &self,
+        document: DocId,
+    ) -> Result<Vec<ConceptNode>, GraphError> {
+        let parameters = vec![("document", id_value(document))];
+        read_concepts(
+            self,
+            "read the concepts that the items of a document mention",
+            CONCEPTS_IN_DOCUMENT,
             parameters,
         )
         .await

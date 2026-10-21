@@ -4,6 +4,7 @@
 
 pub mod content;
 pub mod convert;
+pub mod items;
 pub mod reader;
 #[cfg(feature = "testing")]
 pub mod testing;
@@ -18,6 +19,7 @@ pub use convert::{
     PageProgress, PopplerError, convert_chapter, convert_chapter_with_jev_key, convert_image,
     pdf_page_count, sha256_hex, try_lock_chapter,
 };
+pub use items::ChapterItem;
 pub use reader::{
     Chapter, ChapterPiece, FigurePicture, PieceId, PieceRelationship, ReadChapterError,
     SectionHeading, read_chapter,

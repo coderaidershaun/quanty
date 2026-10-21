@@ -38,7 +38,7 @@ pub(super) fn show(ui: &mut egui::Ui, tab: CardTab, cx: &mut TabCx<'_>) {
                             .selected(is_marked)
                             .show(ui, |ui| {
                                 ui.set_min_width(ui.available_width());
-                                piece::body(ui, piece, cx);
+                                piece::body(ui, piece, cx.media, cx.intents);
                             })
                     })
                     .inner;

@@ -1,6 +1,7 @@
 //! Hands each command to the part of the live backend that does it. Each part sends its own
 //! events.
 
+use super::contents;
 use super::context::{LiveContext, Services};
 use super::source::PageTarget;
 use super::{balances, datasets, ingest, library, query, source};
@@ -23,11 +24,12 @@ impl<S: Services> Handler for LiveContext<S> {
                 let target = PageTarget { doc, page, folder };
                 source::load_page(self, request, &target, &reply).await;
             }
-            Command::LoadChapterContents { .. } => {
-                send_all(
-                    &reply,
-                    command.failed(&Failure::not_built("the contents of a chapter")),
-                );
+            Command::LoadChapterContents {
+                request,
+                doc,
+                folder,
+            } => {
+                contents::load_chapter_contents(self, request, doc, folder, &reply).await;
             }
             Command::LoadCatalogue { request } => {
                 library::load_catalogue(self, request, &reply).await;

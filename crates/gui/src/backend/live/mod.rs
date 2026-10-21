@@ -3,6 +3,7 @@
 
 mod balances;
 mod chapters;
+mod contents;
 mod context;
 mod convert;
 mod datasets;

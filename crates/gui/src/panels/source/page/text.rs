@@ -42,7 +42,7 @@ fn list_of_pieces(ui: &mut egui::Ui, cx: &mut TabCx<'_>) {
                     .fill(fill)
                     .show(ui, |ui| {
                         ui.set_min_width(ui.available_width());
-                        piece::body(ui, piece, cx);
+                        piece::body(ui, piece, cx.media, cx.intents);
                     });
                 if *cx.reveal == Some(piece.number) {
                     piece::bring_into_view(&framed.response);

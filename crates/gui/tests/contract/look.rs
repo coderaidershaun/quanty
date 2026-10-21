@@ -35,6 +35,9 @@ const FIRST_MEDIA_DELETE: &str = "Delete media Hawkes Processes in Finance";
 /// The row of a book on the shelf, and the row of its first chapter once the book is open.
 const BOOK_ROW: &str = "Option Volatility and Pricing";
 const CHAPTER_ROW: &str = "Chapter 1 · Sample Pages";
+/// The row of the sample notes, and the row of their second chapter once they are open.
+const NOTES_ROW: &str = "Quanty Sample Notes";
+const BLACK_SCHOLES_ROW: &str = "Chapter 2 · Black Scholes In Depth";
 /// The box that finds a media or a chapter on the shelf.
 const FIND_BOX: &str = "Find";
 /// The ingest of its scene stops for ever at page 3, so its bar rests there.
@@ -54,6 +57,12 @@ enum Start {
     AfterAStartThatNeverEnds,
     AfterANewMediaIsTyped,
     AfterAClickOnTheLibraryTab,
+    /// The Library tab, a media row, one of its chapter rows, then a view of the chapter.
+    AfterOpeningAViewOfAChapter {
+        media: &'static str,
+        chapter: &'static str,
+        view: &'static str,
+    },
     AfterAClickOnAMediaPencil,
     AfterAClickOnAMediaDelete,
     AfterAClickOnAChapterRow,
@@ -187,6 +196,36 @@ static ROWS: &[Row] = &[
         start: Start::AfterAClickOnAChapterRow,
     },
     Row {
+        picture: "library-code",
+        scene: "black-scholes",
+        window: DEFAULT_WINDOW,
+        start: Start::AfterOpeningAViewOfAChapter {
+            media: NOTES_ROW,
+            chapter: BLACK_SCHOLES_ROW,
+            view: "Code",
+        },
+    },
+    Row {
+        picture: "library-formulas",
+        scene: "black-scholes",
+        window: DEFAULT_WINDOW,
+        start: Start::AfterOpeningAViewOfAChapter {
+            media: NOTES_ROW,
+            chapter: BLACK_SCHOLES_ROW,
+            view: "Formulas",
+        },
+    },
+    Row {
+        picture: "library-figures",
+        scene: "black-scholes",
+        window: DEFAULT_WINDOW,
+        start: Start::AfterOpeningAViewOfAChapter {
+            media: BOOK_ROW,
+            chapter: CHAPTER_ROW,
+            view: "Figures",
+        },
+    },
+    Row {
         picture: "library-find",
         scene: "black-scholes",
         window: DEFAULT_WINDOW,
@@ -223,6 +262,9 @@ static ROWS: &[Row] = &[
         start: Start::AsItOpens,
     },
 ];
+
+// SMELL: this file is over 400 lines. The steps from here down, which bring the app to each
+// resting state, are the part to move out first.
 
 /// Turns the wheel over the Answer pane until the chip is wholly inside it, then clicks it. A chip
 /// that is cut by the edge of the pane is not what a person clicks.
@@ -364,6 +406,16 @@ impl Row {
             Start::AfterAStartThatNeverEnds => start_an_ingest_that_never_ends(&mut harness),
             Start::AfterANewMediaIsTyped => type_a_new_media(&mut harness),
             Start::AfterAClickOnTheLibraryTab => click(&mut harness, Role::Tab, "Library"),
+            Start::AfterOpeningAViewOfAChapter {
+                media,
+                chapter,
+                view,
+            } => {
+                click(&mut harness, Role::Tab, "Library");
+                click(&mut harness, Role::Button, media);
+                click(&mut harness, Role::Button, chapter);
+                click(&mut harness, Role::Tab, view);
+            }
             Start::AfterAClickOnAMediaPencil => {
                 click(&mut harness, Role::Tab, "Library");
                 click(&mut harness, Role::Button, FIRST_MEDIA_PENCIL);

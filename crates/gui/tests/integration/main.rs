@@ -4,6 +4,7 @@
 
 mod app;
 mod balances;
+mod contents;
 mod copied_rules;
 mod datasets;
 mod ingest;

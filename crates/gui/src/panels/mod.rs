@@ -7,6 +7,7 @@ pub mod balances;
 pub mod concept_graph;
 mod exporting;
 pub mod follow_up;
+mod heights;
 mod labels;
 mod media_card;
 pub mod notices;

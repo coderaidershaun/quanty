@@ -3,12 +3,12 @@
 
 use eframe::egui;
 
-use super::heights::{Heights, Slot};
 use super::listing::Row;
 use super::pane::Pane;
 use super::phase::AnswerTab;
 use crate::contract::{ItemKind, ResultItem};
 use crate::media::{code, images, math, rich_text};
+use crate::panels::heights::{Heights, Slot};
 use crate::theme::{Icon, Kind, TextRole, color, size, space};
 use crate::widgets::{Badge, Card, CitationChip, Placeholder};
 

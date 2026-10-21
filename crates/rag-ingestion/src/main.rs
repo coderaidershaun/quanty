@@ -1,9 +1,10 @@
 //! The `rag-ingest` command: checks that the services are ready, ingests a converted chapter or a
-//! picture, converts and ingests a PDF, relabels a stored media or document, or deletes a
-//! document or a whole media.
+//! picture, converts and ingests a PDF, writes the insights of chapters that are stored already,
+//! relabels a stored media or document, or deletes a document or a whole media.
 
 mod cli;
 mod progress;
+mod stored_insights;
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -17,9 +18,10 @@ use rag_core::{
     MediaLabels, WorkKind,
 };
 use rag_ingestion::{
-    ChapterFolder, ChapterPdf, ConceptExtractor, IngestSummary, LoneImage, MediaChange, Models,
-    NamePdfError, Stores, TagChange, UnnamedPdf, delete_document, delete_media, health,
-    ingest_chapter, ingest_image, ingest_pdf, relabel_document_tags, relabel_media,
+    ChapterFolder, ChapterPdf, ConceptExtractor, IngestSummary, InsightsWriter, LoneImage,
+    MediaChange, Models, NamePdfError, Stores, TagChange, UnnamedPdf, delete_document,
+    delete_media, health, ingest_chapter, ingest_image, ingest_pdf, relabel_document_tags,
+    relabel_media,
 };
 use tracing::Level;
 use tracing_subscriber::filter::Targets;
@@ -64,6 +66,10 @@ async fn run(cli: Cli) -> Result<ExitCode> {
         (Some(Command::Pdf(given)), _) => {
             convert_and_ingest(&given).await.map(|()| ExitCode::SUCCESS)
         }
+        (Some(Command::Insights(given)), _) if given.dry_run => {
+            stored_insights::list(given.choice()).await
+        }
+        (Some(Command::Insights(given)), _) => stored_insights::write(given.choice()).await,
         (
             Some(Command::Tag {
                 document_id,
@@ -109,6 +115,7 @@ fn set_up_models(config: &Config) -> Result<Models<GeminiEmbedder, AgentCli>> {
     Ok(Models {
         embedder: GeminiEmbedder::from_config(config).context("could not set up the embedder")?,
         concepts: ConceptExtractor::new(AgentCli::for_work(WorkKind::Ingest), config),
+        insights: Some(InsightsWriter::new(AgentCli::for_work(WorkKind::Ingest))),
     })
 }
 

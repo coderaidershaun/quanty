@@ -52,4 +52,11 @@ impl Llm for AgentCli {
             Self::Invalid(error) => Err(LlmError::Configuration(error.clone())),
         }
     }
+    async fn ask_long(&self, question: Question<'_>) -> Result<LlmReply, LlmError> {
+        match self {
+            Self::Claude(client) => client.ask_long(question).await,
+            Self::Codex(client) => client.ask_long(question).await,
+            Self::Invalid(error) => Err(LlmError::Configuration(error.clone())),
+        }
+    }
 }

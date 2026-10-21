@@ -16,10 +16,11 @@ pub use delete::{
     DeleteError, DocumentDeleteSummary, MediaDeleteSummary, delete_document, delete_media,
 };
 pub use ingest::{
-    ASK_SCORE, Cache as AnswerCache, ChapterFolder, ConceptError, ConceptExtractor, ConceptSummary,
-    IngestError, IngestStep, IngestSummary, Item, ItemCounts, LINK_SCORE, LoneImage, Models,
-    SkippedItem, chapter_items, context_line, document_title, image_items, ingest_chapter,
-    ingest_image, usage_of,
+    ASK_SCORE, Cache as AnswerCache, ChapterChoice, ChapterFolder, ConceptError, ConceptExtractor,
+    ConceptSummary, IngestError, IngestStep, IngestSummary, InsightsOutcome, InsightsSummary,
+    InsightsWriter, Item, ItemCounts, LINK_SCORE, LoneImage, Models, SkippedItem, StoredChapter,
+    StoredChaptersError, chapter_items, context_line, document_title, image_items, ingest_chapter,
+    ingest_image, stored_chapters, usage_of,
 };
 pub use labels::{RelabelError, Relabelled, TagChange, relabel_document_tags};
 pub use media::{MediaChange, MediaRelabelled, relabel_media};

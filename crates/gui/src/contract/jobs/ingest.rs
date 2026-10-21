@@ -18,9 +18,18 @@ pub struct IngestRequest {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ChapterState {
     New,
-    PartlyConverted { pages_done: u32 },
+    PartlyConverted {
+        pages_done: u32,
+    },
     Converted,
-    Ingested { items: u64 },
+    Ingested {
+        items: u64,
+    },
+    /// Both stores hold the document, but its insights, takeaways and cheat sheet are not saved
+    /// yet, so a start asks the model for those alone.
+    IngestedWithoutInsights {
+        items: u64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -59,6 +68,8 @@ pub enum IngestStage {
         items: u32,
     },
     Storing,
+    /// The agent is writing the insights, takeaways and cheat sheet of the whole document.
+    WritingInsights,
     /// `done` of all `items` are read.
     ReadingConcepts {
         done: u32,
@@ -108,7 +119,8 @@ impl IngestStage {
             | IngestStage::OpeningPdf
             | IngestStage::WritingGraph
             | IngestStage::Embedding { .. }
-            | IngestStage::Storing => return None,
+            | IngestStage::Storing
+            | IngestStage::WritingInsights => return None,
         };
         if total == 0 {
             return None;
@@ -146,7 +158,8 @@ pub struct IngestReport {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum IngestOutcome {
-    /// Nothing was converted, embedded or asked, but own tags that were given have still been
+    /// Nothing was converted, embedded or stored. The insights, takeaways and cheat sheet were
+    /// asked for only when they were not saved yet, and own tags that were given have still been
     /// written.
     AlreadyIngested {
         doc: DocId,

@@ -197,7 +197,7 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
     let mut sent_again = sent;
     sent_again["category"] = json!(null);
     sent_again["document_title"] = json!("Hawkes Processes in Finance");
-    let second = call(&client, "ingest_pdf", sent_again).await;
+    let second = call(&client, "ingest_pdf", sent_again.clone()).await;
 
     let again = structured(&second);
     assert_eq!(again["state"], "already_ingested", "{again}");
@@ -208,6 +208,29 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
         again.get("usage").is_none() && again.get("cost_usd").is_none(),
         "a document that was already ingested used nothing: {again}"
     );
+
+    // A chapter that was ingested before insights were written has no file. Sending it again
+    // writes that file and nothing else, and the report says what that used.
+    let catalogue = ocr::Catalogue::read(&stores.config().content_folder).unwrap();
+    let chapter = &catalogue.chapters[0].folder;
+    std::fs::remove_file(chapter.join("insights.json")).unwrap();
+
+    let third = call(&client, "ingest_pdf", sent_again).await;
+
+    let third_job = structured(&third)["job_id"].as_str().unwrap();
+    let writing = report_when_ended(&client, "ingest_status", third_job).await;
+    assert_eq!(writing["state"], "already_ingested", "{writing}");
+    assert_eq!(writing["items"], ended["items"]);
+    let summary = writing["summary"].as_str().unwrap();
+    assert!(summary.contains("insights: written"), "{summary}");
+    assert!(
+        writing["usage"]
+            .as_array()
+            .is_some_and(|used| !used.is_empty()),
+        "{writing}"
+    );
+    assert!(writing["cost_usd"].is_number(), "{writing}");
+    assert!(chapter.join("insights.json").is_file());
 }
 
 #[tokio::test(flavor = "multi_thread")]

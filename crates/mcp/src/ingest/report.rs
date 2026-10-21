@@ -15,8 +15,10 @@ pub(crate) enum JobState {
     Running,
     /// The PDF was converted and ingested.
     Done,
-    /// Both stores already held this PDF, so nothing was converted or embedded and it cost
-    /// nothing. The `document_tags` that were sent are still written.
+    /// Both stores already held this PDF, so nothing was converted, embedded or stored. When the
+    /// document gets insights and they were not saved yet, the agent was asked for them, and
+    /// `summary` and `usage` say what came of it; in every other case it cost nothing. The
+    /// `document_tags` that were sent are still written.
     AlreadyIngested,
     /// The ingest stopped. `error` says why. Send the same PDF again to go on.
     Failed,
@@ -29,6 +31,10 @@ pub(crate) enum Stage {
     Converting,
     /// The converted chapter is being embedded, stored and searched for concepts.
     Ingesting,
+    /// The agent of the Ingest choice is writing the chapter's insights, takeaways and cheat
+    /// sheet. A PDF that was ingested before insights were written is in this stage while its
+    /// missing insights are written.
+    WritingInsights,
 }
 
 /// How an ingest job is going, or how it ended.
@@ -50,10 +56,11 @@ pub(crate) struct IngestReport {
     /// How many items the document has in the stores. When `done` or `already_ingested`.
     #[serde(skip_serializing_if = "Option::is_none")]
     items: Option<u64>,
-    /// What the ingest did, as `rag-ingest pdf` prints it. When `done`.
+    /// What the ingest did, as `rag-ingest pdf` prints it. When `done`, and when
+    /// `already_ingested` tried to write the insights.
     #[serde(skip_serializing_if = "Option::is_none")]
     summary: Option<String>,
-    /// What the ingest used. When `done`.
+    /// What the ingest used. When `done`, and when `already_ingested` tried to write the insights.
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
     spent: Option<Spent>,
     /// Why the ingest stopped, and what to do. When `failed`.
@@ -82,9 +89,20 @@ impl IngestReport {
         self.stage = None;
         self.document_id = Some(outcome.doc_id().to_string());
         match outcome {
-            PdfOutcome::AlreadyIngested { items, .. } => {
+            PdfOutcome::AlreadyIngested {
+                items, insights, ..
+            } => {
                 self.state = JobState::AlreadyIngested;
                 self.items = Some(*items);
+                // A run that tried to write the insights has something to tell, and any other
+                // run used nothing.
+                let tried = insights
+                    .as_ref()
+                    .is_some_and(|insights| insights.outcome.tried_to_write());
+                if tried {
+                    self.summary = Some(outcome.to_string());
+                    self.spent = Some((&outcome.usage()).into());
+                }
             }
             PdfOutcome::Ingested(summary) => {
                 self.state = JobState::Done;

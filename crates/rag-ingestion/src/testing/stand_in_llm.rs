@@ -8,6 +8,8 @@ use std::time::Duration;
 use rag_core::{Llm, LlmError, LlmReply, ModelUsage, Question, Usage, UsageTally};
 use serde_json::{Value, json};
 
+use crate::ingest::INSIGHTS_PROMPT;
+
 /// Long enough for the other questions of a batch to start while this one is still open.
 const ANSWER_DELAY: Duration = Duration::from_millis(20);
 
@@ -39,8 +41,16 @@ pub struct StandInLlm {
 }
 
 impl StandInLlm {
+    /// Finds no concept in any item, and answers the question about a whole document with
+    /// [`stand_in_insights_reply`].
     pub fn finding_nothing() -> StandInLlm {
-        StandInLlm::replying(|_, _| Ok(json!({ "concepts": [], "relations": [] })))
+        StandInLlm::replying_to_questions(|question, _| {
+            if question.system_prompt == INSIGHTS_PROMPT {
+                Ok(stand_in_insights_reply())
+            } else {
+                Ok(json!({ "concepts": [], "relations": [] }))
+            }
+        })
     }
 
     /// A model that cannot answer until the person signs in: the check that costs nothing says
@@ -99,6 +109,19 @@ impl StandInLlm {
             .lock()
             .expect("the lock of the record should not be poisoned")
     }
+}
+
+/// What [`StandInLlm::finding_nothing`] answers to the question about a whole document. It names
+/// only pages 1 and 2, which every sample chapter has.
+pub fn stand_in_insights_reply() -> Value {
+    json!({
+        "insights": [{
+            "text": "Volatility is the price of uncertainty: $\\sigma$ is what an option buys.",
+            "pages": [1, 2],
+        }],
+        "takeaways": ["An option's value rises with volatility."],
+        "cheat_sheet": "### Volatility\n\nHow much a price moves over time.",
+    })
 }
 
 fn signed_out_error() -> LlmError {

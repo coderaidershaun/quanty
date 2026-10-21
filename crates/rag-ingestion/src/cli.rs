@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use clap::builder::NonEmptyStringValueParser;
 use clap::{Args, Parser, Subcommand};
 use rag_core::{Category, DocId, MediaLabels, Tag, author_list};
-use rag_ingestion::{MediaChange, TagChange};
+use rag_ingestion::{ChapterChoice, MediaChange, TagChange};
 
 #[derive(Parser)]
 #[command(name = "rag-ingest", args_conflicts_with_subcommands = true)]
@@ -194,6 +194,44 @@ impl PdfMedia {
     }
 }
 
+#[derive(Args)]
+pub(super) struct GivenChapters {
+    #[command(flatten)]
+    which: WhichChapters,
+
+    #[arg(
+        long = "dry-run",
+        help = "List the files that would be written and ask no model"
+    )]
+    pub(super) dry_run: bool,
+}
+
+#[derive(Args)]
+#[group(required = true, multiple = false)]
+struct WhichChapters {
+    /// The document id that an ingest prints, such as 5f3c2a1e-9b04-5d6e-8a17-2c4b7e90f1d3
+    #[arg(long, value_name = "ID")]
+    document: Option<DocId>,
+
+    /// Every stored document of the media with this title, whatever its capitals
+    #[arg(long, value_name = "TITLE")]
+    media: Option<String>,
+
+    /// Every stored document that belongs to a media
+    #[arg(long)]
+    all: bool,
+}
+
+impl GivenChapters {
+    pub(super) fn choice(&self) -> ChapterChoice<'_> {
+        match (&self.which.document, &self.which.media) {
+            (Some(id), _) => ChapterChoice::Document(*id),
+            (None, Some(title)) => ChapterChoice::Media(title),
+            (None, None) => ChapterChoice::All,
+        }
+    }
+}
+
 #[derive(Subcommand)]
 pub(super) enum Command {
     /// Check that Qdrant and FalkorDB answer and that the claude CLI is signed in
@@ -202,6 +240,11 @@ pub(super) enum Command {
     /// Convert one PDF of a book, a paper or another media and ingest it, in one run that needs
     /// no one
     Pdf(GivenPdf),
+
+    /// Write the missing insights, takeaways and cheat sheet of chapters that are already
+    /// stored, from their converted text, with no embedding. It asks the agent of the Ingest
+    /// choice unless --dry-run is given
+    Insights(GivenChapters),
 
     /// Change the own tags of a stored document, in both stores, with no embedding and no model
     Tag {

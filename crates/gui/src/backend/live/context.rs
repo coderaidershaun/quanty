@@ -10,7 +10,7 @@ use ocr::{ChapterJob, ConversionSummary, ConvertError, PageProgress};
 use rag_core::{
     AgentCli, ConceptStore, Config, Embedder, GeminiEmbedder, ItemStore, Llm, WorkKind,
 };
-use rag_ingestion::{ConceptExtractor, Models, Stores};
+use rag_ingestion::{ConceptExtractor, InsightsWriter, Models, Stores};
 use rag_retrieval::Retriever;
 
 use crate::contract::{Failure, FailureKind};
@@ -198,6 +198,7 @@ impl<S: Services> LiveContext<S> {
         Ok(Models {
             embedder: self.services.embedder(&self.config)?,
             concepts: ConceptExtractor::new(self.services.llm(WorkKind::Ingest), &self.config),
+            insights: Some(InsightsWriter::new(self.services.llm(WorkKind::Ingest))),
         })
     }
 

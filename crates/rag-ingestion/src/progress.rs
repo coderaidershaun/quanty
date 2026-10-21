@@ -37,6 +37,9 @@ fn progress_line(step: &IngestStep) -> Option<String> {
         IngestStep::WritingGraph => Some("writing the graph".to_owned()),
         IngestStep::Embedding { items } => Some(format!("embedding {items} items")),
         IngestStep::Storing => Some("storing the items".to_owned()),
+        IngestStep::WritingInsights => {
+            Some("writing the insights, takeaways and cheat sheet".to_owned())
+        }
         IngestStep::ReadingConcepts { done: 1, total } => {
             Some(format!("reading the concepts of {total} items"))
         }
@@ -94,5 +97,9 @@ mod tests {
             Some("reading the concepts of 44 items")
         );
         assert_eq!(progress_line(&second_read), None);
+        assert_eq!(
+            progress_line(&IngestStep::WritingInsights).as_deref(),
+            Some("writing the insights, takeaways and cheat sheet")
+        );
     }
 }

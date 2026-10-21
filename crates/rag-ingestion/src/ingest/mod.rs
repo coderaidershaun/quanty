@@ -1,15 +1,17 @@
 //! Takes one converted chapter folder, or one picture that stands alone, from disk to stored
-//! points, graph nodes and concepts. Running it again on the same chapter or picture replaces
-//! what the earlier run stored, and asks the language model nothing.
+//! points, graph nodes and concepts, and a chapter to its saved insights. Running it again on the
+//! same chapter or picture replaces what the earlier run stored, and asks the language model only
+//! for what is not kept or saved yet.
 
 mod concepts;
+mod insights;
 mod items;
 mod summary;
 
 use std::path::{Path, PathBuf};
 
 use graph::{DocumentNode, GraphError, ItemNode, MediaNode};
-use ocr::ReadChapterError;
+use ocr::{DocumentName, ReadChapterError, gets_insights};
 use rag_core::{
     DocumentInput, DocumentLabels, EmbedError, Embedder, Embedding, ItemPoint, ItemStore, Llm,
     LlmError, MediaLabels, StoreError, UsageTally, embedding_usage,
@@ -17,6 +19,12 @@ use rag_core::{
 
 pub use concepts::{
     ASK_SCORE, Cache, ConceptError, ConceptExtractor, ConceptSummary, LINK_SCORE, SkippedItem,
+};
+#[cfg(feature = "testing")]
+pub(crate) use insights::INSIGHTS_PROMPT;
+pub use insights::{
+    ChapterChoice, InsightsOutcome, InsightsSummary, InsightsWriter, StoredChapter,
+    StoredChaptersError, stored_chapters,
 };
 pub use items::{Item, LoneImage, chapter_items, context_line, document_title, image_items};
 pub use summary::{IngestStep, IngestSummary, ItemCounts, usage_of};
@@ -61,10 +69,13 @@ pub enum IngestError {
     Concepts(#[from] ConceptError),
 }
 
-/// The two outside models an ingest pays for.
+/// The outside models an ingest pays for.
 pub struct Models<E, L> {
     pub embedder: E,
     pub concepts: ConceptExtractor<L>,
+    /// Writes the insights of a chapter. `None` for a caller that wants only the stores written,
+    /// such as a test of what is stored.
+    pub insights: Option<InsightsWriter<L>>,
 }
 
 /// A converted chapter folder, and the labels its media is made with when the graph does not
@@ -84,6 +95,15 @@ struct Document {
     /// What making the document used before the ingest: the conversion of a picture. A chapter's
     /// conversion is counted by its caller.
     spent: UsageTally,
+    /// The converted folder of a chapter. A picture that stands alone has none, and gets no
+    /// insights.
+    chapter: Option<ConvertedChapter>,
+}
+
+/// Where a chapter was converted to, and how it is named.
+struct ConvertedChapter {
+    folder: PathBuf,
+    name: DocumentName,
 }
 
 /// The language model is asked first whether it can answer, which costs nothing, so a `claude`
@@ -95,6 +115,12 @@ struct Document {
 /// behind. A run that stops after that leaves the chapter in the graph with no points yet, and
 /// running it again stores them. A point is never stored without its node. Every stored picture
 /// path is absolute.
+///
+/// The insights, the takeaways and the cheat sheet of a chapter are written after the points are
+/// stored, and only when the models hold an insights writer and the chapter's folder holds no
+/// saved file. A part of a book that is not a chapter, such as its index, gets none: the summary
+/// says so and the model is not asked. A failed answer is not an error: the summary says why
+/// nothing was written, and the items stay stored.
 ///
 /// The concepts come last, after the points are stored, so a chapter whose extraction failed can
 /// still be searched. Extraction that stops, for example because `claude` has reached its usage
@@ -158,6 +184,10 @@ pub(crate) async fn ingest_chapter_reporting<E: Embedder, L: Llm>(
             labels: chapter.new_media.clone(),
         }),
         spent: UsageTally::default(),
+        chapter: Some(ConvertedChapter {
+            folder,
+            name: converted.index.name.clone(),
+        }),
     };
     ingest_items(document, models, stores, on_step).await
 }
@@ -187,6 +217,7 @@ pub async fn ingest_image<E: Embedder, L: Llm>(
         items,
         media: None,
         spent: usage_of(&picture.image.calls),
+        chapter: None,
     };
     ingest_items(document, models, stores, &mut |_, _| {}).await
 }
@@ -224,7 +255,11 @@ async fn ingest_items<E: Embedder, L: Llm>(
     // It reads the own tags of the stored node, so it must come before an earlier run is removed.
     document.take_labels(stores).await?;
     let Document {
-        node, items, spent, ..
+        node,
+        items,
+        spent,
+        chapter,
+        ..
     } = document;
     let mut meter = Meter::new(on_step, spent);
 
@@ -240,6 +275,18 @@ async fn ingest_items<E: Embedder, L: Llm>(
     };
     meter.step(IngestStep::Storing);
     let points_in_collection = store_points(&embedded, &stores.items).await?;
+    // The points are stored first, so an insights answer that fails never undoes or repeats them.
+    let insights = match (&models.insights, &chapter) {
+        (Some(_), Some(chapter)) if !gets_insights(&chapter.name, node.labels.category) => {
+            Some(InsightsSummary::none_for_book_part())
+        }
+        (Some(writer), Some(chapter)) => Some(
+            writer
+                .write_missing_for_items(&chapter.folder, &items, &mut meter)
+                .await,
+        ),
+        _ => None,
+    };
     let concepts = models
         .concepts
         .extract(&embedded, &models.embedder, stores, &mut meter)
@@ -261,6 +308,7 @@ async fn ingest_items<E: Embedder, L: Llm>(
         items_by_kind: ItemCounts::of(&items),
         points_in_collection,
         concepts,
+        insights,
         usage: meter.into_spent(),
     })
 }

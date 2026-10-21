@@ -113,6 +113,7 @@ impl ProgressLine {
                 items: items as u32,
             },
             IngestStep::Storing => IngestStage::Storing,
+            IngestStep::WritingInsights => IngestStage::WritingInsights,
             IngestStep::ReadingConcepts { done, total } => IngestStage::ReadingConcepts {
                 done: done as u32,
                 items: total as u32,
@@ -162,9 +163,12 @@ fn tag_change(ingest: &IngestRequest) -> TagChange {
     }
 }
 
+// SMELL: what became of the insights is dropped here, so the app does not say when they could not
+// be written, nor what a start of an ingested document spent on them. The next check still shows
+// a file that is missing.
 fn report(outcome: PdfOutcome) -> IngestOutcome {
     match outcome {
-        PdfOutcome::AlreadyIngested { doc_id, items } => IngestOutcome::AlreadyIngested {
+        PdfOutcome::AlreadyIngested { doc_id, items, .. } => IngestOutcome::AlreadyIngested {
             doc: doc_id.into(),
             items,
         },

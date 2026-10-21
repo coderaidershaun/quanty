@@ -10,7 +10,7 @@ use rag_core::{ConceptStore, Config, ItemStore, Llm};
 use tempfile::TempDir;
 
 use super::StandInEmbedder;
-use crate::{ConceptExtractor, Models, Stores};
+use crate::{ConceptExtractor, InsightsWriter, Models, Stores};
 
 const THROWAWAY_PREFIX: &str = "test-items-";
 const THROWAWAY_CONCEPTS_PREFIX: &str = "test-concepts-";
@@ -85,9 +85,11 @@ impl ThrowawayStores {
         }
     }
 
-    /// Both models of an ingest: an embedder that makes up vectors, and the concept extractor
-    /// with this language model and the cache folder and decision log of this config. A test
-    /// builds its models here and nowhere else, so it never names those paths by hand.
+    /// The models of an ingest that writes no insights: an embedder that makes up vectors, and
+    /// the concept extractor with this language model and the cache folder and decision log of
+    /// this config. Insights are left out, so that a test of what is stored never writes into
+    /// the chapter folder it ingests. A test builds its models here and nowhere else, so it never
+    /// names those paths by hand.
     pub fn models<L: Llm>(&self, llm: L) -> Models<StandInEmbedder, L> {
         self.models_with_embedder(StandInEmbedder::default(), llm)
     }
@@ -100,6 +102,16 @@ impl ThrowawayStores {
         Models {
             embedder,
             concepts: ConceptExtractor::new(llm, &self.config),
+            insights: None,
+        }
+    }
+
+    /// [`ThrowawayStores::models`] that also writes insights, asking a clone of `llm`. A clone of
+    /// a stand-in model shares what it records, so one value counts both kinds of question.
+    pub fn models_writing_insights<L: Llm + Clone>(&self, llm: L) -> Models<StandInEmbedder, L> {
+        Models {
+            insights: Some(InsightsWriter::new(llm.clone())),
+            ..self.models(llm)
         }
     }
 

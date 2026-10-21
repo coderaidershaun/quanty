@@ -147,6 +147,11 @@ impl ChapterJob {
         self.chapter_folder.clone()
     }
 
+    /// How the document is named: a chapter of a book, or a document with a title of its own.
+    pub fn name(&self) -> &DocumentName {
+        &self.name
+    }
+
     /// The SHA-256 of the chapter PDF as lower-case hex: the value that `chapter.json` keeps as
     /// `source-sha256`. It reads the whole file.
     ///

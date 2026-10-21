@@ -204,7 +204,8 @@ async fn a_chapter_pdf_is_converted_and_ingested_in_one_run_and_a_second_run_doe
         second,
         PdfOutcome::AlreadyIngested {
             doc_id,
-            items: n as u64
+            items: n as u64,
+            insights: None,
         }
     );
     let printed = second.to_string();
@@ -308,7 +309,8 @@ async fn a_run_that_stops_in_conversion_or_in_ingestion_is_finished_by_the_same_
         again,
         PdfOutcome::AlreadyIngested {
             doc_id: document,
-            items: n
+            items: n,
+            insights: None,
         }
     );
 

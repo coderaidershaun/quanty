@@ -284,14 +284,16 @@ impl<S: Services> QuantyServer<S> {
 
     /// Converts one PDF of a book, a paper or another media and stores it so that it can be
     /// searched. It is PAID and slow: each page is read by the agent of the Ingest choice and Jev,
-    /// the items are embedded by Gemini and that agent finds the concepts, which takes minutes
-    /// for a chapter. The call answers when that work has started, with a `job_id` for
-    /// `ingest_status`. A PDF that is already ingested costs nothing. A book's chapter must be
-    /// named `chapter-<number>-<name>.pdf`; a part of a book that is not a chapter, such as its
-    /// index, takes `document_title` and can have any file name; a paper or other PDF can have
-    /// any name. One ingest runs at a time in this server, and the same PDF must not be sent
-    /// through a second server, or beside `rag-ingest pdf`, at the same time. Sending the same
-    /// PDF again goes on from where a stopped run ended.
+    /// the items are embedded by Gemini and that agent writes the chapter's insights, takeaways
+    /// and cheat sheet and finds the concepts, which takes minutes for a chapter. The call
+    /// answers when that work has started, with a `job_id` for `ingest_status`. A PDF that is
+    /// already ingested costs nothing, unless its insights are not saved yet: then the agent
+    /// writes those alone. A book's chapter must be named `chapter-<number>-<name>.pdf`; a part
+    /// of a book that is not a chapter, such as its index, takes `document_title` and can have
+    /// any file name; a paper or other PDF can have any name. One ingest runs at a time in this
+    /// server, and the same PDF must not be sent through a second server, or beside
+    /// `rag-ingest pdf`, at the same time. Sending the same PDF again goes on from where a
+    /// stopped run ended.
     #[tool(annotations(
         read_only_hint = false,
         destructive_hint = false,

@@ -1,0 +1,24 @@
+{
+  "type": "object",
+  "properties": {
+    "insights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string" },
+          "pages": { "type": "array", "items": { "type": "integer" } }
+        },
+        "required": ["text", "pages"],
+        "additionalProperties": false
+      }
+    },
+    "takeaways": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "cheat_sheet": { "type": "string" }
+  },
+  "required": ["insights", "takeaways", "cheat_sheet"],
+  "additionalProperties": false
+}

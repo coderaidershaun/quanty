@@ -53,6 +53,18 @@ pub trait Llm {
         &self,
         question: Question<'_>,
     ) -> impl Future<Output = Result<LlmReply, LlmError>> + Send;
+
+    /// Like [`Llm::ask`], for a question whose answer is long, such as the notes on a whole
+    /// chapter. An agent that gives up on a question after a while waits longer for this one.
+    ///
+    /// # Errors
+    /// The errors of [`Llm::ask`].
+    fn ask_long(
+        &self,
+        question: Question<'_>,
+    ) -> impl Future<Output = Result<LlmReply, LlmError>> + Send {
+        self.ask(question)
+    }
 }
 
 #[derive(thiserror::Error, Debug)]

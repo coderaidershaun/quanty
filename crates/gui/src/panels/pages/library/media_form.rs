@@ -3,7 +3,7 @@
 
 use eframe::egui;
 
-use super::{SaveStep, reveal};
+use super::SaveStep;
 use crate::contract::{Failure, Intent, Media, is_same_name};
 use crate::panels::media_card::{
     self, FormSetup, MediaFields, Pressed, Purpose, Save, would_change,
@@ -15,7 +15,6 @@ pub(super) struct Draft {
     /// Its title is the library's own. It names the media, so it is sent unchanged.
     fields: MediaFields,
     step: SaveStep,
-    should_reveal: bool,
 }
 
 impl Draft {
@@ -23,11 +22,10 @@ impl Draft {
         Draft {
             fields: MediaFields::of(media),
             step: SaveStep::Typing,
-            should_reveal: true,
         }
     }
 
-    /// The draft keeps the title exactly as the library has it, so an exact match finds its card.
+    /// The draft keeps the title exactly as the library has it, so an exact match finds its page.
     pub(super) fn is_for(&self, title: &str) -> bool {
         self.fields.title == title
     }
@@ -48,7 +46,6 @@ pub(super) fn follow(draft: &mut Draft, library: &Library) -> bool {
             return false;
         }
         draft.step = SaveStep::Refused;
-        draft.should_reveal = true;
     }
     true
 }
@@ -74,7 +71,6 @@ pub(super) fn form(
     shared: &Shared,
     intents: &mut Vec<Intent>,
 ) -> bool {
-    let top = ui.cursor().top();
     let edit = draft.fields.to_edit();
     let save = if draft.step == SaveStep::Sent {
         Save::Sent
@@ -98,6 +94,5 @@ pub(super) fn form(
         draft.step = SaveStep::Sent;
         intents.push(Intent::EditMedia(draft.fields.to_edit()));
     }
-    reveal(ui, top, &mut draft.should_reveal);
     pressed == Some(Pressed::Cancel)
 }

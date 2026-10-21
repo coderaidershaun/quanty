@@ -1,5 +1,5 @@
 //! What the app lends to a panel while it draws, the one state each panel keeps for itself, and
-//! the centred column that a page draws in.
+//! the sheets that a page draws in.
 
 use eframe::egui;
 
@@ -62,16 +62,26 @@ pub(super) fn column(
         egui::pos2(page.center().x - width / 2.0, page.top()),
         egui::vec2(width, page.height()),
     );
+    framed(ui, id_salt, column, add);
+}
+
+/// A sheet that fills `rect`. `add` draws in it and gets the height inside it.
+pub(super) fn framed(
+    ui: &mut egui::Ui,
+    id_salt: &str,
+    rect: egui::Rect,
+    add: impl FnOnce(&mut egui::Ui, f32),
+) {
     let frame = panel_frame(Surface::Sheet);
     let margin = frame.total_margin().sum();
     let builder = egui::UiBuilder::new()
         .id_salt(id_salt)
-        .max_rect(column)
+        .max_rect(rect)
         .layout(egui::Layout::top_down(egui::Align::Min));
     ui.scope_builder(builder, |ui| {
         frame.show(ui, |ui| {
-            ui.set_width(column.width() - margin.x);
-            add(ui, column.height() - margin.y);
+            ui.set_width(rect.width() - margin.x);
+            add(ui, rect.height() - margin.y);
         });
     });
 }

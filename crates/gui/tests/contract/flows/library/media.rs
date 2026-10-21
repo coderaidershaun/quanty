@@ -1,4 +1,4 @@
-//! The pencil on the card of a media opens a form that changes its category, its authors and its
+//! The pencil on the page of a media opens a form that changes its category, its authors and its
 //! tags, and a refused save shows its hint.
 
 use std::sync::Arc;
@@ -9,26 +9,17 @@ use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::contract::{Category, Command, Media, MediaEdit};
 use gui::testkit;
 
-use super::{
-    Ingests, REFUSED_HINT, bring_into_view, click_on_the_card, open_switched, sent_media_edits,
-    view,
-};
+use super::{Ingests, REFUSED_HINT, open_media, open_switched, sent_media_edits, view};
 use crate::flows::recording::Seen;
 use crate::flows::{Window, click, field, has, is_enabled, node, retype, shared};
 
-/// The third card of the scene: a book by one author, with no media tags and two documents. Its
-/// form opens near the bottom of the page.
+/// The third media of the scene: a book by one author, with no media tags and three documents.
 const MEDIA: &str = "Quanty Sample Notes";
 const PENCIL: &str = "Edit Quanty Sample Notes";
 
 /// A chip tells a screen reader that it is chosen as a toggle, not as a selection.
 fn is_toggled(harness: &Window, role: Role, name: &str) -> bool {
     node(harness, role, name).accesskit_node().toggled() == Some(Toggled::True)
-}
-
-fn retype_on_the_card(harness: &mut Window, name: &str, text: &str) {
-    bring_into_view(harness, Role::TextInput, name);
-    retype(harness, name, text);
 }
 
 fn the_media(harness: &Window) -> Media {
@@ -39,7 +30,8 @@ fn the_media(harness: &Window) -> Media {
 }
 
 fn the_pencil_opens_the_form_with_the_labels_of_the_media(harness: &mut Window) {
-    click_on_the_card(harness, Role::Button, PENCIL);
+    open_media(harness, MEDIA);
+    click(harness, Role::Button, PENCIL);
     assert_eq!(field(harness, "Authors").as_deref(), Some("Quanty Team"));
     assert_eq!(field(harness, "Tags").as_deref(), Some(""));
     assert!(
@@ -49,6 +41,7 @@ fn the_pencil_opens_the_form_with_the_labels_of_the_media(harness: &mut Window) 
     let boxes: Vec<String> = harness
         .query_all_by_role(Role::TextInput)
         .map(|text_box| text_box.accesskit_node().label().unwrap_or_default())
+        .filter(|name| name != "Find")
         .collect();
     assert_eq!(
         boxes,
@@ -67,7 +60,7 @@ fn the_pencil_opens_the_form_with_the_labels_of_the_media(harness: &mut Window) 
 }
 
 fn cancel_closes_the_form_and_sends_nothing(harness: &mut Window, seen: &Seen) {
-    click_on_the_card(harness, Role::Button, "Cancel");
+    click(harness, Role::Button, "Cancel");
     assert!(
         !has(harness, Role::TextInput, "Authors"),
         "the form is closed"
@@ -81,12 +74,12 @@ fn a_refused_save_shows_its_hint_and_keeps_what_was_typed(
     refuses_saves: &AtomicBool,
 ) {
     let before = the_media(harness);
-    click_on_the_card(harness, Role::Button, PENCIL);
-    click_on_the_card(harness, Role::Button, "Other");
-    retype_on_the_card(harness, "Authors", "Ann Writer, Bo Writer");
-    retype_on_the_card(harness, "Tags", "Teaching");
+    click(harness, Role::Button, PENCIL);
+    click(harness, Role::Button, "Other");
+    retype(harness, "Authors", "Ann Writer, Bo Writer");
+    retype(harness, "Tags", "Teaching");
     refuses_saves.store(true, Ordering::SeqCst);
-    click_on_the_card(harness, Role::Button, "Save media");
+    click(harness, Role::Button, "Save media");
 
     let wanted = MediaEdit {
         title: MEDIA.to_owned(),
@@ -111,7 +104,7 @@ fn a_refused_save_shows_its_hint_and_keeps_what_was_typed(
     testkit::save_png(harness, "app-library-media-refused");
 }
 
-fn the_same_save_goes_through_and_the_card_shows_the_new_labels(
+fn the_same_save_goes_through_and_the_page_shows_the_new_labels(
     harness: &mut Window,
     seen: &Seen,
     refuses_saves: &AtomicBool,
@@ -126,7 +119,7 @@ fn the_same_save_goes_through_and_the_card_shows_the_new_labels(
     }
     refuses_saves.store(false, Ordering::SeqCst);
     let loads = seen.count(|command| matches!(command, Command::LoadCatalogue { .. }));
-    click_on_the_card(harness, Role::Button, "Save media");
+    click(harness, Role::Button, "Save media");
 
     assert_eq!(sent_media_edits(seen).len(), 2);
     assert_eq!(
@@ -152,20 +145,20 @@ fn the_same_save_goes_through_and_the_card_shows_the_new_labels(
         );
     }
     for label in shown_after {
-        assert!(has(harness, Role::Label, label), "`{label}` is on the card");
+        assert!(has(harness, Role::Label, label), "`{label}` is on the page");
     }
     testkit::save_png(harness, "app-library-media-edited");
 }
 
 #[test]
-fn a_media_is_edited_from_its_card_and_a_refusal_shows_its_hint() {
+fn a_media_is_edited_from_its_page_and_a_refusal_shows_its_hint() {
     let refuses_saves = Arc::new(AtomicBool::new(false));
     let (mut harness, seen) = open_switched("black-scholes", &refuses_saves, Ingests::Run);
     click(&mut harness, Role::Tab, "Library");
     the_pencil_opens_the_form_with_the_labels_of_the_media(&mut harness);
     cancel_closes_the_form_and_sends_nothing(&mut harness, &seen);
     a_refused_save_shows_its_hint_and_keeps_what_was_typed(&mut harness, &seen, &refuses_saves);
-    the_same_save_goes_through_and_the_card_shows_the_new_labels(
+    the_same_save_goes_through_and_the_page_shows_the_new_labels(
         &mut harness,
         &seen,
         &refuses_saves,

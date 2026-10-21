@@ -1,28 +1,27 @@
-//! A Delete button on the card of a document or of a media asks first, in a sheet, and only its
-//! confirm sends the delete. The card is gone once the library is read again, and a delete that
-//! failed says why on its card.
+//! A Delete button on the page of a document or of a media asks first, in a sheet, and only its
+//! confirm sends the delete. The item is gone from the shelf once the library is read again, the
+//! page falls back to what is left, and a delete that failed says why on its page.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use eframe::egui;
 use eframe::egui::accesskit::Role;
-use egui_kittest::kittest::Queryable as _;
+use egui_kittest::kittest::NodeT as _;
 use gui::contract::{
     Catalogue, Category, Command, DocId, Document, DocumentName, FailureKind, IngestRequest,
     Intent, NewMedia, NoticeKind, Tab,
 };
-use gui::state::{IngestJob, MediaDelete};
+use gui::state::{IngestJob, MediaDelete, Open};
 use gui::testkit;
 use uuid::Uuid;
 
-use super::{Ingests, REFUSED_HINT, click_on_the_card, documents_of, open_switched};
+use super::{
+    BOOK, HAWKES, Ingests, NOTES, PAPER, REFUSED_HINT, SAMPLE_PAGES, documents_of, open_document,
+    open_media, open_switched,
+};
 use crate::flows::recording::Seen;
-use crate::flows::{COMMAND, Window, click, has, press, says, shared};
-
-const SAMPLE_PAGES: &str = "Chapter 1 · Sample Pages";
-const NOTES: &str = "Quanty Sample Notes";
-const BOOK: &str = "Option Volatility and Pricing";
+use crate::flows::{COMMAND, Window, click, delete_buttons, has, press, says, shared};
 
 fn the_document(harness: &Window, label: &str) -> Document {
     documents_of(harness)
@@ -73,18 +72,32 @@ fn loads_of_the_catalogue(seen: &Seen) -> usize {
     seen.count(|command| matches!(command, Command::LoadCatalogue { .. }))
 }
 
-fn every_document_has_one_delete_button(harness: &Window) {
-    let documents = documents_of(harness);
-    assert!(!documents.is_empty());
-    for document in documents {
-        let name = delete_document_button(&document.name().label());
-        let buttons = harness.query_all_by_role_and_label(Role::Button, &name);
-        assert_eq!(buttons.count(), 1, "`{name}` is one button");
+/// The delete buttons that are on screen, whatever they delete.
+fn delete_names(harness: &Window) -> Vec<String> {
+    delete_buttons(harness)
+        .iter()
+        .filter_map(|button| button.accesskit_node().label())
+        .collect()
+}
+
+fn each_document_page_has_its_own_delete_button_and_no_other(harness: &mut Window) {
+    let catalogue = the_catalogue(harness);
+    let mut visited = 0;
+    for media in &catalogue.media {
+        let title = media.title.as_deref().expect("a sample media has a title");
+        for document in &media.documents {
+            let label = document.name().label();
+            open_document(harness, title, &label);
+            assert_eq!(delete_names(harness), [delete_document_button(&label)]);
+            visited += 1;
+        }
     }
+    assert!(visited > 0, "no document page was visited");
 }
 
 fn pressing_delete_opens_a_sheet_that_says_what_goes(harness: &mut Window) {
-    click_on_the_card(harness, Role::Button, &delete_document_button(SAMPLE_PAGES));
+    open_document(harness, BOOK, SAMPLE_PAGES);
+    click(harness, Role::Button, &delete_document_button(SAMPLE_PAGES));
     assert!(
         has(
             harness,
@@ -115,12 +128,12 @@ fn cancel_escape_and_a_click_beside_the_sheet_close_it_and_send_nothing(
     assert!(!sheet_is_open(harness), "Cancel closes the sheet");
     nothing_was_sent(seen);
 
-    click_on_the_card(harness, Role::Button, &delete_document_button(SAMPLE_PAGES));
+    click(harness, Role::Button, &delete_document_button(SAMPLE_PAGES));
     press(harness, egui::Modifiers::NONE, egui::Key::Escape);
     assert!(!sheet_is_open(harness), "Escape closes the sheet");
     nothing_was_sent(seen);
 
-    click_on_the_card(harness, Role::Button, &delete_document_button(SAMPLE_PAGES));
+    click(harness, Role::Button, &delete_document_button(SAMPLE_PAGES));
     click(harness, Role::Tab, "Ask");
     assert!(
         !sheet_is_open(harness),
@@ -168,32 +181,36 @@ fn the_source_panel_and_a_check_hold_on_to_the_document(harness: &mut Window, do
     assert!(matches!(shared(harness).ingest, IngestJob::Checked { .. }));
 }
 
-fn the_confirm_sends_one_delete_and_the_card_is_gone(
+fn the_confirm_sends_one_delete_and_the_document_is_gone(
     harness: &mut Window,
     seen: &Seen,
     doc: DocId,
 ) {
     let others_before = documents_of(harness).len() - 1;
     let loads = loads_of_the_catalogue(seen);
-    click_on_the_card(harness, Role::Button, &delete_document_button(SAMPLE_PAGES));
+    click(harness, Role::Button, &delete_document_button(SAMPLE_PAGES));
     click(harness, Role::Button, "Delete document");
 
     assert_eq!(sent_document_deletes(seen), [doc]);
     assert_eq!(sent_media_deletes(seen), Vec::<String>::new());
     assert_eq!(loads_of_the_catalogue(seen), loads + 1);
-    assert!(!says(harness, SAMPLE_PAGES), "the card is gone");
+    assert!(!says(harness, SAMPLE_PAGES), "the document is gone");
     let after = documents_of(harness);
     assert!(after.iter().all(|document| document.id != doc));
     assert_eq!(after.len(), others_before, "no other document went");
-    assert!(
-        says(harness, "Chapter 2 · Black Scholes In Depth"),
-        "a document of another media is still listed"
-    );
-    assert!(
-        says(harness, "Option Volatility and Pricing"),
-        "its media is still listed"
+    assert_eq!(
+        shared(harness).shelf.open,
+        Some(Open::Media {
+            title: Some(BOOK.to_owned())
+        }),
+        "the page falls back to the media of the document"
     );
     assert!(says(harness, "No document yet"));
+    open_media(harness, NOTES);
+    assert!(
+        says(harness, "Chapter 2 · Black Scholes In Depth"),
+        "a document of another media is still listed when its media is open"
+    );
     assert_eq!(shared(harness).source.target, None, "the source closed");
     assert_eq!(shared(harness).ingest, IngestJob::Idle, "the check is gone");
     assert_eq!(shared(harness).notices[0].kind, NoticeKind::Done);
@@ -201,18 +218,20 @@ fn the_confirm_sends_one_delete_and_the_card_is_gone(
 }
 
 #[test]
-fn a_document_is_deleted_from_its_card_once_its_sheet_is_confirmed() {
+fn a_document_is_deleted_from_its_page_once_its_sheet_is_confirmed() {
     let (mut harness, seen) = open_switched("black-scholes", &Arc::default(), Ingests::Run);
     click(&mut harness, Role::Tab, "Library");
     let doc = the_document(&harness, SAMPLE_PAGES).id;
-    every_document_has_one_delete_button(&harness);
+    each_document_page_has_its_own_delete_button_and_no_other(&mut harness);
     pressing_delete_opens_a_sheet_that_says_what_goes(&mut harness);
     cancel_escape_and_a_click_beside_the_sheet_close_it_and_send_nothing(&mut harness, &seen);
     the_source_panel_and_a_check_hold_on_to_the_document(&mut harness, doc);
-    the_confirm_sends_one_delete_and_the_card_is_gone(&mut harness, &seen, doc);
+    the_confirm_sends_one_delete_and_the_document_is_gone(&mut harness, &seen, doc);
 }
 
-fn every_titled_media_has_one_delete_button_and_the_ingest_card_has_none(harness: &mut Window) {
+fn each_titled_media_page_has_its_own_delete_button_and_the_ingest_card_has_none(
+    harness: &mut Window,
+) {
     let catalogue = the_catalogue(harness);
     let titles: Vec<&str> = catalogue
         .media
@@ -221,9 +240,8 @@ fn every_titled_media_has_one_delete_button_and_the_ingest_card_has_none(harness
         .collect();
     assert!(!titles.is_empty());
     for title in titles {
-        let name = delete_media_button(title);
-        let buttons = harness.query_all_by_role_and_label(Role::Button, &name);
-        assert_eq!(buttons.count(), 1, "`{name}` is one button");
+        open_media(harness, title);
+        assert_eq!(delete_names(harness), [delete_media_button(title)]);
     }
 
     click(harness, Role::Tab, "Ingest");
@@ -241,7 +259,8 @@ fn every_titled_media_has_one_delete_button_and_the_ingest_card_has_none(harness
 }
 
 fn pressing_delete_opens_a_sheet_that_counts_the_documents_that_go(harness: &mut Window) {
-    click_on_the_card(harness, Role::Button, &delete_media_button(NOTES));
+    open_media(harness, NOTES);
+    click(harness, Role::Button, &delete_media_button(NOTES));
     assert!(
         has(
             harness,
@@ -291,6 +310,13 @@ fn the_confirm_sends_one_delete_and_the_media_goes_with_its_documents(
     }
     assert!(!says(harness, NOTES));
     assert_eq!(
+        shared(harness).shelf.open,
+        Some(Open::Media {
+            title: Some(HAWKES.to_owned())
+        }),
+        "the page falls back to the first media"
+    );
+    assert_eq!(
         after.media_titled(BOOK),
         before.media_titled(BOOK),
         "another media is whole"
@@ -306,7 +332,8 @@ fn a_media_with_no_document_is_deleted_too(harness: &mut Window, seen: &Seen) {
     };
     harness.state_mut().push(Intent::SaveMedia(media));
     testkit::settle(harness);
-    click_on_the_card(
+    open_media(harness, "Dynamic Hedging");
+    click(
         harness,
         Role::Button,
         &delete_media_button("Dynamic Hedging"),
@@ -316,14 +343,14 @@ fn a_media_with_no_document_is_deleted_too(harness: &mut Window, seen: &Seen) {
     click(harness, Role::Button, "Delete media");
 
     assert_eq!(sent_media_deletes(seen), [NOTES, "Dynamic Hedging"]);
-    assert!(!says(harness, "Dynamic Hedging"), "the card is gone");
+    assert!(!says(harness, "Dynamic Hedging"), "the media is gone");
 }
 
 #[test]
 fn a_media_is_deleted_with_its_documents_once_its_sheet_is_confirmed() {
     let (mut harness, seen) = open_switched("black-scholes", &Arc::default(), Ingests::Run);
     click(&mut harness, Role::Tab, "Library");
-    every_titled_media_has_one_delete_button_and_the_ingest_card_has_none(&mut harness);
+    each_titled_media_page_has_its_own_delete_button_and_the_ingest_card_has_none(&mut harness);
     let in_the_media = the_catalogue(&harness)
         .documents_of_media(NOTES)
         .next()
@@ -336,22 +363,23 @@ fn a_media_is_deleted_with_its_documents_once_its_sheet_is_confirmed() {
 }
 
 fn the_paper(harness: &Window) -> Document {
-    the_document(harness, "Self-Exciting Order Flow")
+    the_document(harness, PAPER)
 }
 
-fn a_refused_delete_closes_the_open_form_and_shows_its_hint_on_the_card(
+fn a_refused_delete_closes_the_open_form_and_shows_its_hint_on_its_page(
     harness: &mut Window,
     seen: &Seen,
     refuses_changes: &AtomicBool,
 ) {
     let paper = the_paper(harness);
-    let name = delete_document_button("Self-Exciting Order Flow");
+    let name = delete_document_button(PAPER);
     refuses_changes.store(true, Ordering::SeqCst);
+    open_document(harness, HAWKES, PAPER);
     click(harness, Role::Button, "Edit tags");
     assert!(has(harness, Role::TextInput, "Tags"), "the form is open");
     let loads = loads_of_the_catalogue(seen);
 
-    click_on_the_card(harness, Role::Button, &name);
+    click(harness, Role::Button, &name);
     click(harness, Role::Button, "Delete document");
 
     assert_eq!(sent_document_deletes(seen), [paper.id]);
@@ -359,43 +387,41 @@ fn a_refused_delete_closes_the_open_form_and_shows_its_hint_on_the_card(
         !has(harness, Role::TextInput, "Tags"),
         "a confirmed delete closes the form, so its failure is not taken for a refused save"
     );
-    assert!(says(harness, REFUSED_HINT), "the card says why");
+    assert!(says(harness, REFUSED_HINT), "the page says why");
     assert_eq!(the_paper(harness), paper, "the document is still listed");
     assert_eq!(loads_of_the_catalogue(seen), loads + 1);
     assert_eq!(shared(harness).notices[0].kind, NoticeKind::Failed);
     testkit::save_png(harness, "app-library-delete-refused");
 }
 
-fn the_same_delete_goes_through_and_takes_the_hint_with_the_card(
+fn the_same_delete_goes_through_and_takes_the_hint_with_the_document(
     harness: &mut Window,
     seen: &Seen,
     refuses_changes: &AtomicBool,
 ) {
     refuses_changes.store(false, Ordering::SeqCst);
-    let name = delete_document_button("Self-Exciting Order Flow");
-    click_on_the_card(harness, Role::Button, &name);
+    let name = delete_document_button(PAPER);
+    click(harness, Role::Button, &name);
     click(harness, Role::Button, "Delete document");
 
     assert_eq!(sent_document_deletes(seen).len(), 2);
     assert!(!says(harness, REFUSED_HINT), "the hint is gone");
-    assert!(
-        !says(harness, "Self-Exciting Order Flow"),
-        "the card is gone"
-    );
+    assert!(!says(harness, PAPER), "the document is gone");
 }
 
-fn a_refused_media_delete_shows_its_hint_on_its_card_and_the_library_is_read_again(
+fn a_refused_media_delete_shows_its_hint_on_its_page_and_the_library_is_read_again(
     harness: &mut Window,
     seen: &Seen,
     refuses_changes: &AtomicBool,
 ) {
     refuses_changes.store(true, Ordering::SeqCst);
     let loads = loads_of_the_catalogue(seen);
-    click_on_the_card(harness, Role::Button, &delete_media_button(NOTES));
+    open_media(harness, NOTES);
+    click(harness, Role::Button, &delete_media_button(NOTES));
     click(harness, Role::Button, "Delete media");
 
     assert_eq!(sent_media_deletes(seen), [NOTES]);
-    assert!(says(harness, REFUSED_HINT), "the card says why");
+    assert!(says(harness, REFUSED_HINT), "the page says why");
     assert_eq!(
         loads_of_the_catalogue(seen),
         loads + 1,
@@ -429,21 +455,21 @@ fn a_scene_whose_library_fails_fails_both_deletes() {
 }
 
 #[test]
-fn a_delete_that_failed_shows_its_hint_on_its_card_and_the_library_is_read_again() {
+fn a_delete_that_failed_shows_its_hint_on_its_page_and_the_library_is_read_again() {
     let refuses_changes = Arc::new(AtomicBool::new(false));
     let (mut harness, seen) = open_switched("black-scholes", &refuses_changes, Ingests::Run);
     click(&mut harness, Role::Tab, "Library");
-    a_refused_delete_closes_the_open_form_and_shows_its_hint_on_the_card(
+    a_refused_delete_closes_the_open_form_and_shows_its_hint_on_its_page(
         &mut harness,
         &seen,
         &refuses_changes,
     );
-    the_same_delete_goes_through_and_takes_the_hint_with_the_card(
+    the_same_delete_goes_through_and_takes_the_hint_with_the_document(
         &mut harness,
         &seen,
         &refuses_changes,
     );
-    a_refused_media_delete_shows_its_hint_on_its_card_and_the_library_is_read_again(
+    a_refused_media_delete_shows_its_hint_on_its_page_and_the_library_is_read_again(
         &mut harness,
         &seen,
         &refuses_changes,

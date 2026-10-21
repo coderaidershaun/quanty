@@ -1,6 +1,6 @@
-//! The Library tab lists each media with its documents, copies the id of a document, opens it to
-//! read, has no Delete for the whole group of documents with no media, and says what no sample
-//! shows.
+//! The Library tab lists each media on a shelf, shows the page of the open media or document,
+//! copies the id of a document, opens it to read, has no Delete for the whole group of documents
+//! with no media, and says what no sample shows.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -11,19 +11,25 @@ use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::DEFAULT_WINDOW;
 use gui::backend::{Handler, Reply};
 use gui::contract::{
-    Catalogue, Category, ChapterLabel, Command, DocId, Document, Event, Failure, Intent,
-    ItemCounts, Media, NewMedia, StartupFacts, Tab,
+    Catalogue, Category, ChapterLabel, Command, DocId, Document, DocumentView, Event, Failure,
+    Intent, ItemCounts, Media, NewMedia, StartupFacts, Tab,
 };
-use gui::state::SourceTarget;
+use gui::state::{Open, SourceTarget};
 use gui::testkit;
 use uuid::Uuid;
 
-use super::{Ingests, documents_of, open_switched};
+use super::{
+    BLACK_SCHOLES, BOOK, HAWKES, Ingests, NOTES, SAMPLE_PAGES, documents_of, is_open_row,
+    open_document, open_media, open_switched,
+};
 use crate::flows::recording::Seen;
 use crate::flows::{
-    COMMAND, Window, are_stacked_in_order, click, copied_by, delete_buttons, has, is_open_tab,
-    node, press, says, shared,
+    COMMAND, Window, are_stacked_in_order, click, copied_by, has, is_open_tab, node, press, says,
+    shared,
 };
+
+/// What each of the six views that are not built yet says under its title.
+const VIEW_ON_ITS_WAY: &str = "This view comes in a later version of quanty.";
 
 /// Lists one catalogue that the test wrote by hand and refuses every other command.
 struct Listing(Catalogue);
@@ -110,46 +116,55 @@ fn book_and_a_picture_with_no_media() -> Catalogue {
 }
 
 fn the_group_with_no_media_has_no_delete_but_each_of_its_documents_has(harness: &mut Window) {
-    assert!(says(harness, "No media"));
+    open_media(harness, "No media");
+    assert!(has(harness, Role::Label, "No media"), "its page names it");
+    let is_a_media_button = |harness: &Window| {
+        harness.query_all_by_role(Role::Button).any(|button| {
+            let name = button.accesskit_node().label().unwrap_or_default();
+            name.starts_with("Edit ") || name.starts_with("Delete media ")
+        })
+    };
+    assert!(
+        !is_a_media_button(harness),
+        "the group with no media has no pencil and no Delete"
+    );
+    open_document(harness, "No media", "A picture on its own");
     assert!(has(
         harness,
         Role::Button,
         "Delete document A picture on its own"
     ));
-    let catalogue = shared(harness).library.catalogue.ready().cloned();
-    let titled = catalogue
-        .expect("the catalogue is loaded")
-        .media
-        .iter()
-        .filter(|media| media.title.is_some())
-        .count();
-    let media_deletes = delete_buttons(harness)
-        .iter()
-        .filter(|button| {
-            let name = button.accesskit_node().label().unwrap_or_default();
-            name.starts_with("Delete media ")
-        })
-        .count();
-    assert_eq!(
-        media_deletes, titled,
-        "a titled media has a Delete and the group with no media has none"
+
+    open_media(harness, "Dynamic Hedging");
+    assert!(
+        has(harness, Role::Button, "Delete media Dynamic Hedging"),
+        "a titled media has a Delete"
     );
 }
 
 fn the_page_says_which_chapter_is_not_whole(harness: &mut Window) {
     click(harness, Role::Tab, "Library");
+    open_document(harness, "Dynamic Hedging", "Chapter 1 · Part 1");
+    assert!(
+        !says(harness, "did not finish"),
+        "the first chapter is whole"
+    );
+    open_document(harness, "Dynamic Hedging", "Chapter 2 · Part 2");
     let not_whole = harness
         .query_all_by_label_contains("did not finish")
         .count();
-    assert_eq!(
-        not_whole, 1,
-        "one chapter of the two was not ingested whole"
-    );
-    assert!(says(harness, "Chapter 2 · Part 2"));
+    assert_eq!(not_whole, 1, "the second chapter was not ingested whole");
+    assert!(has(harness, Role::Label, "Chapter 2 · Part 2"));
     testkit::save_png(harness, "app-library-not-whole");
 }
 
-fn the_tab_opens_the_page_and_the_page_lists_the_media_and_their_documents(harness: &mut Window) {
+fn labels_named(harness: &Window, name: &str) -> usize {
+    harness
+        .query_all_by_role_and_label(Role::Label, name)
+        .count()
+}
+
+fn the_tab_opens_the_page_and_the_shelf_has_a_row_for_each_media(harness: &mut Window) {
     for name in ["Ask", "Library", "Ingest"] {
         assert!(has(harness, Role::Tab, name), "no tab is named `{name}`");
     }
@@ -164,54 +179,115 @@ fn the_tab_opens_the_page_and_the_page_lists_the_media_and_their_documents(harne
         3,
         "the scene has two sample books and a paper"
     );
+    let titles: Vec<&str> = catalogue
+        .media
+        .iter()
+        .map(|media| media.title.as_deref().expect("a sample media has a title"))
+        .collect();
+    assert!(
+        are_stacked_in_order(harness, Role::Button, &titles),
+        "the shelf lists the media in the order of the catalogue"
+    );
     for media in &catalogue.media {
         let title = media.title.as_deref().expect("a sample media has a title");
-        assert!(says(harness, title), "the media `{title}` is listed");
-    }
-    let labels_named = |name: &str| {
-        harness
-            .query_all_by_role_and_label(Role::Label, name)
-            .count()
-    };
-    assert_eq!(labels_named("Paper"), 1, "the paper has a category chip");
-    assert_eq!(labels_named("Book"), 2, "each book has a category chip");
-    for authors in ["A. Author, B. Author", "Quanty Team"] {
-        assert!(
-            has(harness, Role::Label, authors),
-            "the authors `{authors}` are said on their media"
+        let count = node(harness, Role::Button, title).value();
+        assert_eq!(
+            count.as_deref(),
+            Some(media.documents.len().to_string().as_str()),
+            "the row of `{title}` counts its documents"
         );
     }
-    assert_eq!(
-        labels_named("hawkes"),
-        1,
-        "the media tag of the paper is a badge on the paper, and its document does not repeat it"
+    assert!(
+        is_open_row(harness, HAWKES),
+        "the first media opens as soon as the library is read"
     );
-    for document in catalogue.documents() {
-        let name = document.name().label();
-        assert!(says(harness, &name), "`{name}` is listed");
-        let pages = format!(
-            "{} pages",
-            document.pages.expect("a sample document has pages")
-        );
-        assert!(says(harness, &pages), "`{pages}` is said");
-        assert!(says(harness, &document.items.to_string()));
-        for tag in &document.tags {
-            assert!(has(harness, Role::Label, tag), "the tag `{tag}` is said");
+    assert_eq!(
+        shared(harness).shelf.open,
+        Some(Open::Media {
+            title: Some(HAWKES.to_owned())
+        })
+    );
+    assert_eq!(labels_named(harness, "Paper"), 1, "its page has its badge");
+    assert_eq!(
+        labels_named(harness, "Book"),
+        0,
+        "no other media has a page"
+    );
+    assert!(has(harness, Role::Label, "A. Author, B. Author"));
+    assert_eq!(
+        labels_named(harness, "hawkes"),
+        1,
+        "the media tag of the paper is said once, on its page"
+    );
+    assert!(says(harness, "1 document"));
+}
+
+fn each_media_row_opens_its_page_and_unfolds_its_documents(harness: &mut Window) {
+    let catalogue = shared(harness).library.catalogue.ready().cloned();
+    let catalogue = catalogue.expect("the catalogue is loaded");
+    for media in &catalogue.media {
+        let title = media.title.as_deref().expect("a sample media has a title");
+        open_media(harness, title);
+        assert!(is_open_row(harness, title), "`{title}` is the open row");
+        assert_eq!(labels_named(harness, media.category.label()), 1);
+        if !media.authors.is_empty() {
+            let line = media.authors.join(", ");
+            assert!(has(harness, Role::Label, &line), "`{line}` is said");
+        }
+        let count = match media.documents.len() {
+            1 => "1 document".to_owned(),
+            count => format!("{count} documents"),
+        };
+        assert!(has(harness, Role::Label, &count), "`{count}` is said");
+        for other in &catalogue.media {
+            for document in &other.documents {
+                let is_listed = has(harness, Role::Button, &document.name().label());
+                assert_eq!(
+                    is_listed,
+                    other.title == media.title,
+                    "only the open media unfolds its documents: `{title}` is open"
+                );
+            }
         }
     }
     assert!(
         are_stacked_in_order(
             harness,
-            Role::Label,
+            Role::Button,
             &[
                 "Chapter 1 · Options Pricing Intuition",
-                "Chapter 2 · Black Scholes In Depth",
+                BLACK_SCHOLES,
                 "Index",
             ]
         ),
         "the notes list their chapters first and then their index"
     );
     testkit::save_png(harness, "app-library-list");
+}
+
+fn each_document_row_opens_its_page(harness: &mut Window) {
+    let catalogue = shared(harness).library.catalogue.ready().cloned();
+    let catalogue = catalogue.expect("the catalogue is loaded");
+    for media in &catalogue.media {
+        let title = media.title.as_deref().expect("a sample media has a title");
+        for document in &media.documents {
+            let name = document.name().label();
+            open_document(harness, title, &name);
+            assert!(is_open_row(harness, &name), "`{name}` is the open row");
+            assert_eq!(shared(harness).shelf.document(), Some(document.id));
+            assert!(has(harness, Role::Label, &name), "its page names it");
+            let pages = format!(
+                "{} pages",
+                document.pages.expect("a sample document has pages")
+            );
+            assert!(says(harness, &pages), "`{pages}` is said");
+            assert!(says(harness, &document.items.to_string()));
+            for tag in &document.tags {
+                assert!(has(harness, Role::Label, tag), "the tag `{tag}` is said");
+            }
+        }
+    }
+    testkit::save_png(harness, "app-library-document");
 
     click(harness, Role::Tab, "Ask");
     click(harness, Role::ComboBox, "Authors");
@@ -225,7 +301,52 @@ fn the_tab_opens_the_page_and_the_page_lists_the_media_and_their_documents(harne
     click(harness, Role::Tab, "Library");
 }
 
-fn a_saved_book_with_no_document_is_listed_and_says_so(harness: &mut Window) {
+/// The six views that are not built yet say so with a placeholder, and none of them asks the
+/// backend for anything.
+fn the_other_views_show_their_placeholder_and_ask_for_nothing(harness: &mut Window, seen: &Seen) {
+    open_document(harness, BOOK, SAMPLE_PAGES);
+    assert!(
+        is_open_tab(harness, "Overview"),
+        "the Overview is the first view"
+    );
+    for view in DocumentView::ALL.into_iter().skip(1) {
+        click(harness, Role::Tab, view.label());
+        assert!(
+            is_open_tab(harness, view.label()),
+            "`{}` is shown",
+            view.label()
+        );
+        assert_eq!(shared(harness).shelf.view, view);
+        let placeholder = format!("{}. {VIEW_ON_ITS_WAY}", view.label());
+        assert!(
+            has(harness, Role::Label, &placeholder),
+            "the view `{}` says that it comes later",
+            view.label()
+        );
+        assert!(
+            !says(harness, "not built"),
+            "`{}` is not an error",
+            view.label()
+        );
+    }
+    let asked = seen.count(|command| {
+        matches!(
+            command,
+            Command::LoadChapterContents { .. } | Command::LoadChapterInsights { .. }
+        )
+    });
+    assert_eq!(asked, 0, "no view asks for the contents of a chapter yet");
+
+    open_document(harness, NOTES, BLACK_SCHOLES);
+    assert!(
+        is_open_tab(harness, DocumentView::Concepts.label()),
+        "the view that was shown stays when another document opens"
+    );
+    click(harness, Role::Tab, DocumentView::Overview.label());
+    assert_eq!(shared(harness).shelf.view, DocumentView::Overview);
+}
+
+fn a_saved_book_with_no_document_is_a_row_with_none_and_says_so(harness: &mut Window) {
     let media = NewMedia {
         title: "Dynamic Hedging".to_owned(),
         category: Category::Book,
@@ -234,22 +355,21 @@ fn a_saved_book_with_no_document_is_listed_and_says_so(harness: &mut Window) {
     };
     harness.state_mut().push(Intent::SaveMedia(media));
     testkit::settle(harness);
-    assert!(says(harness, "Dynamic Hedging"));
-    let books = harness
-        .query_all_by_role_and_label(Role::Label, "Book")
-        .count();
-    assert_eq!(books, 3, "the saved book has its category chip too");
+    let row = node(harness, Role::Button, "Dynamic Hedging");
+    assert_eq!(
+        row.value().as_deref(),
+        Some("0"),
+        "its row counts no document"
+    );
+    open_media(harness, "Dynamic Hedging");
+    assert_eq!(
+        labels_named(harness, "Book"),
+        1,
+        "its page has its category badge"
+    );
     assert!(has(harness, Role::Label, "Nassim Taleb"));
     assert!(says(harness, "No document yet"));
     testkit::save_png(harness, "app-library-saved-book");
-}
-
-fn copy_id_puts_the_document_id_on_the_clipboard(harness: &mut Window) {
-    let first = documents_of(harness).remove(0);
-    let texts = copied_by(harness, |harness| {
-        node(harness, Role::Button, "Copy id").click();
-    });
-    assert_eq!(texts, [first.id.0.to_string()]);
 }
 
 /// The first document that the source view can open: the paper of the samples has no folder.
@@ -260,8 +380,26 @@ fn first_readable(harness: &Window) -> Document {
         .expect("a sample chapter has its folder")
 }
 
-fn read_opens_the_chapter_in_the_source_panel(harness: &mut Window, seen: &Seen) {
-    let first = first_readable(harness);
+fn the_media_of(harness: &Window, document: &Document) -> String {
+    let catalogue = shared(harness).library.catalogue.ready();
+    let media = catalogue.and_then(|catalogue| catalogue.media_of(document.id));
+    let title = media.and_then(|media| media.title.clone());
+    title.expect("a sample document has a media with a title")
+}
+
+fn copy_id_puts_the_open_document_id_on_the_clipboard(harness: &mut Window, first: &Document) {
+    open_document(
+        harness,
+        &the_media_of(harness, first),
+        &first.name().label(),
+    );
+    let texts = copied_by(harness, |harness| {
+        node(harness, Role::Button, "Copy id").click();
+    });
+    assert_eq!(texts, [first.id.0.to_string()]);
+}
+
+fn read_opens_the_chapter_in_the_source_panel(harness: &mut Window, seen: &Seen, first: &Document) {
     let loads_of_first = |seen: &Seen| {
         seen.count(
             |command| matches!(command, Command::LoadPage { doc, page: 1, .. } if *doc == first.id),
@@ -289,15 +427,25 @@ fn read_opens_the_chapter_in_the_source_panel(harness: &mut Window, seen: &Seen)
         Tab::Library,
         "⌘2 opens the Library tab"
     );
+    assert_eq!(
+        shared(harness).shelf.open,
+        Some(Open::Document(first.id)),
+        "the Library shows what was open before"
+    );
+    assert!(is_open_row(harness, &first.name().label()));
 }
 
 #[test]
-fn the_library_lists_each_media_as_a_card_and_a_document_is_copied_and_read() {
+fn the_library_shows_each_media_on_the_shelf_and_each_document_on_its_page() {
     let (mut harness, seen) = open_switched("black-scholes", &Arc::default(), Ingests::Run);
-    the_tab_opens_the_page_and_the_page_lists_the_media_and_their_documents(&mut harness);
-    a_saved_book_with_no_document_is_listed_and_says_so(&mut harness);
-    copy_id_puts_the_document_id_on_the_clipboard(&mut harness);
-    read_opens_the_chapter_in_the_source_panel(&mut harness, &seen);
+    the_tab_opens_the_page_and_the_shelf_has_a_row_for_each_media(&mut harness);
+    each_media_row_opens_its_page_and_unfolds_its_documents(&mut harness);
+    each_document_row_opens_its_page(&mut harness);
+    the_other_views_show_their_placeholder_and_ask_for_nothing(&mut harness, &seen);
+    a_saved_book_with_no_document_is_a_row_with_none_and_says_so(&mut harness);
+    let first = first_readable(&harness);
+    copy_id_puts_the_open_document_id_on_the_clipboard(&mut harness, &first);
+    read_opens_the_chapter_in_the_source_panel(&mut harness, &seen, &first);
 }
 
 #[test]

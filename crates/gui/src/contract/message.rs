@@ -3,14 +3,16 @@
 
 use super::ask::{Answer, AskDraft, SearchReply};
 use super::concept_graph::ConceptGraph;
+use super::contents::ChapterContents;
 use super::failure::Failure;
 use super::health::{Service, ServiceState};
 use super::ids::{ConceptId, DocId, NoticeId, RequestId};
+use super::insights::ChapterInsights;
 use super::jobs::{
     DatasetProgress, DatasetReport, DatasetRequest, IngestOutcome, IngestProgress, IngestRequest,
     Preflight,
 };
-use super::library::{Catalogue, DocumentTagsEdit, MediaEdit, NewMedia};
+use super::library::{Catalogue, DocumentTagsEdit, DocumentView, MediaEdit, NewMedia};
 use super::source::{PageConcept, PageView};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -57,6 +59,14 @@ pub enum Intent {
     },
     TurnPage(i32),
     ReloadSource,
+    /// Opens the Library tab on the page of that media. `None` is the group of documents with no
+    /// media.
+    OpenMedia {
+        title: Option<String>,
+    },
+    /// Opens the Library tab on the page of that document, on the view that was last shown.
+    OpenDocument(DocId),
+    ShowDocumentView(DocumentView),
     RefreshCatalogue,
     SetDocumentTags(DocumentTagsEdit),
     DeleteDocument(DocId),
@@ -92,6 +102,12 @@ pub enum Command {
         request: RequestId,
         doc: DocId,
         page: u32,
+        folder: Option<std::path::PathBuf>,
+    },
+    /// `folder` is the document's folder from the catalogue when it is known, and else `None`.
+    LoadChapterContents {
+        request: RequestId,
+        doc: DocId,
         folder: Option<std::path::PathBuf>,
     },
     LoadCatalogue {
@@ -132,6 +148,12 @@ pub enum Command {
     CheckHealth {
         request: RequestId,
     },
+    /// `folder` is the document's folder from the catalogue when it is known, and else `None`.
+    LoadChapterInsights {
+        request: RequestId,
+        doc: DocId,
+        folder: Option<std::path::PathBuf>,
+    },
     Cancel(RequestId),
 }
 
@@ -141,6 +163,7 @@ impl Command {
         match self {
             Command::Ask { request, .. }
             | Command::LoadPage { request, .. }
+            | Command::LoadChapterContents { request, .. }
             | Command::LoadCatalogue { request }
             | Command::SetDocumentTags { request, .. }
             | Command::DeleteDocument { request, .. }
@@ -150,7 +173,8 @@ impl Command {
             | Command::Preflight { request, .. }
             | Command::Ingest { request, .. }
             | Command::BuildDataset { request, .. }
-            | Command::CheckHealth { request } => *request,
+            | Command::CheckHealth { request }
+            | Command::LoadChapterInsights { request, .. } => *request,
             Command::Cancel(request) => *request,
         }
     }
@@ -181,6 +205,17 @@ impl Command {
                     result: Err(failure.clone()),
                 },
                 Event::PageConcepts {
+                    request: *request,
+                    result: Err(failure.clone()),
+                },
+            ],
+            // The concepts are owed even when the contents failed: they end the load.
+            Command::LoadChapterContents { request, .. } => vec![
+                Event::ChapterContents {
+                    request: *request,
+                    result: Err(failure.clone()),
+                },
+                Event::ChapterConcepts {
                     request: *request,
                     result: Err(failure.clone()),
                 },
@@ -224,6 +259,10 @@ impl Command {
                 result: Err(failure.clone()),
             }],
             Command::CheckHealth { request } => unknown_health(*request).collect(),
+            Command::LoadChapterInsights { request, .. } => vec![Event::ChapterInsights {
+                request: *request,
+                result: Err(failure.clone()),
+            }],
             Command::Cancel(_) => Vec::new(),
         }
     }
@@ -259,6 +298,21 @@ pub enum Event {
     PageConcepts {
         request: RequestId,
         result: Result<Vec<PageConcept>, Failure>,
+    },
+    ChapterContents {
+        request: RequestId,
+        result: Result<ChapterContents, Failure>,
+    },
+    /// The concepts of the whole document from the graph. Always sent after `ChapterContents` of
+    /// the same request, also when it fails: the state takes it as the end of the load.
+    ChapterConcepts {
+        request: RequestId,
+        result: Result<Vec<PageConcept>, Failure>,
+    },
+    /// `Ok(None)`: nothing is saved for the document yet.
+    ChapterInsights {
+        request: RequestId,
+        result: Result<Option<ChapterInsights>, Failure>,
     },
     Catalogue {
         request: RequestId,
@@ -319,4 +373,48 @@ pub enum Effect {
     CopyText(String),
     PickFile,
     CloseWindow,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_failed_chapter_load_answers_every_event_it_owes() {
+        let failure = Failure::not_built("the contents of a chapter");
+        let request = RequestId(7);
+        let doc = DocId::default();
+
+        let contents = Command::LoadChapterContents {
+            request,
+            doc,
+            folder: None,
+        };
+        assert_eq!(
+            contents.failed(&failure),
+            [
+                Event::ChapterContents {
+                    request,
+                    result: Err(failure.clone()),
+                },
+                Event::ChapterConcepts {
+                    request,
+                    result: Err(failure.clone()),
+                },
+            ]
+        );
+
+        let insights = Command::LoadChapterInsights {
+            request,
+            doc,
+            folder: None,
+        };
+        assert_eq!(
+            insights.failed(&failure),
+            [Event::ChapterInsights {
+                request,
+                result: Err(failure.clone()),
+            }]
+        );
+    }
 }

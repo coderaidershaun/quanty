@@ -1,6 +1,5 @@
 //! No key and no control of the app leads to a part of it that is not built: not a page, not the
-//! help sheet, not a command whose backend only says it is not built. A Delete control and the two
-//! delete commands are built, so they are pressed like any other control.
+//! help sheet, not a command whose backend only says it is not built.
 
 use std::collections::{HashMap, HashSet};
 
@@ -401,34 +400,10 @@ fn assert_no_unbuilt_name_is_drawn(harness: &Window, scene: &str) {
     }
 }
 
-/// Whether the library of the scene held a media of each of two titles with a document, when
-/// the scene opened. A delete of a document and a delete of a media can both be confirmed then.
-fn lists_two_media_with_a_document(harness: &Window) -> bool {
-    let catalogue = shared(harness).library.catalogue.ready();
-    catalogue.is_some_and(|catalogue| {
-        let with_a_document = catalogue
-            .media
-            .iter()
-            .filter(|media| media.title.is_some() && !media.documents.is_empty());
-        with_a_document.count() >= 2
-    })
-}
-
-/// Each sheet has its own confirm, and each control of a scene is pressed once, so a scene that
-/// can delete both ends with exactly one delete of each. That shows that the Delete controls were
-/// pressed and confirmed, and that no delete answered that it is not built.
-fn assert_each_delete_was_confirmed_once(scene: &str, seen: &Seen) {
-    let documents = seen.count(|command| matches!(command, Command::DeleteDocument { .. }));
-    let media = seen.count(|command| matches!(command, Command::DeleteMedia { .. }));
-    assert_eq!(documents, 1, "`{scene}` deleted {documents} documents");
-    assert_eq!(media, 1, "`{scene}` deleted {media} media");
-}
-
 fn every_key_and_control_of(scene: &str) {
     let (mut harness, seen) = recording::open(scene, DEFAULT_WINDOW);
     testkit::settle(&mut harness);
     assert_start_up_sent_only_its_own_commands(scene, &seen);
-    let can_delete_both = lists_two_media_with_a_document(&harness);
 
     for row in &SHORTCUTS {
         // A key that the box takes as text does not reach the shortcut, so the box is left
@@ -470,9 +445,6 @@ fn every_key_and_control_of(scene: &str) {
     }
     assert_nothing_unbuilt_was_reached(&harness, scene, &seen);
     assert_each_health_check_follows_an_ask(scene, &seen);
-    if can_delete_both {
-        assert_each_delete_was_confirmed_once(scene, &seen);
-    }
 }
 
 #[test]

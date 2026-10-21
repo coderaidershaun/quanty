@@ -47,6 +47,9 @@ fn a_build_that_runs_turns_every_delete_off() {
     let first_delete = deletes[0].accesskit_node().label().unwrap_or_default();
     hover_on(&mut harness, Role::Button, &first_delete);
     assert!(says(&harness, OFF_WHILE_BUILDING));
+    // The build never ends, so `click` would wait for ever.
+    node(&harness, Role::Button, "Quanty Sample Notes").click();
+    harness.run_ok();
     assert!(
         is_enabled(&harness, Role::Button, "Edit Quanty Sample Notes"),
         "a build does not hold back the labels of a media"
@@ -82,6 +85,8 @@ fn a_delete_on_its_way_turns_the_start_off() {
     assert!(is_enabled(&harness, Role::Button, "Start build"));
 
     click(&mut harness, Role::Tab, "Library");
+    click(&mut harness, Role::Button, "Option Volatility and Pricing");
+    click(&mut harness, Role::Button, "Chapter 1 · Sample Pages");
     click(
         &mut harness,
         Role::Button,

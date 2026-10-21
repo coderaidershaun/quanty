@@ -5,7 +5,7 @@ use super::context::{LiveContext, Services};
 use super::source::PageTarget;
 use super::{datasets, ingest, library, query, source};
 use crate::backend::{Handler, Reply};
-use crate::contract::{Command, RequestId, unknown_health};
+use crate::contract::{Command, Event, Failure, RequestId, unknown_health};
 
 impl<S: Services> Handler for LiveContext<S> {
     async fn serve(&self, command: Command, reply: Reply) {
@@ -19,6 +19,12 @@ impl<S: Services> Handler for LiveContext<S> {
             } => {
                 let target = PageTarget { doc, page, folder };
                 source::load_page(self, request, &target, &reply).await;
+            }
+            Command::LoadChapterContents { .. } => {
+                send_all(
+                    &reply,
+                    command.failed(&Failure::not_built("the contents of a chapter")),
+                );
             }
             Command::LoadCatalogue { request } => {
                 library::load_catalogue(self, request, &reply).await;
@@ -48,6 +54,12 @@ impl<S: Services> Handler for LiveContext<S> {
                 datasets::build(self, request, &build, &reply).await;
             }
             Command::CheckHealth { request } => check_health(request, &reply),
+            Command::LoadChapterInsights { .. } => {
+                send_all(
+                    &reply,
+                    command.failed(&Failure::not_built("the insights of a chapter")),
+                );
+            }
             Command::Cancel(_) => {}
         }
     }
@@ -57,7 +69,11 @@ impl<S: Services> Handler for LiveContext<S> {
 /// checks again after every search that works, and a check that always said "down" would keep it
 /// checking for ever.
 fn check_health(request: RequestId, reply: &Reply) {
-    for event in unknown_health(request) {
+    send_all(reply, unknown_health(request));
+}
+
+fn send_all(reply: &Reply, events: impl IntoIterator<Item = Event>) {
+    for event in events {
         reply.send(event);
     }
 }

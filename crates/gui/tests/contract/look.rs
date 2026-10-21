@@ -28,6 +28,11 @@ const MAXIMISE: &str = "Maximise";
 const FIRST_MEDIA_PENCIL: &str = "Edit Hawkes Processes in Finance";
 /// The Delete button of the same media, whose sheet is on screen with no scroll.
 const FIRST_MEDIA_DELETE: &str = "Delete media Hawkes Processes in Finance";
+/// The row of a book on the shelf, and the row of its first chapter once the book is open.
+const BOOK_ROW: &str = "Option Volatility and Pricing";
+const CHAPTER_ROW: &str = "Chapter 1 · Sample Pages";
+/// The box that finds a media or a chapter on the shelf.
+const FIND_BOX: &str = "Find";
 /// The ingest of its scene stops for ever at page 3, so its bar rests there.
 const BAR_AT_PAGE_3: &str = "Converting the pages — 3 of 12 done, about 36%";
 /// The build of its scene stops for ever at the synthetic texts, so its bar rests there.
@@ -43,6 +48,8 @@ enum Start {
     AfterAClickOnTheLibraryTab,
     AfterAClickOnAMediaPencil,
     AfterAClickOnAMediaDelete,
+    AfterAClickOnAChapterRow,
+    AfterTypingInTheFindBox,
     AfterAClickOnMaximiseInTheConceptGraph,
     /// The scene never rests, so it is looked at once its catalogue has loaded and its bar has
     /// come to the stall.
@@ -56,7 +63,7 @@ struct Row {
     start: Start,
 }
 
-const ROWS: [Row; 19] = [
+static ROWS: &[Row] = &[
     Row {
         picture: "ask-idle",
         scene: "idle",
@@ -152,6 +159,18 @@ const ROWS: [Row; 19] = [
         scene: "black-scholes",
         window: DEFAULT_WINDOW,
         start: Start::AfterAClickOnAMediaDelete,
+    },
+    Row {
+        picture: "library-document",
+        scene: "black-scholes",
+        window: DEFAULT_WINDOW,
+        start: Start::AfterAClickOnAChapterRow,
+    },
+    Row {
+        picture: "library-find",
+        scene: "black-scholes",
+        window: DEFAULT_WINDOW,
+        start: Start::AfterTypingInTheFindBox,
     },
     Row {
         picture: "ask-graph-maximised",
@@ -273,6 +292,14 @@ fn type_a_new_media(harness: &mut Window) {
     testkit::settle(harness);
 }
 
+/// Escape at the end leaves the box, so that no caret is drawn in the picture.
+fn type_in_the_find_box(harness: &mut Window) {
+    click(harness, Role::Tab, "Library");
+    type_into(harness, FIND_BOX, "black");
+    harness.key_press(egui::Key::Escape);
+    testkit::settle(harness);
+}
+
 impl Row {
     /// Draws the scene at rest and compares it with the kept picture. The error says how.
     fn compare(&self, options: &SnapshotOptions) -> Result<(), String> {
@@ -303,6 +330,12 @@ impl Row {
                 click(&mut harness, Role::Tab, "Library");
                 click(&mut harness, Role::Button, FIRST_MEDIA_DELETE);
             }
+            Start::AfterAClickOnAChapterRow => {
+                click(&mut harness, Role::Tab, "Library");
+                click(&mut harness, Role::Button, BOOK_ROW);
+                click(&mut harness, Role::Button, CHAPTER_ROW);
+            }
+            Start::AfterTypingInTheFindBox => type_in_the_find_box(&mut harness),
             Start::AfterAClickOnMaximiseInTheConceptGraph => {
                 maximise_the_concept_graph(&mut harness, self.window);
             }

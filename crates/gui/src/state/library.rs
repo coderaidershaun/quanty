@@ -3,8 +3,8 @@
 
 use std::collections::BTreeMap;
 
-use super::IngestJob;
 use super::shared::{Shared, push_cancel};
+use super::{IngestJob, Open};
 use crate::contract::{
     Catalogue, Command, DocId, DocumentTagsEdit, Effect, Failure, Loadable, MediaEdit, NewMedia,
     NoticeKind, RequestId,
@@ -218,13 +218,22 @@ impl Shared {
         &mut self,
         request: RequestId,
         result: Result<Catalogue, Failure>,
+        effects: &mut Vec<Effect>,
     ) {
         if self.library.pending != Some(request) {
             return;
         }
+        // The media of the open document, as the catalogue that is about to be replaced has it.
+        let fallback = match (&self.shelf.open, self.library.catalogue.ready()) {
+            (Some(Open::Document(doc)), Some(old)) => {
+                old.media_of(*doc).map(|media| media.title.clone())
+            }
+            _ => None,
+        };
         self.library.catalogue = self.settled(result);
         self.library.revision += 1;
         self.library.pending = None;
+        self.keep_shelf_on_listed_items(fallback, effects);
     }
 
     pub(super) fn document_tags_saved(

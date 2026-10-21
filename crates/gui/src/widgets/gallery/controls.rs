@@ -4,9 +4,11 @@
 use eframe::egui;
 
 use super::{State, section, used};
-use crate::theme::{Icon, TextRole};
+use crate::theme::{Icon, TextRole, space};
 use crate::widgets::look::Look;
-use crate::widgets::{Button, ControlSize, Dropdown, Slider, Stepper, Tab, TabStrip, TextInput};
+use crate::widgets::{
+    Button, ControlSize, Dropdown, ListRow, Slider, Stepper, Tab, TabStrip, TextInput,
+};
 
 const MODES: [&str; 3] = ["Answer", "Search only", "Formulas"];
 const MEDIA_TITLES: [&str; 2] = [
@@ -18,6 +20,7 @@ const LONG_STEP: &str = "page 5 of 7";
 const DROPDOWN_WIDTH: f32 = 140.0;
 /// The width of the dropdown whose choice is too long for it, to show that it stays that wide.
 const MEDIA_WIDTH: f32 = 160.0;
+const LIST_WIDTH: f32 = 300.0;
 
 pub(super) fn buttons(ui: &mut egui::Ui, state: &mut State) {
     section(ui, "Buttons");
@@ -216,4 +219,29 @@ pub(super) fn tabs(ui: &mut egui::Ui, state: &mut State) {
     }
     let hovered = [Tab::new("Alpha"), Tab::new("Beta"), Tab::new("Gamma")];
     TabStrip::new(&hovered, 0).preview(Look::HOVERED).show(ui);
+}
+
+pub(super) fn list_rows(ui: &mut egui::Ui, state: &mut State) {
+    section(ui, "List rows");
+    ui.scope(|ui| {
+        ui.set_max_width(LIST_WIDTH);
+        let rows = [
+            ListRow::new("At rest"),
+            ListRow::new("Hovered").preview(Some(Look::HOVERED)),
+            ListRow::new("Focused").preview(Some(Look::FOCUSED)),
+            ListRow::new("Selected").selected(true),
+            ListRow::new("With a count").count(33),
+            ListRow::new("With a glyph").glyph(Icon::BOOK),
+            ListRow::new("A selected book with a glyph and a count that is far too long")
+                .glyph(Icon::BOOK)
+                .count(33)
+                .selected(true),
+            ListRow::new("Chapter 3 · Greeks")
+                .role(TextRole::Small)
+                .indent(space::XL),
+        ];
+        for row in rows {
+            used(state, &ui.add(row), "ListRow");
+        }
+    });
 }

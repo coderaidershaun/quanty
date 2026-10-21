@@ -393,6 +393,11 @@ impl Handler for Fake {
             Command::LoadPage {
                 request, doc, page, ..
             } => self.load_page(request, doc, page, &reply).await,
+            Command::LoadChapterContents { .. } => {
+                for event in command.failed(&Failure::not_built("the contents of a chapter")) {
+                    reply.send(event);
+                }
+            }
             Command::LoadCatalogue { request } => self.load_catalogue(request, &reply).await,
             Command::SetDocumentTags { request, edit } => {
                 self.set_document_tags(request, &edit, &reply).await;
@@ -414,6 +419,11 @@ impl Handler for Fake {
             Command::Ingest { request, ingest } => self.ingest(request, &ingest, &reply).await,
             Command::BuildDataset { request, build } => {
                 self.build_dataset(request, &build, &reply).await;
+            }
+            Command::LoadChapterInsights { .. } => {
+                for event in command.failed(&Failure::not_built("the insights of a chapter")) {
+                    reply.send(event);
+                }
             }
             Command::Cancel(_) => {}
         }

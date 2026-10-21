@@ -4,6 +4,9 @@
 use std::fmt;
 
 use super::ids::DocId;
+// SMELL: `source` names `ChapterLabel` from here and this file names `PieceKind` from `source`, so
+// the two modules import each other. `DocumentView` is the only use here.
+use super::source::PieceKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct ItemCounts {
@@ -42,6 +45,55 @@ impl fmt::Display for ItemCounts {
                 "{chunks}, {formulas}, {figures}, {tables} and {}",
                 count(code, "code listing")
             ),
+        }
+    }
+}
+
+/// The views of one document on the Library tab, in the order of the strip.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+pub enum DocumentView {
+    #[default]
+    Overview,
+    Insights,
+    Code,
+    Formulas,
+    Figures,
+    Tables,
+    Concepts,
+}
+
+impl DocumentView {
+    pub const ALL: [DocumentView; 7] = [
+        DocumentView::Overview,
+        DocumentView::Insights,
+        DocumentView::Code,
+        DocumentView::Formulas,
+        DocumentView::Figures,
+        DocumentView::Tables,
+        DocumentView::Concepts,
+    ];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            DocumentView::Overview => "Overview",
+            DocumentView::Insights => "Insights",
+            DocumentView::Code => "Code",
+            DocumentView::Formulas => "Formulas",
+            DocumentView::Figures => "Figures",
+            DocumentView::Tables => "Tables",
+            DocumentView::Concepts => "Concepts",
+        }
+    }
+
+    /// The kind of piece the view lists: `Code`, `Formula`, `Figure` or `Table`. `None` for the
+    /// other three.
+    pub const fn piece_kind(self) -> Option<PieceKind> {
+        match self {
+            DocumentView::Code => Some(PieceKind::Code),
+            DocumentView::Formulas => Some(PieceKind::Formula),
+            DocumentView::Figures => Some(PieceKind::Figure),
+            DocumentView::Tables => Some(PieceKind::Table),
+            DocumentView::Overview | DocumentView::Insights | DocumentView::Concepts => None,
         }
     }
 }

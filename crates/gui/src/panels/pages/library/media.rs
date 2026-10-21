@@ -1,50 +1,57 @@
-//! One media of the library as a card: its title, category, authors and tags, the pencil that
-//! opens its form, its Delete button, and its documents, each set off by a line.
+//! The page of the open media: its title line with the pencil and Delete, its labels or its form,
+//! a delete that failed, and how many documents it has. The documents are listed on the shelf.
 
 use eframe::egui;
 
-use super::{Form, Local, can_edit, delete, document, media_form};
+use super::{Form, Local, can_edit, delete, media_form};
 use crate::contract::{Failure, Media, is_same_name};
 use crate::panels::PanelCx;
 use crate::panels::media_card::{self, NO_MEDIA, Pencil};
 use crate::state::MediaDelete;
 use crate::theme::{TextRole, color, space};
-use crate::widgets::{Card, Notice};
+use crate::widgets::Notice;
 
 const NO_DOCUMENT: &str = "No document yet. Add one on the Ingest tab.";
 
 pub(super) fn show(ui: &mut egui::Ui, media: &Media, local: &mut Local, cx: &mut PanelCx<'_>) {
-    Card::new().show(ui, |ui| {
-        header(ui, media, local, cx);
-        let media_delete = &cx.shared.library.media_delete;
-        if let Some(failure) = media
-            .title
-            .as_deref()
-            .and_then(|title| failed_delete(title, media_delete))
-        {
-            ui.add_space(space::XS);
-            Notice::error(&failure.hint).show(ui);
-        }
-        ui.add_space(space::XS);
-        // The documents of no media have no labels to show and no form to open. Each document
-        // shows only its own tags, so the tags of the media are shown once, here.
-        match (media.title.as_deref(), &mut local.form) {
-            (Some(title), Some(Form::Media(draft))) if draft.is_for(title) => {
-                if media_form::form(ui, media, draft, cx.shared, cx.intents) {
-                    local.form = None;
-                }
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, true])
+        .show(ui, |ui| {
+            header(ui, media, local, cx);
+            let media_delete = &cx.shared.library.media_delete;
+            if let Some(failure) = media
+                .title
+                .as_deref()
+                .and_then(|title| failed_delete(title, media_delete))
+            {
+                ui.add_space(space::XS);
+                Notice::error(&failure.hint).show(ui);
             }
-            (Some(_), _) => media_card::labels_line(ui, media),
-            (None, _) => {}
-        }
-        ui.add_space(space::SM);
-        if media.documents.is_empty() {
-            ui.label(TextRole::Small.rich(NO_DOCUMENT).color(color::TEXT_MUTED));
-        }
-        for listed in &media.documents {
-            document::show(ui, listed, local, cx);
-        }
-    });
+            ui.add_space(space::XS);
+            // The documents of no media have no labels to show and no form to open. Each document
+            // shows only its own tags, so the tags of the media are shown once, here.
+            match (media.title.as_deref(), &mut local.form) {
+                (Some(title), Some(Form::Media(draft))) if draft.is_for(title) => {
+                    if media_form::form(ui, media, draft, cx.shared, cx.intents) {
+                        local.form = None;
+                    }
+                }
+                (Some(_), _) => media_card::labels_line(ui, media),
+                (None, _) => {}
+            }
+            ui.add_space(space::SM);
+            match media.documents.len() {
+                0 => ui.label(TextRole::Small.rich(NO_DOCUMENT).color(color::TEXT_MUTED)),
+                count => ui.label(TextRole::Small.rich(documents_text(count))),
+            };
+        });
+}
+
+fn documents_text(count: usize) -> String {
+    match count {
+        1 => "1 document".to_owned(),
+        count => format!("{count} documents"),
+    }
 }
 
 fn header(ui: &mut egui::Ui, media: &Media, local: &mut Local, cx: &PanelCx<'_>) {

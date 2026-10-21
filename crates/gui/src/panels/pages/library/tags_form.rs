@@ -2,7 +2,7 @@
 
 use eframe::egui;
 
-use super::{CANCEL, SAVE, SaveStep, reveal};
+use super::{CANCEL, SAVE, SaveStep};
 use crate::contract::{DocId, Document, DocumentTagsEdit, Intent};
 use crate::panels::labels::{TAGS, caption, list_of, text_of};
 use crate::state::{Library, Shared};
@@ -16,7 +16,6 @@ pub(super) struct Draft {
     pub(super) doc: DocId,
     tags: String,
     step: SaveStep,
-    should_reveal: bool,
 }
 
 impl Draft {
@@ -25,7 +24,6 @@ impl Draft {
             doc: document.id,
             tags: text_of(&document.tags),
             step: SaveStep::Typing,
-            should_reveal: true,
         }
     }
 }
@@ -45,7 +43,6 @@ pub(super) fn follow(draft: &mut Draft, library: &Library) -> bool {
             return false;
         }
         draft.step = SaveStep::Refused;
-        draft.should_reveal = true;
     }
     true
 }
@@ -58,7 +55,6 @@ pub(super) fn form(
     shared: &Shared,
     intents: &mut Vec<Intent>,
 ) -> bool {
-    let top = ui.cursor().top();
     let is_sent = draft.step == SaveStep::Sent;
     ui.add_enabled_ui(!is_sent, |ui| {
         caption(ui, TAGS);
@@ -86,6 +82,5 @@ pub(super) fn form(
         ui.add_space(space::SM);
         Notice::error(&failure.hint).show(ui);
     }
-    reveal(ui, top, &mut draft.should_reveal);
     is_cancelled
 }

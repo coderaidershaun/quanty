@@ -217,6 +217,9 @@ fn failures(shared: &Shared) -> Vec<&gui::contract::Failure> {
         shared.source.page.failure(),
         shared.source.concepts.failure(),
         shared.library.catalogue.failure(),
+        shared.contents.items.failure(),
+        shared.contents.concepts.failure(),
+        shared.insights.saved.failure(),
     ]
     .into_iter()
     .flatten()

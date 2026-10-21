@@ -1,30 +1,41 @@
-//! The Library page: the stored media with their documents, and what a person can do with each
-//! media and each document, with the sheet that asks before a delete.
+//! The Library page: the shelf of media on the left, the page of the open media or document on the
+//! right, what is said when there is nothing to list, and the sheet that asks before a delete.
 
+mod concepts;
+mod contents;
 mod delete;
 mod document;
+mod insights;
 mod media;
 mod media_form;
+mod overview;
+mod shelf;
 mod tags_form;
 
 use eframe::egui;
 
-use crate::contract::{Catalogue, Intent, Loadable};
+use crate::contract::{Catalogue, Document, Intent, Loadable, Media};
 use crate::panels::PanelCx;
 use crate::panels::labels::TRY_AGAIN;
-use crate::panels::seam::column;
-use crate::state::{Library, Shared};
+use crate::panels::seam::{column, framed};
+use crate::state::{Library, Open, Shared};
 use crate::theme::{Icon, TextRole, space};
 use crate::widgets::Placeholder;
 
-/// The column is never wider than this, however wide the window.
+/// The column of what is said in place of a list is never wider than this, however wide the
+/// window.
 const COLUMN_WIDTH: f32 = 960.0;
+const SHELF_WIDTH: f32 = 300.0;
+/// The page of the open item is never wider than this, and the desk shows to its right.
+const PAGE_WIDTH: f32 = 960.0;
 
 const TITLE: &str = "Library";
 const LOADING: &str = "Reading the library";
 const FAILED: &str = "The library did not load";
 const EMPTY: &str = "Your library is empty";
 const EMPTY_HINT: &str = "Add media on the Ingest tab.";
+const NOTHING_OPEN: &str = "Nothing is open";
+const NOTHING_OPEN_HINT: &str = "Choose a media or a chapter on the shelf.";
 const INGEST_RUNNING: &str = "An ingest is running. Media and tags can be edited, and documents and media deleted, when it is done.";
 const SAVE: &str = "Save";
 const CANCEL: &str = "Cancel";
@@ -34,6 +45,8 @@ const CANCEL: &str = "Cancel";
 /// delete that failed would show as a refused save or not at all.
 #[derive(Debug, Default)]
 pub struct Local {
+    find: String,
+    rows: shelf::Rows,
     form: Option<Form>,
     question: Option<delete::Question>,
 }
@@ -49,19 +62,6 @@ enum SaveStep {
     Typing,
     Sent,
     Refused,
-}
-
-/// A form or its refusal near the bottom of the list would open out of sight, so it is scrolled
-/// into view: once, so that the person can still scroll away, and only as far as needed, so that
-/// a form already on screen does not move. Call it last, because the form ends where the drawing
-/// ends.
-fn reveal(ui: &egui::Ui, form_top: f32, should_reveal: &mut bool) {
-    if !std::mem::take(should_reveal) {
-        return;
-    }
-    let drawn = ui.min_rect();
-    let form = egui::Rect::from_x_y_ranges(drawn.x_range(), form_top..=drawn.bottom());
-    ui.scroll_to_rect(form, None);
 }
 
 /// A save on its way must not lose its form, and a draft must not be made from labels that a
@@ -99,23 +99,20 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
         .catalogue
         .ready()
         .filter(|catalogue| !catalogue.media.is_empty());
-    column(ui, "library_column", COLUMN_WIDTH, |ui, _| {
-        if listed.is_none() {
-            // What is said in place of a list puts itself in the middle of the room it is
-            // given, so the frame takes the whole column first. With a list, the frame ends
-            // where the list ends.
+    match listed {
+        Some(catalogue) => panes(ui, catalogue, local, cx),
+        None => column(ui, "library_column", COLUMN_WIDTH, |ui, _| {
+            // What is said in place of a list puts itself in the middle of the room it is given,
+            // so the frame takes the whole column first.
             ui.set_min_height(ui.available_height());
-        }
-        ui.label(TextRole::Title.rich(TITLE));
-        if shared.ingest.is_running() {
-            ui.label(TextRole::Small.rich(INGEST_RUNNING));
-        }
-        ui.add_space(space::MD);
-        match listed {
-            Some(catalogue) => media_list(ui, catalogue, local, cx),
-            None => nothing_listed(ui, &shared.library.catalogue, cx.intents),
-        }
-    });
+            ui.label(TextRole::Title.rich(TITLE));
+            if shared.ingest.is_running() {
+                ui.label(TextRole::Small.rich(INGEST_RUNNING));
+            }
+            ui.add_space(space::MD);
+            nothing_listed(ui, &shared.library.catalogue, cx.intents);
+        }),
+    }
     if delete::sheet(ui.ctx(), &mut local.question, cx.intents) {
         local.form = None;
     }
@@ -143,14 +140,64 @@ fn nothing_listed(ui: &mut egui::Ui, catalogue: &Loadable<Catalogue>, intents: &
     }
 }
 
-fn media_list(ui: &mut egui::Ui, catalogue: &Catalogue, local: &mut Local, cx: &mut PanelCx<'_>) {
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, true])
-        .max_height(ui.available_height())
-        .show(ui, |ui| {
-            for media in &catalogue.media {
-                media::show(ui, media, local, cx);
-                ui.add_space(space::LG);
-            }
-        });
+/// Two sheets that fill the room: the shelf, and beside it the page of what is open.
+fn panes(ui: &mut egui::Ui, catalogue: &Catalogue, local: &mut Local, cx: &mut PanelCx<'_>) {
+    let room = ui.max_rect();
+    let shelf_width = SHELF_WIDTH.min(room.width());
+    let shelf = egui::Rect::from_min_size(room.min, egui::vec2(shelf_width, room.height()));
+    let page_left = shelf.right() + space::MD;
+    let page_width = (room.right() - page_left).clamp(0.0, PAGE_WIDTH);
+    let page = egui::Rect::from_min_size(
+        egui::pos2(page_left, room.top()),
+        egui::vec2(page_width, room.height()),
+    );
+    framed(ui, "library_shelf", shelf, |ui, height| {
+        ui.set_min_height(height);
+        shelf::show(ui, local, catalogue, cx);
+    });
+    framed(ui, "library_page", page, |ui, height| {
+        ui.set_min_height(height);
+        open_page(ui, catalogue, local, cx);
+    });
+}
+
+fn open_page(ui: &mut egui::Ui, catalogue: &Catalogue, local: &mut Local, cx: &mut PanelCx<'_>) {
+    if cx.shared.ingest.is_running() {
+        ui.label(TextRole::Small.rich(INGEST_RUNNING));
+        ui.add_space(space::SM);
+    }
+    match opened(catalogue, cx.shared.shelf.open.as_ref()) {
+        Some(Opened::Media(media)) => media::show(ui, media, local, cx),
+        Some(Opened::Document(media, document)) => document::show(ui, media, document, local, cx),
+        None => {
+            Placeholder::empty(Icon::LIBRARY, NOTHING_OPEN)
+                .hint(NOTHING_OPEN_HINT)
+                .show(ui);
+        }
+    }
+}
+
+/// What the page shows. A document comes with its media, for the line that names it.
+enum Opened<'a> {
+    Media(&'a Media),
+    Document(&'a Media, &'a Document),
+}
+
+/// `None` when nothing is open, or the open item is not in the catalogue.
+fn opened<'a>(catalogue: &'a Catalogue, open: Option<&Open>) -> Option<Opened<'a>> {
+    match open? {
+        Open::Media { title } => catalogue
+            .media
+            .iter()
+            .find(|media| media.title == *title)
+            .map(Opened::Media),
+        Open::Document(doc) => {
+            let media = catalogue.media_of(*doc)?;
+            let document = media
+                .documents
+                .iter()
+                .find(|document| document.id == *doc)?;
+            Some(Opened::Document(media, document))
+        }
+    }
 }

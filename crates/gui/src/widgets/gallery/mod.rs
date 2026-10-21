@@ -72,6 +72,7 @@ fn widgets(ui: &mut egui::Ui, state: &mut State) {
     controls::buttons(ui, state);
     controls::inputs(ui, state);
     controls::tabs(ui, state);
+    controls::list_rows(ui, state);
     frames::cards(ui, state);
     frames::surfaces(ui);
     marks::chips(ui, state);

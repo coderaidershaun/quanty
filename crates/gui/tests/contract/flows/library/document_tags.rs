@@ -9,7 +9,7 @@ use egui_kittest::kittest::Queryable as _;
 use gui::contract::{Command, DocumentTagsEdit};
 use gui::testkit;
 
-use super::{Ingests, REFUSED_HINT, documents_of, open_switched};
+use super::{HAWKES, Ingests, REFUSED_HINT, documents_of, open_document, open_switched};
 use crate::flows::recording::Seen;
 use crate::flows::{Window, click, field, has, is_enabled, press, retype, says};
 
@@ -29,6 +29,7 @@ fn a_refused_save_shows_its_hint_and_keeps_what_was_typed(
     refuses_saves: &AtomicBool,
 ) {
     let before = documents_of(harness).remove(0);
+    open_document(harness, HAWKES, &before.name().label());
     click(harness, Role::Button, "Edit tags");
     assert!(
         !has(harness, Role::TextInput, "Authors"),

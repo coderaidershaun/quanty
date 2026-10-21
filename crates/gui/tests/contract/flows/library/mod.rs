@@ -1,19 +1,21 @@
-//! The Library tab lists the stored media and their documents, copies the id of a document, opens
-//! it to read, changes its own tags and the labels of a media, deletes a document or a media after
-//! asking, and says what no sample shows.
+//! The Library tab lists the stored media on a shelf and shows the page of the open media or
+//! document, finds a media or a chapter, is opened from the Source panel, copies the id of a
+//! document, opens it to read, changes its own tags and the labels of a media, deletes a document
+//! or a media after asking, and says what no sample shows.
 
 mod catalogue;
 mod delete;
 mod delete_on_its_way;
 mod document_tags;
 mod media;
+mod navigation;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use eframe::egui;
-use eframe::egui::accesskit::Role;
-use egui_kittest::kittest::{NodeT as _, Queryable as _};
+use eframe::egui::accesskit::{Role, Toggled};
+use egui_kittest::kittest::NodeT as _;
 use gui::app::layout::DEFAULT_WINDOW;
 use gui::backend::fake::Fake;
 use gui::backend::{Handler, Reply};
@@ -21,14 +23,20 @@ use gui::contract::{Category, Command, Document, Failure, FailureKind, Intent, M
 use gui::testkit;
 
 use crate::flows::recording::{self, Seen};
-use crate::flows::{
-    Window, click, delete_buttons, hover_on, is_enabled, node, panels, says, shared,
-};
+use crate::flows::{Window, click, has, hover_on, is_enabled, node, panels, says, shared};
 
 const REFUSED_HINT: &str = "Start Qdrant at http://localhost:6334, then try again.";
 
-/// The frame of the page and the edge of its list cut off the last points of the page, so a
-/// control counts as in view only when it is this far inside the page.
+/// The titles of the sample library that the scenes list.
+const HAWKES: &str = "Hawkes Processes in Finance";
+const PAPER: &str = "Self-Exciting Order Flow";
+const BOOK: &str = "Option Volatility and Pricing";
+const SAMPLE_PAGES: &str = "Chapter 1 · Sample Pages";
+const NOTES: &str = "Quanty Sample Notes";
+const BLACK_SCHOLES: &str = "Chapter 2 · Black Scholes In Depth";
+
+/// The frame of the page cuts off the last points of the page, so a control counts as in view only
+/// when it is this far inside the page.
 const VIEW_INSET: f32 = 32.0;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -86,30 +94,66 @@ fn view() -> egui::Rect {
     panels(DEFAULT_WINDOW).page.shrink(VIEW_INSET)
 }
 
-/// egui keeps a node for a control that the list cuts off, and a click lands in the middle of the
-/// node, so the click would miss it. The wheel is turned until the whole control is in view. It
-/// only turns down, so cards are pressed from the top of the page to the bottom.
-fn bring_into_view(harness: &mut Window, role: Role, name: &str) {
-    let view = view();
-    for _ in 0..40 {
-        if view.contains_rect(node(harness, role, name).rect()) {
-            return;
-        }
-        harness.hover_at(view.center());
-        harness.event(egui::Event::MouseWheel {
-            unit: egui::MouseWheelUnit::Point,
-            delta: egui::vec2(0.0, -240.0),
-            phase: egui::TouchPhase::Move,
-            modifiers: egui::Modifiers::NONE,
-        });
-        harness.run_ok();
-    }
-    panic!("`{name}` never came wholly into view");
+/// Presses the row of a media on the shelf, so that its page shows and its documents unfold.
+fn open_media(harness: &mut Window, title: &str) {
+    click(harness, Role::Button, title);
 }
 
-fn click_on_the_card(harness: &mut Window, role: Role, name: &str) {
-    bring_into_view(harness, role, name);
-    click(harness, role, name);
+/// Opens the media, then presses the row of one of its documents.
+fn open_document(harness: &mut Window, media: &str, label: &str) {
+    open_media(harness, media);
+    click(harness, Role::Button, label);
+}
+
+/// A row of the shelf is chosen as a toggle is: the open item is the row that is on.
+fn is_open_row(harness: &Window, label: &str) -> bool {
+    node(harness, Role::Button, label)
+        .accesskit_node()
+        .toggled()
+        == Some(Toggled::True)
+}
+
+/// As a click on a row, for an app that is never at rest: a change on its way or an ingest that
+/// never ends, where `click` would wait for ever.
+fn open_row_while_busy(harness: &mut Window, label: &str) {
+    node(harness, Role::Button, label).click();
+    harness.run_ok();
+}
+
+/// Visits every media page and every document page of an app that is never at rest, and finds
+/// the pencil, the tags button and the Delete of each off.
+fn every_change_is_off_on_every_page(harness: &mut Window) {
+    let catalogue = shared(harness).library.catalogue.ready().cloned();
+    let catalogue = catalogue.expect("the catalogue is loaded");
+    let mut pages = 0;
+    for media in &catalogue.media {
+        let title = media.title.as_deref().expect("a sample media has a title");
+        open_row_while_busy(harness, title);
+        for button in [format!("Edit {title}"), format!("Delete media {title}")] {
+            assert!(
+                !is_enabled(harness, Role::Button, &button),
+                "`{button}` is off"
+            );
+        }
+        for document in &media.documents {
+            let label = document.name().label();
+            open_row_while_busy(harness, &label);
+            // The button of the tags is not there while the form of the tags is open.
+            if !has(harness, Role::TextInput, "Tags") {
+                assert!(
+                    !is_enabled(harness, Role::Button, "Edit tags"),
+                    "`Edit tags` is off"
+                );
+            }
+            let delete = format!("Delete document {label}");
+            assert!(
+                !is_enabled(harness, Role::Button, &delete),
+                "`{delete}` is off"
+            );
+            pages += 1;
+        }
+    }
+    assert!(pages > 1, "the documents were visited");
 }
 
 fn documents_of(harness: &Window) -> Vec<Document> {
@@ -138,35 +182,14 @@ fn nothing_can_be_edited_while_an_ingest_runs() {
     assert!(shared(&harness).ingest.is_running());
     node(&harness, Role::Tab, "Library").click();
     harness.run_ok();
-    let buttons: Vec<_> = harness
-        .query_all_by_role_and_label(Role::Button, "Edit tags")
-        .collect();
-    assert!(!buttons.is_empty());
-    for button in buttons {
-        assert!(button.accesskit_node().is_disabled());
-    }
-    let catalogue = shared(&harness).library.catalogue.ready().cloned();
-    let catalogue = catalogue.expect("the catalogue is loaded");
-    let titles: Vec<&str> = catalogue
-        .media
-        .iter()
-        .filter_map(|media| media.title.as_deref())
-        .collect();
-    assert!(!titles.is_empty());
-    for title in titles {
-        let pencil = format!("Edit {title}");
-        assert!(
-            !is_enabled(&harness, Role::Button, &pencil),
-            "the pencil of `{title}` is off while an ingest runs"
-        );
-    }
-    let deletes = delete_buttons(&harness);
-    assert!(!deletes.is_empty());
-    for button in &deletes {
-        assert!(button.accesskit_node().is_disabled(), "{button:?} is off");
-    }
-    let first_delete = deletes[0].accesskit_node().label().unwrap_or_default();
-    hover_on(&mut harness, Role::Button, &first_delete);
+    every_change_is_off_on_every_page(&mut harness);
+    open_row_while_busy(&mut harness, HAWKES);
+    open_row_while_busy(&mut harness, PAPER);
+    hover_on(
+        &mut harness,
+        Role::Button,
+        &format!("Delete document {PAPER}"),
+    );
     assert!(says(
         &harness,
         "Nothing can be deleted while an ingest runs."

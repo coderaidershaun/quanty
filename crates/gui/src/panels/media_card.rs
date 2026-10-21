@@ -112,13 +112,24 @@ pub(super) fn pencil(ui: &mut egui::Ui, title: &str, pencil: Pencil) -> bool {
     ui.add_enabled(pencil == Pencil::On, button).clicked()
 }
 
+/// The glyph of a category, on its badge and before its row on the shelf.
+pub(super) fn category_icon(category: Category) -> Icon {
+    match category {
+        Category::Book => Icon::BOOK,
+        Category::Paper => Icon::DOCUMENT,
+        Category::Other => Icon::FOLDER,
+    }
+}
+
 fn category_badge(category: Category) -> Badge<'static> {
-    let (tone, icon) = match category {
-        Category::Book => (Tone::Indigo, Icon::BOOK),
-        Category::Paper => (Tone::Purple, Icon::DOCUMENT),
-        Category::Other => (Tone::Ink, Icon::FOLDER),
+    let tone = match category {
+        Category::Book => Tone::Indigo,
+        Category::Paper => Tone::Purple,
+        Category::Other => Tone::Ink,
     };
-    Badge::new(category.label()).tone(tone).icon(icon)
+    Badge::new(category.label())
+        .tone(tone)
+        .icon(category_icon(category))
 }
 
 /// The authors and the tags of a media on one line that wraps, and nothing when it has neither.

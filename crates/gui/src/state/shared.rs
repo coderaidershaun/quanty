@@ -3,7 +3,9 @@
 
 use std::path::PathBuf;
 
-use super::{AskSession, DatasetJob, Health, IngestJob, Library, SourceNav};
+use super::{
+    AskSession, Contents, DatasetJob, Health, IngestJob, Insights, Library, Shelf, SourceNav,
+};
 use crate::contract::{
     Command, Effect, Event, Failure, Intent, Loadable, Notice, NoticeId, NoticeKind, Panel,
     RequestId, StartupFacts, Tab,
@@ -43,6 +45,9 @@ pub struct Shared {
     pub ask: AskSession,
     pub source: SourceNav,
     pub library: Library,
+    pub shelf: Shelf,
+    pub contents: Contents,
+    pub insights: Insights,
     pub ingest: IngestJob,
     pub datasets: DatasetJob,
     /// Newest first, this session only.
@@ -85,6 +90,9 @@ impl Shared {
             Intent::OpenSource { doc, page, piece } => self.open_source(doc, page, piece, effects),
             Intent::TurnPage(delta) => self.turn_page(delta, effects),
             Intent::ReloadSource => self.reload_source(effects),
+            Intent::OpenMedia { title } => self.open_media(title, effects),
+            Intent::OpenDocument(doc) => self.open_document(doc, effects),
+            Intent::ShowDocumentView(view) => self.show_document_view(view, effects),
             Intent::RefreshCatalogue => self.refresh_catalogue(effects),
             Intent::SetDocumentTags(edit) => self.set_document_tags(edit, effects),
             Intent::DeleteDocument(doc) => self.delete_document(doc, effects),
@@ -123,7 +131,18 @@ impl Shared {
             Event::Answer { request, result } => self.answer_arrived(request, result),
             Event::Page { request, result } => self.page_arrived(request, result),
             Event::PageConcepts { request, result } => self.page_concepts_arrived(request, result),
-            Event::Catalogue { request, result } => self.catalogue_arrived(request, result),
+            Event::ChapterContents { request, result } => {
+                self.chapter_contents_arrived(request, result);
+            }
+            Event::ChapterConcepts { request, result } => {
+                self.chapter_concepts_arrived(request, result);
+            }
+            Event::ChapterInsights { request, result } => {
+                self.chapter_insights_arrived(request, result);
+            }
+            Event::Catalogue { request, result } => {
+                self.catalogue_arrived(request, result, effects);
+            }
             Event::DocumentTagsSaved {
                 request,
                 doc,
@@ -162,6 +181,8 @@ impl Shared {
         !self.ask.is_running()
             && !self.source_is_busy()
             && !self.library_is_busy()
+            && !self.contents_is_busy()
+            && !self.insights_is_busy()
             && self.health.pending.is_none()
             && !self.ingest.is_working()
             && !self.datasets.is_running()

@@ -54,7 +54,11 @@ fn main() -> anyhow::Result<()> {
             let config =
                 Config::from_sources(|name| std::env::var(name).ok(), home.env_file.as_deref())
                     .context("could not read the settings")?;
-            app::run(LiveContext::new(config, RealServices), facts, Vec::new())
+            app::run(
+                LiveContext::new(config, RealServices::default()),
+                facts,
+                Vec::new(),
+            )
         }
     };
     opened.map_err(|error| anyhow::anyhow!("could not open the window: {error}"))

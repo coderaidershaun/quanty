@@ -14,7 +14,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::args::non_blank;
-use crate::jobs::{self, Jobs};
+use crate::jobs::{Jobs, StopState};
 use crate::services::Services;
 pub(crate) use error::DatasetToolError;
 pub(crate) use report::DatasetReport;
@@ -154,10 +154,15 @@ impl<S: Services> Datasets<S> {
             graph,
             report: started.report,
         };
-        jobs::spawn(report, work.run(), move |report, ended| match ended {
-            Ok(built) => report.finish(&built),
-            Err(error) => report.fail(error_text(error)),
-        });
+        self.jobs.spawn(
+            started.id,
+            report,
+            work.run(),
+            move |report, ended| match ended {
+                Ok(built) => report.finish(&built),
+                Err(error) => report.fail(error_text(error)),
+            },
+        );
         let mut watcher = started.watcher;
         let report = watcher
             .wait_for(|report| report.stage.is_some() || report.state != DatasetState::Running)
@@ -166,8 +171,13 @@ impl<S: Services> Datasets<S> {
             .map_err(|_| DatasetToolError::Lost)?;
         match report.state {
             DatasetState::Failed => Err(DatasetToolError::Failed(report.error.unwrap_or_default())),
-            DatasetState::Running | DatasetState::Done => Ok(report),
+            DatasetState::Running | DatasetState::Done | DatasetState::Stopped => Ok(report),
         }
+    }
+
+    /// Stops the build with this id when it is running. `None` when no build has the id.
+    pub(crate) async fn stop(&self, job_id: &str) -> Option<StopState> {
+        self.jobs.stop(job_id).await
     }
 
     /// The latest report of a build.

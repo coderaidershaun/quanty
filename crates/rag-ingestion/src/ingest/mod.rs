@@ -23,7 +23,7 @@ pub use concepts::{
 #[cfg(feature = "testing")]
 pub(crate) use insights::INSIGHTS_PROMPT;
 pub use insights::{
-    ChapterChoice, InsightsOutcome, InsightsSummary, InsightsWriter, StoredChapter,
+    ChapterChoice, InsightsNeed, InsightsOutcome, InsightsSummary, InsightsWriter, StoredChapter,
     StoredChaptersError, stored_chapters,
 };
 pub use items::{Item, LoneImage, chapter_items, context_line, document_title, image_items};

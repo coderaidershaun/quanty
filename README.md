@@ -39,11 +39,11 @@ The saved choices are `.quanty-model.json` in the Quanty home folder. The file h
 `thinking`. The desktop app, command line tools, OCR and MCP server read it before creating a model
 client, so no restart is needed. `rag-query` and the MCP `search` and `answer` tools use the Ask
 choice. `rag-ingest` (concepts, the insights of a chapter, `pdf`, `insights` and `health`), page
-conversion (`ocr` and the app's ingest) and the MCP `ingest_pdf` and `health` tools use the Ingest
-choice. `rag-dataset` and the MCP `build_dataset` tool use the Datasets choice. A file saved by an
-older version of quanty holds one choice and gives it to all three until a tab is changed; the next
-save writes the three choices. An MCP server that is still running from an older version must be
-restarted. Without that file, `LLM_PROVIDER`, `LLM_MODEL` and `LLM_THINKING` in the environment or
+conversion (`ocr` and the app's ingest) and the MCP `ingest_pdf`, `write_insights` and `health`
+tools use the Ingest choice. `rag-dataset` and the MCP `build_dataset` tool use the Datasets choice.
+A file saved by an older version of quanty holds one choice and gives it to all three until a tab is
+changed; the next save writes the three choices. An MCP server that is still running from an older
+version must be restarted. Without that file, `LLM_PROVIDER`, `LLM_MODEL` and `LLM_THINKING` in the environment or
 `.env` set the defaults, the same for all three. A saved UI choice takes precedence. Codex defaults
 to `gpt-6.1-sol` with `medium` thinking. Supported levels are `low`, `medium`, `high`, `xhigh`,
 `max` and, for models that support it, `ultra`. `CODEX_BIN` can name a custom Codex executable.
@@ -326,19 +326,27 @@ claude mcp add --scope user quanty -- sh -c "cd '$PWD' && exec '$PWD/target/rele
 
 The server finds `.env`, `content/` and `data/` from the folder it starts in: that is what the `cd` is for.
 
-| Tool             | What it does                                                     | Cost                                               |
-| ---------------- | ---------------------------------------------------------------- | -------------------------------------------------- |
-| `health`         | Says whether Qdrant, FalkorDB and the sign-in of the Ingest choice's agent are ready | Free                                               |
-| `list_documents` | Lists every stored document                                      | Free                                               |
-| `search`         | Finds the stored items nearest to a question                     | One small Gemini call                              |
-| `read_page`      | Reads one page of a document, in reading order                   | Free                                               |
-| `answer`         | Writes an answer from what `search` finds, with its sources      | A Gemini call and the subscription usage of the agent of the Ask choice |
-| `ingest_pdf`     | Converts one PDF of a media and stores it                        | Paid and slow: the agent of the Ingest choice, Jev and Gemini  |
-| `ingest_status`  | Says how an ingest job is going                                  | Free                                               |
-| `build_dataset`  | Builds a training dataset from the converted documents           | Paid and slow, it can take hours, unless `dry_run` is `true`, which is free |
-| `dataset_status` | Says how a dataset build is going and what it spent so far       | Free                                               |
+| Tool                 | What it does                                                     | Cost                                               |
+| -------------------- | ---------------------------------------------------------------- | -------------------------------------------------- |
+| `health`             | Says whether Qdrant, FalkorDB, the sign-in of the Ingest choice's agent and the two API keys are ready, and which model each kind of work uses | Free                                               |
+| `list_documents`     | Lists every stored document, whether it was ingested whole and how many items of each kind it has | Free                                               |
+| `search`             | Finds the stored items nearest to a question                     | One small Gemini call                              |
+| `read_page`          | Reads one page of a document, in reading order                   | Free                                               |
+| `chapter_contents`   | Lists every formula, figure, table and code listing of a document, in reading order | Free                                               |
+| `chapter_concepts`   | Lists the concepts of a document, or of one page of it           | Free                                               |
+| `chapter_insights`   | Gives the insights, takeaways and cheat sheet written for a document | Free                                           |
+| `answer`             | Writes an answer from what `search` finds, with its sources      | A Gemini call and the subscription usage of the agent of the Ask choice |
+| `edit_media`         | Changes the category, authors or tags of a stored media, in both stores | Free                                        |
+| `edit_document_tags` | Adds tags to a stored document or takes tags away, in both stores | Free                                              |
+| `ingest_pdf`         | Converts one PDF of a media and stores it                        | Paid and slow: the agent of the Ingest choice, Jev and Gemini  |
+| `ingest_status`      | Says how an ingest job is going                                  | Free                                               |
+| `write_insights`     | Writes the missing insights, takeaways and cheat sheets of stored documents | Paid and slow, a minute or more for each document, unless `dry_run` is `true`, which is free |
+| `insights_status`    | Says how an insights job is going and what became of each document | Free                                            |
+| `build_dataset`      | Builds a training dataset from the converted documents           | Paid and slow, it can take hours, unless `dry_run` is `true`, which is free |
+| `dataset_status`     | Says how a dataset build is going and what it spent so far       | Free                                               |
+| `stop_job`           | Stops a running ingest, insights job or dataset build            | Free                                               |
 
-An agent that can write its own answer should call `search`, not `answer`. The arguments, the first calls to try, `.mcp.json`, HTTP, how to send a PDF and how to build a dataset are in [docs/mcp.md](docs/mcp.md).
+An agent that can write its own answer should call `search`, not `answer`. The arguments, the first calls to try, `.mcp.json`, HTTP, how to send a PDF, how to write insights, how to stop a job and how to build a dataset are in [docs/mcp.md](docs/mcp.md). The tools do not delete and do not change the model choice: [docs/mcp.md](docs/mcp.md#8-what-is-not-a-tool) says why.
 
 ## Command line
 

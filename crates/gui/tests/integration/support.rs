@@ -281,7 +281,7 @@ pub fn closed(content_folder: &Path) -> LiveContext<KeyChecks<RealServices>> {
         ..closed_ports_config()
     };
     let services = KeyChecks {
-        inner: RealServices,
+        inner: RealServices::default(),
         gemini: Check::Unreachable,
         jev: Check::Unreachable,
     };

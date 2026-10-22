@@ -2,7 +2,6 @@
 //! chapters that are stored already, or lists what it would write. It needs the graph and the
 //! content folder only, so nothing is embedded.
 
-use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result};
@@ -10,31 +9,10 @@ use graph::FalkorGraph;
 use ocr::content::INSIGHTS_FILE;
 use rag_core::{AgentCli, Config, Llm, UsageTally, WorkKind, cost_text};
 use rag_ingestion::{
-    ChapterChoice, InsightsOutcome, InsightsWriter, StoredChapter, stored_chapters,
+    ChapterChoice, InsightsNeed, InsightsOutcome, InsightsWriter, StoredChapter, stored_chapters,
 };
 
 const ALREADY_SAVED: &str = "insights already saved";
-
-/// What is to be done for one chosen chapter.
-enum Need<'a> {
-    BookPart,
-    Write(&'a Path),
-    AlreadySaved,
-    NoChapter,
-}
-
-impl<'a> Need<'a> {
-    fn of(chapter: &'a StoredChapter) -> Need<'a> {
-        if !chapter.gets_insights {
-            return Need::BookPart;
-        }
-        match (&chapter.folder, chapter.has_insights) {
-            (None, _) => Need::NoChapter,
-            (Some(_), true) => Need::AlreadySaved,
-            (Some(folder), false) => Need::Write(folder),
-        }
-    }
-}
 
 /// Prints one line for each chosen chapter and, for the files that are missing, says that they
 /// would be written. No model is asked.
@@ -42,20 +20,20 @@ pub(super) async fn list(choice: ChapterChoice<'_>) -> Result<ExitCode> {
     let (config, chapters) = chosen(choice).await?;
     let (mut to_write, mut saved, mut without_chapter, mut book_parts) = (0, 0, 0, 0);
     for chapter in &chapters {
-        let what = match Need::of(chapter) {
-            Need::BookPart => {
+        let what = match chapter.need() {
+            InsightsNeed::BookPart => {
                 book_parts += 1;
                 InsightsOutcome::NoneForBookPart.line(chapter.doc_id)
             }
-            Need::Write(folder) => {
+            InsightsNeed::Write(folder) => {
                 to_write += 1;
                 format!("would write {}", folder.join(INSIGHTS_FILE).display())
             }
-            Need::AlreadySaved => {
+            InsightsNeed::AlreadySaved => {
                 saved += 1;
                 ALREADY_SAVED.to_owned()
             }
-            Need::NoChapter => {
+            InsightsNeed::NoChapter => {
                 without_chapter += 1;
                 no_chapter_line(&config)
             }
@@ -79,8 +57,8 @@ pub(super) async fn write(choice: ChapterChoice<'_>) -> Result<ExitCode> {
     // that is left is still asked and fails at once. Stopping there is not safe yet, because every
     // Codex error, a slow answer included, counts as such an error.
     for chapter in &chapters {
-        let what = match Need::of(chapter) {
-            Need::Write(folder) => {
+        let what = match chapter.need() {
+            InsightsNeed::Write(folder) => {
                 let writer = match &mut writer {
                     Some(writer) => writer,
                     unready => unready.insert(ready_writer().await?),
@@ -95,15 +73,15 @@ pub(super) async fn write(choice: ChapterChoice<'_>) -> Result<ExitCode> {
                 }
                 summary.outcome.line(chapter.doc_id)
             }
-            Need::BookPart => {
+            InsightsNeed::BookPart => {
                 book_parts += 1;
                 InsightsOutcome::NoneForBookPart.line(chapter.doc_id)
             }
-            Need::AlreadySaved => {
+            InsightsNeed::AlreadySaved => {
                 saved += 1;
                 ALREADY_SAVED.to_owned()
             }
-            Need::NoChapter => {
+            InsightsNeed::NoChapter => {
                 not_written += 1;
                 no_chapter_line(&config)
             }

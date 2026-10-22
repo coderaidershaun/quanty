@@ -189,6 +189,8 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
             "media_tags": ["hawkes"],
             "tags": ["options", "volatility"],
             "pages": 7,
+            "ingested_whole": true,
+            "items": { "chunk": 6, "formula": 6, "figure": 6, "table": 5, "code": 0 },
         }])
     );
 

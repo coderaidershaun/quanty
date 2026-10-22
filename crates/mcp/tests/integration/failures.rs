@@ -3,12 +3,12 @@
 
 use mcp::QuantyServer;
 use ocr::testing::sample_pdf;
-use rag_core::DocId;
+use rag_core::{DocId, EmbedError};
 use rag_ingestion::testing::StandInLlm;
 use serde_json::json;
 
 use crate::support::{
-    ClosedPorts, StandInServices, call, connect, error_text, sample_content_folder,
+    ClosedPorts, Library, StandInServices, call, connect, error_text, sample_content_folder,
     sample_document_id,
 };
 
@@ -193,4 +193,176 @@ async fn a_chapter_that_cannot_be_read_is_named_when_a_document_is_not_found() {
     assert!(text.contains(&asked), "{text}");
     assert!(text.contains("cannot be read"), "{text}");
     assert!(text.contains(&broken.display().to_string()), "{text}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_job_that_this_server_does_not_have_is_named() {
+    let ports = ClosedPorts::new();
+    let client = connect(ports.server()).await;
+
+    let stop = call(&client, "stop_job", json!({ "job_id": "no-such-job" })).await;
+
+    let text = error_text(&stop);
+    assert!(text.contains("no-such-job"), "{text}");
+    assert!(
+        text.contains("job ids are forgotten when the server restarts"),
+        "{text}"
+    );
+    let status = call(
+        &client,
+        "insights_status",
+        json!({ "job_id": "no-such-job" }),
+    )
+    .await;
+    let text = error_text(&status);
+    assert!(text.contains("no-such-job"), "{text}");
+    assert!(text.contains("call `write_insights` again"), "{text}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn write_insights_takes_exactly_one_choice() {
+    // The stores are down, so a choice that is checked after the first connection would be hidden
+    // behind the error of the store.
+    let ports = ClosedPorts::new();
+    let client = connect(ports.server()).await;
+    let id = sample_document_id().to_string();
+
+    for choice in [
+        json!({}),
+        json!({ "all": false }),
+        json!({ "media": "  " }),
+        json!({ "document_id": id, "media": "A Book" }),
+        json!({ "media": "A Book", "all": true }),
+        json!({ "document_id": id, "all": true }),
+    ] {
+        let result = call(&client, "write_insights", choice.clone()).await;
+
+        let text = error_text(&result);
+        assert!(
+            text.contains("give exactly one of `document_id`, `media` and `all: true`"),
+            "{choice}: {text}"
+        );
+    }
+    let bad_id = call(
+        &client,
+        "write_insights",
+        json!({ "document_id": "not-an-id" }),
+    )
+    .await;
+    let text = error_text(&bad_id);
+    assert!(text.contains("`document_id`"), "{text}");
+    assert!(text.contains("not-an-id"), "{text}");
+    for choice in [
+        json!({ "all": true }),
+        json!({ "media": "A Book", "dry_run": true }),
+        json!({ "document_id": id }),
+    ] {
+        let result = call(&client, "write_insights", choice.clone()).await;
+
+        let text = error_text(&result);
+        assert!(text.contains("falkor://127.0.0.1:1"), "{choice}: {text}");
+        assert!(text.contains("Call the `health` tool"), "{choice}: {text}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_library_edit_that_is_not_valid_is_refused_before_any_store() {
+    // The stores are down, so an edit that is checked after the first connection would be hidden
+    // behind the error of the store.
+    let ports = ClosedPorts::new();
+    let client = connect(ports.server()).await;
+    let id = sample_document_id().to_string();
+
+    for (tool, arguments, words) in [
+        (
+            "edit_media",
+            json!({ "media": "A Book" }),
+            "nothing to change",
+        ),
+        (
+            "edit_media",
+            json!({ "media": "A Book", "tags": ["good", " "] }),
+            "a tag in `tags` is blank",
+        ),
+        (
+            "edit_media",
+            json!({ "media": "A Book", "category": "poem" }),
+            "`category` is not valid",
+        ),
+        (
+            "edit_media",
+            json!({ "media": "  ", "tags": [] }),
+            "`media` is blank",
+        ),
+        (
+            "edit_document_tags",
+            json!({ "document_id": "not-an-id", "add": ["a"] }),
+            "not-an-id",
+        ),
+        (
+            "edit_document_tags",
+            json!({ "document_id": id }),
+            "nothing to change",
+        ),
+        (
+            "edit_document_tags",
+            json!({ "document_id": id, "remove": [" "] }),
+            "a tag in `add` or `remove` is blank",
+        ),
+    ] {
+        let result = call(&client, tool, arguments.clone()).await;
+
+        let text = error_text(&result);
+        assert!(text.contains(words), "{tool} {arguments}: {text}");
+        assert!(!text.contains("127.0.0.1"), "no store was reached: {text}");
+    }
+    for (tool, arguments) in [
+        ("edit_media", json!({ "media": "A Book", "tags": [] })),
+        (
+            "edit_document_tags",
+            json!({ "document_id": id, "add": ["a"] }),
+        ),
+    ] {
+        let result = call(&client, tool, arguments).await;
+
+        let text = error_text(&result);
+        assert!(text.contains("falkor://127.0.0.1:1"), "{tool}: {text}");
+        assert!(text.contains("Call the `health` tool"), "{tool}: {text}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored failures::"]
+async fn a_spent_credit_is_named_with_its_billing_page() {
+    let library = Library::ingested("mcp-credit").await;
+    let rejected = |status: u16, body: &'static str| {
+        let services = StandInServices::new().with_failing_embedder(move || EmbedError::Rejected {
+            status,
+            body: body.to_owned(),
+        });
+        library.server_over(&sample_content_folder(), services)
+    };
+    let client = connect(rejected(402, "Your prepayment credits are depleted")).await;
+
+    let search = call(&client, "search", json!({ "question": "what is delta?" })).await;
+
+    let text = error_text(&search);
+    assert!(
+        text.contains(
+            " Your Google Gemini prepaid credit is used up: add credit at https://aistudio.google.com/billing, then try again. Call the `health` tool"
+        ),
+        "{text}"
+    );
+    assert!(
+        text.ends_with("Call the `health` tool to see which service is not ready."),
+        "{text}"
+    );
+
+    let client = connect(rejected(500, "the service is busy")).await;
+
+    let search = call(&client, "search", json!({ "question": "what is delta?" })).await;
+
+    let text = error_text(&search);
+    assert!(text.contains("500"), "{text}");
+    assert!(!text.contains("prepaid credit"), "{text}");
 }

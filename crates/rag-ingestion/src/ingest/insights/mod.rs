@@ -14,7 +14,9 @@ use rag_core::{DocId, Llm, Question, UsageTally, error_chain};
 
 use question::{DocumentText, Notes, PROMPT_VERSION, SCHEMA, SYSTEM_PROMPT};
 
-pub use stored::{ChapterChoice, StoredChapter, StoredChaptersError, stored_chapters};
+pub use stored::{
+    ChapterChoice, InsightsNeed, StoredChapter, StoredChaptersError, stored_chapters,
+};
 
 use super::items::{Item, chapter_items};
 use super::summary::{IngestStep, Meter};

@@ -49,7 +49,7 @@ async fn main() -> ExitCode {
 
 async fn run(cli: Cli) -> Result<()> {
     let config = Config::load().context("could not read the settings")?;
-    let server = QuantyServer::new(config, PaidServices);
+    let server = QuantyServer::new(config, PaidServices::default());
     match cli.http {
         None => {
             tracing::info!("serving over the standard input and output");

@@ -4,6 +4,9 @@
 mod datasets;
 mod failures;
 mod ingest;
+mod insights;
+mod jobs;
+mod labels;
 mod library;
 mod retrieval;
 mod support;

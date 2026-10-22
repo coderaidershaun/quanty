@@ -1,13 +1,15 @@
 //! The Library tab lists the stored media on a shelf and shows the page of the open media or
 //! document, finds a media or a chapter, is opened from the Source panel, copies the id of a
-//! document, opens it to read, changes its own tags and the labels of a media, deletes a document
-//! or a media after asking, and says what no sample shows.
+//! document, opens it to read, shows the contents and the insights of a chapter, changes its own
+//! tags and the labels of a media, deletes a document or a media after asking, and says what no
+//! sample shows.
 
 mod catalogue;
 mod contents;
 mod delete;
 mod delete_on_its_way;
 mod document_tags;
+mod insights;
 mod media;
 mod navigation;
 

@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use export::{Block, Document, Source};
+use export::{Block, Document, InsightsSheet, SheetInsight, Source};
 use lopdf::Object;
 
 /// The picture of the figure in the sample answer: a real page figure from the sample chapters.
@@ -80,6 +80,33 @@ pub fn cheat_sheet() -> Document {
             },
         ],
         sources: Vec::new(),
+    }
+}
+
+/// What a chapter's saved insights hold: two insights (the first rests on two pages and holds a
+/// formula, the second on none), two takeaways, and a cheat sheet with a heading, a display
+/// formula and a table of two symbols. There are five formulas in all.
+pub fn insights_sheet() -> InsightsSheet {
+    InsightsSheet {
+        document_title: "Hull, chapter 2: Options".to_owned(),
+        model: "sonnet".to_owned(),
+        insights: vec![
+            SheetInsight {
+                text: "A portfolio of the option and $\\Delta$ shares has no random part left."
+                    .to_owned(),
+                pages: vec![1, 3],
+            },
+            SheetInsight {
+                text: "The price does not depend on how fast the stock is expected to rise."
+                    .to_owned(),
+                pages: Vec::new(),
+            },
+        ],
+        takeaways: vec![
+            "A hedged portfolio is riskless".to_owned(),
+            "A riskless portfolio earns the rate $r$".to_owned(),
+        ],
+        cheat_sheet: "### Put–call parity\n\n$$C - P = S - K e^{-rT}$$\n\n| Symbol | Meaning |\n| --- | --- |\n| $S$ | the stock price now |\n| $K$ | the strike |".to_owned(),
     }
 }
 

@@ -3,8 +3,10 @@
 use std::path::{Path, PathBuf};
 
 use eframe::egui;
+use export::{Format, InsightsSheet, SheetInsight};
 use gui::media::Offload;
 use gui::media::math::{Math, MathRef, MathState};
+use gui::media::rich_text::{DollarBlock, dollar_blocks};
 use gui::testkit;
 use gui::theme::TextRole;
 
@@ -30,9 +32,35 @@ impl Formulas {
                 let page: serde_json::Value =
                     serde_json::from_str(&read()).expect("a page.json is JSON");
                 symbols_in(&page, &mut formulas.symbols);
+            } else if name == "insights.json" {
+                let folder = path.parent().expect("a file has a folder");
+                formulas.add_insights(&read_insights(folder));
             }
         }
         formulas
+    }
+
+    /// The formulas of one saved insights file, as the Insights view reads it: every insight, the
+    /// cheat sheet, and the takeaways as the lines of a list.
+    fn add_insights(&mut self, saved: &ocr::ChapterInsights) {
+        let takeaways: Vec<String> = saved
+            .takeaways
+            .iter()
+            .map(|takeaway| format!("- {takeaway}"))
+            .collect();
+        let takeaways = takeaways.join("\n");
+        let insights = saved.insights.iter().map(|insight| insight.text.as_str());
+        let texts = insights.chain([saved.cheat_sheet.as_str(), takeaways.as_str()]);
+        for markdown in texts {
+            for block in dollar_blocks(markdown) {
+                match block {
+                    DollarBlock::Formula(latex) => self.blocks.push(latex),
+                    DollarBlock::Heading(text)
+                    | DollarBlock::Text(text)
+                    | DollarBlock::Table(text) => self.spans.extend(inline_spans(&text)),
+                }
+            }
+        }
     }
 
     fn asked(&self) -> Vec<MathRef<'_>> {
@@ -41,6 +69,12 @@ impl Formulas {
         let inline = inline.map(|latex| MathRef::inline(latex, TextRole::Body));
         blocks.chain(inline).collect()
     }
+}
+
+fn read_insights(folder: &Path) -> ocr::ChapterInsights {
+    ocr::ChapterInsights::read(folder)
+        .expect("a sample insights file reads")
+        .expect("the sample insights file is there")
 }
 
 fn files_under(folder: &Path) -> Vec<PathBuf> {
@@ -135,4 +169,52 @@ fn every_formula_in_the_committed_samples_is_typeset() {
         asked.len(),
         not_typeset.join("\n")
     );
+
+    assert_the_exported_file_finds_the_formulas_the_view_finds(&testkit::samples_folder());
+}
+
+/// The exported HTML of each sample insights file typesets as many formulas as the Insights view
+/// finds in it, so that the view and the file take the same text as formulas.
+fn assert_the_exported_file_finds_the_formulas_the_view_finds(samples: &Path) {
+    let folders: Vec<PathBuf> = files_under(samples)
+        .into_iter()
+        .filter(|path| path.file_name().is_some_and(|name| name == "insights.json"))
+        .filter_map(|path| path.parent().map(Path::to_owned))
+        .collect();
+    assert!(!folders.is_empty(), "no insights.json was found");
+
+    let temporary = tempfile::tempdir().expect("a temporary folder");
+    for folder in folders {
+        let saved = read_insights(&folder);
+        let mut found = Formulas::default();
+        found.add_insights(&saved);
+
+        let sheet = InsightsSheet {
+            document_title: "Sample".to_owned(),
+            model: saved.model.clone(),
+            insights: saved
+                .insights
+                .iter()
+                .map(|insight| SheetInsight {
+                    text: insight.text.clone(),
+                    pages: insight.pages.clone(),
+                })
+                .collect(),
+            takeaways: saved.takeaways.clone(),
+            cheat_sheet: saved.cheat_sheet.clone(),
+        };
+        let path = temporary.path().join("insights.html");
+        export::write(&export::insights_document(&sheet), Format::Html, &path)
+            .expect("the HTML is written");
+        let html = std::fs::read_to_string(&path).expect("the HTML can be read");
+
+        let in_view = found.blocks.len() + found.spans.len();
+        assert!(in_view > 0, "{} holds no formula", folder.display());
+        assert_eq!(
+            html.matches("<img class=\"math\"").count(),
+            in_view,
+            "the view and the file disagree on the formulas of {}",
+            folder.display()
+        );
+    }
 }

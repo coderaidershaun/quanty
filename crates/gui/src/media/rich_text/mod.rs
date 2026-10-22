@@ -1,8 +1,10 @@
 //! Stored Markdown drawn as text that a person can read and copy: emphasis, code, formulas on
-//! the baseline of their line, footnotes, citation chips and tables.
+//! the baseline of their line, footnotes, citation chips and tables. Markdown that a model wrote
+//! with its formulas between dollar signs is read into those blocks first.
 
 mod atom;
 mod breaker;
+mod dollar_markdown;
 mod flow;
 mod layouts;
 mod measure;
@@ -18,6 +20,7 @@ use eframe::egui;
 use super::Media;
 use crate::theme::TextRole;
 
+pub use self::dollar_markdown::{DollarBlock, dollar_blocks};
 pub use self::layouts::{LayoutStats, Layouts};
 pub(super) use self::paint::copy_is_chosen;
 

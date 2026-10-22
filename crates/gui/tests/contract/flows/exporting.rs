@@ -15,13 +15,13 @@ use gui::testkit;
 use super::recording::{self, Seen};
 use super::{Window, click, has, is_enabled, node, says, shared};
 
-type Asked = Rc<RefCell<Vec<(Format, String)>>>;
+pub(super) type Asked = Rc<RefCell<Vec<(Format, String)>>>;
 
 const QUESTION: &str = "How is the Black–Scholes formula derived and what assumptions does it make";
 
 /// Stands in for the save dialog: it writes down what it was asked and answers with the file
 /// name inside `folder`.
-fn stand_in_for_the_save_dialog(harness: &mut Window, folder: PathBuf) -> Asked {
+pub(super) fn stand_in_for_the_save_dialog(harness: &mut Window, folder: PathBuf) -> Asked {
     let asked = Asked::default();
     let record = asked.clone();
     harness.state_mut().set_save_dialog(move |format, name| {

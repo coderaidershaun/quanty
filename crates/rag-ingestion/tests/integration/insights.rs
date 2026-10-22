@@ -33,6 +33,10 @@ async fn rag_ingest_insights_writes_the_missing_files_of_stored_chapters() {
     let book = copy_sample_chapter(&support::sample_chapter(), &content);
     let notes_1 = copy_sample_chapter(&support::intuition_chapter(), &content);
     let notes_2 = copy_sample_chapter(&support::in_depth_chapter(), &content);
+    // The committed notes chapter carries its insights for the Library's Insights view, and this
+    // run is about chapters that have none.
+    std::fs::remove_file(notes_2.join(ocr::content::INSIGHTS_FILE))
+        .expect("the committed notes chapter carries its insights");
     // These models write no insights, so the three chapters are stored without them.
     let models = throwaway.models(StandInLlm::finding_nothing());
     let mut book_id = None;

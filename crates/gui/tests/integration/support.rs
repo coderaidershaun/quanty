@@ -7,7 +7,8 @@ use std::time::Duration;
 
 use graph::{ConceptNode, FalkorGraph, Mention, Relation, RelationKind};
 use gui::backend::live::{LiveContext, RealServices, Services};
-use gui::contract::{DocId, Failure};
+use gui::backend::{Handler, Reply};
+use gui::contract::{Command, DocId, Event, Failure};
 use ocr::convert::services::{Jev, JevError};
 use ocr::testing::{Scenario, StubServices};
 use ocr::{ChapterIndex, ChapterJob, ConversionSummary, ConvertError, PageProgress};
@@ -292,6 +293,13 @@ pub fn closed(content_folder: &Path) -> LiveContext<KeyChecks<RealServices>> {
 pub fn sample_chapter(chapter: &str) -> PathBuf {
     let folder = gui::testkit::samples_folder().join(chapter);
     std::fs::canonicalize(folder).expect("a committed chapter should exist")
+}
+
+/// Every event that `backend` sends for `command`, in the order it sends them.
+pub async fn served(backend: &impl Handler, command: Command) -> Vec<Event> {
+    let (reply, events, _stop) = Reply::collecting();
+    backend.serve(command, reply).await;
+    events.try_iter().collect()
 }
 
 pub fn document_of(chapter: &Path) -> DocId {

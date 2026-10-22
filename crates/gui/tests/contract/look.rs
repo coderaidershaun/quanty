@@ -261,6 +261,26 @@ static ROWS: &[Row] = &[
         window: DEFAULT_WINDOW,
         start: Start::AsItOpens,
     },
+    Row {
+        picture: "library-insights",
+        scene: "black-scholes",
+        window: [1536.0, 2112.0],
+        start: Start::AfterOpeningAViewOfAChapter {
+            media: NOTES_ROW,
+            chapter: BLACK_SCHOLES_ROW,
+            view: "Insights",
+        },
+    },
+    Row {
+        picture: "library-insights-none",
+        scene: "black-scholes",
+        window: DEFAULT_WINDOW,
+        start: Start::AfterOpeningAViewOfAChapter {
+            media: BOOK_ROW,
+            chapter: CHAPTER_ROW,
+            view: "Insights",
+        },
+    },
 ];
 
 // SMELL: this file is over 400 lines. The steps from here down, which bring the app to each

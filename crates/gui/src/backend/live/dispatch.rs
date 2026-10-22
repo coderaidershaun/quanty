@@ -4,9 +4,9 @@
 use super::contents;
 use super::context::{LiveContext, Services};
 use super::source::PageTarget;
-use super::{balances, datasets, ingest, library, query, source};
+use super::{balances, datasets, ingest, insights, library, query, source};
 use crate::backend::{Handler, Reply, exporting};
-use crate::contract::{Command, Event, Failure, RequestId, unknown_health};
+use crate::contract::{Command, Event, RequestId, unknown_health};
 
 impl<S: Services> Handler for LiveContext<S> {
     async fn serve(&self, command: Command, reply: Reply) {
@@ -59,12 +59,11 @@ impl<S: Services> Handler for LiveContext<S> {
                 datasets::build(self, request, &build, &reply).await;
             }
             Command::CheckHealth { request } => check_health(request, &reply),
-            Command::LoadChapterInsights { .. } => {
-                send_all(
-                    &reply,
-                    command.failed(&Failure::not_built("the insights of a chapter")),
-                );
-            }
+            Command::LoadChapterInsights {
+                request,
+                doc,
+                folder,
+            } => insights::load_chapter_insights(self, request, doc, folder, &reply).await,
             Command::Cancel(_) => {}
             Command::ReadBalances { request } => balances::read(self, request, &reply).await,
         }

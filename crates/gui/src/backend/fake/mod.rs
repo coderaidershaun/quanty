@@ -4,6 +4,7 @@
 mod balances;
 mod contents;
 mod fixtures;
+mod insights;
 mod library;
 mod scenes;
 
@@ -423,10 +424,8 @@ impl Handler for Fake {
             Command::BuildDataset { request, build } => {
                 self.build_dataset(request, &build, &reply).await;
             }
-            Command::LoadChapterInsights { .. } => {
-                for event in command.failed(&Failure::not_built("the insights of a chapter")) {
-                    reply.send(event);
-                }
+            Command::LoadChapterInsights { request, doc, .. } => {
+                self.load_chapter_insights(request, doc, &reply).await;
             }
             Command::Cancel(_) => {}
             Command::ReadBalances { request } => self.read_balances(request, &reply).await,

@@ -8,6 +8,7 @@ mod contents;
 mod copied_rules;
 mod datasets;
 mod ingest;
+mod insights;
 mod library;
 mod media_images;
 mod media_math;

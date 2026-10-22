@@ -13,12 +13,14 @@ backend = { path = "crates/backend" }
 base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 choices = { path = "crates/choices" }
 clap = { version = "4.6.7", default-features = false, features = ["derive", "error-context", "help", "std", "usage"] }
+console_error_panic_hook = { version = "0.1.7", default-features = false }
 contract = { path = "crates/contract" }
 dotenvy = "0.15.7"
 eframe = { version = "=0.36.2", default-features = false, features = ["accesskit", "default_fonts", "links", "wgpu"] }
 egui-phosphor = { version = "=0.14.0", default-features = false, features = ["light"] }
 egui_kittest = { version = "=0.36.2", default-features = false, features = ["eframe", "snapshot", "wgpu"] }
 ehttp = { version = "=0.5.0", default-features = false }
+ewebsock = { version = "=0.8.0", default-features = false }
 export = { path = "crates/export" }
 falkordb = { version = "0.10.4", features = ["tokio"] }
 futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
@@ -26,6 +28,7 @@ graph = { path = "crates/graph" }
 gui = { path = "crates/gui" }
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
 krilla = { version = "0.8.2", default-features = false, features = ["raster-images"] }
+log = { version = "0.4.34", default-features = false }
 lopdf = { version = "0.46.0", default-features = false }
 ocr = { path = "crates/ocr" }
 percent-encoding = { version = "2.3.2", default-features = false, features = ["std"] }
@@ -56,7 +59,11 @@ tracing = { version = "0.1.44", default-features = false, features = ["std", "lo
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "std"] }
 unicode-normalization = { version = "0.1.26", default-features = false }
 uuid = { version = "1.27.0", default-features = false, features = ["serde", "std", "v4", "v5", "js"] }
+wasm-bindgen = { version = "0.2.129", default-features = false, features = ["std"] }
+wasm-bindgen-futures = { version = "0.4.79", default-features = false, features = ["std"] }
+web-sys = { version = "0.3.106", default-features = false }
 web-time = { version = "1.1.0", default-features = false }
+wgpu = { version = "=30.0.1", default-features = false }
 
 [profile.dev.package."*"]
 debug = false

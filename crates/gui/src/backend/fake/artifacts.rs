@@ -145,15 +145,43 @@ fn plain(text: &str, limit: usize) -> bool {
         && !text
             .chars()
             .any(|character| character.is_control() || matches!(character, '\u{2028}' | '\u{2029}'))
-        && !text.contains('`')
-        && !text.contains("**")
-        && !text.split('<').skip(1).any(|tail| {
-            tail.starts_with(|character: char| character.is_ascii_alphabetic() || character == '/')
-                && tail.contains('>')
-        })
-        && !text.contains("__")
-        && !text.contains("](")
-        && !text.starts_with(['#', '*'])
+        && !has_formatting(text)
+}
+
+fn has_formatting(text: &str) -> bool {
+    let prefix = if text.starts_with('#') {
+        text.trim_start_matches('#')
+    } else if text.starts_with(['*', '-', '+']) {
+        &text[1..]
+    } else {
+        ""
+    };
+    if text.contains('`') || prefix.starts_with(char::is_whitespace) {
+        return true;
+    }
+    for (start, _) in text.match_indices('*') {
+        let before = text[..start].chars().next_back();
+        if before.is_some_and(|c| c.is_alphanumeric() || matches!(c, '_' | '*')) {
+            continue;
+        }
+        let width = text[start..].bytes().take_while(|&b| b == b'*').count();
+        let rest = &text[start + width..];
+        if rest.starts_with(char::is_whitespace) || rest.is_empty() {
+            continue;
+        }
+        let delimiter = &text[start..start + width];
+        for (end, _) in rest.match_indices(delimiter) {
+            let content = &rest[..end];
+            let after = rest[end + width..].chars().next();
+            if !content.is_empty()
+                && !content.ends_with(|c: char| c.is_whitespace() || c == '*')
+                && after.is_none_or(|c| !c.is_alphanumeric() && !matches!(c, '_' | '*'))
+            {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn normalize(value: &mut Value) {

@@ -50,26 +50,128 @@ pub struct ArtifactText {
 impl ArtifactText {
     /// Rejects multiline text, formatting and values outside the display limits.
     pub fn is_valid(&self) -> bool {
-        plain(&self.title, 80) && plain(&self.description, 280)
+        self.validate().is_ok()
+    }
+
+    /// Technical identifiers and punctuation are literal plain text.
+    ///
+    /// # Errors
+    /// Identifies the first invalid field with a reason and bounded escaped evidence.
+    pub fn validate(&self) -> Result<(), ArtifactTextError> {
+        validate_field("title", &self.title, 80)?;
+        validate_field("description", &self.description, 280)
     }
 }
 
-fn plain(text: &str, limit: usize) -> bool {
-    !text.trim().is_empty()
-        && text == text.trim()
-        && text.chars().count() <= limit
-        && !text
-            .chars()
-            .any(|character| character.is_control() || matches!(character, '\u{2028}' | '\u{2029}'))
-        && !text.contains('`')
-        && !text.contains("**")
-        && !text.split('<').skip(1).any(|tail| {
-            tail.starts_with(|character: char| character.is_ascii_alphabetic() || character == '/')
-                && tail.contains('>')
+/// A failed display constraint with at most 96 escaped excerpt characters plus an ellipsis.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{field}: {reason}; value=\"{excerpt}\"")]
+pub struct ArtifactTextError {
+    field: &'static str,
+    reason: TextReason,
+    excerpt: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+enum TextReason {
+    #[error("empty or whitespace-only text; supply source-grounded text")]
+    Empty,
+    #[error("leading or trailing whitespace; trim the field")]
+    Whitespace,
+    #[error("{actual} characters exceeds {limit}; shorten the field")]
+    Length { actual: usize, limit: usize },
+    #[error("line or paragraph break at character {position}; use one line")]
+    Break { position: usize },
+    #[error("control character at character {position}; remove it")]
+    Control { position: usize },
+    #[error("Markdown formatting; remove backticks, emphasis or heading/list markers")]
+    Formatting,
+}
+
+fn validate_field(field: &'static str, text: &str, limit: usize) -> Result<(), ArtifactTextError> {
+    let actual = text.chars().count();
+    let reason = if text.trim().is_empty() {
+        Some(TextReason::Empty)
+    } else if text != text.trim() {
+        Some(TextReason::Whitespace)
+    } else if actual > limit {
+        Some(TextReason::Length { actual, limit })
+    } else if let Some(position) = text
+        .chars()
+        .position(|c| matches!(c, '\n' | '\r' | '\u{2028}' | '\u{2029}'))
+    {
+        Some(TextReason::Break {
+            position: position + 1,
         })
-        && !text.contains("__")
-        && !text.contains("](")
-        && !text.starts_with(['#', '*'])
+    } else if let Some(position) = text.chars().position(char::is_control) {
+        Some(TextReason::Control {
+            position: position + 1,
+        })
+    } else if has_formatting(text) {
+        Some(TextReason::Formatting)
+    } else {
+        None
+    };
+    match reason {
+        Some(reason) => Err(ArtifactTextError {
+            field,
+            reason,
+            excerpt: excerpt(text),
+        }),
+        None => Ok(()),
+    }
+}
+
+fn excerpt(text: &str) -> String {
+    let mut excerpt = String::new();
+    let mut count = 0;
+    for character in text.chars() {
+        let escaped = character.escape_debug().to_string();
+        let width = escaped.chars().count();
+        if count + width > 96 {
+            excerpt.push('…');
+            break;
+        }
+        excerpt.push_str(&escaped);
+        count += width;
+    }
+    excerpt
+}
+
+fn has_formatting(text: &str) -> bool {
+    let prefix = if text.starts_with('#') {
+        text.trim_start_matches('#')
+    } else if text.starts_with(['*', '-', '+']) {
+        &text[1..]
+    } else {
+        ""
+    };
+    if text.contains('`') || prefix.starts_with(char::is_whitespace) {
+        return true;
+    }
+    for (start, _) in text.match_indices('*') {
+        let before = text[..start].chars().next_back();
+        if before.is_some_and(|c| c.is_alphanumeric() || matches!(c, '_' | '*')) {
+            continue;
+        }
+        let width = text[start..].bytes().take_while(|&b| b == b'*').count();
+        let rest = &text[start + width..];
+        if rest.starts_with(char::is_whitespace) || rest.is_empty() {
+            continue;
+        }
+        let delimiter = &text[start..start + width];
+        for (end, _) in rest.match_indices(delimiter) {
+            let content = &rest[..end];
+            let after = rest[end + width..].chars().next();
+            if !content.is_empty()
+                && !content.ends_with(|c: char| c.is_whitespace() || c == '*')
+                && after.is_none_or(|c| !c.is_alphanumeric() && !matches!(c, '_' | '*'))
+            {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Provenance belongs to each entry, because resumed batches can use different models.

@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use ocr::content::{ArtifactTarget, ArtifactText};
+use ocr::content::{ArtifactTarget, ArtifactText, ArtifactTextError};
 use serde::Deserialize;
 
 pub(super) const PROMPT: &str = include_str!("prompts/metadata.md");
@@ -34,9 +34,10 @@ pub(super) fn validate(
                 id: text.id.clone(),
             });
         }
-        if !text.is_valid() {
+        if let Err(source) = text.validate() {
             return Err(ReplyError::Text {
                 id: text.id.clone(),
+                source,
             });
         }
     }
@@ -58,10 +59,12 @@ pub(super) enum ReplyError {
     Unknown { id: String },
     #[error("duplicate id {id:?}")]
     Duplicate { id: String },
-    #[error(
-        "invalid text for {id:?}: use plain single-line text, title 1..80 characters, description 1..280 characters"
-    )]
-    Text { id: String },
+    #[error("invalid text for {id:?}: {source}")]
+    Text {
+        id: String,
+        #[source]
+        source: ArtifactTextError,
+    },
     #[error("missing ids: {ids:?}")]
     Missing { ids: Vec<String> },
 }

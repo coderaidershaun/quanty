@@ -81,8 +81,8 @@ async fn the_items_of_a_chapter_load_from_its_folder_while_the_stores_are_down()
     .map(|target| ocr::content::ArtifactEntry {
         text: ocr::content::ArtifactText {
             id: target.id.clone(),
-            title: "Source-backed title".to_owned(),
-            description: "Explains the source step.".to_owned(),
+            title: "Prefetching with __builtin_prefetch".to_owned(),
+            description: "Warms std::vector<InstrumentState> for the next event.".to_owned(),
         },
         model: "fixture".to_owned(),
         cache_identity: "fixture".to_owned(),
@@ -113,7 +113,7 @@ async fn the_items_of_a_chapter_load_from_its_folder_while_the_stores_are_down()
             .as_ref()
             .unwrap()
             .title,
-        "Source-backed title",
+        "Prefetching with __builtin_prefetch",
         "multipart metadata joins by the first piece"
     );
     assert_eq!(partial.items.last().unwrap().piece, listing.piece);
@@ -203,6 +203,60 @@ async fn the_fake_backend_lists_the_contents_of_every_sample_as_the_live_reader_
         compared += 1;
     }
     assert_eq!(compared, 3, "three chapters");
+    let copied = tempfile::tempdir().unwrap();
+    copy_folder(&home.join("../../samples"), &copied.path().join("samples"));
+    let fake = Fake::scene("idle", copied.path()).unwrap().instant();
+    let document = catalogue
+        .documents()
+        .find(|doc| doc.folder.is_some())
+        .unwrap();
+    let folder = copied.path().join("samples/content").join(
+        document
+            .folder
+            .as_ref()
+            .unwrap()
+            .canonicalize()
+            .unwrap()
+            .strip_prefix(home.join("../../samples/content").canonicalize().unwrap())
+            .unwrap(),
+    );
+    let mut saved = ocr::content::ChapterArtifacts::read(&folder)
+        .unwrap()
+        .unwrap();
+    for (title, description, valid) in [
+        (
+            "__builtin_prefetch",
+            "Uses std::vector<std::vector<int>>, __VA_ARGS__ and #include <vector>.",
+            true,
+        ),
+        (
+            "#include <vector>",
+            "Uses int **p, *ptr, a[i](x), $100 and prices < 120 > 0.",
+            true,
+        ),
+        ("A **bold** title", "Keeps source text.", false),
+        ("Plain title", "Uses `wrapped` text.", false),
+    ] {
+        saved.entries[0].text.title = title.to_owned();
+        saved.entries[0].text.description = description.to_owned();
+        saved.write(&folder).unwrap();
+        let (faked, _) = loaded(&fake, document.id, Some(&folder)).await;
+        let (live, _) = loaded(&cx, document.id, Some(&folder)).await;
+        let faked = faked.unwrap();
+        assert_eq!(
+            faked
+                .items
+                .iter()
+                .map(|item| &item.metadata)
+                .collect::<Vec<_>>(),
+            live.unwrap()
+                .items
+                .iter()
+                .map(|item| &item.metadata)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(faked.items[0].metadata.is_some(), valid);
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]

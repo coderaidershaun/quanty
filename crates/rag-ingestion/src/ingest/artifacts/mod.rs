@@ -174,7 +174,7 @@ impl<L: Llm> ArtifactWriter<L> {
 }
 
 // Raise this when chapter rendering or acceptance rules change, so old work is regenerated.
-const GENERATION_POLICY_VERSION: &str = "1";
+const GENERATION_POLICY_VERSION: &str = "2";
 
 fn generation_signature() -> String {
     Sha256::digest(format!("{GENERATION_POLICY_VERSION}:{PROMPT}:{SCHEMA}"))

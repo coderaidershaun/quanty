@@ -1,6 +1,7 @@
 //! Shared by the tests of this crate: the samples, the command that runs `rag-ingest` against
 //! throwaway stores, reads of the stores and the decision log, and the picture stand-in.
 
+pub mod artifacts;
 mod decisions;
 mod stand_in_image_services;
 

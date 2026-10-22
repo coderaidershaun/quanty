@@ -73,13 +73,22 @@ async fn chapter_artifacts_persist_and_resume() {
         let input: serde_json::Value = serde_json::from_str(&question.input).unwrap();
         assert_eq!(input["manifest"].as_array().unwrap().len(), 4);
         assert_eq!(input["manifest"][3]["pieces"].as_array().unwrap().len(), 2);
-        Ok(answer(question))
+        let mut value = answer(question);
+        value["artifacts"][3]["title"] = json!("Prefetching with __builtin_prefetch");
+        value["artifacts"][3]["description"] =
+            json!("Warms std::vector<InstrumentState> for the next event.");
+        Ok(value)
     });
     let writer = ArtifactWriter::new(llm.clone());
     let first = writer.write_missing(folder.path()).await.unwrap();
     assert_eq!(first.total, 4);
     let mut saved = ChapterArtifacts::read(folder.path()).unwrap().unwrap();
     assert_eq!(saved.entries.len(), 4);
+    assert!(saved.matches_source(&ocr::read_chapter(folder.path()).unwrap().artifact_source()));
+    assert_eq!(
+        saved.entries[3].text.title,
+        "Prefetching with __builtin_prefetch"
+    );
     let mut ambiguous_saved = saved.clone();
     ambiguous_saved
         .source
@@ -167,37 +176,37 @@ async fn chapter_artifacts_persist_and_resume() {
 async fn invalid_or_oversized_artifact_requests_cannot_finish() {
     use rag_ingestion::{ArtifactError, ArtifactState, assess_artifacts};
     let folder = chapter();
-    let mutations: &[fn(&mut serde_json::Value)] = &[
-        (|v| v["artifacts"] = json!([])),
-        (|v| {
-            let first = v["artifacts"][0].clone();
-            v["artifacts"].as_array_mut().unwrap().push(first);
-        }),
-        (|v| v["artifacts"][0]["id"] = json!("unknown")),
-        (|v| v["artifacts"][0]["title"] = json!(" ")),
-        (|v| v["artifacts"][0]["title"] = json!("x".repeat(81))),
-        (|v| v["artifacts"][0]["description"] = json!("x".repeat(281))),
-        (|v| v["artifacts"][0]["description"] = json!("two\nparagraphs")),
-        (|v| v["artifacts"][0]["title"] = json!("A **bold** title")),
-        (|v| v["artifacts"][0]["extra"] = json!(true)),
-        (|v| v["extra"] = json!(true)),
-    ];
-    for &mutation in mutations {
+    let mutations = crate::support::artifacts::REJECTIONS;
+    let mut formatting_rejection = None;
+    for &(mutation, reason) in mutations {
         let llm = StandInLlm::replying_to_questions(move |q, _| {
             let mut value = answer(q);
             mutation(&mut value);
             Ok(value)
         });
-        assert!(matches!(
-            ArtifactWriter::new(llm.clone())
-                .write_missing(folder.path())
-                .await,
-            Err(ArtifactError::Rejected { .. })
-        ));
+        let Err(ArtifactError::Rejected { diagnostics }) = ArtifactWriter::new(llm.clone())
+            .write_missing(folder.path())
+            .await
+        else {
+            panic!("expected rejection: {reason}");
+        };
+        assert!(diagnostics.contains(reason), "{diagnostics}");
+        if reason == "title: Markdown formatting" {
+            formatting_rejection = Some((mutation, diagnostics.clone()));
+        }
+        if reason.contains("control character") || reason.contains("10000") {
+            assert!(diagnostics.contains("\\0"), "{diagnostics}");
+            assert!(
+                diagnostics.len() < 400,
+                "bounded escaped excerpt: {}",
+                diagnostics.len()
+            );
+            assert!(!diagnostics.chars().any(char::is_control));
+        }
         assert_eq!(llm.calls(), 2);
         assert!(!folder.path().join("artifacts.json").exists());
         let second: serde_json::Value = serde_json::from_str(&llm.questions()[1].input).unwrap();
-        assert!(!second["validation_feedback"].as_str().unwrap().is_empty());
+        assert_eq!(second["validation_feedback"], diagnostics);
     }
     let retry_too_large = StandInLlm::replying_to_questions(|question, _| {
         assert!(
@@ -219,13 +228,16 @@ async fn invalid_or_oversized_artifact_requests_cannot_finish() {
         "rejected reply spend is reported before budget failure"
     );
     assert!(!folder.path().join("artifacts.json").exists());
-    let repaired = StandInLlm::replying_to_questions(|q, _| {
+    let (formatting_mutation, formatting_feedback) = formatting_rejection.unwrap();
+    let repaired = StandInLlm::replying_to_questions(move |q, _| {
         let input: serde_json::Value = serde_json::from_str(&q.input).unwrap();
+        let mut value = answer(q);
         if input["validation_feedback"] == "" {
-            Ok(json!({"artifacts":[]}))
+            formatting_mutation(&mut value);
         } else {
-            Ok(answer(q))
+            assert_eq!(input["validation_feedback"], formatting_feedback);
         }
+        Ok(value)
     });
     ArtifactWriter::new(repaired.clone())
         .write_missing(folder.path())
@@ -273,17 +285,40 @@ async fn invalid_or_oversized_artifact_requests_cannot_finish() {
         0
     );
     assert_eq!(llm.calls(), 0);
-    let finance = chapter();
-    let plain = StandInLlm::replying_to_questions(|q, _| {
-        let mut value = answer(q);
-        value["artifacts"][0]["description"] =
-            json!("Compares a $100 strike with prices < 120 and payoffs > 0.");
-        Ok(value)
-    });
-    ArtifactWriter::new(plain)
-        .write_missing(finance.path())
-        .await
-        .unwrap();
+    for (title, description) in [
+        (
+            "Software prefetching with __builtin_prefetch",
+            "Prefetches std::vector<InstrumentState> before the MarketDataHandler loop.",
+        ),
+        (
+            "__VA_ARGS__",
+            "Expands a variadic macro with std::vector<std::vector<int>>.",
+        ),
+        (
+            "#include <vector>",
+            "Includes <vector> for int **p, *ptr and a[i](x).",
+        ),
+        (
+            "*ptr",
+            "Compares a $100 strike with prices < 120 and payoffs > 0.",
+        ),
+    ]
+    .into_iter()
+    .map(|(title, description)| (title.to_owned(), description.to_owned()))
+    .chain(std::iter::once(("é".repeat(80), "界".repeat(280))))
+    {
+        let technical = chapter();
+        let plain = StandInLlm::replying_to_questions(move |q, _| {
+            let mut value = answer(q);
+            value["artifacts"][0]["title"] = json!(title);
+            value["artifacts"][0]["description"] = json!(description);
+            Ok(value)
+        });
+        ArtifactWriter::new(plain)
+            .write_missing(technical.path())
+            .await
+            .unwrap();
+    }
     let duplicate = chapter();
     let page = duplicate.path().join("page-num-1/page.json");
     let mut file: serde_json::Value =

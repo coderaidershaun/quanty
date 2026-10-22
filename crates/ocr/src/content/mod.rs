@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 pub use artifacts::{
     ARTIFACTS_FILE, ARTIFACTS_VERSION, ArtifactEntry, ArtifactPiece, ArtifactSource,
-    ArtifactTarget, ArtifactText, ChapterArtifacts,
+    ArtifactTarget, ArtifactText, ArtifactTextError, ChapterArtifacts,
 };
 pub use catalogue::{Catalogue, ChapterEntry, ImageEntry, saved_images};
 pub use conversion::{

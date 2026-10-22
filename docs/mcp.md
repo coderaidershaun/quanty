@@ -4,7 +4,7 @@
 
 ## 1. Before you start it
 
-The server uses the same things as the other commands. Do the set up in [README.md](../README.md) first:
+The server uses the same things as the other commands. Do the set up in the [README](../README.md#quickstart-run-the-app) first:
 
 - Qdrant and FalkorDB are running (`docker compose up -d`).
 - `.env` holds the two keys, `EMBEDDING_GEMINI_API_KEY` and `CONVERTER_JEV_API_KEY`.
@@ -12,6 +12,14 @@ The server uses the same things as the other commands. Do the set up in [README.
 - Poppler is installed (only `ingest_pdf` needs it).
 
 The `health` tool tells an agent whether Qdrant, FalkorDB, the sign-in of the Ingest choice's agent and the two keys are ready, and which model each kind of work uses. It does not check `ANTHROPIC_API_KEY` or Poppler.
+
+### Which database it uses
+
+The server reads the library from the database that is chosen in the desktop app, the file `.quanty-databases.json` beside `.env`: its Qdrant, its FalkorDB, its graph and its content folder. See [Choose a database](guide.md#choose-a-database). With no such file, or with Local chosen, it uses the local Docker stores and `content/`, as before.
+
+- **It reads the choice once, when it starts.** After you switch the database in the app, restart the server, or it keeps using the database it started on. An agent that started it must start it again.
+- **A store setting in the client wins.** When the configuration of the MCP client (the `env` of an entry in `.mcp.json`, or the environment of the command) sets any of `QDRANT_URL`, `QDRANT_API_KEY`, `FALKORDB_URL`, `FALKORDB_PASSWORD`, `FALKORDB_GRAPH` or `CONTENT_DIR` to a value that is not blank, the server ignores the chosen database and uses the environment, `.env` and the defaults for all six. This is the rule of every program: [reference.md](reference.md#the-order-of-sources) has it.
+- **The `health` tool** checks the stores of the database the server started on.
 
 ### Where it must start
 

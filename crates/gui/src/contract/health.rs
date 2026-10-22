@@ -1,6 +1,8 @@
 //! The six things the app needs before it can work, what is known about each, which failures
 //! name one of them, and what the last read of each paid account found.
 
+use choices::{Database, Databases};
+
 use super::failure::{Failure, FailureKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -42,6 +44,10 @@ pub struct StartupFacts {
     /// The name of the scene when the app runs from fixtures.
     pub fixture: Option<String>,
     pub anthropic_api_key_set: bool,
+    /// The database called Local: what the settings and the environment say of the stores.
+    pub local_database: Database,
+    /// The saved databases and the name of the chosen one.
+    pub databases: Databases,
 }
 
 impl Failure {

@@ -1,25 +1,19 @@
-//! The footer: what is known of each paid account, and a link to the page that shows its credit.
-//! No provider gives a balance for an API key, so no entry shows an amount. It draws static text
-//! with no spinner, so a window at rest asks for no repaint.
+//! The left of the footer: what is known of each paid account, and a link to the page that shows
+//! its credit. No provider gives a balance for an API key, so no entry shows an amount. It draws
+//! static text with no spinner, so a window at rest asks for no repaint.
 
 use eframe::egui;
 
 use crate::contract::{Balance, FailureKind, Intent, Provider, ReadFailure};
 use crate::panels::PanelCx;
-use crate::theme::{Icon, TextRole, Tone, color, hairline, space};
+use crate::theme::{Icon, TextRole, Tone, space};
 use crate::widgets::{Button, ControlSize, dot};
 
 /// The room kept at the right end of an entry for its link, so that a long hint is cut short
 /// before the link would pass the end of the entry.
 const LINK_ROOM: f32 = 104.0;
 
-pub(super) fn show(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
-    let footer = ui.max_rect();
-    let painter = ui.painter();
-    let line = hairline(painter, color::HAIRLINE);
-    painter.hline(footer.x_range(), footer.top() + line.width / 2.0, line);
-
-    let row = footer.shrink2(egui::vec2(space::LG, 0.0));
+pub(super) fn show(ui: &mut egui::Ui, row: egui::Rect, cx: &mut PanelCx<'_>) {
     let width = (row.width() - space::LG) / 2.0;
     for (place, provider) in Provider::ALL.into_iter().enumerate() {
         let left = row.left() + place as f32 * (width + space::LG);

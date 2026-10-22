@@ -10,8 +10,8 @@ use gui::app::layout::DEFAULT_WINDOW;
 use gui::backend::fake::{self, Fake};
 use gui::backend::{Backend, Handler, Reply};
 use gui::contract::{
-    AskDraft, Command, DatasetStage, DocumentName, Event, Failure, FailureKind, Intent, Loadable,
-    RequestId, SearchReply, StartupFacts, Tab,
+    AskDraft, Command, Databases, DatasetStage, DocumentName, Event, Failure, FailureKind, Intent,
+    Loadable, Provider, RequestId, SearchReply, StartupFacts, Tab,
 };
 use gui::state::{DatasetJob, HealthLevel, IngestJob, Shared};
 use gui::testkit::{self, run_until, sample};
@@ -59,6 +59,11 @@ fn assert_scene(name: &str, shared: &Shared) {
             documents == Some(5) && ask.search == Loadable::Idle
         }
         "first-run" | "empty-library" => documents == Some(0) && ask.search == Loadable::Idle,
+        "no-database" => {
+            shared.database.in_use.is_none()
+                && shared.library.catalogue == Loadable::Idle
+                && ask.search == Loadable::Idle
+        }
         "black-scholes" => results == Some(9) && nodes > Some(0) && blocks > Some(0),
         "no-answer" => results == Some(9) && blocks == Some(0),
         "results-only" => results == Some(9) && nodes > Some(0) && ask.answer == Loadable::Idle,
@@ -134,6 +139,9 @@ fn open_scene(name: &str, rests: bool) -> Harness<'static, App> {
         "gallery" => ("the catalogue", |shared| {
             shared.library.catalogue.ready().is_some()
         }),
+        "no-database" => ("the balances", |shared| {
+            shared.balances.shown(Provider::Google).is_some()
+        }),
         "ingest-running" => ("the check", |shared| {
             matches!(shared.ingest, IngestJob::Checked { .. })
         }),
@@ -146,7 +154,7 @@ fn open_scene(name: &str, rests: bool) -> Harness<'static, App> {
 
 #[test]
 fn every_scene_opens_and_every_sample_page_loads() {
-    assert_eq!(fake::scenes().len(), 26);
+    assert_eq!(fake::scenes().len(), 27);
     for scene in fake::scenes() {
         let mut harness = open_scene(scene.name, scene.rests);
         assert_scene(scene.name, harness.state().shared());
@@ -242,6 +250,8 @@ impl Handler for PanicsAfterTheResults {
 fn app_on(handler: impl Handler, opening: Vec<Intent>) -> Harness<'static, App> {
     let facts = StartupFacts {
         home: testkit::samples_folder(),
+        local_database: Fake::local_database(&testkit::samples_folder()),
+        databases: Databases::choosing_local(),
         ..StartupFacts::default()
     };
     Harness::builder()

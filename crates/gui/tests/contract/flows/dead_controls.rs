@@ -110,8 +110,13 @@ fn assert_start_up_sent_only_its_own_commands(scene: &str, seen: &Seen) {
         "`{scene}`"
     );
     assert_eq!(
+        counted(|c| matches!(c, Command::UseDatabase { .. })),
+        1,
+        "`{scene}`"
+    );
+    assert_eq!(
         seen.all().len(),
-        1 + asks + pages + checks + builds + reads,
+        2 + asks + pages + checks + builds + reads,
         "`{scene}` sent a command that its opening does not ask for: {:?}",
         seen.all()
     );

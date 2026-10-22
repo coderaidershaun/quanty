@@ -4,6 +4,7 @@
 mod artifacts;
 mod balances;
 mod contents;
+mod databases;
 mod fixtures;
 mod insights;
 mod library;
@@ -435,6 +436,7 @@ impl Handler for Fake {
             }
             Command::Cancel(_) => {}
             Command::ReadBalances { request } => self.read_balances(request, &reply).await,
+            Command::UseDatabase { request, .. } => self.use_database(request, &reply).await,
         }
     }
 }

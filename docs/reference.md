@@ -1,6 +1,6 @@
 # quanty reference
 
-Every command in full detail. For the short version, see the [README](../README.md).
+Every command in full detail. For the short version, see the [guide](guide.md).
 
 PDFs are turned into searchable items (text, LaTeX formulas, figures, tables and code listings). An LLM extracts the concepts each item mentions. Concepts are global, so two PDFs that both discuss Black–Scholes attach to the same node, and every new PDF links itself to everything already ingested with no manual work.
 
@@ -18,7 +18,7 @@ PDFs are turned into searchable items (text, LaTeX formulas, figures, tables and
 | --- | --- |
 | `ocr` | PDF to text, LaTeX, figures and figure descriptions |
 | `rag-core` | Shared types, IDs, config, `Embedder` and `Llm` traits, Qdrant wrapper |
-| `model-settings` | The saved model and thinking choices, one each for Ask, Ingest and Datasets, that the desktop app, the command line programs, the MCP server and `ocr` read (`.quanty-model.json`); the file holds `ask`, `ingest` and `datasets`, each with `provider`, `model` and `thinking`, and a file saved by an older version of quanty, with one choice, gives that choice to all three |
+| `choices` | The choices a person saves in the quanty folder, which every program reads. The model and thinking choices, one each for Ask, Ingest and Datasets, that the desktop app, the command line programs, the MCP server and `ocr` read (`.quanty-model.json`); the file holds `ask`, `ingest` and `datasets`, each with `provider`, `model` and `thinking`, and a file saved by an older version of quanty, with one choice, gives that choice to all three. And the saved databases and the chosen one (`.quanty-databases.json`; see "The database in use"). It also holds `ApiKey`, the secret that shows nothing of itself when printed, which `rag-core` re-exports |
 | `graph` | FalkorDB graph store |
 | `rag-ingestion` | Chunking, embedding, concept extraction and resolution, and the insights of a chapter (`rag-ingest`) |
 | `rag-retrieval` | Vector search, graph expansion, ranking, answers with citations (`rag-query`) |
@@ -66,13 +66,95 @@ An ingest adds one more file to the folder, `insights.json`, which the conversio
 
 Later crates read a converted document back, in reading order, with `ocr::read_chapter`.
 
+## The database in use
+
+A database is the place a library lives: a Qdrant store, a FalkorDB store, the name of the graph, and the content folder that holds the converted pages. The reserved database **Local** is whatever the settings say of those, which `.env`, the environment and the defaults give: the two Docker stores of `docker-compose.yaml` and `content/`. Every other database is a saved one. Local is listed first, is never saved, cannot be edited in the app, and its name is taken in any capitals.
+
+### The settings that name a database
+
+| Setting | What it is | Default |
+| --- | --- | --- |
+| `QDRANT_URL` | The gRPC address of Qdrant. The gRPC port, not 6333 | `http://localhost:6334` |
+| `QDRANT_API_KEY` | The API key, only for a Qdrant that has one. Sent in the `api-key` header, never in the address | none |
+| `FALKORDB_URL` | The address of FalkorDB | `falkor://localhost:6379` |
+| `FALKORDB_PASSWORD` | The password, only for a FalkorDB that has one. It is set on the connection, never in the address | none |
+| `FALKORDB_GRAPH` | The graph that documents and items are written to | `quanty` |
+| `CONTENT_DIR` | The content folder | `content` |
+
+A value that is empty or only spaces counts as not set. A password in the address (`falkor://:pw@host`) still works, but it can then show up in a message: keep it in `FALKORDB_PASSWORD`. A key or a password that is not printable ASCII is refused in a saved database, because the Qdrant client cannot send it as a header and would print it in its error.
+
+### The order of sources
+
+For these six settings, the first source that has them wins, and it wins for all six or for none:
+
+1. The environment. When any of the six is set in the environment to a value that is not blank, all six come from the environment, then `.env`, then the defaults, and no saved database is applied, so a key never meets another server. A value in `.env` does not count for this rule.
+2. The chosen saved database, when the file names one: it gives all six. An entry with no key leaves the key unset, even when `.env` has one.
+3. `.env`.
+4. The defaults.
+
+When the file names Local, or names nothing, the settings are those of `.env` and the defaults. Every other setting (the keys of Gemini and Jev, the folders of the kept answers, the datasets) comes from the environment, `.env` and the defaults as before, whatever database is chosen.
+
+### The file
+
+The saved databases and the chosen one are one file, `.quanty-databases.json`, in the quanty folder beside `.env`. A program that is not the app looks for it beside the nearest `.env` at or above the current folder, else in the current folder. The app looks for it in its home folder. A file that is not there means that nothing is chosen. The file is written whole, through a temporary file that is then renamed, and only its owner can read it (mode 0600), because it holds keys.
+
+```json
+{
+  "chosen": "Office",
+  "saved": [
+    {
+      "name": "Office",
+      "qdrant_url": "http://127.0.0.1:16334",
+      "qdrant_api_key": "THE_QDRANT_KEY_GOES_HERE",
+      "falkordb_url": "falkor://127.0.0.1:16379",
+      "falkordb_password": "THE_FALKORDB_PASSWORD_GOES_HERE",
+      "falkordb_graph": "quanty",
+      "content_folder": "/Volumes/quanty-content"
+    }
+  ]
+}
+```
+
+| Key | What it holds |
+| --- | --- |
+| `chosen` | The name of the database in use: `"Local"`, the name of a saved one, or left out when nothing is chosen. A name that is neither Local nor saved is an error |
+| `saved` | The saved databases, each with `name`, `qdrant_url`, `falkordb_url`, `falkordb_graph` and `content_folder`, and with `qdrant_api_key` and `falkordb_password` when they have them |
+
+A saved database is not accepted, and the **Use** button stays off for it, if its name, address or graph is blank, if its name is Local in any capitals, if its content folder is blank or is not an absolute path, or if its key or password is not printable ASCII. A file that cannot be read or is not a databases file stops a program with `could not read the settings` and the place of the fault. The message names the line and the column and never quotes the file, because the file holds keys.
+
+### Who reads it
+
+`Config::load` applies the chosen database, and every program that reads the stores calls it: `rag-ingest`, `rag-query`, `rag-dataset` and `quanty-mcp`. When the environment names a store, the file is not read at all, so a broken file never stops a command that set its own stores. `quanty-mcp` reads it once, when it starts: restart it after a switch (see [mcp.md](mcp.md#which-database-it-uses)). The desktop app reads it in `main`, applies the database it names to its settings before the first command, and keeps Local for the sheet.
+
+`Config::load_local` is `load` without the file: the environment, `.env` and the defaults. The test harnesses build their settings with it, so a database chosen in the app never reaches a test. The store-backed tests of `rag-core`, `graph` and `rag-ingestion` need the local stores, started with `docker compose up -d`, with neither `QDRANT_API_KEY` nor `FALKORDB_PASSWORD` set, because the clients that clean up after them carry neither.
+
+### In the desktop app
+
+The entry at the right end of the footer reads **Database: not chosen** while nothing is in use, and else **Database: <name> · <state>**, with the state `not checked`, `checking…`, `connected` or `down`. It is a ghost button, draws static text with no spinner, and opens the sheet. A hint for a failure stands beside it, cut short.
+
+The sheet is a modal. Its **Database** list holds Local, the saved databases and **New…**. It has the fields **Name**, **Qdrant URL**, **Qdrant API key**, **FalkorDB URL**, **FalkorDB password**, **Graph** and **Content folder**; the two secret fields hide what is typed. Local is shown and cannot be edited ("Edit .env to change Local"). The buttons:
+
+| Button | What it does |
+| --- | --- |
+| **Use** | Checks the database, then switches to it and saves the choice. It is off, with the reason as its hover text, while an ask, an ingest or a dataset build runs or a check is on its way, while a saved database's fields fail the checks above, and while the draft is named like another saved database |
+| **Forget** | Removes a saved database from the file at once. It is shown for saved databases only, and is off for the one in use |
+| **Cancel** | Closes the sheet. Off while no database is in use |
+
+The check of **Use** takes at most 5 seconds for each store. For a saved database it first needs the content folder to be a folder, else the failure is "The content folder <path> is not there. Mount it, then try again." Qdrant is asked whether the items collection exists, which needs the API key; the graph is connected with the password. The settings of the app change only when both answer, and the stores kept open for the old settings are dropped. When anything fails, nothing changes but the message in the sheet: the database in use, its state in the footer and the health of its stores stay. **Use** on the database already in use is a new check of it, and its result shows in the footer. A switch that succeeds under another name, from a saved database that was edited, forgets the old name and saves the new one. The sheet opens by itself, and ignores **Esc** and a click beside it, while no database is in use and while a check it sent is on its way.
+
+At start the app runs on the chosen database from its first command, and checks it: the Library is read after that check ends, whatever its result, so that a store that is down is reported as before. When the environment names a store, the app treats Local as chosen; a **Forget** then saves Local as the chosen database, and a **Use** of a saved database switches for that session and saves that database. The app reads the file even then, because the sheet needs the list.
+
+### What stays on each machine
+
+The kept answers (`data/concept-cache`, `data/dataset-cache`, `data/concept-decisions.jsonl`) and the built datasets (`datasets/`) are not part of a database. They stay on the machine that made them. The stored path of a figure's picture, and the folder of a document in the graph, are absolute paths from the machine that ingested; the folder of a document is found again by a scan of the content folder, so pages work from any mount path, while the pictures of figures in an answer show only when the content folder is reached at the same path on every machine. [server.md](server.md) sets a server up.
+
 ## Checking the stores
 
 ```bash
 cargo run --release -p rag-ingestion --bin rag-ingest -- health
 ```
 
-Prints one line each for Qdrant, FalkorDB and the sign-in of the Ingest choice's agent, and exits with 1 when any of them is not ready. The addresses come from `QDRANT_URL` (the gRPC port, default `http://localhost:6334`) and `FALKORDB_URL` (default `falkor://localhost:6379`). The environment wins over `.env`.
+Prints one line each for Qdrant, FalkorDB and the sign-in of the Ingest choice's agent, and exits with 1 when any of them is not ready. The addresses come from the database in use (see "The database in use"): `QDRANT_URL` (the gRPC port, default `http://localhost:6334`) and `FALKORDB_URL` (default `falkor://localhost:6379`) unless a saved database is chosen. The Qdrant line needs the API key, when the Qdrant has one: it asks whether the items collection exists, which a wrong key cannot do, and a refused key shows as `FAILED` with the cause. The environment wins over `.env`.
 
 If another program on your machine, such as a Homebrew Redis, already listens on port 6379, `localhost:6379` reaches that program and not the FalkorDB container. The FalkorDB line then fails with "did not answer like FalkorDB". Stop the other program or map the container to another port, and set `FALKORDB_URL` to match.
 
@@ -646,13 +728,13 @@ Each file holds the question, the title of the answer, its headings and paragrap
 
 Only one export is written at a time, and while one is, the three **Export** items are off and the pointer on one reads "A file is being exported." A strip under the row of tabs says how the last export ended, until it is dismissed with its cross: "Exported the answer as PDF" with "Saved to <path>.", or, when the file could not be written, "Could not export the answer as PDF" with the path and the reason that the system gave, such as "No such file or directory".
 
-The program reads `.env`, `content/` and `data/` from its home folder. It finds that folder in this order: the folder given with `--home <folder>`; the folder that `QUANTY_HOME` names; the nearest folder at or above the current one that holds a `.env`; the nearest folder at or above the program's own folder that holds one, which is what a start from Finder uses; and last the current folder, with no `.env`.
+The program reads `.env`, `.quanty-databases.json`, `content/` and `data/` from its home folder. It finds that folder in this order: the folder given with `--home <folder>`; the folder that `QUANTY_HOME` names; the nearest folder at or above the current one that holds a `.env`; the nearest folder at or above the program's own folder that holds one, which is what a start from Finder uses; and last the current folder, with no `.env`.
 
 A citation opens its page when the document's folder is found. The document is looked for under the content folder, by its source file; a folder that is stored with the document is used first, when there is one. A document that is found in neither way shows "The page was not found" with what to do: this is what a document that was ingested from a folder outside the content folder shows.
 
 The filters of the Ask bar are lists. **Media** offers "All media" and each media that has a document. **Document** offers "All documents" and the documents of the chosen media, in reading order: a chapter shows as "Chapter <number> · <name>", and any other document, such as a part of a book or a paper, by its own title. It is off until a media is chosen, and choosing another media clears it. With a document chosen, an ask looks at that document alone. **Authors** offers "All authors" and each author of a document, once. **Tags** lets you tick any number of tags, from the tags of the media and the own tags of the documents. **Category** offers "Any category", Book, Paper and Other. An ask looks only at the documents that match every filter, as the flags of `rag-query` do. The Source panel picks its page by **Media** and **Document**: a chapter shows as "Chapter <number> · <name>", and any other document by its title.
 
-`--fixture <scene>` runs the whole window on built-in data from `samples/content`, with no store, no model and no cost. `--fixture list` prints the scenes: each is one state of the screen, such as `black-scholes` (a full answer), `stores-down` or `first-run`. The Datasets tab has three: `datasets-ready`, `datasets-running` and `datasets-failed`. Two show the footer: `balances-unread`, where Google cannot be read and Jev refuses its key, and `out-of-credit`, where Google says the credit is spent in a search and Jev says so in an ingest. The Ingest tab has four: `ingest-ready`, a chapter checked and ready to start; `ingest-failed`, a start that fails at a page; `ingest-running`, a start that stops at page 3 of 12 and never ends; and `ingest-insights-failed`, a start that stores its items and cannot write its insights.
+`--fixture <scene>` runs the whole window on built-in data from `samples/content`, with no store, no model and no cost. `--fixture list` prints the scenes: each is one state of the screen, such as `black-scholes` (a full answer), `stores-down` or `first-run`. The Datasets tab has three: `datasets-ready`, `datasets-running` and `datasets-failed`. `no-database` is the first start: no database is chosen, so the window opens on the sheet that asks which one to use, and nothing loads until **Use**. A fixture never reads `.quanty-databases.json`, so it never names a real server, and every other scene opens with Local chosen. Two show the footer: `balances-unread`, where Google cannot be read and Jev refuses its key, and `out-of-credit`, where Google says the credit is spent in a search and Jev says so in an ingest. The Ingest tab has four: `ingest-ready`, a chapter checked and ready to start; `ingest-failed`, a start that fails at a page; `ingest-running`, a start that stops at page 3 of 12 and never ends; and `ingest-insights-failed`, a start that stores its items and cannot write its insights.
 
 The **Library** tab has two panes. On the left is the shelf: the box **Find**, then one row for each media, with a glyph for its category and, at the right end, how many documents it has, and under the media that is open one row for each of its documents, in the order of the book. Only the open media shows its documents, so a library of any size is a short list: a media and then one of its chapters are two clicks away. The documents that belong to no media, such as a picture that stands alone, are one row, "No media". A click on a row opens it, and the first media is open when the library has been read. **Find** narrows the shelf as you type, whatever the capitals: it keeps every media whose title holds the text, with all its documents, and every other media that has a document whose name holds the text, with only those documents. A document's name is as the app shows it, such as "Chapter 3 · Greeks". **Clear**, at the end of the box, empties it, and a click on a row keeps the text. When nothing matches, the shelf says so. Tab walks the box and the rows, and Space or Enter opens a row. The Library tab shows again what was open when it was left.
 
@@ -696,7 +778,7 @@ While a build runs, the form is off and a bar shows the stage in words: "Startin
 
 At the end a notice says "Built <name>" with the counts, such as "2 documents, 4 sections for training and 2 held out, 1 rejected. 12 synthetic texts and 8 fine-tuning examples (5 think, 3 direct)." For a dry run it ends "Dry run: 70 model calls planned, none made." Then come the tokens of each model, the cost, and "Saved in" the folder of the dataset, `DATASET_DIR/<name>` made absolute. A build that failed shows "The build failed" with what to do. **Try again**, after a failure, starts the build that the form holds now. **Build another** clears the notice and brings **Start build** back.
 
-The **footer** is the strip at the foot of every tab, also while a panel is maximised. It has one entry for Google Gemini, the key `EMBEDDING_GEMINI_API_KEY` that embeds, and one for Jev, the key `CONVERTER_JEV_API_KEY` that finds the math on a page. An entry is a dot, the account and its state in words, a short hint, and a link: **Billing** opens https://aistudio.google.com/billing, and **Console** opens https://console.typesafe.ai/ in your browser, because Jev documents no billing page of its own. Clicking the entry reads it again.
+The **footer** is the strip at the foot of every tab, also while a panel is maximised. At its left it has one entry for Google Gemini, the key `EMBEDDING_GEMINI_API_KEY` that embeds, and one for Jev, the key `CONVERTER_JEV_API_KEY` that finds the math on a page. At its right end it has a third entry, the database in use, which opens a sheet: see "The database in use", which also says how the stores and the content folder are chosen. The next paragraphs are about the first two. An entry is a dot, the account and its state in words, a short hint, and a link: **Billing** opens https://aistudio.google.com/billing, and **Console** opens https://console.typesafe.ai/ in your browser, because Jev documents no billing page of its own. Clicking the entry reads it again.
 
 **It never shows an amount, a made-up one or an estimate, because neither provider gives a balance for an API key.** What the providers' documents say, read on 21 October 2026:
 
@@ -727,7 +809,7 @@ Not built yet: the notices tray, the help sheet and the health check.
 
 ## The MCP server
 
-`quanty-mcp` lets an AI agent search the stored library, read the pages of its documents, get a cited answer, list the formulas, figures, tables, code listings and concepts of a chapter, read its insights, export them to a PDF, a Markdown file or an HTML file, send a PDF to be ingested, write the missing insights of stored chapters, change the labels of a media or a document, stop a job and build a training dataset, over the Model Context Protocol. `build_dataset` starts a build, and `dataset_status` gives its stage, its usage and its cost while it runs; `write_insights` and `insights_status` do the same for insights, `stop_job` stops an ingest, an insights job or a build, and `export_insights` writes the saved insights of a document to one file at the path the caller gives, for nothing. `health` also gives the state of the Gemini and Jev keys, with the page where each credit is added, and the model of each kind of work, and the text of a failing call whose cause is a spent credit names that page. The tools do not delete a document or change a model choice: [mcp.md](mcp.md#8-what-is-not-a-tool) says why. How to build and start it, its tools and their costs are in [mcp.md](mcp.md).
+`quanty-mcp` lets an AI agent search the stored library, read the pages of its documents, get a cited answer, list the formulas, figures, tables, code listings and concepts of a chapter, read its insights, export them to a PDF, a Markdown file or an HTML file, send a PDF to be ingested, write the missing insights of stored chapters, change the labels of a media or a document, stop a job and build a training dataset, over the Model Context Protocol. `build_dataset` starts a build, and `dataset_status` gives its stage, its usage and its cost while it runs; `write_insights` and `insights_status` do the same for insights, `stop_job` stops an ingest, an insights job or a build, and `export_insights` writes the saved insights of a document to one file at the path the caller gives, for nothing. `health` also gives the state of the Gemini and Jev keys, with the page where each credit is added, and the model of each kind of work, and the text of a failing call whose cause is a spent credit names that page. The tools do not delete a document or change a model choice: [mcp.md](mcp.md#8-what-is-not-a-tool) says why. It reads the chosen database once, when it starts, and an MCP client that sets a store setting makes it ignore the chosen database. How to build and start it, its tools and their costs are in [mcp.md](mcp.md).
 
 ## Costs
 

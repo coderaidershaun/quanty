@@ -29,7 +29,8 @@ async fn finish<S: Services>(
     // graph that is down fails it.
     let graph = cx.graph().await?;
     let llm = cx.dataset_llm();
-    let options = options_of(wanted, cx.config());
+    let config = cx.config();
+    let options = options_of(wanted, &config);
     let report = rag_dataset::build(&options, &llm, Some(&graph), &mut |step, spent| {
         let progress = DatasetProgress {
             stage: step.into(),

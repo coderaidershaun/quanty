@@ -112,6 +112,8 @@ pub fn app_at(scene: &str, size: [f32; 2], pixels_per_point: f32) -> Harness<'st
         .instant();
     let opening = fake.opening();
     let facts = StartupFacts {
+        local_database: Fake::local_database(&home),
+        databases: fake.databases(),
         home,
         env_file: None,
         fixture: Some(scene.to_owned()),

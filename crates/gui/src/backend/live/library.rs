@@ -35,11 +35,12 @@ async fn read_catalogue<S: Services>(cx: &LiveContext<S>) -> Result<Catalogue, F
         .await
         .map_err(|error| cx.failure(error))?;
     let saved = graph.media().await.map_err(|error| cx.failure(error))?;
+    let config = cx.config();
     let found = chapters_on_disk(
         records
             .iter()
             .map(|record| (record.node.id, record.chapter_folder.as_deref())),
-        &cx.config().content_folder,
+        &config.content_folder,
     );
     Ok(catalogue_from(records, found, saved))
 }
@@ -71,8 +72,9 @@ pub(super) async fn delete_document<S: Services>(
     doc: DocId,
     reply: &Reply,
 ) {
+    let config = cx.config();
     let result = with_stores(cx, async |stores| {
-        rag_ingestion::delete_document(doc.into(), &cx.config().content_folder, stores).await
+        rag_ingestion::delete_document(doc.into(), &config.content_folder, stores).await
     })
     .await;
     reply.send(Event::DocumentDeleted {
@@ -91,8 +93,9 @@ pub(super) async fn delete_media<S: Services>(
     title: &str,
     reply: &Reply,
 ) {
+    let config = cx.config();
     let result = with_stores(cx, async |stores| {
-        rag_ingestion::delete_media(title, &cx.config().content_folder, stores).await
+        rag_ingestion::delete_media(title, &config.content_folder, stores).await
     })
     .await;
     reply.send(Event::MediaDeleted { request, result });

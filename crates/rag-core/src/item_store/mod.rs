@@ -38,12 +38,16 @@ impl ItemStore {
         &self.collection.name
     }
 
+    /// Asks whether the items collection exists, which needs the API key, writes nothing and is
+    /// fine when the collection is missing. The health check of Qdrant would not do: it answers
+    /// without a key, so a wrong key would pass.
+    ///
     /// # Errors
-    /// [`StoreError::Unreachable`] when Qdrant does not answer a health check.
+    /// [`StoreError::Unreachable`] when Qdrant does not answer, or refuses the API key.
     pub async fn ping(&self) -> Result<(), StoreError> {
         self.collection
             .client
-            .health_check()
+            .collection_exists(self.collection.name.as_str())
             .await
             .map(|_| ())
             .map_err(|source| StoreError::Unreachable {

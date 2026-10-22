@@ -49,4 +49,59 @@ fn health_names_each_store_it_cannot_reach_and_exits_non_zero() {
         lines[1]
     );
     assert!(lines[2].starts_with("agent:"), "{}", lines[2]);
+
+    // The database chosen in the app, saved beside the `.env`, is the one the command checks.
+    // Where the environment names a store setting, the person's own setting wins instead.
+    let databases = serde_json::json!({
+        "chosen": "Elsewhere",
+        "saved": [{
+            "name": "Elsewhere",
+            "qdrant_url": "http://127.0.0.1:3",
+            "falkordb_url": "falkor://127.0.0.1:4",
+            "falkordb_graph": "elsewhere",
+            "content_folder": settings_folder.path().join("content"),
+        }],
+    });
+    std::fs::write(
+        settings_folder.path().join(".quanty-databases.json"),
+        databases.to_string(),
+    )
+    .unwrap();
+    let (_, lines) = run_health(|command| {
+        command.current_dir(&working_folder);
+        for name in STORE_NAMES {
+            command.env_remove(name);
+        }
+    });
+    assert_checks_name(&lines, "http://127.0.0.1:3", "falkor://127.0.0.1:4");
+    let (_, lines) = run_health(|command| {
+        command
+            .current_dir(&working_folder)
+            .env_remove("QDRANT_URL")
+            .env("FALKORDB_URL", "falkor://127.0.0.1:1");
+    });
+    assert_checks_name(&lines, "http://127.0.0.1:1", "falkor://127.0.0.1:1");
+}
+
+const STORE_NAMES: [&str; 6] = [
+    "QDRANT_URL",
+    "QDRANT_API_KEY",
+    "FALKORDB_URL",
+    "FALKORDB_PASSWORD",
+    "FALKORDB_GRAPH",
+    "CONTENT_DIR",
+];
+
+fn assert_checks_name(lines: &[String], qdrant_url: &str, falkordb_url: &str) {
+    assert_eq!(lines.len(), 3, "one line for each check: {lines:?}");
+    assert!(
+        lines[0].starts_with(&format!("Qdrant: FAILED ({qdrant_url})")),
+        "{}",
+        lines[0]
+    );
+    assert!(
+        lines[1].starts_with(&format!("FalkorDB: FAILED ({falkordb_url})")),
+        "{}",
+        lines[1]
+    );
 }

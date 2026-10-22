@@ -59,6 +59,8 @@ pub(super) fn open_with<H: Handler>(
         .instant();
     let opening = fake.opening();
     let facts = StartupFacts {
+        local_database: Fake::local_database(&home),
+        databases: fake.databases(),
         home,
         env_file: None,
         fixture: Some(scene.to_owned()),

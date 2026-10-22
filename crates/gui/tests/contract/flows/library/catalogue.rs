@@ -9,10 +9,11 @@ use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::DEFAULT_WINDOW;
+use gui::backend::fake::Fake;
 use gui::backend::{Handler, Reply};
 use gui::contract::{
-    Catalogue, Category, ChapterLabel, Command, DocId, Document, DocumentView, Event, Failure,
-    Intent, ItemCounts, Media, NewMedia, StartupFacts, Tab,
+    Catalogue, Category, ChapterLabel, Command, Databases, DocId, Document, DocumentView, Event,
+    Failure, Intent, ItemCounts, Media, NewMedia, StartupFacts, Tab,
 };
 use gui::state::{Open, SourceTarget};
 use gui::testkit;
@@ -48,8 +49,11 @@ impl Handler for Listing {
 }
 
 fn open_on(handler: impl Handler, size: [f32; 2]) -> Window {
+    let home = testkit::samples_folder();
     let facts = StartupFacts {
-        home: testkit::samples_folder(),
+        local_database: Fake::local_database(&home),
+        databases: Databases::choosing_local(),
+        home,
         env_file: None,
         fixture: None,
         anthropic_api_key_set: false,

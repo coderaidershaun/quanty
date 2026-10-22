@@ -65,6 +65,10 @@ impl<S: Services> Handler for LiveContext<S> {
             } => chapter::load_chapter_insights(self, request, doc, folder, &reply).await,
             Command::Cancel(_) => {}
             Command::ReadBalances { request } => balances::read(self, request, &reply).await,
+            Command::UseDatabase { request, database } => {
+                let result = self.use_database(&database).await;
+                reply.send(Event::DatabaseUsed { request, result });
+            }
         }
     }
 }

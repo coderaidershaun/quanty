@@ -29,6 +29,14 @@ pub(super) struct Script {
     pub(super) datasets: Datasets,
     /// What a read of the balances finds.
     pub(super) balances: BalanceReads,
+    pub(super) database: Choice,
+}
+
+/// Whether the saved choices of the scene name a database.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(super) enum Choice {
+    Local,
+    Nothing,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -111,6 +119,8 @@ pub(super) enum Opening {
     BuildsADataset,
 }
 
+// SMELL: this file is over 400 lines, and each new scene adds to it. The kinds of script above
+// are the part to move out first, so that this file keeps only the scenes.
 const HEALTHY: Script = Script {
     search: Search::Found,
     graph: Graph::Drawn,
@@ -126,9 +136,10 @@ const HEALTHY: Script = Script {
         google: Balance::NotOffered,
         jev: Balance::NotOffered,
     },
+    database: Choice::Local,
 };
 
-static SCENES: [Scene; 26] = [
+static SCENES: [Scene; 27] = [
     Scene {
         name: "idle",
         about: "Healthy, with the sample library and nothing asked.",
@@ -381,6 +392,16 @@ static SCENES: [Scene; 26] = [
         script: Script {
             search: Search::Fails(FailureKind::EmbeddingOutOfCredit),
             ingest: Ingest::Fails(FailureKind::ConverterOutOfCredit),
+            ..HEALTHY
+        },
+    },
+    Scene {
+        name: "no-database",
+        about: "No database chosen yet: the window asks which one to use before anything loads.",
+        rests: false,
+        script: Script {
+            opening: Opening::Nothing,
+            database: Choice::Nothing,
             ..HEALTHY
         },
     },

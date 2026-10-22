@@ -21,7 +21,7 @@ pub use balances::Balances;
 pub use contents::Contents;
 pub use datasets::DatasetJob;
 pub use exporting::{ExportJob, ExportState};
-pub use health::{Health, HealthLevel};
+pub use health::{DatabaseLink, Health, HealthLevel};
 pub use ingest::IngestJob;
 pub use insights::Insights;
 pub use library::{Busy, Library, MediaDelete, MediaEditing, MediaSave};

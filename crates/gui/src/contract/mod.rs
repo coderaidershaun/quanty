@@ -18,6 +18,7 @@ pub use ask::{
     Answer, AnswerBlock, AskDraft, AskMode, Filters, ItemKind, NothingFound, Reason, ResultItem,
     RetrievalTrace, SearchReply,
 };
+pub use choices::{Database, Databases};
 pub use concept_graph::{ConceptGraph, EdgeKind, GraphEdge, GraphNode, NodeId, NodeKind};
 pub use failure::{Failure, FailureKind, Loadable};
 pub use health::{

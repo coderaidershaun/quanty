@@ -8,7 +8,7 @@ use qdrant_client::qdrant::{
 };
 use qdrant_client::{Qdrant, QdrantError};
 
-use crate::{ConceptId, Config, EMBEDDING_DIMENSIONS, ItemId};
+use crate::{ApiKey, ConceptId, Config, EMBEDDING_DIMENSIONS, ItemId};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -98,7 +98,11 @@ impl Collection {
     pub(crate) fn open(config: &Config, name: &str) -> Result<Collection, StoreError> {
         // Without `skip_compatibility_check` the client starts a thread on build, and it prints to
         // standard output when the store is down, which would end up in the middle of a report.
+        // SMELL: a key that is not printable ASCII cannot be sent as a header, and the client
+        // then writes the whole key into its error message. A saved database refuses such a key,
+        // but a key from the environment or `.env` is not checked.
         let client = Qdrant::from_url(&config.qdrant_url)
+            .api_key(config.qdrant_api_key.as_ref().map(ApiKey::expose))
             .timeout(REQUEST_TIMEOUT)
             .skip_compatibility_check()
             .build()

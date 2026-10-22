@@ -804,6 +804,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "choices"
+version = "0.1.0"
+dependencies = [
+ "dotenvy",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2003,6 +2014,7 @@ name = "gui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "choices",
  "clap",
  "eframe",
  "egui-phosphor",
@@ -2011,7 +2023,6 @@ dependencies = [
  "graph",
  "gui",
  "image",
- "model-settings",
  "ocr",
  "proptest",
  "rag-core",
@@ -2866,17 +2877,6 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "model-settings"
-version = "0.1.0"
-dependencies = [
- "dotenvy",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -3907,8 +3907,8 @@ name = "rag-core"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
+ "choices",
  "dotenvy",
- "model-settings",
  "qdrant-client",
  "reqwest",
  "serde",

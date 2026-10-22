@@ -1,16 +1,17 @@
 //! The settings and the outside services that every kind of work shares, and the one place that
 //! turns a backend error into something a person can read.
 
-use std::sync::Arc;
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use graph::FalkorGraph;
 use ocr::convert::services::JevError;
 use ocr::{ChapterJob, ConversionSummary, ConvertError, PageProgress};
 use rag_core::{
-    AgentCli, ApiKey, ConceptStore, Config, EmbedError, Embedder, GeminiEmbedder, ItemStore, Llm,
-    WorkKind,
+    AgentCli, ApiKey, ConceptStore, Config, Database, EmbedError, Embedder, GeminiEmbedder,
+    ItemStore, Llm, WorkKind,
 };
 use rag_ingestion::{ConceptExtractor, InsightsWriter, KeyClients, Models, Stores};
 use rag_retrieval::Retriever;
@@ -44,13 +45,13 @@ pub trait Services: Send + Sync + 'static {
 
     /// Asks Google whether it accepts `key`. It costs nothing, and it cannot see spent credit. The
     /// real service makes its client when this is called and not when the future runs, so that a
-    /// time limit on the future never covers it.
-    fn check_gemini_key(&self, key: &ApiKey)
-    -> impl Future<Output = Result<(), EmbedError>> + Send;
+    /// time limit on the future never covers it. The key is given by value because the future
+    /// would otherwise keep a borrow of the settings it was read from.
+    fn check_gemini_key(&self, key: ApiKey) -> impl Future<Output = Result<(), EmbedError>> + Send;
 
     /// Asks Jev whether it accepts `key`. It costs nothing, and Jev documents no reply to it for
     /// spent credit.
-    fn check_jev_key(&self, key: &ApiKey) -> impl Future<Output = Result<(), JevError>> + Send;
+    fn check_jev_key(&self, key: ApiKey) -> impl Future<Output = Result<(), JevError>> + Send;
 }
 
 /// The real services. It keeps the clients that ask the providers about a key, so each is made
@@ -85,16 +86,13 @@ impl Services for RealServices {
         ocr::convert_chapter_with_jev_key(job, jev_api_key, on_page).await
     }
 
-    fn check_gemini_key(
-        &self,
-        key: &ApiKey,
-    ) -> impl Future<Output = Result<(), EmbedError>> + Send {
-        let client = self.key_clients.gemini(key);
+    fn check_gemini_key(&self, key: ApiKey) -> impl Future<Output = Result<(), EmbedError>> + Send {
+        let client = self.key_clients.gemini(&key);
         async move { client?.check_key().await }
     }
 
-    fn check_jev_key(&self, key: &ApiKey) -> impl Future<Output = Result<(), JevError>> + Send {
-        let client = self.key_clients.jev(key);
+    fn check_jev_key(&self, key: ApiKey) -> impl Future<Output = Result<(), JevError>> + Send {
+        let client = self.key_clients.jev(&key);
         async move { client?.check_key().await }
     }
 }
@@ -104,7 +102,9 @@ impl Services for RealServices {
 pub type Kept<S> = Arc<Retriever<<S as Services>::Embedder>>;
 
 pub struct LiveContext<S: Services> {
-    config: Config,
+    /// The settings in use. A command takes the `Arc` out and works with that one, so a switch
+    /// of the database never changes the settings under a command that has begun.
+    config: RwLock<Arc<Config>>,
     services: S,
     retriever: tokio::sync::Mutex<Option<(u64, Kept<S>)>>,
     graph: tokio::sync::Mutex<Option<(u64, Arc<FalkorGraph>)>>,
@@ -116,7 +116,7 @@ pub struct LiveContext<S: Services> {
 impl<S: Services> LiveContext<S> {
     pub fn new(config: Config, services: S) -> Self {
         LiveContext {
-            config,
+            config: RwLock::new(Arc::new(config)),
             services,
             retriever: tokio::sync::Mutex::new(None),
             graph: tokio::sync::Mutex::new(None),
@@ -124,8 +124,12 @@ impl<S: Services> LiveContext<S> {
         }
     }
 
-    pub fn config(&self) -> &Config {
-        &self.config
+    pub fn config(&self) -> Arc<Config> {
+        let config = self
+            .config
+            .read()
+            .expect("the settings lock is never held while code that can panic runs");
+        Arc::clone(&config)
     }
 
     /// # Errors
@@ -138,11 +142,12 @@ impl<S: Services> LiveContext<S> {
         {
             return Ok(Arc::clone(retriever));
         }
+        let config = self.config();
         let retriever = Arc::new(Retriever {
-            embedder: self.services.embedder(&self.config)?,
-            items: ItemStore::connect(&self.config).map_err(|error| self.failure(error))?,
-            concepts: ConceptStore::connect(&self.config).map_err(|error| self.failure(error))?,
-            graph: self.connect_graph().await?,
+            embedder: self.services.embedder(&config)?,
+            items: ItemStore::connect(&config).map_err(|error| self.failure(error))?,
+            concepts: ConceptStore::connect(&config).map_err(|error| self.failure(error))?,
+            graph: self.connect_graph(&config).await?,
         });
         *kept = Some((era, Arc::clone(&retriever)));
         Ok(retriever)
@@ -161,24 +166,56 @@ impl<S: Services> LiveContext<S> {
         {
             return Ok(Arc::clone(graph));
         }
-        let graph = Arc::new(self.connect_graph().await?);
+        let config = self.config();
+        let graph = Arc::new(self.connect_graph(&config).await?);
         *kept = Some((era, Arc::clone(&graph)));
         Ok(graph)
     }
 
-    async fn connect_graph(&self) -> Result<FalkorGraph, Failure> {
-        match tokio::time::timeout(CONNECT_LIMIT, self.services.graph(&self.config)).await {
+    async fn connect_graph(&self, config: &Config) -> Result<FalkorGraph, Failure> {
+        match tokio::time::timeout(CONNECT_LIMIT, self.services.graph(config)).await {
             Ok(connected) => connected.map_err(|failure| self.failure(failure)),
-            Err(_) => {
-                let address = &self.config.falkordb_url;
-                Err(self.failure(Failure {
-                    detail: format!(
-                        "FalkorDB at {address} did not answer within {} seconds",
-                        CONNECT_LIMIT.as_secs()
-                    ),
-                    ..Failure::falkordb_down(address)
-                }))
-            }
+            Err(_) => Err(self.failure(did_not_answer(
+                "FalkorDB",
+                &config.falkordb_url,
+                Failure::falkordb_down,
+            ))),
+        }
+    }
+
+    /// Makes `database` the one every command reads and writes, once both of its stores answer
+    /// and, for a saved entry, its content folder is there. On any failure nothing changes.
+    ///
+    /// # Errors
+    /// A failure that says which store is down, or that the content folder is not there.
+    pub async fn use_database(&self, database: &Database) -> Result<(), Failure> {
+        if !database.is_local() && !database.content_folder.is_dir() {
+            return Err(content_folder_missing(&database.content_folder));
+        }
+        let config = Arc::new((*self.config()).clone().with_database(database));
+        self.ping_qdrant(&config).await?;
+        self.connect_graph(&config).await?;
+        // WARNING: write the settings first and raise the era second, with no `.await` between.
+        // `retriever()` and `graph()` read the era before they read the settings. In the other
+        // order, one of them could read the new era with the old settings and keep a store of
+        // the old database under the new era for ever.
+        *self
+            .config
+            .write()
+            .expect("the settings lock is never held while code that can panic runs") = config;
+        self.era.fetch_add(1, Ordering::AcqRel);
+        Ok(())
+    }
+
+    async fn ping_qdrant(&self, config: &Config) -> Result<(), Failure> {
+        let items = ItemStore::connect(config).map_err(|error| self.failure(error))?;
+        match tokio::time::timeout(CONNECT_LIMIT, items.ping()).await {
+            Ok(pinged) => pinged.map_err(|error| self.failure(error)),
+            Err(_) => Err(self.failure(did_not_answer(
+                "Qdrant",
+                &config.qdrant_url,
+                Failure::qdrant_down,
+            ))),
         }
     }
 
@@ -187,10 +224,11 @@ impl<S: Services> LiveContext<S> {
     /// # Errors
     /// A failure that says which store is not ready.
     pub async fn stores(&self) -> Result<Stores, Failure> {
+        let config = self.config();
         Ok(Stores {
-            items: ItemStore::connect(&self.config).map_err(|error| self.failure(error))?,
-            graph: self.connect_graph().await?,
-            concepts: ConceptStore::connect(&self.config).map_err(|error| self.failure(error))?,
+            items: ItemStore::connect(&config).map_err(|error| self.failure(error))?,
+            graph: self.connect_graph(&config).await?,
+            concepts: ConceptStore::connect(&config).map_err(|error| self.failure(error))?,
         })
     }
 
@@ -205,7 +243,8 @@ impl<S: Services> LiveContext<S> {
         job: &ChapterJob,
         on_page: &mut (dyn FnMut(PageProgress) + Send),
     ) -> Result<ConversionSummary, ConvertError> {
-        let key = self.config.jev_api_key.as_ref().map(|key| key.expose());
+        let config = self.config();
+        let key = config.jev_api_key.as_ref().map(ApiKey::expose);
         self.services.convert(job, key, on_page).await
     }
 
@@ -213,7 +252,7 @@ impl<S: Services> LiveContext<S> {
     /// `None` when the settings have no key. The client is made when this is called, and the
     /// future is only the read, so a time limit around it never covers the making.
     pub fn check_gemini_key(&self) -> Option<impl Future<Output = Result<(), EmbedError>> + Send> {
-        let key = self.config.gemini_api_key.as_ref()?;
+        let key = self.config().gemini_api_key.clone()?;
         Some(self.services.check_gemini_key(key))
     }
 
@@ -221,7 +260,7 @@ impl<S: Services> LiveContext<S> {
     /// `None` when the settings have no key. The client is made when this is called, like the one
     /// for Google.
     pub fn check_jev_key(&self) -> Option<impl Future<Output = Result<(), JevError>> + Send> {
-        let key = self.config.jev_api_key.as_ref()?;
+        let key = self.config().jev_api_key.clone()?;
         Some(self.services.check_jev_key(key))
     }
 
@@ -241,10 +280,11 @@ impl<S: Services> LiveContext<S> {
     /// # Errors
     /// A failure that says the embedding key is missing.
     pub fn models(&self) -> Result<Models<S::Embedder, S::Llm>, Failure> {
+        let config = self.config();
         Ok(Models {
             artifacts: rag_ingestion::ArtifactWriter::new(self.services.llm(WorkKind::Ingest)),
-            embedder: self.services.embedder(&self.config)?,
-            concepts: ConceptExtractor::new(self.services.llm(WorkKind::Ingest), &self.config),
+            embedder: self.services.embedder(&config)?,
+            concepts: ConceptExtractor::new(self.services.llm(WorkKind::Ingest), &config),
             insights: Some(InsightsWriter::new(self.services.llm(WorkKind::Ingest))),
         })
     }
@@ -269,4 +309,26 @@ impl<S: Services> LiveContext<S> {
         }
         failure
     }
+}
+
+/// A store that did not answer within the limit, which counts as that store being down.
+fn did_not_answer(store: &str, address: &str, down: fn(&str) -> Failure) -> Failure {
+    Failure {
+        detail: format!(
+            "{store} at {address} did not answer within {} seconds",
+            CONNECT_LIMIT.as_secs()
+        ),
+        ..down(address)
+    }
+}
+
+fn content_folder_missing(folder: &Path) -> Failure {
+    let folder = folder.display();
+    Failure::new(
+        FailureKind::SourceMissing,
+        format!("the content folder {folder} is not a folder"),
+    )
+    .with_hint(format!(
+        "The content folder {folder} is not there. Mount it, then try again."
+    ))
 }

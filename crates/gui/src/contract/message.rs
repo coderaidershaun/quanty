@@ -1,6 +1,7 @@
 //! The messages of the app: what a person asks for (`Intent`), what the backend is told to do
 //! (`Command`), what comes back (`Event`) and what the shared state asks the app to do (`Effect`).
 
+use choices::Database;
 use export::Format;
 
 use super::ask::{Answer, AskDraft, SearchReply};
@@ -103,6 +104,8 @@ pub enum Intent {
     /// What the footer's entries and the start of the app ask for.
     ReadBalances,
     OpenBillingPage(Provider),
+    /// Connects to both stores of the database, and uses it when they answer.
+    UseDatabase(Database),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -175,6 +178,10 @@ pub enum Command {
     ReadBalances {
         request: RequestId,
     },
+    UseDatabase {
+        request: RequestId,
+        database: Database,
+    },
 }
 
 impl Command {
@@ -196,11 +203,15 @@ impl Command {
             | Command::BuildDataset { request, .. }
             | Command::CheckHealth { request }
             | Command::LoadChapterInsights { request, .. }
-            | Command::ReadBalances { request } => *request,
+            | Command::ReadBalances { request }
+            | Command::UseDatabase { request, .. } => *request,
             Command::Cancel(request) => *request,
         }
     }
 
+    // SMELL: this file is near the 500-line limit, and each new command adds an arm here. This
+    // function and `unknown_health` are the part to move out first, into a file of what each
+    // command owes when it fails.
     /// A health check is answered with `Unknown` for every service and not with `Down`: a check
     /// that failed says nothing about the services, and `Down` would make the next good search
     /// send the check again, for ever.
@@ -302,6 +313,10 @@ impl Command {
                     },
                 }]
             }
+            Command::UseDatabase { request, .. } => vec![Event::DatabaseUsed {
+                request: *request,
+                result: Err(failure.clone()),
+            }],
         }
     }
 }
@@ -412,6 +427,11 @@ pub enum Event {
     Balances {
         request: RequestId,
         found: BalanceReads,
+    },
+    /// `Ok` when both stores of the database answered.
+    DatabaseUsed {
+        request: RequestId,
+        result: Result<(), Failure>,
     },
 }
 

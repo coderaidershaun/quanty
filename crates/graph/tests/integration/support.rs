@@ -9,7 +9,7 @@ const THROWAWAY_PREFIX: &str = "test-graph-";
 /// A graph that no one else uses, and the settings that name it. The graph is removed when the
 /// first value is dropped, so keep it for the whole test.
 pub fn throwaway_config(test_name: &str) -> (ThrowawayGraph, Config) {
-    let settings = Config::load().expect("the settings should load");
+    let settings = Config::load_local().expect("the settings should load");
     let throwaway = ThrowawayGraph::new(&settings, test_name);
     let config = Config {
         falkordb_graph: throwaway.name().to_owned(),

@@ -5,6 +5,9 @@
 .claude/
 .claude/skills/rex-*
 .claude/skills/INDEX.md
+.codex/
+.codex/skills/rex-*
+.codex/skills/INDEX.md
 
 # Local store data
 /data/
@@ -24,3 +27,6 @@ crates/gui/tests/snapshots/**/*.old.png
 
 # Saved desktop/CLI model selection
 .quanty-model.json
+
+# Saved databases (holds keys)
+.quanty-databases.json

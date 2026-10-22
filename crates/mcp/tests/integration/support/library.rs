@@ -25,7 +25,9 @@ impl ClosedPorts {
         let folder = tempfile::tempdir().expect("a temporary folder should be made");
         let config = Config {
             qdrant_url: "http://127.0.0.1:1".to_owned(),
+            qdrant_api_key: None,
             falkordb_url: "falkor://127.0.0.1:1".to_owned(),
+            falkordb_password: None,
             falkordb_graph: "closed-ports".to_owned(),
             items_collection: "closed-ports-items".to_owned(),
             concepts_collection: "closed-ports-concepts".to_owned(),

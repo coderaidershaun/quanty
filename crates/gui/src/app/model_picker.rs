@@ -3,8 +3,8 @@
 use super::region::region;
 use crate::contract::{StartupFacts, Tab};
 use crate::widgets::{ControlSize, Dropdown};
+use choices::{MODEL_CHOICES, MODEL_SETTINGS_FILE, THINKING_LEVELS, WorkChoices, WorkKind};
 use eframe::egui;
-use model_settings::{MODEL_CHOICES, MODEL_SETTINGS_FILE, THINKING_LEVELS, WorkChoices, WorkKind};
 
 pub(super) struct ModelPicker {
     choices: WorkChoices,

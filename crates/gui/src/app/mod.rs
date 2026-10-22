@@ -2,6 +2,7 @@
 //! asked for.
 
 mod balances;
+mod database_picker;
 pub mod launch;
 pub mod layout;
 mod model_picker;

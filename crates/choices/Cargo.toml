@@ -1,5 +1,5 @@
 [package]
-name = "model-settings"
+name = "choices"
 version.workspace = true
 edition.workspace = true
 

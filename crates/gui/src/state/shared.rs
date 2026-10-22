@@ -4,8 +4,8 @@
 use std::path::PathBuf;
 
 use super::{
-    AskSession, Balances, Contents, DatasetJob, ExportJob, Health, IngestJob, Insights, Library,
-    Shelf, SourceNav,
+    AskSession, Balances, Contents, DatabaseLink, DatasetJob, ExportJob, Health, IngestJob,
+    Insights, Library, Shelf, SourceNav,
 };
 use crate::contract::{
     Command, Effect, Event, Failure, Intent, Loadable, Notice, NoticeId, NoticeKind, Panel,
@@ -56,6 +56,7 @@ pub struct Shared {
     /// Newest first, this session only.
     pub notices: Vec<Notice>,
     pub health: Health,
+    pub database: DatabaseLink,
     pub balances: Balances,
     next_request: u64,
     next_notice: u64,
@@ -64,6 +65,7 @@ pub struct Shared {
 impl Shared {
     pub fn new(facts: StartupFacts) -> Shared {
         Shared {
+            database: DatabaseLink::chosen_by(&facts),
             health: Health::new(facts),
             ..Shared::default()
         }
@@ -131,6 +133,7 @@ impl Shared {
             Intent::OpenBillingPage(provider) => {
                 effects.push(Effect::OpenUrl(provider.billing_page().to_owned()));
             }
+            Intent::UseDatabase(database) => self.use_database(database, effects),
         }
         self.read_after_a_paid_job(before, effects);
     }
@@ -194,6 +197,9 @@ impl Shared {
                 state,
             } => self.health_arrived(request, service, state),
             Event::Balances { request, found } => self.balances_arrived(request, found),
+            Event::DatabaseUsed { request, result } => {
+                self.database_used(request, result, effects);
+            }
         }
         self.read_after_a_paid_job(before, effects);
     }
@@ -206,6 +212,7 @@ impl Shared {
             && !self.contents_is_busy()
             && !self.insights_is_busy()
             && self.health.pending.is_none()
+            && !self.database.is_checking()
             && !self.ingest.is_working()
             && !self.datasets.is_running()
             && !self.balances.is_reading()

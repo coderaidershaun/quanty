@@ -20,6 +20,8 @@ pub const ASK_BAR: f32 = 2.0 * space::MD + size::CONTROL_LG + space::SM + size::
 
 const TABS_WIDTH: f32 = 300.0;
 const LOGO_WIDTH: f32 = 120.0;
+/// The room of the database entry at the right end of the footer.
+const DATABASE_WIDTH: f32 = 360.0;
 
 const GUTTER: f32 = space::LG;
 const GAP: f32 = space::MD;
@@ -113,4 +115,19 @@ pub fn top_bar(bar: Rect) -> TopBarRects {
         ),
         tabs: Rect::from_center_size(centre, vec2(TABS_WIDTH, size::TAB.min(bar.height()))),
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FooterRects {
+    /// The two paid accounts, from the left.
+    pub accounts: Rect,
+    /// The database in use, at the right end.
+    pub database: Rect,
+}
+
+pub fn footer(footer: Rect) -> FooterRects {
+    let row = footer.shrink2(vec2(GUTTER, 0.0));
+    let database = Rect::from_min_max(pos2(row.right() - DATABASE_WIDTH, row.top()), row.max);
+    let accounts = Rect::from_min_max(row.min, pos2(database.left() - GUTTER, row.bottom()));
+    FooterRects { accounts, database }
 }

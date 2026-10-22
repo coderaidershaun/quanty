@@ -24,7 +24,7 @@ impl Fake {
             .expect("the catalogue of the fake is not poisoned")
     }
 
-    async fn after_wait<T>(
+    pub(super) async fn after_wait<T>(
         &self,
         answer: impl FnOnce() -> Result<T, Failure>,
     ) -> Result<T, Failure> {

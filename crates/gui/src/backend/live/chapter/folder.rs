@@ -24,7 +24,8 @@ impl FolderFault {
     pub(super) fn failure<S: Services>(self, cx: &LiveContext<S>, doc: DocId) -> Failure {
         match self {
             FolderFault::Unknown => {
-                let content_folder = &cx.config().content_folder;
+                let config = cx.config();
+                let content_folder = &config.content_folder;
                 let searched = content_folder.display();
                 Failure {
                     detail: format!(

@@ -15,7 +15,7 @@ use falkordb::{
     AsyncGraph, FalkorAsyncClient, FalkorClientBuilder, FalkorConnectionInfo, FalkorDBError,
     FalkorValue, QueryResult, RowStream,
 };
-use rag_core::Config;
+use rag_core::{ApiKey, Config};
 
 use crate::error::GraphError;
 
@@ -48,6 +48,10 @@ impl FalkorGraph {
             source,
         };
         let info = FalkorConnectionInfo::try_from(url.as_str()).map_err(connect_error)?;
+        let info = match &config.falkordb_password {
+            Some(password) => with_password(info, password),
+            None => info,
+        };
         let building = FalkorClientBuilder::new_async()
             .with_connection_info(info)
             .with_response_timeout(Some(RESPONSE_TIMEOUT))
@@ -105,6 +109,19 @@ impl FalkorGraph {
             source,
         })
     }
+}
+
+/// The connection with the password set on it and not written into the address, so that no error
+/// that names the address can print it.
+fn with_password(info: FalkorConnectionInfo, password: &ApiKey) -> FalkorConnectionInfo {
+    // Only the `tokio` feature of falkordb is on, so `Redis` is the one variant. A build that
+    // turns on the embedded server fails to compile here, so the password is never dropped.
+    let FalkorConnectionInfo::Redis(redis) = info;
+    let settings = redis
+        .redis_settings()
+        .clone()
+        .set_password(password.expose());
+    FalkorConnectionInfo::Redis(redis.set_redis_settings(settings))
 }
 
 /// An id as the text that Qdrant also uses for it.

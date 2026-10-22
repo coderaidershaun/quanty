@@ -10,7 +10,7 @@ use gui::app::layout::DEFAULT_WINDOW;
 use gui::backend::live::LiveContext;
 use gui::backend::{Handler, Reply};
 use gui::contract::{
-    Balance, BalanceReads, Command, Event, Failure, FailureKind, ReadFailure, RequestId,
+    Balance, BalanceReads, Command, Databases, Event, Failure, FailureKind, ReadFailure, RequestId,
     StartupFacts,
 };
 use gui::testkit;
@@ -19,7 +19,8 @@ use ocr::convert::services::{JevError, ServiceError};
 use ocr::testing::{Scenario, StubServices};
 use rag_core::{ApiKey, Config, EmbedError};
 
-use crate::support::{Check, KeyChecks, StandInsOnClosedPorts, closed_ports_config};
+use crate::key_checks::{Check, KeyChecks};
+use crate::support::{StandInsOnClosedPorts, closed_ports_config};
 
 const GEMINI_KEY: &str = "gemini-key-that-must-never-show";
 const JEV_KEY: &str = "jev-key-that-must-never-show";
@@ -149,6 +150,8 @@ fn a_key_is_never_shown_on_the_screen() {
         Keys::InTheSettings,
     );
     let facts = StartupFacts {
+        local_database: cx.config().local_database(),
+        databases: Databases::choosing_local(),
         home: std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")),
         env_file: None,
         fixture: None,

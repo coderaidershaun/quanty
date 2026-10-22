@@ -3,7 +3,7 @@
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
-use crate::contract::StartupFacts;
+use crate::contract::{Database, Databases, StartupFacts};
 
 const ENV_FILE: &str = ".env";
 const HOME_VARIABLE: &str = "QUANTY_HOME";
@@ -99,7 +99,12 @@ fn path_with(path: &OsStr, home: Option<&Path>) -> OsString {
 }
 
 impl Home {
-    pub fn facts(&self, fixture: Option<&str>) -> StartupFacts {
+    pub fn facts(
+        &self,
+        fixture: Option<&str>,
+        local_database: Database,
+        databases: Databases,
+    ) -> StartupFacts {
         tracing::info!(
             home = %self.folder.display(),
             env_file = ?self.env_file,
@@ -112,6 +117,8 @@ impl Home {
             fixture: fixture.map(str::to_owned),
             anthropic_api_key_set: std::env::var_os("ANTHROPIC_API_KEY")
                 .is_some_and(|value| !value.is_empty()),
+            local_database,
+            databases,
         }
     }
 }

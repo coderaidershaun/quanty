@@ -12,6 +12,7 @@ testing = ["dep:egui_kittest"]
 
 [dependencies]
 anyhow.workspace = true
+choices.workspace = true
 clap.workspace = true
 eframe.workspace = true
 egui-phosphor.workspace = true
@@ -19,7 +20,6 @@ egui_kittest = { workspace = true, optional = true }
 export.workspace = true
 graph.workspace = true
 image.workspace = true
-model-settings.workspace = true
 ocr.workspace = true
 rag-core.workspace = true
 rag-dataset.workspace = true

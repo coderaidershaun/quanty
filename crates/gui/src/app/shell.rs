@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use eframe::egui;
 use export::Format;
 
+use super::database_picker::DatabasePicker;
 use super::layout::{self, ShellRects};
 use super::region::region;
 use super::{balances, shortcuts, top_bar};
@@ -46,6 +47,7 @@ pub struct App {
     pick_file: FilePicker,
     save_dialog: SaveDialog,
     model_picker: super::model_picker::ModelPicker,
+    database_picker: DatabasePicker,
 }
 
 impl App {
@@ -65,11 +67,15 @@ impl App {
             let ctx = ctx.clone();
             move || ctx.request_repaint()
         })?;
-        let mut intents = vec![Intent::RefreshCatalogue, Intent::ReadBalances];
-        intents.extend(opening);
         let model_picker = super::model_picker::ModelPicker::new(&facts);
+        let shared = Shared::new(facts);
+        let database_picker = DatabasePicker::new(&shared);
+        // The catalogue is not asked for here: it follows the check of the database.
+        let mut intents = vec![Intent::ReadBalances];
+        intents.extend(shared.database.in_use.clone().map(Intent::UseDatabase));
+        intents.extend(opening);
         Ok(App {
-            shared: Shared::new(facts),
+            shared,
             locals: Locals::default(),
             gallery: gallery::State::default(),
             media,
@@ -79,6 +85,7 @@ impl App {
             pick_file: Box::new(|| None),
             save_dialog: Box::new(|_, _| None),
             model_picker,
+            database_picker,
         })
     }
 
@@ -176,8 +183,21 @@ impl App {
         egui::CentralPanel::no_frame().show(ui, |ui| {
             ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
             draw_tab(ui, &rects, &mut self.locals, &mut cx);
-            region(ui, "footer", rects.footer, |ui| balances::show(ui, &mut cx));
+            region(ui, "footer", rects.footer, |ui| {
+                let footer = rects.footer;
+                let painter = ui.painter();
+                let line = theme::hairline(painter, color::HAIRLINE);
+                painter.hline(footer.x_range(), footer.top() + line.width / 2.0, line);
+                let parts = layout::footer(footer);
+                balances::show(ui, parts.accounts, &mut cx);
+                self.database_picker
+                    .footer_entry(ui, parts.database, cx.shared);
+            });
         });
+        let can_switch =
+            cx.shared.can_switch_database() && self.backend.is_idle_but_for_balance_reads();
+        self.database_picker
+            .sheet(ui.ctx(), cx.shared, can_switch, cx.intents);
     }
 }
 

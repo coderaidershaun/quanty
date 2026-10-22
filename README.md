@@ -6,12 +6,11 @@
 </p>
 
 <p align="center">
-  <a href="#quickstart">Quickstart</a> ·
-  <a href="#the-desktop-app">Desktop app</a> ·
-  <a href="#mcp-server">MCP server</a> ·
-  <a href="#command-line">Command line</a> ·
-  <a href="#costs">Costs</a> ·
-  <a href="#troubleshooting">Troubleshooting</a> ·
+  <a href="#quickstart-run-the-app">Run the app</a> ·
+  <a href="#quickstart-the-database-on-an-ubuntu-server">Database on a server</a> ·
+  <a href="docs/guide.md">Guide</a> ·
+  <a href="docs/troubleshooting.md">Troubleshooting</a> ·
+  <a href="docs/mcp.md">MCP server</a> ·
   <a href="docs/reference.md">Reference</a>
 </p>
 
@@ -20,39 +19,6 @@
   <br>
   <sub>The desktop app on its built-in <code>black-scholes</code> fixture: sample data, no store, no model, no cost.</sub>
 </p>
-
-## Choose a model
-
-The **Model** and **Thinking** dropdowns in the desktop top bar are for the tab on screen. Ask,
-Ingest and Datasets each keep their own Model and Thinking choice, which the top bar shows on that
-tab; Library has none. Ask is for answers, Ingest for page conversion and concept extraction, and
-Datasets for dataset builds. The default is **Codex / GPT-6.1 Sol / Medium**. Claude models remain
-in the same menu. The controls use the app's existing dropdown styling and save immediately;
-finish any running operation before switching.
-
-All language-model calls run headlessly through the installed CLI. Run `codex login` once
-with your ChatGPT account, or sign in with `claude` when using Claude. No OpenAI API key is
-needed. Codex CLI 0.162.1 is tested; it must support `--ignore-user-config` and `--ignore-rules`.
-
-The saved choices are `.quanty-model.json` in the Quanty home folder. The file holds `ask`,
-`ingest` and `datasets`, one choice for each kind of work, each with `provider`, `model` and
-`thinking`. The desktop app, command line tools, OCR and MCP server read it before creating a model
-client, so no restart is needed. `rag-query` and the MCP `search` and `answer` tools use the Ask
-choice. `rag-ingest` (concepts, the insights of a chapter, `pdf`, `insights` and `health`), page
-conversion (`ocr` and the app's ingest) and the MCP `ingest_pdf`, `write_insights` and `health`
-tools use the Ingest choice. `rag-dataset` and the MCP `build_dataset` tool use the Datasets choice.
-A file saved by an older version of quanty holds one choice and gives it to all three until a tab is
-changed; the next save writes the three choices. An MCP server that is still running from an older
-version must be restarted. Without that file, `LLM_PROVIDER`, `LLM_MODEL` and `LLM_THINKING` in the environment or
-`.env` set the defaults, the same for all three. A saved UI choice takes precedence. Codex defaults
-to `gpt-6.1-sol` with `medium` thinking. Supported levels are `low`, `medium`, `high`, `xhigh`,
-`max` and, for models that support it, `ultra`. `CODEX_BIN` can name a custom Codex executable.
-
-PDF pages are rendered locally and attached as images, with their text layer, to headless
-Codex. No model shell tools are needed. Gemini embedding and Jev conversion settings keep
-their existing roles. Codex usage records tokens; dollar cost is unknown when no price is
-available. [Codex non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode)
-describes the CLI protocol.
 
 ## Why quanty
 
@@ -69,373 +35,179 @@ A person can ask it "what is the correct math for a multivariate Hawkes process 
 
 Whether the goal is maximising Sharpe ratio, increasing trade volume or reducing risk, quanty is a stepping stone between the robust modelling quant finance requires and the accelerating progress of QIS.
 
-## Try it in one command
+## Quickstart: run the app
 
-With Rust installed and nothing else (no keys, no Docker), run this in the quanty folder, the root of this repository:
+The shortest path to the desktop app on a laptop. Run every command in the quanty folder, the root of this repository.
+
+**Try it first, with nothing set up.** With Rust installed and nothing else (no keys, no Docker), this opens the app shown above on its built-in sample data. `--fixture list` names the other scenes.
 
 ```bash
 cargo run --release -p gui -- --fixture black-scholes
 ```
 
-It opens the app shown above on its built-in sample data. `--fixture list` names the other scenes.
+**Then set it up for real.**
 
-People use the [desktop app](#the-desktop-app), agents use the [MCP server](#mcp-server), and there is a [command line](#command-line). All three read the same stores, so set them up once, as the [Quickstart](#quickstart) shows.
+1. **Install the tools.**
 
-## Quickstart
+   | You need | What it is for |
+   | --- | --- |
+   | Rust (stable, with `cargo`) | Builds every program |
+   | Docker, with `docker compose` | Runs the two stores: Qdrant (vectors) and FalkorDB (the graph) |
+   | [Poppler](https://poppler.freedesktop.org/) (`brew install poppler`) | Reads a PDF when it is converted |
+   | The `codex` CLI, signed in (or `claude`) | Reads pages, finds concepts and writes answers, on the subscription of each agent you choose |
 
-Set up once, then open the app with real stores. Run every command in the quanty folder.
+2. **Start the stores.** Start Docker Desktop first, then:
 
-### 1. Install the tools
+   ```bash
+   docker compose up -d    # Qdrant on ports 6333 and 6334, FalkorDB on 6379, data under data/
+   docker compose ps       # both quanty-qdrant-1 and quanty-falkordb-1 say running
+   ```
+
+   These two stores are the database called **Local**. To use stores on a server instead, see [the server quickstart](#quickstart-the-database-on-an-ubuntu-server).
 
-| You need                                                             | What it is for                                                                |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Rust (stable, with `cargo`)                                          | Builds every program                                                          |
-| Docker, with `docker compose`                                        | Runs the two stores: Qdrant (vectors) and FalkorDB (the graph)                |
-| [Poppler](https://poppler.freedesktop.org/) (`brew install poppler`) | Reads a PDF when it is converted                                              |
-| The `codex` CLI, signed in (or `claude`)                                          | Reads pages, finds concepts and writes answers, on the subscription of each agent you choose |
+3. **Add the keys.** Copy the example and put your two keys in place of `PLEASE_PROVIDE` and `ENTER`. Then make sure `ANTHROPIC_API_KEY` is not set.
+
+   ```bash
+   cp .env.example .env
+   unset ANTHROPIC_API_KEY
+   ```
+
+   | Key | What it is for |
+   | --- | --- |
+   | `EMBEDDING_GEMINI_API_KEY` | Gemini embeddings: it embeds every page and every question |
+   | `CONVERTER_JEV_API_KEY` | The Jev API, which is asked whether a page holds math: only when a PDF is converted |
 
-### 2. Start the stores
+   > [!IMPORTANT]
+   > `ANTHROPIC_API_KEY` must not be set, in the shell or in `.env`. When Claude is selected and it is set, quanty asks `claude` nothing, so that the work is billed to the subscription and not to the API.
 
-Make sure Docker is running: start Docker Desktop, then start the two stores.
+4. **Check the services.** `health` prints one line each for Qdrant, FalkorDB and the agent of the Ingest choice: `ok`, or `FAILED` with what is wrong. It does not check the Gemini or Jev keys. When the Ingest choice is Claude, it refuses `ANTHROPIC_API_KEY`; Codex requires a ChatGPT subscription login.
 
-```bash
-docker compose up -d    # Qdrant on ports 6333 and 6334, FalkorDB on 6379, data under data/
-docker compose ps       # both quanty-qdrant-1 and quanty-falkordb-1 say running
-```
+   ```bash
+   cargo run --release -p rag-ingestion --bin rag-ingest -- health
+   ```
 
-### 3. Add the keys
+5. **Open the app.**
 
-Copy the example and put your two keys in it.
+   ```bash
+   cargo run --release -p gui
+   ```
 
-```bash
-cp .env.example .env       # then put your two keys in place of PLEASE_PROVIDE and ENTER
-unset ANTHROPIC_API_KEY    # must not be set, so that claude bills your subscription, not the API
-```
+   The first time, the window opens on a sheet that asks which database to use, and nothing loads yet. Choose **Local**, which is the two Docker stores from step 2, and press **Use**. After that the window opens on **Ask**. When a store, a key or `claude` is not ready, the part of the window that needs it says which one and what to do.
 
-| Key                        | What it is for                                                                      |
-| -------------------------- | ----------------------------------------------------------------------------------- |
-| `EMBEDDING_GEMINI_API_KEY` | Gemini embeddings: it embeds every page and every question                          |
-| `CONVERTER_JEV_API_KEY`    | The Jev API, which is asked whether a page holds math: only when a PDF is converted |
+To add your first PDF, follow [Add your first PDF](docs/guide.md#add-your-first-pdf) in the guide.
+
+## Quickstart: the database on an Ubuntu server
 
-> [!IMPORTANT]
-> `ANTHROPIC_API_KEY` must not be set, in the shell or in `.env`. When Claude is selected and it is set, quanty asks `claude` nothing, so that the work is billed to the subscription and not to the API. `unset ANTHROPIC_API_KEY` does nothing when it is not set.
+Keep the two stores, Qdrant and FalkorDB, on an Ubuntu server, so that every machine and every agent uses one library. No quanty program runs on the server. Your machines reach the stores through an SSH tunnel, and the converted pages through a mounted folder. This is a short version of [docs/server.md](docs/server.md). Replace `me@server` with your SSH login.
 
-### 4. Check the services
+**On the server**
 
-```bash
-cargo run --release -p rag-ingestion --bin rag-ingest -- health
-```
+1. **Install Docker Engine and its Compose plugin.** These are the steps of [Docker's page for Ubuntu](https://docs.docker.com/engine/install/ubuntu/), for Ubuntu 22.04, 24.04 and 26.04.
 
-`health` prints one line each for Qdrant, FalkorDB and the agent of the Ingest choice: `ok`, or `FAILED` with what is wrong. It does not check the Gemini or Jev keys. When the Ingest choice is Claude, it refuses `ANTHROPIC_API_KEY`; Codex requires a ChatGPT subscription login.
-
-### 5. Open the app
-
-```bash
-cargo run --release -p gui
-```
-
-The window opens on **Ask**. Add your first PDF on the **Ingest** tab, or from the command line as [Add your first PDF](#add-your-first-pdf) shows. When a store, a key or `claude` is not ready, the part of the window that needs it says which one and what to do.
-
-## Add your first PDF
-
-The library holds media. A media is a book, a paper or another work, with a title, a category, its authors and its tags. Each PDF is one document of a media, and a document can also have tags of its own.
-
-| Document                                                  | Its PDF                                                                                                                 |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| A chapter of a book                                       | Named `chapter-<number>-<name>.pdf`                                                                                     |
-| A part of a book that is not a chapter, such as its index | Any name. It takes a title instead: `--title` on the command line, `document_title` over MCP, **Other part** in the app |
-| The PDF of a paper or another work, which has a title     | Any name                                                                                                                |
-
-The repository holds a sample of seven pages. Ingest it, then ask a question. The ingest is paid work: see [Costs](#costs).
-
-```bash
-cargo run --release -p rag-ingestion --bin rag-ingest -- pdf \
-  --book "Option Volatility and Pricing" \
-  --author "Sheldon Natenberg" --tag options \
-  samples/chapter-1-sample-pages.pdf
-
-cargo run --release -p rag-retrieval --bin rag-query -- "What is the Black–Scholes formula for a call option?"
-
-# Ask one document alone, by its stored title or its document id
-cargo run --release -p rag-retrieval --bin rag-query -- --document "Option Volatility and Pricing, chapter 1: Sample Pages" "Which pages cover volatility?"
-```
-
-A 20-page PDF takes about 15 minutes. If it stops, run the same command again and it carries on. On a finished PDF it does nothing and costs nothing, unless the chapter has no insights yet: then it writes only those.
-
-Every chapter or paper that is ingested also gets a file, `insights.json`, in its folder under `content/`. The model of the Ingest choice writes it from the whole converted text: the insights (short paragraphs, each with the pages it rests on), the takeaways (one line each) and a cheat sheet (headed sections, formulas and small tables). A chapter that has the file is not asked again. A part of a book that is not a chapter, such as its index, table of contents, front cover, glossary or preface, gets none, because it has no argument to summarise: the run says so and asks the model nothing. A paper does get them. A picture that stands alone gets none. Chapters that were ingested before this existed get theirs with `rag-ingest insights`; see [the command](docs/reference.md#writing-the-insights-of-stored-chapters).
-
-<details>
-<summary>What the ingest prints while it runs</summary>
-
-Its progress goes to standard error, one line for each step. The summary comes last, on standard output.
-
-1. `checking what is already stored`
-2. `opening the pdf`
-3. `converting 7 of 7 pages (0 already done)`
-4. One line for each page as it is cut out, such as `page 3 cut out`
-5. One line for each page with what the page cost, such as `page 3 converted ($0.14)`
-6. `writing the graph`
-7. `embedding <n> items`
-8. `storing the items`
-9. `writing the insights, takeaways and cheat sheet`
-10. `reading the concepts of <n> items`
-11. `linking the concepts of <n> items`
-
-Every line, and when it shows, is in [docs/reference.md](docs/reference.md#ingesting-a-pdf).
-
-</details>
-
-The PDF of a paper can have any name, and a paper often has more than one author:
-
-```bash
-cargo run --release -p rag-ingestion --bin rag-ingest -- pdf \
-  --paper "Hawkes Processes in Finance" \
-  --author "First Author" --author "Second Author" --tag hawkes \
-  --doc-tag survey \
-  path/to/hawkes-notes.pdf
-```
-
-A part of a book that is not a chapter, such as its index, takes `--title`, and its PDF can have any name. The document is stored as the title of the book, a comma and the title of the part, here `Option Volatility and Pricing, Index`, and the Library lists it by its own title, after the chapters:
-
-```bash
-cargo run --release -p rag-ingestion --bin rag-ingest -- pdf \
-  --book "Option Volatility and Pricing" --title "Index" \
-  path/to/book-index.pdf
-```
-
-Three flags label what you ingest. All three are optional.
-
-| Flag        | What it labels                                       |
-| ----------- | ---------------------------------------------------- |
-| `--author`  | An author of the media. Give it once for each author |
-| `--tag`     | A tag of the media                                   |
-| `--doc-tag` | This PDF only                                        |
-
-`--author` and `--tag` are used only when the library does not have that media yet: change a stored media with `rag-ingest media`. A media that the library already has keeps its own category, whatever `--book`, `--paper` or `--other` says.
-
-## Architecture
-
-The whole system on one page: how a PDF becomes items, concepts and points, and how a question comes back as an answer with citations.
-
-<p align="center">
-  <img src="docs/img/architecture.webp" width="880" alt="The architecture of quanty: the three front doors, the write path that ingests one PDF, the shared state in content/, FalkorDB and Qdrant, the read path that answers a question, the shared crates, the outside services and the cargo dependencies">
-</p>
-
-What each crate is, and how a search works step by step, is in [docs/reference.md](docs/reference.md#how-it-works). The folders of the repository:
-
-| Folder      | What it holds                                                                                                                                                                   |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `crates/`   | Ten crates: `ocr`, `rag-core`, `model-settings`, `graph`, `rag-ingestion`, `rag-retrieval`, `rag-dataset`, `export`, `gui` and `mcp`                                            |
-| `docs/`     | [reference.md](docs/reference.md), every command in full, [mcp.md](docs/mcp.md), the MCP server in full, and [training.md](docs/training.md), how to train Gemma 4 on a dataset |
-| `samples/`  | The sample PDF and converted sample chapters                                                                                                                                    |
-| `content/`  | The converted documents, in one folder for each media. Made on your machine, not in git                                                                                         |
-| `data/`     | The stores and the kept answers. Made on your machine, not in git                                                                                                               |
-| `datasets/` | The built training datasets (`DATASET_DIR`). Made on your machine, not in git                                                                                                   |
-
-## The desktop app
-
-The app is for people. It opens one window with four tabs: **Ask**, **Library**, **Ingest** and **Datasets**.
-
-```bash
-cargo run --release -p gui    # builds and opens target/release/quanty
-```
-
-The six panels of Ask, every button and every key are in [docs/reference.md](docs/reference.md#the-desktop-app). Not built yet: the notices tray, the help sheet and the health check.
-
-<details>
-<summary>Keys</summary>
-
-| Key                                         | What it does                                                    |
-| ------------------------------------------- | --------------------------------------------------------------- |
-| <kbd>⌘1</kbd> to <kbd>⌘4</kbd>              | Go to **Ask**, **Library**, **Ingest**, **Datasets**            |
-| <kbd>/</kbd> or <kbd>⌘K</kbd>               | Write a question (<kbd>Enter</kbd> asks it)                     |
-| <kbd>J</kbd>, <kbd>K</kbd>                  | Next and previous result                                        |
-| <kbd>⌘.</kbd> or <kbd>Esc</kbd>             | Stop the search or the answer                                   |
-| <kbd>Esc</kbd>                              | Put a maximised panel back, when no search or answer is running |
-| <kbd>⇧⌘S</kbd>                              | Copy the answer with its citations                              |
-
-</details>
-
-### Ask
-
-- Ask a question in the mode **Answer** or **Results only**, with five filters: **Media**, **Document**, **Authors**, **Tags** and **Category**.
-- Read the answer with its citations, the page each citation stands on, the concept graph, the steps of the search, and questions to ask next.
-- **Answer** costs one Gemini embedding call and one call to the selected model on your selected agent subscription. **Results only** writes no answer and costs the embedding call alone.
-- **Maximise**, at the top right of the page's panel and of the concept graph, gives that panel the whole tab. **Restore**, in the same place, puts every panel back.
-- **Share** opens a menu: **Copy as Markdown**, or **Export as PDF…**, **Export as Markdown…** and **Export as HTML…**, which save the written answer, with its formulas, figures, tables, code and sources, as one file that stands alone. An export is free.
-
-### Library
-
-- A shelf on the left with a **Find** box and one row for each media, with how many documents it has. Only the open media shows its documents, so a media and one of its chapters are two clicks away, however large the library is.
-- The page of a media shows its title, a badge for its category, its authors and its tags. Its pencil, **✎ Edit**, changes the category, the authors and the tags, as `rag-ingest media` does. The title cannot change, because it names the media's folder.
-- The page of a document shows its chapter or its title, its pages and its items, and a strip of views: Overview, Insights, Code, Formulas, Figures, Tables and Concepts. The Overview shows the document's own tags and the buttons: **Copy id** copies its document id, which `rag-ingest tag` and `rag-ingest delete-document` take, **Read** opens it in Ask, **Edit tags** changes its own tags, as `rag-ingest tag` does, and **Delete** deletes it. **Code**, **Formulas**, **Figures** and **Tables** list every item of that kind in the whole document with its page, and **Read on …** opens it in Ask. **Concepts** lists the document's concepts with their definitions. **Insights** shows the saved insights, takeaways and cheat sheet of the document, and **Export** writes them as a PDF, a Markdown file or an HTML file.
-- **Delete** on the page of a media deletes the media with every document of it. A sheet asks first, and a delete cannot be undone. It does what `rag-ingest delete-document` and `rag-ingest delete-media` do, and it never removes the PDF you picked from your own disk.
-- Every edit and every delete is free. **Delete** is off while a dataset is being built.
-
-### Ingest
-
-- The **Add media** journey. Choose a media in the **Media** list, or choose **Add new media…**, pick its category, type its title, authors and tags, and press **Save media**.
-- Press **Choose a PDF**. For a book, **Part of the book** offers **Chapter** and **Other part**. A chapter's number and name are filled in from a file named `chapter-<number>-<name>.pdf`. An other part, such as the index or the glossary, takes a **Title**. **Tags for this PDF** are the document's own tags.
-- The check then runs by itself and is free: it says how many pages the PDF has and how many are converted already, or what would stop a start. For a chapter that is stored but has no insights yet, it says that a start pays only for the insights, takeaways and cheat sheet; for a part of a book that is not a chapter it says that a start pays for nothing.
-- **Start ingest** is paid work, the same as `rag-ingest pdf`: the words under it name what is paid, the pages, the embedding, the insights, takeaways and cheat sheet, and the concepts. Keep the app open while it runs; if it stops, start the same PDF again and it carries on. **Add another PDF** keeps the media chosen for the next PDF.
-- At the end the tab says what became of the insights, takeaways and cheat sheet: written (the Library shows them under **Insights**), saved already, none for a part of a book that is not a chapter, or not written, with the reason and the command `rag-ingest insights --document <id>`, which is paid, and a **Copy command** button. A start of a PDF that is ingested already says the same, and what the insights cost when the agent was asked for them.
-
-<details>
-<summary>What the <b>Ingest</b> bar shows while it runs</summary>
-
-The bar shows the stage and how far it has got:
-
-1. "Checking what is already stored" and "Opening the PDF"
-2. "Preparing the pages — 7 of 12 ready · about 9%"
-3. "Converting the pages — 3 of 12 done · about 36%", with what the pages have cost so far
-4. The later stages, such as "Writing the insights, takeaways and cheat sheet", up to "Linking the concepts"
-
-The percent is an estimate: it runs from the first page cut out to the last page saved.
-
-</details>
-
-### Datasets
-
-- Fill in a form: the dataset's name, **Media** (or **All media**), the documents to hold out of training, the rewrites and the questions per section, the most SFT examples, and a dry-run box. The other options keep the defaults of `rag-dataset build`.
-- **Start build** is paid work on the model chosen in the top bar, the same as `rag-dataset build`. Tick the dry-run box and it is free: it exports, checks and plans, and asks no model.
-- While it runs the bar shows the stage in words with "about N%" and the spend so far. At the end a notice gives the counts and the dataset's folder, and **Try again** or **Build another** goes on from there.
-
-### The footer
-
-Every tab has a strip at the foot of the window with one entry for **Google Gemini**, the embedding key, and one for **Jev**, the converter key. Each entry says what is known about that account, and has a link to the page where you see and top up your credit: **Billing** opens the Google AI Studio billing page, and **Console** opens the Jev console.
-
-It never shows an amount. Neither provider lets an API key read a balance. Google says that [you can only manage your Prepay credit balance in AI Studio](https://ai.google.dev/gemini-api/docs/billing), and [no method of its API](https://ai.google.dev/api/all-methods) returns one. The [API of Jev](https://api.typesafe.ai/openapi.json) has only `/v1/models` and `/v1/systemone`, and its [error table](https://docs.typesafe.ai/api/errors) has no credit error. So an entry says one of these instead:
-
-| It says | What it means |
-| --- | --- |
-| balance not offered | The provider took the key. See your credit on the page behind the link |
-| key missing | The key is not in `.env`. Add it, then start quanty again |
-| key refused | The provider did not take the key. Make a new one, put it in `.env`, then start quanty again |
-| out of credit | A reply of that provider said the credit is spent. The next ask (Google) or ingest (Jev) that works clears it |
-| could not read | The provider could not be reached, did not answer in time, or answered with an unexpected status. Click the entry to try again |
-
-The footer reads at start, after each ask, ingest and dataset build ends, and when you click an entry. It never reads on a timer. A read costs nothing, and a read that fails or hangs holds nothing else up. The key is never shown.
-
-## MCP server
-
-`quanty-mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server over the same stores, for agents. Build it and add it to Claude Code, with both lines run in the quanty folder.
-
-```bash
-cargo build --release -p mcp    # makes target/release/quanty-mcp
-claude mcp add --scope user quanty -- sh -c "cd '$PWD' && exec '$PWD/target/release/quanty-mcp'"
-```
-
-The server finds `.env`, `content/` and `data/` from the folder it starts in: that is what the `cd` is for.
-
-| Tool                 | What it does                                                     | Cost                                               |
-| -------------------- | ---------------------------------------------------------------- | -------------------------------------------------- |
-| `health`             | Says whether Qdrant, FalkorDB, the sign-in of the Ingest choice's agent and the two API keys are ready, and which model each kind of work uses | Free                                               |
-| `list_documents`     | Lists every stored document, whether it was ingested whole and how many items of each kind it has | Free                                               |
-| `search`             | Finds the stored items nearest to a question                     | One small Gemini call                              |
-| `read_page`          | Reads one page of a document, in reading order                   | Free                                               |
-| `chapter_contents`   | Lists every formula, figure, table and code listing of a document, in reading order | Free                                               |
-| `chapter_concepts`   | Lists the concepts of a document, or of one page of it           | Free                                               |
-| `chapter_insights`   | Gives the insights, takeaways and cheat sheet written for a document | Free                                           |
-| `export_insights`    | Writes the saved insights, takeaways and cheat sheet of a document to a PDF, Markdown or HTML file | Free; writes one file             |
-| `answer`             | Writes an answer from what `search` finds, with its sources      | A Gemini call and the subscription usage of the agent of the Ask choice |
-| `edit_media`         | Changes the category, authors or tags of a stored media, in both stores | Free                                        |
-| `edit_document_tags` | Adds tags to a stored document or takes tags away, in both stores | Free                                              |
-| `ingest_pdf`         | Converts one PDF of a media and stores it                        | Paid and slow: the agent of the Ingest choice, Jev and Gemini  |
-| `ingest_status`      | Says how an ingest job is going                                  | Free                                               |
-| `write_insights`     | Writes the missing insights, takeaways and cheat sheets of stored documents | Paid and slow, a minute or more for each document, unless `dry_run` is `true`, which is free |
-| `insights_status`    | Says how an insights job is going and what became of each document | Free                                            |
-| `build_dataset`      | Builds a training dataset from the converted documents           | Paid and slow, it can take hours, unless `dry_run` is `true`, which is free |
-| `dataset_status`     | Says how a dataset build is going and what it spent so far       | Free                                               |
-| `stop_job`           | Stops a running ingest, insights job or dataset build            | Free                                               |
-
-An agent that can write its own answer should call `search`, not `answer`. The arguments, the first calls to try, `.mcp.json`, HTTP, how to send a PDF, how to write and export insights, how to stop a job and how to build a dataset are in [docs/mcp.md](docs/mcp.md). The tools do not delete and do not change the model choice: [docs/mcp.md](docs/mcp.md#8-what-is-not-a-tool) says why.
-
-## Command line
-
-Four programs. Every command and flag is in [docs/reference.md](docs/reference.md).
-
-| Program       | What it does                                                                                                                                                                                                                                                           |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rag-ingest`  | Checks the services, ingests a PDF or a converted document, writes the missing insights of stored chapters (`insights`), changes a media (`media`) or the own tags of a document (`tag`), and deletes a document (`delete-document`) or a whole media (`delete-media`) |
-| `rag-query`   | Asks the stored items of the whole library, or of one document (`--document`), a question, and `--answer` writes an answer                                                                                                                                             |
-| `ocr`         | Converts the PDF of a book's chapter into saved files under `content/`, and stores nothing                                                                                                                                                                             |
-| `rag-dataset` | Builds a training dataset for Gemma 4 from the converted documents; `--dry-run` plans it for free                                                                                                                                                                      |
-
-Run each one through `cargo`:
-
-```bash
-cargo run --release -p rag-ingestion --bin rag-ingest -- …
-cargo run --release -p rag-retrieval --bin rag-query -- …
-cargo run --release -p ocr -- …
-cargo run --release -p rag-dataset -- build --name <name> …
-```
-
-The recipe for training on a dataset is in [docs/training.md](docs/training.md).
-
-## Costs
-
-These bill for the work that quanty asks of them.
-
-| What                        | Billed to                                                | When                                                                                          |
-| --------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Gemini embeddings           | Your Gemini API key, by the token                        | Every ingest and every question                                                               |
-| Jev                         | Your Jev API key                                         | The pages of a PDF, when they are converted                                                   |
-| `claude` (Haiku and Sonnet) | The subscription `claude` is signed in to, never the API | Converting pages, finding concepts, writing the insights of a chapter and writing an answer   |
-| A dataset build             | The subscription of the agent of the Datasets choice, Codex or Claude | `rag-dataset build`, `build_dataset` and **Start build** on the Datasets tab, never a dry run |
-
-Every ingest and every question reports the tokens each model used and about what they cost, such as `cost of this run: ≈ $1.75`. The figure comes from one table of prices per million tokens: it is what the API would charge, not what your subscription bills. The table, its date and how each figure is made are in [docs/reference.md](docs/reference.md#costs).
-
-Converted pages and the answers about concepts are kept on disk, so a run that stopped goes on without paying twice, and a PDF that is already ingested costs nothing once its `insights.json` is saved. `rag-ingest insights` is paid work too, for each chapter whose file is missing, unless it is a dry run. The answers of a dataset build are kept in `DATASET_CACHE_DIR`, so a build asked again does not pay twice. `rag-ingest pdf` checks the Gemini key and both stores before the first page is paid for.
-
-These cost nothing:
-
-- The two stores, which run on your machine.
-- `health`, `--fixture`, `list_documents`, `read_page`, `chapter_contents`, `chapter_concepts`, `chapter_insights`, `export_insights`, `edit_media`, `edit_document_tags`, `ingest_status`, `insights_status`, `dataset_status`, `stop_job`, `media`, `tag`, `delete-document`, `delete-media` and `insights --dry-run`.
-- A dry run of a dataset: `rag-dataset build --dry-run`, `dry_run: true` in `build_dataset`, and the dry-run box of the Datasets tab.
-- The check, every edit, every delete and every export of the desktop app.
-
-`delete-document`, `delete-media` and a delete in the desktop app cost nothing to run, but they remove the converted pages, so the same PDF ingested again is converted again, which is paid work.
-
-## Start fresh
-
-To empty the library and begin again, stop the stores and remove the two folders that quanty made on your machine.
-
-> [!CAUTION]
-> This deletes every stored media and document, every converted page (with the PDFs that the MCP server saved under `content/_uploads`), every kept answer about concepts, every kept answer of the dataset builds, and the log of concept decisions. It cannot be undone.
-
-```bash
-docker compose down       # stops Qdrant and FalkorDB
-rm -rf data content       # the stores, the kept answers and the converted documents
-docker compose up -d
-cargo run --release -p rag-ingestion --bin rag-ingest -- health
-```
-
-Nothing in git is touched: `samples/` stays. To ingest the PDFs again is paid work again, because nothing is kept to go on from: see [Costs](#costs). The built datasets are in `datasets/`, which `rm -rf data content` leaves: remove it too to drop them. The kept answers of their models are in `data/dataset-cache`, so they go with `data`, and a dataset built again is paid work again. When `.env` names other places with `CONTENT_DIR`, `CONCEPT_CACHE_DIR`, `CONCEPT_DECISION_LOG`, `DATASET_DIR` or `DATASET_CACHE_DIR`, remove those too.
-
-## Troubleshooting
-
-Messages you may see, and what to do.
-
-| What you see                                                                                                                                                             | What to do                                                                                                                                                                                                                                                                                                            |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `could not reach Qdrant at …` or `could not connect to FalkorDB at …`                                                                                                    | Run `docker compose up -d`, then `health` again                                                                                                                                                                                                                                                                       |
-| `did not answer like FalkorDB; another program may be using that port`                                                                                                   | Something else listens on port 6379, such as a local Redis. Stop it, or map the container to another port and set `FALKORDB_URL` to match                                                                                                                                                                             |
-| `EMBEDDING_GEMINI_API_KEY is not set` or `CONVERTER_JEV_API_KEY is not set`                                                                                              | Put the key in `.env`, and start the command in the quanty folder: `.env` is looked for in the current folder and the folders above it                                                                                                                                                                                |
-| `ANTHROPIC_API_KEY is set, so claude could bill the API` or `claude is not signed in`                                                                                    | Run `unset ANTHROPIC_API_KEY`, or run `claude` in a terminal and sign in. Then start the program again                                                                                                                                                                                                                |
-| "The page was not found" in the app, or `no converted chapter under content has the document id …` from `read_page`                                                      | The document's folder is not where quanty looks. Put it inside its media's folder under `content/`, or ingest its PDF again with `rag-ingest pdf`                                                                                                                                                                     |
-| `… cannot be ingested as a book chapter; rename it to chapter-<number>-<name>.pdf …` or `… so its pdf must be named chapter-<number>-<name>.pdf …` from `rag-ingest pdf` | The media is a book, so the file name gives the chapter. Rename the file, or give `--title` when the PDF is a part of the book that is not a chapter, such as its index. A media that the library does not have yet can be a paper or another media instead: give `--paper` or `--other`, whose PDF can have any name |
-
-## Artifact descriptions
-
-Converted documents require saved Library artifact titles and descriptions. Existing libraries can preview and backfill them without rebuilding search data:
-
-```sh
-rag-ingest artifacts --all --dry-run
-rag-ingest artifacts --document <document-id>
-```
-
-Backfill uses the selected Ingest model and saved chapter text. See [artifact metadata and backfill](docs/reference.md#artifact-titles-and-descriptions) for resumability, request limits and failure behavior.
-
+   ```bash
+   sudo apt update
+   sudo apt install ca-certificates curl
+   sudo install -m 0755 -d /etc/apt/keyrings
+   sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+   sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+   sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
+   Types: deb
+   URIs: https://download.docker.com/linux/ubuntu
+   Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+   Components: stable
+   Architectures: $(dpkg --print-architecture)
+   Signed-By: /etc/apt/keyrings/docker.asc
+   EOF
+
+   sudo apt update
+   sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+   sudo docker run hello-world
+   ```
+
+   To run `docker` without `sudo`, add yourself to the `docker` group, which the install created, then log out and in ([Docker's page](https://docs.docker.com/engine/install/linux-postinstall/)). The steps below assume you did.
+
+   ```bash
+   sudo usermod -aG docker $USER
+   ```
+
+2. **Make the folder, the key and the password.** `/srv/quanty` is the root of the library. The second command writes the key and the password to a file that only you can read. Keep a copy in your password manager, because the app asks for both.
+
+   ```bash
+   sudo mkdir -p /srv/quanty && sudo chown "$USER" /srv/quanty
+   cd /srv/quanty
+   mkdir content
+   printf 'QDRANT_API_KEY=%s\nFALKORDB_PASSWORD=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > .env
+   chmod 600 .env
+   ```
+
+3. **Write the Compose file.** Both ports bind to the loopback address of the server, and Qdrant and FalkorDB each need their key or password.
+
+   ```bash
+   cat > docker-compose.yaml <<'EOF'
+   services:
+     qdrant:
+       image: qdrant/qdrant
+       ports: ["127.0.0.1:6334:6334"]
+       environment:
+         - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY}
+       volumes: ["./data/qdrant:/qdrant/storage"]
+     falkordb:
+       image: falkordb/falkordb
+       ports: ["127.0.0.1:6379:6379"]
+       environment:
+         - REDIS_ARGS=--requirepass ${FALKORDB_PASSWORD}
+         - REDISCLI_AUTH=${FALKORDB_PASSWORD}
+       volumes: ["./data/falkordb:/var/lib/falkordb/data"]
+   EOF
+   ```
+
+4. **Start the stores and check them.**
+
+   ```bash
+   docker compose up -d
+   docker compose ps                              # both say running
+   docker compose exec falkordb redis-cli PING    # PONG: the password works
+   ```
+
+**On each machine that uses the library**
+
+5. **Mount the content folder** at the same path on every machine, and before you start quanty. On a Mac, `sshfs` needs macFUSE too. On Ubuntu, install it with `sudo apt install sshfs`.
+
+   ```bash
+   sudo mkdir -p /Volumes/quanty-content && sudo chown "$USER" /Volumes/quanty-content
+   sshfs me@server:/srv/quanty/content /Volumes/quanty-content -o reconnect
+   ```
+
+6. **Open the tunnel** in a terminal of its own. It prints nothing and stays open. Local ports 16334 and 16379 leave the usual 6334 and 6379 free for the Docker stores of your own machine.
+
+   ```bash
+   ssh -N -L 16334:127.0.0.1:6334 -L 16379:127.0.0.1:6379 me@server
+   ```
+
+7. **Add the database in the app.** Start quanty, click the entry at the right end of the footer, choose **New…**, fill in the seven fields, and press **Use**. The footer then reads **Database: Server · connected**.
+
+   | Field | What to put in it |
+   | --- | --- |
+   | **Name** | Any name, such as `Server` |
+   | **Qdrant URL** | `http://127.0.0.1:16334` |
+   | **Qdrant API key** | `QDRANT_API_KEY` from `/srv/quanty/.env` on the server |
+   | **FalkorDB URL** | `falkor://127.0.0.1:16379` |
+   | **FalkorDB password** | `FALKORDB_PASSWORD` from `/srv/quanty/.env` on the server |
+   | **Graph** | `quanty` |
+   | **Content folder** | `/Volumes/quanty-content` |
+
+[docs/server.md](docs/server.md) goes on with the other way to share the content folder (SMB), backups, moving a library to a new server, and a private network instead of a tunnel.
+
+## Documentation
+
+- [docs/guide.md](docs/guide.md): choose a model and a database, where a library lives, add your first PDF, the desktop app, the command line, costs, start fresh and artifact descriptions.
+- [docs/server.md](docs/server.md): keep the stores on a server, step by step, with SMB, backups and moving a library.
+- [docs/mcp.md](docs/mcp.md): the MCP server for agents, its tools and how to add it to Claude Code.
+- [docs/reference.md](docs/reference.md): every command and flag in full.
+- [docs/training.md](docs/training.md): train Gemma 4 on a dataset that quanty built.
+- [docs/troubleshooting.md](docs/troubleshooting.md): messages you may see, and what to do.
+- [docs/architecture.md](docs/architecture.md): the whole system on one page, and the folders of the repository.
 
 ## Licence
 

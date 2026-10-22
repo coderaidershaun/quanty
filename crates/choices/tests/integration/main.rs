@@ -1,6 +1,6 @@
 //! Saved choices, one for each kind of work, must load from old and new files and without parsing
 //! unrelated environment settings.
-use model_settings::{MODEL_SETTINGS_FILE, ModelSettings, WorkChoices, WorkKind};
+use choices::{MODEL_SETTINGS_FILE, ModelSettings, WorkChoices, WorkKind};
 
 #[test]
 fn saved_selection_precedes_environment_file() {

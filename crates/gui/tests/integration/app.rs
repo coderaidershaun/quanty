@@ -11,10 +11,11 @@ use egui_kittest::kittest::Queryable as _;
 use gui::app::App;
 use gui::app::layout::{self, DEFAULT_WINDOW};
 use gui::contract::{
-    AskDraft, Failure, FailureKind, Filters, Intent, ItemKind, Loadable, NodeId, NodeKind,
-    PieceKind, ResultItem, StartupFacts,
+    AskDraft, Databases, Failure, FailureKind, Filters, Intent, ItemKind, Loadable, NodeId,
+    NodeKind, PieceKind, ResultItem, StartupFacts,
 };
 use gui::testkit;
+use rag_core::Config;
 
 use crate::support::{self, QUESTION, SAMPLE_PAGES};
 
@@ -35,7 +36,8 @@ fn an_ask_runs_from_the_question_to_the_cited_page_on_the_live_adapters() {
         .expect("a runtime should start");
     let cx = runtime.block_on(support::seeded("app-ask"));
     let content_folder = cx.config().content_folder.clone();
-    let mut harness = testkit::app_on(cx, facts(), Vec::new(), DEFAULT_WINDOW);
+    let facts = facts(&cx.config());
+    let mut harness = testkit::app_on(cx, facts, Vec::new(), DEFAULT_WINDOW);
     testkit::settle_within(&mut harness, SLOW);
 
     the_media_list_offers_each_stored_book(&mut harness);
@@ -277,12 +279,9 @@ fn a_media_that_is_not_stored_finds_nothing_and_says_so(harness: &mut Window) {
 #[test]
 fn the_app_opens_with_both_stores_down_and_says_what_to_start() {
     let samples = testkit::samples_folder();
-    let mut harness = testkit::app_on(
-        support::closed(&samples),
-        facts(),
-        Vec::new(),
-        DEFAULT_WINDOW,
-    );
+    let cx = support::closed(&samples);
+    let facts = facts(&cx.config());
+    let mut harness = testkit::app_on(cx, facts, Vec::new(), DEFAULT_WINDOW);
     testkit::settle_within(&mut harness, Duration::from_secs(10));
 
     let catalogue = &harness.state().shared().library.catalogue;
@@ -317,8 +316,10 @@ fn the_app_opens_with_both_stores_down_and_says_what_to_start() {
     harness.get_by_label(&format!("Picture of page {PAGE_WITH_THE_FIGURE}"));
 }
 
-fn facts() -> StartupFacts {
+fn facts(config: &Config) -> StartupFacts {
     StartupFacts {
+        local_database: config.local_database(),
+        databases: Databases::choosing_local(),
         home: PathBuf::from(env!("CARGO_MANIFEST_DIR")),
         env_file: None,
         fixture: None,

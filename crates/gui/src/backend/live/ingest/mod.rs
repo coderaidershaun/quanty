@@ -34,7 +34,8 @@ fn chapter_job<S: Services>(
             name: (&ingest.name).into(),
         },
     };
-    let job = ChapterJob::new(document, &ingest.pdf, &cx.config().content_folder)
+    let config = cx.config();
+    let job = ChapterJob::new(document, &ingest.pdf, &config.content_folder)
         .map_err(|error| cx.failure(error))?;
     check_is_a_pdf(&ingest.pdf)?;
     Ok(job)

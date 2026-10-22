@@ -3,19 +3,20 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
 
 use graph::{ConceptNode, FalkorGraph, Mention, Relation, RelationKind};
 use gui::backend::live::{LiveContext, RealServices, Services};
 use gui::backend::{Handler, Reply};
 use gui::contract::{Command, DocId, Event, Failure};
-use ocr::convert::services::{Jev, JevError};
+use ocr::convert::services::JevError;
 use ocr::testing::{Scenario, StubServices};
 use ocr::{ChapterIndex, ChapterJob, ConversionSummary, ConvertError, PageProgress};
-use rag_core::{ApiKey, Config, EmbedError, GeminiEmbedder, ItemKind, MediaLabels, WorkKind};
+use rag_core::{ApiKey, Config, EmbedError, ItemKind, MediaLabels, WorkKind};
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores, first_axis, vector_at};
 use rag_ingestion::{ChapterFolder, Item, Models, chapter_items, ingest_chapter};
 use serde_json::json;
+
+use crate::key_checks::{Check, KeyChecks};
 
 pub const QUESTION: &str = "How is a call option priced?";
 pub const IN_DEPTH: &str = "quanty-sample-notes/chapter-2";
@@ -59,11 +60,11 @@ impl Services for StandInServices {
         ocr::convert::convert_chapter_with_progress(job, &*self.pages, on_page).await
     }
 
-    async fn check_gemini_key(&self, _key: &ApiKey) -> Result<(), EmbedError> {
+    async fn check_gemini_key(&self, _key: ApiKey) -> Result<(), EmbedError> {
         Ok(())
     }
 
-    async fn check_jev_key(&self, _key: &ApiKey) -> Result<(), JevError> {
+    async fn check_jev_key(&self, _key: ApiKey) -> Result<(), JevError> {
         Ok(())
     }
 }
@@ -128,11 +129,11 @@ impl Services for StandInsOnClosedPorts {
         ocr::convert::convert_chapter_with_progress(job, &*self.pages, on_page).await
     }
 
-    async fn check_gemini_key(&self, _key: &ApiKey) -> Result<(), EmbedError> {
+    async fn check_gemini_key(&self, _key: ApiKey) -> Result<(), EmbedError> {
         Ok(())
     }
 
-    async fn check_jev_key(&self, _key: &ApiKey) -> Result<(), JevError> {
+    async fn check_jev_key(&self, _key: ApiKey) -> Result<(), JevError> {
         Ok(())
     }
 }
@@ -145,7 +146,7 @@ impl Services for StandInsOnClosedPorts {
 /// When the settings of `first` do not name a throwaway graph: the second context connects to
 /// the graph that the settings name, and that must never be the real one.
 pub fn started_again(first: &LiveContext<StandInServices>) -> LiveContext<StandInsOnClosedPorts> {
-    let config = first.config().clone();
+    let config = (*first.config()).clone();
     assert!(
         config.falkordb_graph.starts_with(THROWAWAY_GRAPH_PREFIX),
         "the graph `{}` is not a throwaway graph",
@@ -178,7 +179,9 @@ pub fn closed_ports_config() -> Config {
     let folder = std::env::temp_dir().join("quanty-closed-ports");
     Config {
         qdrant_url: "http://127.0.0.1:1".to_owned(),
+        qdrant_api_key: None,
         falkordb_url: "falkor://127.0.0.1:1".to_owned(),
+        falkordb_password: None,
         falkordb_graph: "closed-ports".to_owned(),
         items_collection: "closed-ports-items".to_owned(),
         concepts_collection: "closed-ports-concepts".to_owned(),
@@ -189,87 +192,6 @@ pub fn closed_ports_config() -> Config {
         dataset_cache_folder: folder.join("dataset-cache"),
         gemini_api_key: Some(ApiKey::new("a-made-up-key")),
         jev_api_key: None,
-    }
-}
-
-// SMELL: this file is near the 500-line limit, and each new stand-in adds to it. The stand-in key
-// checks below are the part to move out first.
-/// How a key check answers.
-#[derive(Debug, Clone, Copy)]
-pub enum Check {
-    Accepted,
-    Rejected {
-        status: u16,
-        body: &'static str,
-    },
-    /// The real client runs against a port that nothing listens on.
-    Unreachable,
-}
-
-/// `inner` does all the work except the two key checks, which answer as the test chose. No check
-/// ever reaches a provider.
-pub struct KeyChecks<S> {
-    pub inner: S,
-    pub gemini: Check,
-    pub jev: Check,
-}
-
-const CLOSED_PORT: &str = "http://127.0.0.1:1";
-
-impl<S: Services> Services for KeyChecks<S> {
-    type Embedder = S::Embedder;
-    type Llm = S::Llm;
-
-    fn embedder(&self, config: &Config) -> Result<S::Embedder, Failure> {
-        self.inner.embedder(config)
-    }
-
-    fn llm(&self, work: WorkKind) -> S::Llm {
-        self.inner.llm(work)
-    }
-
-    fn graph(&self, config: &Config) -> impl Future<Output = Result<FalkorGraph, Failure>> + Send {
-        self.inner.graph(config)
-    }
-
-    fn convert(
-        &self,
-        job: &ChapterJob,
-        jev_api_key: Option<&str>,
-        on_page: &mut (dyn FnMut(PageProgress) + Send),
-    ) -> impl Future<Output = Result<ConversionSummary, ConvertError>> + Send {
-        self.inner.convert(job, jev_api_key, on_page)
-    }
-
-    async fn check_gemini_key(&self, key: &ApiKey) -> Result<(), EmbedError> {
-        match self.gemini {
-            Check::Accepted => Ok(()),
-            Check::Rejected { status, body } => Err(EmbedError::Rejected {
-                status,
-                body: body.to_owned(),
-            }),
-            Check::Unreachable => {
-                let embedder = GeminiEmbedder::new(key)?;
-                embedder
-                    .with_endpoint(CLOSED_PORT, Duration::ZERO)
-                    .check_key()
-                    .await
-            }
-        }
-    }
-
-    async fn check_jev_key(&self, key: &ApiKey) -> Result<(), JevError> {
-        match self.jev {
-            Check::Accepted => Ok(()),
-            Check::Rejected { status, body } => Err(JevError::Rejected {
-                status,
-                body: body.to_owned(),
-            }),
-            Check::Unreachable => {
-                let jev = Jev::new(key.expose())?;
-                jev.with_base_url(CLOSED_PORT).check_key().await
-            }
-        }
     }
 }
 

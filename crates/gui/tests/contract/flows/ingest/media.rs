@@ -2,16 +2,14 @@
 //! pencil changes, and is refused a second time, and a paper's PDF of any name is checked by
 //! itself and ingested.
 
-use std::path::PathBuf;
-
+use backend::fake::Fake;
+use backend::{Handler, Reply};
+use contract::{
+    Category, Command, DocumentName, IngestRequest, Intent, Media, MediaEdit, NewMedia,
+};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::backend::fake::Fake;
-use gui::backend::{Handler, Reply};
-use gui::contract::{
-    Category, Command, DocumentName, IngestRequest, Intent, Media, MediaEdit, NewMedia,
-};
 use gui::state::IngestJob;
 use gui::testkit;
 
@@ -179,7 +177,11 @@ fn a_paper_pdf_of_the_saved_paper_is_checked_and_ingested(harness: &mut Window, 
     let checks = seen.count(is_preflight);
     harness
         .state_mut()
-        .push(Intent::PdfPicked(PathBuf::from("hawkes-notes.pdf")));
+        .push(Intent::PdfPicked(contract::UploadedPdf {
+            upload: contract::UploadId::default(),
+            file_name: "hawkes-notes.pdf".to_owned(),
+            bytes: 1,
+        }));
     testkit::settle(harness);
 
     assert_eq!(
@@ -188,7 +190,8 @@ fn a_paper_pdf_of_the_saved_paper_is_checked_and_ingested(harness: &mut Window, 
         "the pick is checked with no click"
     );
     let mut wanted = IngestRequest {
-        pdf: PathBuf::from("hawkes-notes.pdf"),
+        pdf: contract::UploadId::default(),
+        file_name: "hawkes-notes.pdf".into(),
         media: SAVED_PAPER.to_owned(),
         category: Category::Paper,
         name: DocumentName::Title(SAVED_PAPER.to_owned()),

@@ -6,10 +6,10 @@ use eframe::egui;
 use super::pane::Pane;
 use super::phase::AnswerTab;
 use super::share;
-use crate::contract::Usage;
 use crate::panels::labels::spent_text;
 use crate::theme::{self, TextRole, color, size, space};
 use crate::widgets::{self, TabStrip};
+use contract::Usage;
 
 pub(super) fn show(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>) {
     let counts = pane.listing.map(|listing| listing.counts);

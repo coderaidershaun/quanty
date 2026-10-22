@@ -5,25 +5,23 @@ mod document;
 mod media;
 mod status;
 
-use std::path::PathBuf;
-
 use eframe::egui;
 
 use self::document::DocumentFields;
 use self::media::MediaChoice;
-use crate::contract::{Catalogue, Category, IngestRequest, Intent, Media, is_same_name};
 use crate::panels::PanelCx;
 use crate::panels::pages::media_card::MediaFields;
 use crate::panels::seam::column;
 use crate::state::{IngestJob, MediaEditing, Shared};
 use crate::theme::{TextRole, space};
+use contract::{Catalogue, Category, IngestRequest, Intent, Media, is_same_name};
 
 /// The column is never wider than this, however wide the window.
 const COLUMN_WIDTH: f32 = 720.0;
 
 #[derive(Debug, Default)]
 pub struct Local {
-    pdf: Option<PathBuf>,
+    pdf: Option<contract::UploadedPdf>,
     media: MediaChoice,
     /// The PDF section as typed.
     typed: DocumentFields,
@@ -68,7 +66,8 @@ impl Local {
         let pdf = self.pdf.clone().ok_or(Missing::Pdf)?;
         let name = fields.name(category)?;
         Ok(IngestRequest {
-            pdf,
+            pdf: pdf.upload,
+            file_name: pdf.file_name,
             media: title.to_owned(),
             category,
             name,
@@ -84,7 +83,11 @@ impl Local {
     fn fill_from(&mut self, request: &IngestRequest, catalogue: Option<&Catalogue>) {
         let is_gone =
             catalogue.is_some_and(|catalogue| media::titled(catalogue, &request.media).is_none());
-        self.pdf = Some(request.pdf.clone());
+        self.pdf = Some(contract::UploadedPdf {
+            upload: request.pdf,
+            file_name: request.file_name.clone(),
+            bytes: 0,
+        });
         self.media = if is_gone {
             MediaChoice::New(MediaFields {
                 category: request.category,
@@ -102,9 +105,9 @@ impl Local {
     }
 
     /// A pick is not typing, so the name fields that it fills in are settled at once.
-    fn pick(&mut self, pdf: PathBuf) {
-        self.typed.take_name_of(&pdf);
-        self.settled.take_name_of(&pdf);
+    fn pick(&mut self, pdf: contract::UploadedPdf) {
+        self.typed.take_name_of(&pdf.file_name);
+        self.settled.take_name_of(&pdf.file_name);
         self.pdf = Some(pdf);
         self.wants_check = true;
     }

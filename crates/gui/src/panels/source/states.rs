@@ -2,11 +2,11 @@
 
 use eframe::egui;
 
-use crate::contract::{Failure, FailureKind, Intent, Loadable};
 use crate::panels::PanelCx;
 use crate::panels::labels::TRY_AGAIN;
 use crate::theme::Icon;
 use crate::widgets::{Button, ControlSize, Placeholder, PlaceholderResponse};
+use contract::{Failure, FailureKind, Intent, Loadable};
 
 /// In a room lower than this a placeholder sits in a scroll area, so none of it is cut off.
 const MIN_ROOM: f32 = 200.0;

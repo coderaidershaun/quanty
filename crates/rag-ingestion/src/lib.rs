@@ -12,6 +12,7 @@ mod pdf;
 mod stores;
 #[cfg(feature = "testing")]
 pub mod testing;
+mod uploads;
 
 pub use delete::{
     DeleteError, DocumentDeleteSummary, MediaDeleteSummary, delete_document, delete_media,
@@ -32,3 +33,5 @@ pub use pdf::{
     items_of_ingested_document,
 };
 pub use stores::Stores;
+
+pub use uploads::{UploadNameError, check_upload_file_name, save_uploaded_pdf, uploaded_pdf_path};

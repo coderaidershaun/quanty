@@ -3,13 +3,13 @@
 
 use std::collections::{HashMap, HashSet};
 
+use backend::fake::{self, Fake};
+use contract::{Chord, Command, Failure, Intent, KeyName, SHORTCUTS};
 use eframe::egui;
 use eframe::egui::accesskit::{Action, NodeId, Role};
 use egui_kittest::kittest::{AccessKitNode, By, NodeT as _, Queryable as _};
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::backend::fake::{self, Fake};
-use gui::contract::{Chord, Command, Failure, Intent, KeyName, SHORTCUTS};
-use gui::state::{MediaDelete, Quit};
+use gui::state::MediaDelete;
 use gui::testkit;
 
 use super::recording::{self, Seen};
@@ -110,13 +110,13 @@ fn assert_start_up_sent_only_its_own_commands(scene: &str, seen: &Seen) {
         "`{scene}`"
     );
     assert_eq!(
-        counted(|c| matches!(c, Command::UseDatabase { .. })),
-        1,
-        "`{scene}`"
-    );
-    assert_eq!(
         seen.all().len(),
-        2 + asks + pages + checks + builds + reads,
+        1 + asks
+            + pages
+            + checks
+            + builds
+            + reads
+            + counted(|c| matches!(c, Command::CheckHealth { .. })),
         "`{scene}` sent a command that its opening does not ask for: {:?}",
         seen.all()
     );
@@ -298,10 +298,15 @@ fn press_every_row_of_every_list(harness: &mut Window) {
 /// that worked, so an ask came before each one, and after the one before it.
 fn assert_each_health_check_follows_an_ask(scene: &str, seen: &Seen) {
     let mut asked = false;
+    let mut first = true;
     for command in seen.all() {
         match command {
             Command::Ask { .. } => asked = true,
             Command::CheckHealth { .. } => {
+                if first {
+                    first = false;
+                    continue;
+                }
                 assert!(asked, "`{scene}` checked health with no ask before it");
                 asked = false;
             }
@@ -351,13 +356,12 @@ fn assert_nothing_unbuilt_was_reached(harness: &Window, scene: &str, seen: &Seen
     assert_ingest_commands_follow_a_check(scene, seen);
     let shared = shared(harness);
     assert!(!shared.help_open, "`{scene}` opened the help sheet");
-    assert_eq!(shared.quit, Quit::No);
     let not_built = Failure::not_built("anything").hint;
     let health_failures =
-        gui::contract::Service::ALL
+        contract::Service::ALL
             .into_iter()
             .filter_map(|service| match shared.health.of(service) {
-                gui::contract::ServiceState::Down(failure) => Some(failure),
+                contract::ServiceState::Down(failure) => Some(failure),
                 _ => None,
             });
     let all_failures = failures(shared)
@@ -413,6 +417,7 @@ fn every_key_and_control_of(scene: &str) {
     testkit::settle(&mut harness);
     assert_start_up_sent_only_its_own_commands(scene, &seen);
 
+    let health_before_keys = seen.count(|command| matches!(command, Command::CheckHealth { .. }));
     for row in &SHORTCUTS {
         // A key that the box takes as text does not reach the shortcut, so the box is left
         // first, as a person leaves it.
@@ -434,11 +439,10 @@ fn every_key_and_control_of(scene: &str) {
         }
     }
     assert_nothing_unbuilt_was_reached(&harness, scene, &seen);
-    assert!(
-        seen.all()
-            .iter()
-            .all(|command| !matches!(command, Command::CheckHealth { .. })),
-        "`{scene}`: a key sent a health check"
+    assert_eq!(
+        seen.count(|command| matches!(command, Command::CheckHealth { .. })),
+        health_before_keys,
+        "`{scene}`: a key sent a health check beyond startup"
     );
 
     press_every_control(&mut harness, scene);

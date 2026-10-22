@@ -3,15 +3,13 @@
 //! is held back until no box of the section has the keyboard, so a check never starts on a
 //! keystroke.
 
-use std::path::Path;
-
 use eframe::egui;
 
 use super::{Local, Missing};
-use crate::contract::{Category, DocumentName, IngestRequest, Intent};
 use crate::panels::labels::{caption, list_of, text_of};
 use crate::theme::{TextRole, color, space};
 use crate::widgets::{Button, Chip, TextInput, TextInputResponse};
+use contract::{Category, DocumentName, IngestRequest, Intent};
 
 const PDF: &str = "PDF";
 const PART_OF_THE_BOOK: &str = "Part of the book";
@@ -91,9 +89,8 @@ impl DocumentFields {
     /// The name fields belonged to the file before. A file named as a chapter fills in the
     /// chapter. Any other file empties the chapter and offers its words as the title of a part,
     /// but leaves the choice of the part alone: the person decides that a file is not a chapter.
-    pub(super) fn take_name_of(&mut self, pdf: &Path) {
-        let file_name = file_name_of(pdf).unwrap_or_default();
-        match DocumentName::from_chapter_file_name(&file_name) {
+    pub(super) fn take_name_of(&mut self, file_name: &str) {
+        match DocumentName::from_chapter_file_name(file_name) {
             Some(DocumentName::Chapter { number, name }) => {
                 self.part = BookPart::Chapter;
                 self.chapter_number = number.to_string();
@@ -103,7 +100,7 @@ impl DocumentFields {
             _ => {
                 self.chapter_number.clear();
                 self.chapter_name.clear();
-                self.part_title = DocumentName::title_from_file_name(&file_name);
+                self.part_title = DocumentName::title_from_file_name(file_name);
             }
         }
     }
@@ -118,14 +115,13 @@ fn titled(title: &str) -> Result<DocumentName, Missing> {
     }
 }
 
-fn file_name_of(pdf: &Path) -> Option<String> {
-    pdf.file_name()
-        .map(|name| name.to_string_lossy().into_owned())
+fn file_name_of(pdf: &contract::UploadedPdf) -> String {
+    pdf.file_name.clone()
 }
 
 pub(super) fn show(ui: &mut egui::Ui, local: &mut Local, intents: &mut Vec<Intent>) {
     caption(ui, PDF);
-    file_row(ui, local.pdf.as_deref(), intents);
+    file_row(ui, local.pdf.as_ref(), intents);
     let category = local.media.chosen().map(|(_, category)| category);
     let mut boxes = name_boxes(ui, category, &mut local.typed);
     caption(ui, OWN_TAGS);
@@ -217,12 +213,12 @@ fn part_chips(ui: &mut egui::Ui, part: &mut BookPart) {
     });
 }
 
-fn file_row(ui: &mut egui::Ui, pdf: Option<&Path>, intents: &mut Vec<Intent>) {
+fn file_row(ui: &mut egui::Ui, pdf: Option<&contract::UploadedPdf>, intents: &mut Vec<Intent>) {
     ui.horizontal(|ui| {
         if ui.add(Button::secondary("Choose a PDF")).clicked() {
             intents.push(Intent::PickPdf);
         }
-        let (words, tint) = match pdf.and_then(file_name_of) {
+        let (words, tint) = match pdf.map(file_name_of) {
             Some(name) => (name, color::TEXT),
             None => ("No file chosen".to_owned(), color::TEXT_MUTED),
         };

@@ -3,10 +3,9 @@
 //! named once the category of its media is known.
 
 use std::collections::BTreeSet;
-use std::ffi::OsStr;
 use std::fs::File;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
@@ -14,16 +13,12 @@ use graph::FalkorGraph;
 use ocr::ChapterJob;
 use ocr::content::media_folder_name;
 use rag_core::{Category, Config, MediaLabels, Tag, author_list};
-use rag_ingestion::{TagChange, UnnamedPdf};
+use rag_ingestion::{TagChange, UnnamedPdf, uploaded_pdf_path};
 
 use super::{IngestPdfArgs, PdfIngestError};
 use crate::args::{non_blank, parse_tags};
 
 const PDF_START: &[u8] = b"%PDF-";
-
-/// The folder under the content folder that uploads are saved in. A media folder name never holds
-/// an underscore, so no upload can land in the folder of a media.
-const UPLOADS_FOLDER: &str = "_uploads";
 
 /// A PDF whose arguments and file passed every check. It is not named yet: that needs the
 /// category of its media, which the library may already have.
@@ -141,7 +136,8 @@ fn checked_source(
         }
         (None, Some(text)) => {
             let file_name = file_name.ok_or(PdfIngestError::MissingFileName)?;
-            let save_to = upload_path(config, media_folder, &file_name)?;
+            let save_to = uploaded_pdf_path(&config.content_folder, media_folder, &file_name)
+                .map_err(|error| PdfIngestError::FileNameHoldsFolder { name: error.name })?;
             let bytes = decoded_pdf(&text, max_pdf_bytes)?;
             Ok(Source {
                 pdf_path: save_to.clone(),
@@ -216,28 +212,6 @@ fn path_of_a_pdf(path: &str, max_pdf_bytes: u64) -> Result<PathBuf, PdfIngestErr
         return Err(PdfIngestError::NotAPdf { path });
     }
     Ok(path)
-}
-
-/// Where an uploaded PDF is saved: never a path that the caller chose, only a file name that
-/// has no folder in it, under the folder of the media under the uploads folder.
-fn upload_path(
-    config: &Config,
-    media_folder: &str,
-    file_name: &str,
-) -> Result<PathBuf, PdfIngestError> {
-    let is_plain = Path::new(file_name)
-        .file_name()
-        .is_some_and(|plain| plain == OsStr::new(file_name));
-    if !is_plain {
-        return Err(PdfIngestError::FileNameHoldsFolder {
-            name: file_name.to_owned(),
-        });
-    }
-    Ok(config
-        .content_folder
-        .join(UPLOADS_FOLDER)
-        .join(media_folder)
-        .join(file_name))
 }
 
 fn decoded_pdf(text: &str, max_pdf_bytes: u64) -> Result<Vec<u8>, PdfIngestError> {

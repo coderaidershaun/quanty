@@ -1,8 +1,7 @@
 //! The one ingest the person can have at a time: checked, started, watched, stopped, finished.
 
-use super::Quit;
 use super::shared::{Shared, push_cancel};
-use crate::contract::{
+use contract::{
     Command, Effect, Failure, IngestOutcome, IngestProgress, IngestRequest, NoticeKind, Preflight,
     RequestId, Usage,
 };
@@ -72,6 +71,9 @@ impl Shared {
     }
 
     pub(super) fn start_ingest(&mut self, effects: &mut Vec<Effect>) {
+        if !self.health.facts.running.is_empty() {
+            return;
+        }
         // The backend keeps a delete and an ingest apart only while the pages are converted, so no
         // ingest starts while a delete is on its way.
         if self.library.is_deleting() {
@@ -179,9 +181,6 @@ impl Shared {
         if matches!(result, Ok(IngestOutcome::Ingested(_))) {
             self.refresh_catalogue(effects);
         }
-        if self.quit == Quit::Confirmed {
-            effects.push(Effect::CloseWindow);
-        }
         let spent = progress.map_or_else(Usage::default, |progress| progress.spent);
         self.ingest = IngestJob::Finished {
             request,
@@ -195,10 +194,7 @@ impl Shared {
         request: &IngestRequest,
         result: &Result<IngestOutcome, Failure>,
     ) {
-        let file = request.pdf.file_name().map_or_else(
-            || request.pdf.display().to_string(),
-            |name| name.to_string_lossy().into_owned(),
-        );
+        let file = request.file_name.clone();
         match result {
             Ok(IngestOutcome::Ingested(report)) => {
                 let mut detail = format!(

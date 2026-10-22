@@ -5,14 +5,14 @@
 
 use std::time::Duration;
 
+use backend::fake;
+use contract::{DocId, DocumentView, Intent, Tab};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::App;
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::backend::fake;
-use gui::contract::{DocId, DocumentView, Intent, Tab};
 use gui::testkit;
 
 type Window = Harness<'static, App>;

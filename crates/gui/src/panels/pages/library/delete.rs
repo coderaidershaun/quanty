@@ -4,10 +4,10 @@
 use eframe::egui;
 
 use super::can_delete;
-use crate::contract::{Catalogue, DocId, Document, Intent};
 use crate::state::Shared;
 use crate::theme::Icon;
 use crate::widgets::{Button, Choice, Confirm, ControlSize};
+use contract::{Catalogue, DocId, Document, Intent};
 
 const DELETE: &str = "Delete";
 const DELETE_DOCUMENT: &str = "Delete document";

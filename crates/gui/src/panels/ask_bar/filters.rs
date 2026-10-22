@@ -6,9 +6,9 @@ use std::iter::once;
 use eframe::egui;
 
 use super::layout::{Rects, slot};
-use crate::contract::{Category, DocId, Document, Filters};
 use crate::state::Library;
 use crate::widgets::{Dropdown, paint_caret};
+use contract::{Category, DocId, Document, Filters};
 
 const ALL_MEDIA: &str = "All media";
 const ALL_DOCUMENTS: &str = "All documents";

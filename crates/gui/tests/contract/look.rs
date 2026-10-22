@@ -1,7 +1,6 @@
 //! The look of the app at rest is kept as pictures on disk, and a change that moves a pixel by
 //! more than the tolerance fails here until a person looks at the new picture and approves it.
 
-use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use eframe::egui;
@@ -26,7 +25,6 @@ const FIGURE_CITATION: &str = "Citation 8";
 const START_INGEST: &str = "Start ingest";
 const SHARE: &str = "Share";
 const EXPORT_AS_PDF: &str = "Export as PDF…";
-const MISSING_FOLDER_FILE: &str = "/quanty-no-such-folder/answer.pdf";
 const MAXIMISE: &str = "Maximise";
 /// The pencil of the first media of the scene, whose form is on screen with no scroll.
 const FIRST_MEDIA_PENCIL: &str = "Edit Hawkes Processes in Finance";
@@ -409,7 +407,12 @@ fn type_in_the_find_box(harness: &mut Window) {
 impl Row {
     /// Draws the scene at rest and compares it with the kept picture. The error says how.
     fn compare(&self, options: &SnapshotOptions) -> Result<(), String> {
-        let mut harness = testkit::app_at(self.scene, self.window, PIXELS_PER_POINT);
+        let home = tempfile::tempdir().unwrap();
+        if matches!(self.start, Start::AfterAnExportThatFails) {
+            std::fs::write(home.path().join("data"), "not a folder").unwrap();
+        }
+        let mut harness =
+            testkit::app_at_with_home(self.scene, self.window, PIXELS_PER_POINT, home);
         match self.start {
             Start::AtTheStallOfItsBuild => wait_for_the_stall_of_the_build(&mut harness),
             _ => testkit::settle(&mut harness),
@@ -421,9 +424,6 @@ impl Row {
             }
             Start::AfterAClickOnShare => click(&mut harness, Role::Button, SHARE),
             Start::AfterAnExportThatFails => {
-                harness
-                    .state_mut()
-                    .set_save_dialog(|_, _| Some(PathBuf::from(MISSING_FOLDER_FILE)));
                 click(&mut harness, Role::Button, SHARE);
                 click(&mut harness, Role::Button, EXPORT_AS_PDF);
             }

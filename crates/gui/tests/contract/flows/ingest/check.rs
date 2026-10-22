@@ -2,12 +2,10 @@
 //! until its chapter is typed and no box of the PDF has the keyboard any more. A book's PDF can
 //! also be checked as a part of the book that is not a chapter, with a title.
 
-use std::path::PathBuf;
-
+use contract::{Category, DocumentName, IngestRequest};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::contract::{Category, DocumentName, IngestRequest};
 use gui::testkit;
 
 use super::recording::Seen;
@@ -76,7 +74,8 @@ fn a_pdf_is_checked_by_itself_and_a_book_waits_for_its_chapter() {
 
     assert_eq!(seen.count(is_preflight), 2);
     let wanted = IngestRequest {
-        pdf: PathBuf::from("ch3.pdf"),
+        pdf: contract::UploadId::default(),
+        file_name: "ch3.pdf".into(),
         media: BOOK.to_owned(),
         category: Category::Book,
         name: DocumentName::Chapter {
@@ -93,7 +92,8 @@ fn a_pdf_is_checked_by_itself_and_a_book_waits_for_its_chapter() {
 fn a_book_pdf_that_is_not_a_chapter_is_checked_as_a_part(harness: &mut Window, seen: &Seen) {
     let checked_before = seen.count(is_preflight);
     let part = |title: &str| IngestRequest {
-        pdf: PathBuf::from("index.pdf"),
+        pdf: contract::UploadId::default(),
+        file_name: "index.pdf".into(),
         media: BOOK.to_owned(),
         category: Category::Book,
         name: DocumentName::Title(title.to_owned()),
@@ -132,7 +132,8 @@ fn a_book_pdf_that_is_not_a_chapter_is_checked_as_a_part(harness: &mut Window, s
     assert_eq!(
         last_checked(seen),
         IngestRequest {
-            pdf: PathBuf::from("chapter-5-rho.pdf"),
+            pdf: contract::UploadId::default(),
+            file_name: "chapter-5-rho.pdf".into(),
             name: DocumentName::Chapter {
                 number: 5,
                 name: "Rho".to_owned()

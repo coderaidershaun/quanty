@@ -3,47 +3,35 @@ name = "gui"
 version.workspace = true
 edition.workspace = true
 
-[[bin]]
-name = "quanty"
-path = "src/main.rs"
-
 [features]
-testing = ["dep:egui_kittest"]
+testing = ["dep:egui_kittest", "dep:backend", "dep:percent-encoding", "dep:tempfile"]
 
 [dependencies]
-anyhow.workspace = true
+backend = { workspace = true, optional = true, features = ["testing"] }
 choices.workspace = true
-clap.workspace = true
+contract.workspace = true
 eframe.workspace = true
 egui-phosphor.workspace = true
 egui_kittest = { workspace = true, optional = true }
+ehttp.workspace = true
 export.workspace = true
-graph.workspace = true
 image.workspace = true
-ocr.workspace = true
-rag-core.workspace = true
-rag-dataset.workspace = true
-rag-ingestion.workspace = true
-rag-retrieval.workspace = true
+percent-encoding = { workspace = true, optional = true }
 ratex-layout.workspace = true
 ratex-parser.workspace = true
 ratex-render.workspace = true
 ratex-types.workspace = true
-rfd.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-sha2.workspace = true
+tempfile = { workspace = true, optional = true }
 thiserror.workspace = true
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
 tracing.workspace = true
-tracing-subscriber.workspace = true
 uuid.workspace = true
+web-time.workspace = true
 
 [dev-dependencies]
-graph = { workspace = true, features = ["testing"] }
 gui = { workspace = true, features = ["testing"] }
-ocr = { workspace = true, features = ["testing"] }
 proptest.workspace = true
-rag-ingestion = { workspace = true, features = ["testing"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+rfd.workspace = true

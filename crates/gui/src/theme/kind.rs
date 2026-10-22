@@ -2,7 +2,7 @@
 //! of each kind.
 
 use super::{Icon, Tone};
-use crate::contract::{ItemKind, NodeKind, PieceKind};
+use contract::{ItemKind, NodeKind, PieceKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Kind {

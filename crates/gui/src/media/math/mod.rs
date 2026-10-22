@@ -1,4 +1,4 @@
-//! Formulas as pictures: typeset off the window's thread, kept as textures, and drawn on the
+//! Formulas as pictures: typeset between frames, kept as textures, and drawn on the
 //! text baseline. A formula that cannot be typeset shows its LaTeX source instead.
 
 mod cache;

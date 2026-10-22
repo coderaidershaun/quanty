@@ -5,10 +5,10 @@ use eframe::egui;
 
 use super::pane::Pane;
 use super::phase::{Phase, Written};
-use crate::contract::{Failure, Loadable, NothingFound};
 use crate::panels::labels::detail;
 use crate::theme::{Icon, TextRole};
 use crate::widgets::{self, Placeholder};
+use contract::{Failure, Loadable, NothingFound};
 
 /// The whole body, for a search that has no result to show.
 pub(super) fn whole(ui: &mut egui::Ui, pane: &Pane<'_, '_>) {

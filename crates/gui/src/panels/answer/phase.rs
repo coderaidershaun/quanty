@@ -1,7 +1,7 @@
 //! Names what the pane has to show from the ask alone, so drawing never guesses.
 
-use crate::contract::{Answer, AskMode, Failure, ItemKind, Loadable, NothingFound};
 use crate::state::AskSession;
+use contract::{Answer, AskMode, Failure, ItemKind, Loadable, NothingFound};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum AnswerTab {

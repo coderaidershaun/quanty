@@ -1,21 +1,20 @@
 //! The footer shows what is known of the Google and the Jev account on every tab, reads it only
 //! at start, after a paid job and on a click, and a read that fails or never ends blocks nothing.
 
-use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+use backend::fake::Fake;
+use backend::{Handler, Reply};
+use contract::{
+    AskDraft, Balance, BalanceReads, Category, Command, DatasetRequest, DocumentName, Effect,
+    Event, Failure, FailureKind, IngestRequest, Intent, Provider, RequestId, RetrievalTrace,
+    SearchReply, Tab,
+};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::Node;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::backend::fake::Fake;
-use gui::backend::{Handler, Reply};
-use gui::contract::{
-    AskDraft, Balance, BalanceReads, Category, Command, DatasetRequest, DocumentName, Effect,
-    Event, Failure, FailureKind, IngestRequest, Intent, Provider, RequestId, RetrievalTrace,
-    SearchReply, Tab,
-};
 use gui::state::Shared;
 use gui::testkit::{self, run_until};
 
@@ -277,7 +276,8 @@ fn spent_credit_is_shown_until_a_job_that_needs_the_provider_works() {
 
     harness.state_mut().push(Intent::OpenTab(Tab::Ingest));
     harness.state_mut().push(Intent::CheckIngest(IngestRequest {
-        pdf: PathBuf::from("chapter-3-greeks.pdf"),
+        pdf: contract::UploadId::default(),
+        file_name: "chapter-3-greeks.pdf".into(),
         media: "Option Volatility and Pricing".to_owned(),
         category: Category::Book,
         name: DocumentName::Chapter {

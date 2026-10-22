@@ -14,13 +14,13 @@ mod tags_form;
 
 use eframe::egui;
 
-use crate::contract::{Catalogue, Document, Intent, Loadable, Media};
 use crate::panels::PanelCx;
 use crate::panels::labels::TRY_AGAIN;
 use crate::panels::seam::{column, framed};
 use crate::state::{Library, Open, Shared};
 use crate::theme::{Icon, TextRole, space};
 use crate::widgets::Placeholder;
+use contract::{Catalogue, Document, Intent, Loadable, Media};
 
 /// The column of what is said in place of a list is never wider than this, however wide the
 /// window.

@@ -7,10 +7,10 @@ use eframe::egui;
 use super::blocks::narrow_to_measure;
 use super::listing::Row;
 use super::pane::{Copied, Pane};
-use crate::contract::ResultItem;
 use crate::media::{images, math, rich_text};
 use crate::theme::{Icon, TextRole, color, radius, size, space, stroke};
 use crate::widgets::{Button, CitationChip, ControlSize};
+use contract::ResultItem;
 
 const FORMULA_CAPTION: &str = "As printed in the source";
 const COPY_LABEL: &str = "Copy LaTeX";

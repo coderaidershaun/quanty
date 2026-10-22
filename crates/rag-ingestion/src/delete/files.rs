@@ -15,8 +15,8 @@ use rag_core::DocId;
 
 use super::DeleteError;
 
-// SMELL: the MCP server keeps its own copy of this name, and the two must be the same.
-const UPLOADS_FOLDER: &str = "_uploads";
+// SMELL: removal reconstructs the upload path instead of using the checks that saving uses.
+use crate::uploads::UPLOADS_FOLDER;
 
 /// The converted folders of one document that the content folder holds, each held so that no
 /// conversion starts in it until the folders are removed. A picture that stands alone has no

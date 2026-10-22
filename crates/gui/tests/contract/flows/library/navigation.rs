@@ -3,10 +3,10 @@
 
 use std::sync::Arc;
 
+use contract::{Intent, Tab};
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::contract::{Intent, Tab};
 use gui::state::Open;
 use gui::testkit;
 

@@ -3,7 +3,6 @@
 
 use eframe::egui;
 
-use crate::contract::{Intent, PagePiece, PieceKind};
 use crate::media::Media;
 use crate::media::code;
 use crate::media::images;
@@ -11,6 +10,7 @@ use crate::media::math::{self, MathRef};
 use crate::media::rich_text::{self, Clicked, RichText};
 use crate::theme::{TextRole, color};
 use crate::widgets::Card;
+use contract::{Intent, PagePiece, PieceKind};
 
 const MIN_FIGURE_HEIGHT: f32 = 120.0;
 const MAX_FIGURE_HEIGHT: f32 = 320.0;

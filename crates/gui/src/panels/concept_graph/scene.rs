@@ -10,8 +10,8 @@ use super::place::{Placed, place};
 use super::plan::{Plan, is_concept, plan};
 use super::seats::{Metrics, Sizes};
 use super::view::View;
-use crate::contract::{ConceptGraph, ConceptId, EdgeKind, GraphNode, NodeId};
 use crate::theme::{Kind, TextRole, Tone, color, radius, size, space};
+use contract::{ConceptGraph, ConceptId, EdgeKind, GraphNode, NodeId};
 
 /// These are the heights of a node with two lines of text and of a node with a single line.
 const NODE_ROOMY: f32 = size::CONTROL_LG;

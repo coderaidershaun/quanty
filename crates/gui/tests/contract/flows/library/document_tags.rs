@@ -3,10 +3,10 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use contract::{Command, DocumentTagsEdit};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::Queryable as _;
-use gui::contract::{Command, DocumentTagsEdit};
 use gui::testkit;
 
 use super::{HAWKES, Ingests, REFUSED_HINT, documents_of, open_document, open_switched};

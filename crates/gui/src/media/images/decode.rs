@@ -1,11 +1,8 @@
-//! The work of a picture thread: read a file, decode it, make its stored sizes and upload them.
-//! It is the only code that opens or decodes a picture file.
+//! Fetched bytes are decoded into bounded picture sizes and uploaded as textures.
 
 use std::error::Error as _;
-use std::fs::File;
-use std::io::{self, BufReader};
+use std::io::Cursor;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::path::{Path, PathBuf};
 
 use eframe::egui;
 
@@ -17,13 +14,14 @@ const MAX_FILE_SIDE: u32 = 20_000;
 const MAX_DECODE_BYTES: u64 = 1 << 30;
 
 pub(super) struct DecodeJob {
-    pub(super) path: PathBuf,
+    pub(super) url: String,
+    pub(super) bytes: Result<Vec<u8>, String>,
     /// The longest side a stored size may have.
     pub(super) max_side: u32,
 }
 
 pub(super) struct Decoded {
-    pub(super) path: PathBuf,
+    pub(super) url: String,
     pub(super) outcome: Result<Loaded, ImageFailure>,
 }
 
@@ -36,71 +34,57 @@ pub(super) struct Loaded {
 
 #[derive(Debug, thiserror::Error)]
 enum DecodeError {
-    #[error("no file at {}", path.display())]
-    Missing { path: PathBuf },
-    #[error("cannot read {}", path.display())]
-    Read {
-        path: PathBuf,
-        #[source]
-        source: io::Error,
-    },
-    #[error("cannot decode {}", path.display())]
+    #[error("cannot decode {url}")]
     Decode {
-        path: PathBuf,
+        url: String,
         #[source]
         source: image::ImageError,
     },
-    #[error("the decoder panicked on {}", path.display())]
-    Panicked { path: PathBuf },
+    #[error("the decoder panicked on {url}")]
+    Panicked { url: String },
 }
 
-impl DecodeError {
-    fn failure(&self) -> ImageFailure {
-        match self {
-            DecodeError::Missing { .. } => ImageFailure::Missing,
-            DecodeError::Read { .. }
-            | DecodeError::Decode { .. }
-            | DecodeError::Panicked { .. } => ImageFailure::Unreadable,
-        }
-    }
-}
-
-/// Runs on a worker thread. A failure is logged here, once, and handed back as a state.
+/// A failure is logged once and handed back as a state.
 pub(super) fn decode(ctx: &egui::Context, job: DecodeJob) -> Decoded {
-    let DecodeJob { path, max_side } = job;
-    let loaded = catch_unwind(AssertUnwindSafe(|| load(ctx, &path, max_side)))
-        .unwrap_or_else(|_| Err(DecodeError::Panicked { path: path.clone() }));
-    let outcome = loaded.map_err(|error| {
-        let cause = error.source().map(tracing::field::display);
-        tracing::warn!(%error, cause, "a picture cannot be shown");
-        error.failure()
-    });
-    Decoded { path, outcome }
+    let DecodeJob {
+        url,
+        bytes,
+        max_side,
+    } = job;
+    let outcome = match bytes {
+        Ok(bytes) => catch_unwind(AssertUnwindSafe(|| load(ctx, &url, &bytes, max_side)))
+            .unwrap_or_else(|_| Err(DecodeError::Panicked { url: url.clone() }))
+            .map_err(|error| {
+                let cause = error.source().map(tracing::field::display);
+                tracing::warn!(%error, cause, "a picture cannot be shown");
+                ImageFailure::Unreadable
+            }),
+        Err(reason) => {
+            tracing::warn!(%url, %reason, "a picture cannot be fetched");
+            Err(ImageFailure::Missing)
+        }
+    };
+    Decoded { url, outcome }
 }
 
-fn load(ctx: &egui::Context, path: &Path, max_side: u32) -> Result<Loaded, DecodeError> {
-    let file = File::open(path).map_err(|source| match source.kind() {
-        io::ErrorKind::NotFound => DecodeError::Missing {
-            path: path.to_path_buf(),
-        },
-        _ => DecodeError::Read {
-            path: path.to_path_buf(),
-            source,
-        },
+fn load(
+    ctx: &egui::Context,
+    url: &str,
+    bytes: &[u8],
+    max_side: u32,
+) -> Result<Loaded, DecodeError> {
+    let format = image::guess_format(bytes).map_err(|source| DecodeError::Decode {
+        url: url.to_owned(),
+        source,
     })?;
-    let mut reader = image::ImageReader::new(BufReader::new(file))
-        .with_guessed_format()
-        .map_err(|source| DecodeError::Read {
-            path: path.to_path_buf(),
-            source,
-        })?;
+    let mut reader = image::ImageReader::with_format(Cursor::new(bytes), format);
     let mut limits = image::Limits::default();
     limits.max_image_width = Some(MAX_FILE_SIDE);
     limits.max_image_height = Some(MAX_FILE_SIDE);
     limits.max_alloc = Some(MAX_DECODE_BYTES);
     reader.limits(limits);
     let decoded = reader.decode().map_err(|source| DecodeError::Decode {
-        path: path.to_path_buf(),
+        url: url.to_owned(),
         source,
     })?;
 
@@ -112,7 +96,7 @@ fn load(ctx: &egui::Context, path: &Path, max_side: u32) -> Result<Loaded, Decod
         .map(|(level, stored)| {
             let pixels = [stored.width() as usize, stored.height() as usize];
             let colors = egui::ColorImage::from_rgba_unmultiplied(pixels, stored.as_raw());
-            let name = format!("image:{}#{level}", path.display());
+            let name = format!("image:{url}#{level}");
             ctx.load_texture(name, colors, egui::TextureOptions::LINEAR)
         })
         .collect();

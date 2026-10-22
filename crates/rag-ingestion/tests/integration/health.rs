@@ -50,30 +50,13 @@ fn health_names_each_store_it_cannot_reach_and_exits_non_zero() {
     );
     assert!(lines[2].starts_with("agent:"), "{}", lines[2]);
 
-    // The database chosen in the app, saved beside the `.env`, is the one the command checks.
-    // Where the environment names a store setting, the person's own setting wins instead.
-    let databases = serde_json::json!({
-        "chosen": "Elsewhere",
-        "saved": [{
-            "name": "Elsewhere",
-            "qdrant_url": "http://127.0.0.1:3",
-            "falkordb_url": "falkor://127.0.0.1:4",
-            "falkordb_graph": "elsewhere",
-            "content_folder": settings_folder.path().join("content"),
-        }],
-    });
-    std::fs::write(
-        settings_folder.path().join(".quanty-databases.json"),
-        databases.to_string(),
-    )
-    .unwrap();
     let (_, lines) = run_health(|command| {
         command.current_dir(&working_folder);
         for name in STORE_NAMES {
             command.env_remove(name);
         }
     });
-    assert_checks_name(&lines, "http://127.0.0.1:3", "falkor://127.0.0.1:4");
+    assert_checks_name(&lines, "http://127.0.0.1:1", "falkor://127.0.0.1:2");
     let (_, lines) = run_health(|command| {
         command
             .current_dir(&working_folder)

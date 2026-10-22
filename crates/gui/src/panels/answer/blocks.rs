@@ -5,10 +5,10 @@ use eframe::egui;
 use super::pane::Pane;
 use super::phase::{AnswerTab, Written};
 use super::{cards, results, states};
-use crate::contract::{Answer, AnswerBlock, ItemKind};
 use crate::media::rich_text;
 use crate::panels::heights::Heights;
 use crate::theme::{TextRole, space};
+use contract::{Answer, AnswerBlock, ItemKind};
 
 /// What a block of the answer is taken to be high until it has been drawn once.
 const BLOCK_ESTIMATE: f32 = 2.0 * TextRole::Body.line_height();

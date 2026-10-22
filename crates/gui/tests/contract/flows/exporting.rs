@@ -2,41 +2,36 @@
 //! file at the place the save dialog gives, tells the person how it ended, and offers nothing
 //! before the answer is written.
 
-use std::cell::RefCell;
-use std::path::PathBuf;
-use std::rc::Rc;
-
+use super::recording::{self, Seen};
+use super::{Window, click, has, is_enabled, node, says, shared};
+use contract::{Command, NoticeKind};
 use eframe::egui::accesskit::Role;
 use export::Format;
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::contract::{Command, NoticeKind};
 use gui::testkit;
 
-use super::recording::{self, Seen};
-use super::{Window, click, has, is_enabled, node, says, shared};
-
-pub(super) type Asked = Rc<RefCell<Vec<(Format, String)>>>;
+pub(super) fn downloaded_file(harness: &Window, seen: &Seen) -> std::path::PathBuf {
+    let download = shared(harness)
+        .export
+        .as_ref()
+        .unwrap()
+        .download
+        .as_ref()
+        .unwrap();
+    let relative = download.url.strip_prefix("/api/download/").unwrap();
+    let id = relative.split('/').next().unwrap();
+    seen.home()
+        .join("data/exports")
+        .join(id)
+        .join(&download.file_name)
+}
 
 const QUESTION: &str = "How is the Black–Scholes formula derived and what assumptions does it make";
 
-/// Stands in for the save dialog: it writes down what it was asked and answers with the file
-/// name inside `folder`.
-pub(super) fn stand_in_for_the_save_dialog(harness: &mut Window, folder: PathBuf) -> Asked {
-    let asked = Asked::default();
-    let record = asked.clone();
-    harness.state_mut().set_save_dialog(move |format, name| {
-        record.borrow_mut().push((format, name.to_owned()));
-        Some(folder.join(name))
-    });
-    asked
-}
-
 #[test]
-fn each_export_writes_the_file_that_the_save_dialog_names() {
-    let (mut harness, _) = recording::open("black-scholes", DEFAULT_WINDOW);
+fn each_export_writes_the_download_that_the_browser_opens() {
+    let (mut harness, seen) = recording::open("black-scholes", DEFAULT_WINDOW);
     testkit::settle(&mut harness);
-    let folder = tempfile::tempdir().expect("a temporary folder");
-    let asked = stand_in_for_the_save_dialog(&mut harness, folder.path().to_owned());
 
     click(&mut harness, Role::Button, "Share");
     for item in [
@@ -60,12 +55,15 @@ fn each_export_writes_the_file_that_the_save_dialog_names() {
         click(&mut harness, Role::Button, item);
 
         let name = format!("{QUESTION}.{}", format.extension());
-        assert_eq!(
-            asked.borrow().last(),
-            Some(&(format, name.clone())),
-            "the dialog offers a name made from the question"
-        );
-        let written = std::fs::read(folder.path().join(&name)).expect("the file is written");
+        let file = shared(&harness)
+            .export
+            .as_ref()
+            .unwrap()
+            .download
+            .as_ref()
+            .unwrap();
+        assert_eq!(file.file_name, name);
+        let written = std::fs::read(downloaded_file(&harness, &seen)).expect("the file is written");
         assert!(
             written.starts_with(beginning.as_bytes()),
             "the {} file starts with {beginning}",
@@ -76,8 +74,11 @@ fn each_export_writes_the_file_that_the_save_dialog_names() {
             .first()
             .expect("the export left a notice");
         assert_eq!(notice.kind, NoticeKind::Done);
-        let path = folder.path().join(&name);
-        assert!(notice.detail.contains(&path.display().to_string()));
+        assert!(
+            notice
+                .detail
+                .contains(&format!("Your browser is downloading {name}"))
+        );
         assert!(
             says(
                 &harness,
@@ -87,19 +88,16 @@ fn each_export_writes_the_file_that_the_save_dialog_names() {
         );
     }
     assert_eq!(
-        asked.borrow().len(),
-        3,
-        "the dialog was asked once for each export"
+        seen.count(|command| matches!(command, Command::Export { .. })),
+        3
     );
 }
 
 #[test]
 fn a_write_that_fails_says_where_and_why() {
-    let (mut harness, _) = recording::open("black-scholes", DEFAULT_WINDOW);
+    let (mut harness, seen) = recording::open("black-scholes", DEFAULT_WINDOW);
     testkit::settle(&mut harness);
-    let folder = tempfile::tempdir().expect("a temporary folder");
-    let missing = folder.path().join("no-such-folder");
-    stand_in_for_the_save_dialog(&mut harness, missing.clone());
+    std::fs::write(seen.home().join("data"), "exports cannot be made here").unwrap();
 
     click(&mut harness, Role::Button, "Share");
     click(&mut harness, Role::Button, "Export as PDF…");
@@ -109,22 +107,13 @@ fn a_write_that_fails_says_where_and_why() {
         .first()
         .expect("the failed export left a notice");
     assert_eq!(notice.kind, NoticeKind::Failed);
-    let path = missing
-        .join(format!("{QUESTION}.pdf"))
-        .display()
-        .to_string();
     assert!(
-        notice.detail.contains(&path),
-        "the notice names the path: {}",
-        notice.detail
-    );
-    assert!(
-        notice.detail.contains("No such file or directory"),
-        "the notice gives the reason of the system: {}",
+        notice.detail.contains("Not a directory"),
+        "{}",
         notice.detail
     );
     assert!(says(&harness, "Could not export the answer as PDF"));
-    assert!(says(&harness, "No such file or directory"));
+    assert!(says(&harness, "Not a directory"));
 
     click(&mut harness, Role::Button, "Dismiss");
     assert!(
@@ -137,8 +126,6 @@ fn a_write_that_fails_says_where_and_why() {
 #[test]
 fn nothing_is_exported_before_the_answer_is_written() {
     let (mut harness, seen): (Window, Seen) = recording::open("answering", DEFAULT_WINDOW);
-    let folder = tempfile::tempdir().expect("a temporary folder");
-    let asked = stand_in_for_the_save_dialog(&mut harness, folder.path().to_owned());
     testkit::run_until(&mut harness, "the results", |shared| {
         shared.ask.search.ready().is_some()
     });
@@ -150,7 +137,6 @@ fn nothing_is_exported_before_the_answer_is_written() {
     harness.run_ok();
     assert!(!has(&harness, Role::Button, "Export as PDF…"));
     assert!(shared(&harness).ask.export_request(Format::Pdf).is_none());
-    assert!(asked.borrow().is_empty());
     assert_eq!(
         seen.count(|command| matches!(command, Command::Export { .. })),
         0

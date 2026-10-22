@@ -1,15 +1,19 @@
-//! Pictures, formulas and laid-out text that panels show: each is made off the window's thread
-//! the first time it is asked for, and kept. A code listing is the exception: it is laid out on
-//! the window's thread and not kept.
+//! Pictures, formulas and laid-out text are prepared once and kept while panels need them.
 
 pub mod code;
+mod fetch;
 pub mod images;
 pub mod math;
 mod offload;
 pub mod rich_text;
 mod salt;
 
+use std::time::Duration;
+
 use eframe::egui;
+use web_time::Instant;
+
+pub use fetch::{Fetch, UnavailableFetch};
 
 pub use offload::{Offload, Urgency, Workers};
 use salt::content_salt;
@@ -18,28 +22,42 @@ pub struct Media {
     pub images: images::Images,
     pub math: math::Math,
     pub text: rich_text::Layouts,
+    automatic: bool,
 }
 
 impl Media {
     pub fn new(ctx: &egui::Context) -> Media {
-        Media::with_offload(ctx, Offload::Threads)
+        Media::with_fetch(ctx, Box::new(UnavailableFetch))
+    }
+
+    pub fn with_fetch(ctx: &egui::Context, fetch: Box<dyn Fetch>) -> Media {
+        let mut media = Media::manual_with_fetch(ctx, fetch);
+        media.automatic = true;
+        media
     }
 
     /// For tests: nothing runs until `run_pending`.
     pub fn manual(ctx: &egui::Context) -> Media {
-        Media::with_offload(ctx, Offload::Manual)
+        Media::manual_with_fetch(ctx, Box::new(UnavailableFetch))
     }
 
-    fn with_offload(ctx: &egui::Context, offload: Offload) -> Media {
+    pub fn manual_with_fetch(ctx: &egui::Context, fetch: Box<dyn Fetch>) -> Media {
         Media {
-            images: images::Images::new(ctx, offload),
-            math: math::Math::new(ctx, offload),
+            images: images::Images::new(ctx, Offload::Manual, fetch),
+            math: math::Math::new(ctx, Offload::Manual),
             text: rich_text::Layouts::default(),
+            automatic: false,
         }
     }
 
     /// The app calls it once for every frame.
     pub fn poll(&mut self, ctx: &egui::Context) {
+        if self.automatic {
+            let started = Instant::now();
+            let budget = Duration::from_millis(4);
+            self.images.run_for(budget);
+            self.math.run_for(budget.saturating_sub(started.elapsed()));
+        }
         self.images.poll(ctx);
         self.math.poll(ctx);
         self.text.poll(ctx);

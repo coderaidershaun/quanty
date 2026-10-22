@@ -1,9 +1,9 @@
 //! A code listing among the results of an ask: the Code tab counts it, the list, the answer and
 //! Share show it with its language and its indentation, and Copy code gives it as it is stored.
 
+use contract::{AnswerBlock, Intent, ItemId, ItemKind};
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
-use gui::contract::{AnswerBlock, Intent, ItemId, ItemKind};
 use gui::panels::answer;
 use gui::testkit::{self, sample};
 use uuid::Uuid;

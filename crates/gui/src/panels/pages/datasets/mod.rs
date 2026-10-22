@@ -6,11 +6,11 @@ mod status;
 
 use eframe::egui;
 
-use crate::contract::DatasetRequest;
 use crate::panels::PanelCx;
 use crate::panels::seam::column;
 use crate::state::Shared;
 use crate::theme::{TextRole, space};
+use contract::DatasetRequest;
 
 /// The column is never wider than this, however wide the window.
 const COLUMN_WIDTH: f32 = 720.0;

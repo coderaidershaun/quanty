@@ -7,11 +7,11 @@ use super::{
     answer, ask_bar, concept_graph, datasets, follow_up, ingest, library, notices, retrieval_path,
     source,
 };
-use crate::contract::{Intent, Panel};
 use crate::media::Media;
 use crate::state::Shared;
 use crate::theme::{Icon, TextRole, color, radius, stroke};
 use crate::widgets::{Button, Surface, panel_frame};
+use contract::{Intent, Panel};
 
 /// The app applies the pushed `intents` after the frame.
 pub struct PanelCx<'a> {

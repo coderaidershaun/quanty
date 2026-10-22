@@ -3,10 +3,10 @@
 
 use eframe::egui;
 
-use crate::contract::Loadable;
 use crate::panels::PanelCx;
 use crate::theme::Icon;
 use crate::widgets::Placeholder;
+use contract::Loadable;
 
 pub(super) fn show(ui: &mut egui::Ui, cx: &PanelCx<'_>) {
     let ask = &cx.shared.ask;

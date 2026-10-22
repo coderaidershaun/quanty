@@ -8,9 +8,9 @@ use eframe::egui::{
 
 use super::view::{self, View, Viewport, ZoomStep};
 use super::zoom_bar::ZoomAction;
-use crate::contract::PageBox;
 use crate::media::images::Picture;
 use crate::theme::{Tone, color, radius, shadow, stroke};
+use contract::PageBox;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Figure<'a> {

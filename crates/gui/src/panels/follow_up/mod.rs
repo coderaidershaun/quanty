@@ -6,10 +6,10 @@ mod guidance;
 
 use eframe::egui;
 
-use crate::contract::{AskDraft, Intent};
 use crate::panels::PanelCx;
 use crate::theme::{Icon, TextRole, space};
 use crate::widgets;
+use contract::{AskDraft, Intent};
 
 #[derive(Debug, Default)]
 pub struct Local {

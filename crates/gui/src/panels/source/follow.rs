@@ -3,8 +3,8 @@
 
 use super::Local;
 use super::tabs::tab_for;
-use crate::contract::{PagePiece, PageView};
 use crate::state::{Shared, SourceNav};
+use contract::{PagePiece, PageView};
 
 pub(super) fn marked_piece<'a>(nav: &SourceNav, page: &'a PageView) -> Option<&'a PagePiece> {
     let target = nav.target?;

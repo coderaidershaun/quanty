@@ -47,76 +47,44 @@ fn names_path(line: &str, path_start: &str) -> bool {
 }
 
 #[test]
-fn only_the_live_backend_and_main_name_a_backend_crate() {
+fn gui_has_only_browser_dependencies() {
     let source = manifest_folder().join("src");
-    let live_backend = source.join("backend").join("live");
-    let main = source.join("main.rs");
-    let crates = [
+    let testkit = source.join("testkit");
+    let forbidden = [
+        "backend::",
         "graph::",
         "ocr::",
         "rag_core::",
         "rag_dataset::",
         "rag_ingestion::",
         "rag_retrieval::",
+        "std::fs",
+        "std::thread",
+        "std::time::Instant",
+        "tokio",
     ];
     let mut breaks = Vec::new();
     for file in rust_files(&source) {
-        if file == main || file.starts_with(&live_backend) {
+        if file.starts_with(&testkit) {
             continue;
         }
         for (number, line) in read(&file).lines().enumerate() {
             if line.trim_start().starts_with("//") {
                 continue;
             }
-            for name in crates {
-                if names_path(line, name) {
-                    breaks.push(format!(
-                        "{}:{}: {}",
-                        file.display(),
-                        number + 1,
-                        line.trim()
-                    ));
-                }
+            if forbidden.iter().any(|name| names_path(line, name)) {
+                breaks.push(format!(
+                    "{}:{}: {}",
+                    file.display(),
+                    number + 1,
+                    line.trim()
+                ));
             }
         }
     }
     assert!(
         breaks.is_empty(),
-        "only src/backend/live and src/main.rs may name a backend crate:\n{}",
-        breaks.join("\n")
-    );
-}
-
-#[test]
-fn only_main_builds_the_settings() {
-    let manifest = manifest_folder();
-    let main = manifest.join("src").join("main.rs");
-    // Written in two parts so that this file does not find itself.
-    let calls = [
-        concat!("Config::", "load"),
-        concat!("Config::", "from_sources"),
-    ];
-    let mut breaks = Vec::new();
-    for folder in [manifest.join("src"), manifest.join("tests")] {
-        for file in rust_files(&folder) {
-            if file == main {
-                continue;
-            }
-            for (number, line) in read(&file).lines().enumerate() {
-                if calls.iter().any(|call| line.contains(call)) {
-                    breaks.push(format!(
-                        "{}:{}: {}",
-                        file.display(),
-                        number + 1,
-                        line.trim()
-                    ));
-                }
-            }
-        }
-    }
-    assert!(
-        breaks.is_empty(),
-        "only src/main.rs may build the settings:\n{}",
+        "the UI must compile in a browser:\n{}",
         breaks.join("\n")
     );
 }

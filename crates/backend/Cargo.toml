@@ -1,0 +1,38 @@
+[package]
+name = "backend"
+version.workspace = true
+edition.workspace = true
+
+[features]
+testing = []
+
+[dependencies]
+choices.workspace = true
+contract.workspace = true
+export.workspace = true
+graph.workspace = true
+ocr.workspace = true
+percent-encoding.workspace = true
+rag-core.workspace = true
+rag-dataset.workspace = true
+rag-ingestion.workspace = true
+rag-retrieval.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+backend = { path = ".", features = ["testing"] }
+eframe.workspace = true
+egui_kittest.workspace = true
+graph = { workspace = true, features = ["testing"] }
+gui = { workspace = true, features = ["testing"] }
+image.workspace = true
+ocr = { workspace = true, features = ["testing"] }
+proptest.workspace = true
+rag-ingestion = { workspace = true, features = ["testing"] }
+tempfile.workspace = true

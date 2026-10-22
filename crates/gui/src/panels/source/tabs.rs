@@ -3,11 +3,11 @@
 
 use eframe::egui;
 
-use crate::contract::{DocId, Intent, PagePiece, PageView, PieceKind};
 use crate::media::Media;
 use crate::state::SourceNav;
 use crate::theme::{Icon, Tone, size, space};
 use crate::widgets::{Tab, TabStrip};
+use contract::{DocId, Intent, PagePiece, PageView, PieceKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub(super) enum SourceTab {

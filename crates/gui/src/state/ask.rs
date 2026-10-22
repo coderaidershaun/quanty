@@ -7,7 +7,7 @@ use export::{Block, Document, Format, Source, fence_for};
 
 use super::HealthLevel;
 use super::shared::{Shared, push_cancel};
-use crate::contract::{
+use contract::{
     Answer, AnswerBlock, AskDraft, AskMode, Command, ConceptGraph, ConceptId, Effect, ExportPlace,
     ExportRequest, Failure, Filters, ItemKind, Loadable, RequestId, ResultItem, SearchReply, Tab,
 };
@@ -131,8 +131,8 @@ impl AskSession {
         })
     }
 
-    /// What the answer asks of an export as `format`: the document, the file name the save dialog
-    /// offers, and the place that asked. `None` when there is no written answer.
+    /// Prepares the answer for export, with its download name and the place that asked.
+    /// Returns `None` when there is no written answer.
     pub fn export_request(&self, format: Format) -> Option<ExportRequest> {
         Some(ExportRequest {
             format,
@@ -156,7 +156,10 @@ fn card_block(result: &ResultItem) -> Option<Block> {
             cite,
         }),
         ItemKind::Figure => Some(Block::Figure {
-            picture: result.image.as_ref().map(|image| image.path.clone()),
+            picture: result
+                .image
+                .as_ref()
+                .map(|image| std::path::PathBuf::from(&image.url)),
             description: result.text.clone(),
             caption: result.caption(),
             cite,

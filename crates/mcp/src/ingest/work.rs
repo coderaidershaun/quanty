@@ -118,8 +118,5 @@ fn save(upload: &Upload) -> Result<(), PdfIngestError> {
         path: upload.save_to.clone(),
         source,
     };
-    if let Some(folder) = upload.save_to.parent() {
-        std::fs::create_dir_all(folder).map_err(failed)?;
-    }
-    std::fs::write(&upload.save_to, &upload.bytes).map_err(failed)
+    rag_ingestion::save_uploaded_pdf(&upload.save_to, &upload.bytes).map_err(failed)
 }

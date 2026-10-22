@@ -6,11 +6,11 @@ use eframe::egui;
 use super::listing::Row;
 use super::pane::Pane;
 use super::phase::AnswerTab;
-use crate::contract::{ItemKind, ResultItem};
 use crate::media::{code, images, math, rich_text};
 use crate::panels::heights::{Heights, Slot};
 use crate::theme::{Icon, Kind, TextRole, color, size, space};
 use crate::widgets::{Badge, Card, CitationChip, Placeholder};
+use contract::{ItemKind, ResultItem};
 
 const TEXT_PREVIEW: f32 = 3.0 * TextRole::Body.line_height();
 /// The size of a figure's picture in the list, in points.

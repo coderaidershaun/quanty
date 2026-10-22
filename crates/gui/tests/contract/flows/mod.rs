@@ -3,7 +3,6 @@
 //! balances, and that no control leads to a part that is not built.
 
 mod balances;
-mod choices;
 mod datasets;
 mod dead_controls;
 mod exporting;
@@ -11,6 +10,7 @@ mod failures;
 mod follow_up;
 mod ingest;
 mod library;
+mod model_choice;
 mod recording;
 mod selection;
 mod source;
@@ -195,8 +195,8 @@ fn node_in<'a>(
         .find(|node| area.contains(node.rect().center()))
 }
 
-fn failures(shared: &Shared) -> Vec<&gui::contract::Failure> {
-    let ingest: Vec<&gui::contract::Failure> = match &shared.ingest {
+fn failures(shared: &Shared) -> Vec<&contract::Failure> {
+    let ingest: Vec<&contract::Failure> = match &shared.ingest {
         IngestJob::CheckFailed { failure, .. } => vec![failure],
         IngestJob::Checked { preflight, .. } => preflight.blockers.iter().collect(),
         IngestJob::Finished {

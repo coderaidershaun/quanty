@@ -1,11 +1,11 @@
 //! A service that is down, a key that is missing, a library that is empty and a page that is
 //! gone are each said where they happen, with what to do, and the rest of the screen stays.
 
+use contract::{Command, FailureKind, Loadable};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::Queryable as _;
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::contract::{Command, FailureKind, Loadable};
 use gui::testkit;
 
 use super::recording::{self, Seen};

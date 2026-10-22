@@ -2,17 +2,17 @@
 //! for it, opens the page an insight rests on, says what it finds when there are none or the file
 //! cannot be read, and exports all three.
 
+use backend::fake::Fake;
+use backend::{Handler, Reply};
+use contract::{ChapterInsights, Command, Tab};
 use eframe::egui::accesskit::Role;
 use export::Format;
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::backend::fake::Fake;
-use gui::backend::{Handler, Reply};
-use gui::contract::{ChapterInsights, Command, Tab};
 use gui::state::SourceTarget;
 use gui::testkit;
 
 use super::{BLACK_SCHOLES, BOOK, NOTES, SAMPLE_PAGES, documents_of, open_document};
-use crate::flows::exporting::stand_in_for_the_save_dialog;
+use crate::flows::exporting::downloaded_file;
 use crate::flows::recording::{self, Seen};
 use crate::flows::{Window, click, copied_by, has, node, says, shared};
 
@@ -148,12 +148,10 @@ fn each_state_of_the_insights_view_says_what_it_is() {
 }
 
 #[test]
-fn each_export_of_the_insights_writes_the_file_that_the_save_dialog_names() {
-    let (mut harness, _seen) = open_library("black-scholes");
+fn each_export_of_the_insights_writes_a_browser_download() {
+    let (mut harness, seen) = open_library("black-scholes");
     open_document(&mut harness, NOTES, BLACK_SCHOLES);
     click(&mut harness, Role::Tab, "Insights");
-    let folder = tempfile::tempdir().expect("a temporary folder");
-    let asked = stand_in_for_the_save_dialog(&mut harness, folder.path().to_owned());
 
     click(&mut harness, Role::Button, "Export");
     for item in ["Export as PDF…", "Export as Markdown…", "Export as HTML…"] {
@@ -177,11 +175,17 @@ fn each_export_of_the_insights_writes_the_file_that_the_save_dialog_names() {
 
         let name = format.file_name(&format!("{NOTES_CHAPTER_TITLE} insights"));
         assert_eq!(
-            asked.borrow().last(),
-            Some(&(format, name.clone())),
-            "the dialog offers a name made from the title of the chapter"
+            shared(&harness)
+                .export
+                .as_ref()
+                .unwrap()
+                .download
+                .as_ref()
+                .unwrap()
+                .file_name,
+            name
         );
-        let written = std::fs::read(folder.path().join(&name)).expect("the file is written");
+        let written = std::fs::read(downloaded_file(&harness, &seen)).expect("the file is written");
         assert!(
             written.starts_with(beginning.as_bytes()),
             "the {} file starts with {beginning}",
@@ -201,8 +205,7 @@ fn each_export_of_the_insights_writes_the_file_that_the_save_dialog_names() {
         );
     }
     assert_eq!(
-        asked.borrow().len(),
-        3,
-        "the dialog was asked once for each export"
+        seen.count(|command| matches!(command, Command::Export { .. })),
+        3
     );
 }

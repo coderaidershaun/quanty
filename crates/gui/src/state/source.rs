@@ -2,9 +2,7 @@
 //! the next one loads.
 
 use super::shared::{Shared, push_cancel};
-use crate::contract::{
-    Command, DocId, Effect, Failure, Loadable, PageConcept, PageView, RequestId, Tab,
-};
+use contract::{Command, DocId, Effect, Failure, Loadable, PageConcept, PageView, RequestId, Tab};
 
 /// What was asked for, which may be a page that has not arrived yet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]

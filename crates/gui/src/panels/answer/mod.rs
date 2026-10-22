@@ -15,10 +15,10 @@ use eframe::egui;
 use self::listing::Listing;
 use self::pane::{Pane, View};
 use self::phase::{AnswerTab, Phase};
-use crate::contract::{ExportPlace, Loadable};
 use crate::panels::{PanelCx, exporting};
 use crate::theme::space;
 use crate::widgets;
+use contract::{ExportPlace, Loadable};
 
 #[derive(Debug, Default)]
 pub struct Local {

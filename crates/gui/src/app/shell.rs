@@ -1,18 +1,14 @@
 //! The app that owns the window's state, and the drawing of the whole window: the top bar and
 //! the panels of the open tab, each in the rectangle the layout gives it.
 
-use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use web_time::Instant;
 
 use eframe::egui;
-use export::Format;
 
-use super::database_picker::DatabasePicker;
 use super::layout::{self, ShellRects};
 use super::region::region;
 use super::{balances, shortcuts, top_bar};
-use crate::backend::{Backend, Handler};
-use crate::contract::{self, Effect, Intent, Panel, StartupFacts};
 use crate::media::Media;
 use crate::panels::{
     Locals, PanelCx, answer, ask_bar, concept_graph, datasets, follow_up, ingest, library,
@@ -20,7 +16,9 @@ use crate::panels::{
 };
 use crate::state::Shared;
 use crate::theme::{self, color, space};
+use crate::transport::Transport;
 use crate::widgets::gallery;
+use contract::{self, Effect, Intent, Panel, StartupFacts};
 
 /// How long `logic` may spend on backend events before it hands the frame back.
 const DRAIN_BUDGET: Duration = Duration::from_millis(4);
@@ -32,61 +30,54 @@ const GALLERY_SCENE: &str = "gallery";
 const SOURCE_REGION: &str = "source";
 const GRAPH_REGION: &str = "concept_graph";
 
-type FilePicker = Box<dyn FnMut() -> Option<PathBuf>>;
-/// Asks where to save an export of a kind of file, offering the name it is given.
-type SaveDialog = Box<dyn FnMut(Format, &str) -> Option<PathBuf>>;
+type FilePicker = Box<dyn FnMut(&mut Vec<Intent>)>;
 
 pub struct App {
+    ctx: egui::Context,
     shared: Shared,
     locals: Locals,
     gallery: gallery::State,
     media: Media,
-    backend: Backend,
+    backend: Box<dyn Transport>,
     intents: Vec<Intent>,
     effects: Vec<Effect>,
-    pick_file: FilePicker,
-    save_dialog: SaveDialog,
+    file_picker: FilePicker,
     model_picker: super::model_picker::ModelPicker,
-    database_picker: DatabasePicker,
 }
 
 impl App {
-    /// # Errors
-    /// Whatever the operating system says when the backend's threads cannot start.
+    /// Queues the initial health, catalogue and balance reads before the opening actions.
     pub fn new(
         creation: &eframe::CreationContext<'_>,
-        handler: impl Handler,
+        transport: Box<dyn Transport>,
         facts: StartupFacts,
         opening: Vec<Intent>,
-    ) -> std::io::Result<App> {
+    ) -> App {
         let ctx = creation.egui_ctx.clone();
         // Fonts set during a pass exist only from the next pass, so the theme goes first.
         theme::install(&ctx);
         let media = Media::new(&ctx);
-        let backend = Backend::start(handler, {
-            let ctx = ctx.clone();
-            move || ctx.request_repaint()
-        })?;
+
         let model_picker = super::model_picker::ModelPicker::new(&facts);
         let shared = Shared::new(facts);
-        let database_picker = DatabasePicker::new(&shared);
-        // The catalogue is not asked for here: it follows the check of the database.
-        let mut intents = vec![Intent::ReadBalances];
-        intents.extend(shared.database.in_use.clone().map(Intent::UseDatabase));
+        let mut intents = vec![
+            Intent::RecheckHealth,
+            Intent::RefreshCatalogue,
+            Intent::ReadBalances,
+        ];
         intents.extend(opening);
-        Ok(App {
+        App {
+            ctx,
             shared,
             locals: Locals::default(),
             gallery: gallery::State::default(),
             media,
-            backend,
+            backend: transport,
             intents,
             effects: Vec::new(),
-            pick_file: Box::new(|| None),
-            save_dialog: Box::new(|_, _| None),
+            file_picker: Box::new(|_| {}),
             model_picker,
-            database_picker,
-        })
+        }
     }
 
     pub fn shared(&self) -> &Shared {
@@ -97,16 +88,14 @@ impl App {
         self.intents.push(intent);
     }
 
-    pub fn with_file_picker(mut self, pick: impl FnMut() -> Option<PathBuf> + 'static) -> App {
-        self.pick_file = Box::new(pick);
+    pub fn with_file_picker(mut self, pick: impl FnMut(&mut Vec<Intent>) + 'static) -> App {
+        self.file_picker = Box::new(pick);
         self
     }
 
-    pub fn set_save_dialog(
-        &mut self,
-        dialog: impl FnMut(Format, &str) -> Option<PathBuf> + 'static,
-    ) {
-        self.save_dialog = Box::new(dialog);
+    pub fn with_fetch(mut self, fetch: Box<dyn crate::media::Fetch>) -> App {
+        self.media = Media::with_fetch(&self.ctx, fetch);
+        self
     }
 
     pub fn is_idle(&self) -> bool {
@@ -127,18 +116,8 @@ impl App {
                 match effect {
                     Effect::Send(command) => self.backend.send(command),
                     Effect::CopyText(text) => ctx.copy_text(text),
-                    Effect::CloseWindow => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
                     Effect::OpenUrl(url) => ctx.open_url(egui::OpenUrl::new_tab(url)),
-                    Effect::PickFile => {
-                        if let Some(path) = (self.pick_file)() {
-                            self.intents.push(Intent::PdfPicked(path));
-                        }
-                    }
-                    Effect::PickSavePath(export) => {
-                        if let Some(path) = (self.save_dialog)(export.format, &export.file_name) {
-                            self.intents.push(Intent::ExportPathPicked { export, path });
-                        }
-                    }
+                    Effect::PickFile => (self.file_picker)(&mut self.intents),
                 }
             }
             self.effects = effects;
@@ -177,7 +156,8 @@ impl App {
                     ui,
                     rects.top_bar,
                     self.backend.is_idle_but_for_balance_reads(),
-                    cx.shared.tab,
+                    cx.shared,
+                    cx.intents,
                 );
             });
         egui::CentralPanel::no_frame().show(ui, |ui| {
@@ -190,14 +170,19 @@ impl App {
                 painter.hline(footer.x_range(), footer.top() + line.width / 2.0, line);
                 let parts = layout::footer(footer);
                 balances::show(ui, parts.accounts, &mut cx);
-                self.database_picker
-                    .footer_entry(ui, parts.database, cx.shared);
+                let text = match self.backend.connection() {
+                    contract::Connection::Connected => "Connected".to_owned(),
+                    contract::Connection::Reconnecting { attempt } => {
+                        format!("Reconnecting · attempt {attempt}")
+                    }
+                    contract::Connection::Lost => "Connection lost".to_owned(),
+                };
+                ui.put(
+                    parts.connection,
+                    egui::Label::new(crate::theme::TextRole::Small.rich(text)),
+                );
             });
         });
-        let can_switch =
-            cx.shared.can_switch_database() && self.backend.is_idle_but_for_balance_reads();
-        self.database_picker
-            .sheet(ui.ctx(), cx.shared, can_switch, cx.intents);
     }
 }
 
@@ -230,42 +215,6 @@ impl eframe::App for App {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         theme::clear_color()
     }
-}
-
-/// # Errors
-/// Whatever eframe reports when the window cannot be made.
-pub fn run(handler: impl Handler, facts: StartupFacts, opening: Vec<Intent>) -> eframe::Result {
-    let icon = eframe::icon_data::from_png_bytes(include_bytes!("../../assets/icons/icon.png"))
-        .expect("the embedded Quanty icon must be a valid PNG");
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_title("quanty")
-            .with_icon(icon)
-            .with_inner_size(layout::DEFAULT_WINDOW)
-            .with_min_inner_size(layout::MIN_WINDOW)
-            .with_drag_and_drop(true),
-        renderer: eframe::Renderer::Wgpu,
-        ..eframe::NativeOptions::default()
-    };
-    eframe::run_native(
-        "quanty",
-        options,
-        Box::new(move |creation| {
-            let mut app = App::new(creation, handler, facts, opening)?.with_file_picker(|| {
-                rfd::FileDialog::new()
-                    .add_filter("PDF", &["pdf"])
-                    .pick_file()
-            });
-            app.set_save_dialog(|format, file_name| {
-                rfd::FileDialog::new()
-                    .set_title("Export")
-                    .set_file_name(file_name)
-                    .add_filter(format.name(), &[format.extension()])
-                    .save_file()
-            });
-            Ok(Box::new(app))
-        }),
-    )
 }
 
 fn draw_tab(ui: &mut egui::Ui, rects: &ShellRects, locals: &mut Locals, cx: &mut PanelCx<'_>) {

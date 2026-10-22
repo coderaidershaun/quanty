@@ -4,13 +4,13 @@
 use eframe::egui;
 
 use super::{Form, Local, can_edit, delete, media_form};
-use crate::contract::{Failure, Media, is_same_name};
 use crate::panels::PanelCx;
 use crate::panels::labels::NO_MEDIA;
 use crate::panels::pages::media_card::{self, Pencil};
 use crate::state::MediaDelete;
 use crate::theme::{TextRole, color, space};
 use crate::widgets::Notice;
+use contract::{Failure, Media, is_same_name};
 
 const NO_DOCUMENT: &str = "No document yet. Add one on the Ingest tab.";
 

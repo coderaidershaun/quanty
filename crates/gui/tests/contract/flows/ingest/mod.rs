@@ -7,11 +7,9 @@ mod insights;
 mod media;
 mod run;
 
-use std::path::PathBuf;
-
+use contract::{Command, IngestRequest, Intent};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
-use gui::contract::{Command, IngestRequest, Intent};
 use gui::testkit;
 
 use super::recording::{self, Seen};
@@ -38,7 +36,11 @@ fn place_of(seen: &Seen, is: fn(&Command) -> bool) -> Option<usize> {
 fn pick(harness: &mut Window, file: &str) {
     harness
         .state_mut()
-        .push(Intent::PdfPicked(PathBuf::from(file)));
+        .push(Intent::PdfPicked(contract::UploadedPdf {
+            upload: contract::UploadId::default(),
+            file_name: file.to_owned(),
+            bytes: 1,
+        }));
     testkit::settle(harness);
 }
 

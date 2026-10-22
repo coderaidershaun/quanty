@@ -4,9 +4,9 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use contract::{Category, Command, Media, MediaEdit};
 use eframe::egui::accesskit::{Role, Toggled};
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
-use gui::contract::{Category, Command, Media, MediaEdit};
 use gui::testkit;
 
 use super::{Ingests, REFUSED_HINT, open_media, open_switched, sent_media_edits, view};

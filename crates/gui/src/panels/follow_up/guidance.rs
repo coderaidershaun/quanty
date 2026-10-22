@@ -1,7 +1,7 @@
 //! Every word of Follow up and the rule that picks what shows under the box.
 
-use crate::contract::{Answer, AskMode, Loadable, NothingFound};
 use crate::state::AskSession;
+use contract::{Answer, AskMode, Loadable, NothingFound};
 
 pub(super) const TITLE: &str = "Follow up";
 pub(super) const CAPTION: &str = "Each question is a new search";

@@ -7,9 +7,9 @@ use super::chain::MAX_LEVELS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageFailure {
-    /// Stored figure paths are absolute and can be stale.
+    /// The server could not return the picture.
     Missing,
-    /// The file is there but is not a PNG or JPEG that can be decoded.
+    /// The fetched bytes cannot be decoded as a picture.
     Unreadable,
 }
 

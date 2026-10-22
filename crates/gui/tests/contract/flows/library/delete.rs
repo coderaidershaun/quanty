@@ -5,13 +5,13 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use eframe::egui;
-use eframe::egui::accesskit::Role;
-use egui_kittest::kittest::NodeT as _;
-use gui::contract::{
+use contract::{
     Catalogue, Category, Command, DocId, Document, DocumentName, FailureKind, IngestRequest,
     Intent, NewMedia, NoticeKind, Tab,
 };
+use eframe::egui;
+use eframe::egui::accesskit::Role;
+use egui_kittest::kittest::NodeT as _;
 use gui::state::{IngestJob, MediaDelete, Open};
 use gui::testkit;
 use uuid::Uuid;
@@ -167,7 +167,8 @@ fn the_source_panel_shows(harness: &mut Window, doc: DocId) {
 fn the_source_panel_and_a_check_hold_on_to_the_document(harness: &mut Window, doc: DocId) {
     the_source_panel_shows(harness, doc);
     let request = IngestRequest {
-        pdf: "/books/x/chapter-3-greeks.pdf".into(),
+        pdf: contract::UploadId::default(),
+        file_name: "chapter-3-greeks.pdf".into(),
         media: "Option Volatility and Pricing".to_owned(),
         category: Category::Book,
         name: DocumentName::Chapter {

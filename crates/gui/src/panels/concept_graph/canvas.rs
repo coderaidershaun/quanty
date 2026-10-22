@@ -7,9 +7,9 @@ use super::geometry::point;
 use super::paint::{self, Drawing, NodeState, to_offset, to_point, to_pos};
 use super::scene::{Picture, SCROLL_PER_DOUBLING, Scene};
 use super::view::View;
-use crate::contract::{ConceptGraph, GraphNode, Intent, NodeId, NodeKind};
 use crate::state::AskSession;
 use crate::theme::{TextRole, space};
+use contract::{ConceptGraph, GraphNode, Intent, NodeId, NodeKind};
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Stage<'a> {

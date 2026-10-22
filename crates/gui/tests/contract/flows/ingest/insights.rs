@@ -2,16 +2,14 @@
 //! written, that they were saved already, that a part of a book gets none, or why they could not
 //! be written and which command writes them.
 
-use std::path::PathBuf;
-
+use contract::{
+    Category, ChapterInsights, DocId, DocumentName, IngestOutcome, IngestRequest, InsightsOutcome,
+    ModelTokens, Usage,
+};
 use eframe::egui::accesskit::Role;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::contract::{
-    Category, ChapterInsights, DocId, DocumentName, IngestOutcome, IngestRequest, InsightsOutcome,
-    ModelTokens, Usage,
-};
 use gui::panels::ingest;
 use gui::state::{IngestJob, Shared};
 use gui::testkit::{self, Host};
@@ -69,7 +67,8 @@ fn the_end_of_an_ingest_says_what_became_of_the_insights() {
 #[test]
 fn a_start_of_an_ingested_document_says_what_its_insights_cost() {
     let request = IngestRequest {
-        pdf: PathBuf::from("chapter-3-greeks.pdf"),
+        pdf: contract::UploadId::default(),
+        file_name: "chapter-3-greeks.pdf".into(),
         media: "Option Volatility and Pricing".to_owned(),
         category: Category::Book,
         name: DocumentName::Chapter {
@@ -150,10 +149,10 @@ fn a_start_of_an_ingested_document_says_what_its_insights_cost() {
     ] {
         harness.state_mut().shared.ingest = IngestJob::Checked {
             request: request.clone(),
-            preflight: gui::contract::Preflight {
+            preflight: contract::Preflight {
                 name: request.name.clone(),
                 pages: Some(12),
-                state: Some(gui::contract::ChapterState::IngestedWithoutMetadata {
+                state: Some(contract::ChapterState::IngestedWithoutMetadata {
                     items: 120,
                     missing_artifacts,
                     missing_insights,
@@ -167,15 +166,15 @@ fn a_start_of_an_ingested_document_says_what_its_insights_cost() {
         assert!(!said(&harness, "false"));
     }
     if let IngestJob::Checked { preflight, .. } = &mut harness.state_mut().shared.ingest {
-        preflight.state = Some(gui::contract::ChapterState::Converted);
+        preflight.state = Some(contract::ChapterState::Converted);
     }
     harness.run_ok();
     assert!(said(&harness, "missing artifact descriptions and insights"));
 }
 
 pub(super) fn assert_artifacts_precede_store_changes() {
-    use gui::backend::{Handler, Reply, fake::Fake};
-    use gui::contract::{Command, Event, IngestStage, RequestId};
+    use backend::{Handler, Reply, fake::Fake};
+    use contract::{Command, Event, IngestStage, RequestId};
     let (reply, events, _stop) = Reply::collecting();
     let fake = Fake::scene(
         "ingest-ready",
@@ -186,7 +185,8 @@ pub(super) fn assert_artifacts_precede_store_changes() {
     let command = Command::Ingest {
         request: RequestId(1),
         ingest: IngestRequest {
-            pdf: "chapter.pdf".into(),
+            pdf: contract::UploadId::default(),
+            file_name: "chapter.pdf".into(),
             media: "Sample".into(),
             category: Category::Book,
             name: DocumentName::Title("Sample".into()),

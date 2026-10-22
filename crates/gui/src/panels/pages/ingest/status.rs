@@ -4,10 +4,6 @@
 use eframe::egui;
 
 use super::{Local, Missing};
-use crate::contract::{
-    ChapterInsights, ChapterState, DocId, Failure, IngestOutcome, IngestProgress, IngestReport,
-    IngestRequest, IngestStage, InsightsOutcome, Intent, Preflight, Usage,
-};
 use crate::panels::PanelCx;
 use crate::panels::labels::{
     COPY_COMMAND, START_OFF_WHILE_DELETING, TRY_AGAIN, cost_text, detail, spent_text,
@@ -16,11 +12,15 @@ use crate::panels::labels::{
 use crate::state::IngestJob;
 use crate::theme::{TextRole, color, space};
 use crate::widgets::{self, Button, Notice};
+use contract::{
+    ChapterInsights, ChapterState, DocId, Failure, IngestOutcome, IngestProgress, IngestReport,
+    IngestRequest, IngestStage, InsightsOutcome, Intent, Preflight, Usage,
+};
 
 const CHECKING: &str = "Checking the PDF";
 const CONNECTING: &str = "Connecting to the stores";
 const COST: &str = "Checking is free. Starting is paid work: the selected agent and Jev convert each page, Gemini embeds the items, and the selected agent writes artifact descriptions, the insights, takeaways and cheat sheet and reads the concepts.";
-const KEEP_OPEN: &str = "Keep the app open until this is done. If it stops, start the same PDF again: pages that are converted are not paid for twice.";
+const KEEP_OPEN: &str = "This ingest continues on the server if you close the tab. If it stops, start the same PDF again: pages that are converted are not paid for twice.";
 
 /// `draft` is what the form holds now, made of its settled fields.
 pub(super) fn show(
@@ -29,6 +29,12 @@ pub(super) fn show(
     cx: &mut PanelCx<'_>,
     draft: &Result<IngestRequest, Missing>,
 ) {
+    for job in &cx.shared.health.facts.running {
+        ui.label(TextRole::Small.rich(format!(
+            "An ingest is running on the server: {}. Wait for it to end.",
+            job.name
+        )));
+    }
     match &cx.shared.ingest {
         // A draft that is complete is checked in this frame, so it needs no words.
         IngestJob::Idle => {
@@ -48,7 +54,10 @@ pub(super) fn show(
             let can_start = local.draft_of(&local.typed).as_ref() == Ok(request);
             // A delete removes what a start would write, so the two never run together.
             let is_deleting = cx.shared.library.is_deleting();
-            let start = ui.add_enabled(can_start && !is_deleting, Button::primary("Start ingest"));
+            let start = ui.add_enabled(
+                can_start && !is_deleting && cx.shared.health.facts.running.is_empty(),
+                Button::primary("Start ingest"),
+            );
             let start = if is_deleting {
                 start.on_disabled_hover_text(START_OFF_WHILE_DELETING)
             } else {

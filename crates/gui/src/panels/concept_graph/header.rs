@@ -4,10 +4,10 @@
 use eframe::egui::{self, Align, Layout, Sense, UiBuilder, Vec2};
 
 use super::scene::{HEADER_HEIGHT, LEGEND_HEIGHT, Picture};
-use crate::contract::Panel;
 use crate::panels::PanelCx;
 use crate::theme::{Icon, Kind, TextRole, size, space};
 use crate::widgets::{Button, section_header};
+use contract::Panel;
 
 /// The areas are worked out before anything is drawn, so the canvas has its size before the
 /// picture is made, and the title row still shows what the picture holds in the same frame.

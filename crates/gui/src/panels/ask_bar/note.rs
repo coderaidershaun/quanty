@@ -4,11 +4,11 @@
 use eframe::egui;
 
 use super::layout::slot;
-use crate::contract::{AskDraft, Failure, Intent, Loadable};
 use crate::panels::labels::TRY_AGAIN;
 use crate::state::Shared;
 use crate::theme::{TextRole, Tone, color};
 use crate::widgets::{self, Button, ControlSize};
+use contract::{AskDraft, Failure, Intent, Loadable};
 
 const BLANK: &str = "Type a question to ask.";
 const LIBRARY_LOADING: &str = "Loading the library\u{2026}";

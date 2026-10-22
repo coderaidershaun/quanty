@@ -2,18 +2,16 @@
 //! again when it is stored, and a start that fails says so with its hint. The check and the run
 //! show how far they have got, and each stage of a run is named with its counts and its cost.
 
-use std::path::PathBuf;
-
+use backend::fake::Fake;
+use backend::{Handler, Reply};
+use contract::{
+    Category, Command, DocumentName, IngestProgress, IngestRequest, IngestStage, ModelTokens,
+    RequestId, Tab, Usage,
+};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::{DEFAULT_WINDOW, MIN_WINDOW};
-use gui::backend::fake::Fake;
-use gui::backend::{Handler, Reply};
-use gui::contract::{
-    Category, Command, DocumentName, IngestProgress, IngestRequest, IngestStage, ModelTokens,
-    RequestId, Tab, Usage,
-};
 use gui::panels::ingest;
 use gui::state::{IngestJob, Shared};
 use gui::testkit::{self, run_until};
@@ -417,7 +415,8 @@ fn every_stage() -> [Shown; 14] {
 fn every_stage_of_a_run_is_named_with_its_counts() {
     super::insights::assert_artifacts_precede_store_changes();
     let request = IngestRequest {
-        pdf: PathBuf::from("chapter-3-greeks.pdf"),
+        pdf: contract::UploadId::default(),
+        file_name: "chapter-3-greeks.pdf".into(),
         media: "Option Volatility and Pricing".to_owned(),
         category: Category::Book,
         name: DocumentName::Chapter {
@@ -479,11 +478,9 @@ fn every_stage_of_a_run_is_named_with_its_counts() {
         )),
     };
     harness.state_mut().shared.apply_event(
-        gui::contract::Event::IngestFinished {
+        contract::Event::IngestFinished {
             request: RequestId(1),
-            result: Err(gui::contract::Failure::internal(
-                "invalid metadata response",
-            )),
+            result: Err(contract::Failure::internal("invalid metadata response")),
         },
         &mut Vec::new(),
     );

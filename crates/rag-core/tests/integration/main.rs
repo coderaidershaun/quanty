@@ -5,7 +5,6 @@ mod claude_cli;
 mod claude_live;
 mod codex_cli;
 mod concept_store;
-mod databases;
 mod gemini_live;
 mod gemini_stub;
 mod gemini_wire;

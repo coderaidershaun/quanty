@@ -30,7 +30,7 @@ fn assert_unit_vector(vector: &[f32], what: &str) {
 #[ignore = "calls the real Gemini API and spends API credit; run with: set -a; . ./.env; set +a; REX_PROD_API=true cargo test -p rag-core --test integration -- --ignored gemini_live::"]
 async fn embeds_two_texts_a_figure_and_a_query_live() {
     require_prod_api();
-    let config = Config::load_local().expect("the settings should load");
+    let config = Config::load().expect("the settings should load");
     let embedder = GeminiEmbedder::from_config(&config)
         .expect("EMBEDDING_GEMINI_API_KEY must be set; source .env first");
 

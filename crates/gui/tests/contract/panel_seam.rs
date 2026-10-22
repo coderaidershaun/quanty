@@ -5,10 +5,10 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use contract::Intent;
 use eframe::egui;
 use egui::accesskit::Role;
 use egui_kittest::kittest::Queryable;
-use gui::contract::Intent;
 use gui::media::rich_text::{self, Clicked, RichText};
 use gui::state::Shared;
 use gui::testkit::{self, sample};

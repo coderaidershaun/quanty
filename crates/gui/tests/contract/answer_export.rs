@@ -1,8 +1,8 @@
 //! The written answer as a document that goes in a file: its blocks in order, its formulas read
 //! as formulas, its figures, tables and listings with their captions, and its sources.
 
+use contract::{AnswerBlock, ExportPlace, ItemId, ItemKind};
 use export::{Block, Format, Source};
-use gui::contract::{AnswerBlock, ExportPlace, ItemId, ItemKind};
 use gui::testkit::{self, sample};
 use uuid::Uuid;
 
@@ -38,7 +38,7 @@ fn an_answer_becomes_a_document_with_its_formulas_figures_tables_code_and_source
         .image
         .clone()
         .expect("the sample figure has a picture")
-        .path;
+        .url;
     let mut written = sample::answer();
     written.blocks.push(AnswerBlock::Paragraph {
         text: PARAGRAPH.to_owned(),
@@ -79,7 +79,7 @@ fn an_answer_becomes_a_document_with_its_formulas_figures_tables_code_and_source
             ),
             text("Three spreads can show the same profit at one price.", 3),
             Block::Figure {
-                picture: Some(figure_path.clone()),
+                picture: Some(std::path::PathBuf::from(&figure_path)),
                 description: reply.results[2].text.clone(),
                 caption: "**Figure 13-4**".to_owned(),
                 cite: Some(3),
@@ -129,9 +129,23 @@ fn an_answer_becomes_a_document_with_its_formulas_figures_tables_code_and_source
     );
     assert_eq!(request.document, document);
 
-    let folder = tempfile::tempdir().expect("a temporary folder");
-    let path = folder.path().join(&request.file_name);
-    export::write(&request.document, request.format, &path).expect("the file is written");
+    let folder = tempfile::tempdir().expect("a temporary configured home");
+    let fake = backend::fake::Fake::scene("idle", folder.path())
+        .unwrap()
+        .instant();
+    let download = exported(&fake, request.document.clone(), request.format).unwrap();
+    let id = download
+        .url
+        .strip_prefix("/api/download/")
+        .unwrap()
+        .split('/')
+        .next()
+        .unwrap();
+    let path = folder
+        .path()
+        .join("data/exports")
+        .join(id)
+        .join(download.file_name);
     let file = std::fs::read_to_string(&path).expect("the file is read");
     assert!(file.contains(r"The delta $d_1$ costs \$5 to compute, and `a$b` stays code. [4]"));
     assert!(
@@ -142,4 +156,30 @@ fn an_answer_becomes_a_document_with_its_formulas_figures_tables_code_and_source
     let still_searching = testkit::searched(reply);
     assert!(still_searching.ask.answer_document().is_none());
     assert!(still_searching.ask.export_request(Format::Pdf).is_none());
+}
+
+fn exported(
+    fake: &backend::fake::Fake,
+    document: export::Document,
+    format: Format,
+) -> Result<contract::Download, contract::Failure> {
+    use backend::Handler;
+    let (reply, events, _stop) = backend::Reply::collecting();
+    let command = contract::Command::Export {
+        request: contract::RequestId(1),
+        file: contract::ExportFile {
+            format,
+            document,
+            file_name: format.file_name("answer"),
+        },
+    };
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(fake.serve(command, reply));
+    match events.try_recv().unwrap() {
+        contract::Event::Exported { result, .. } => result,
+        event => panic!("an export returned {event:?}"),
+    }
 }

@@ -3,7 +3,7 @@
 //! the other failed.
 
 use super::shared::{Shared, push_cancel};
-use crate::contract::{
+use contract::{
     ChapterContents, Command, DocId, DocumentView, Effect, Failure, Loadable, PageConcept,
     RequestId,
 };

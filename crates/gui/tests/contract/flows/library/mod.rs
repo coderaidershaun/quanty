@@ -16,13 +16,13 @@ mod navigation;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use backend::fake::Fake;
+use backend::{Handler, Reply};
+use contract::{Category, Command, Document, Failure, FailureKind, Intent, MediaEdit};
 use eframe::egui;
 use eframe::egui::accesskit::{Role, Toggled};
 use egui_kittest::kittest::NodeT as _;
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::backend::fake::Fake;
-use gui::backend::{Handler, Reply};
-use gui::contract::{Category, Command, Document, Failure, FailureKind, Intent, MediaEdit};
 use gui::testkit;
 
 use crate::flows::recording::{self, Seen};

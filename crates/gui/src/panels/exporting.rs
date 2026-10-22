@@ -5,9 +5,9 @@ use eframe::egui;
 use export::Format;
 
 use super::PanelCx;
-use crate::contract::{ExportPlace, ExportRequest, Intent, NoticeKind};
 use crate::theme::{Icon, size, space};
 use crate::widgets::{Button, ControlSize, Notice};
+use contract::{ExportPlace, ExportRequest, Intent, NoticeKind};
 
 /// Every item of a menu with Export items is this wide, so the menu does not change width when
 /// an item changes its words.

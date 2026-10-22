@@ -3,7 +3,7 @@
 
 use eframe::egui;
 
-use crate::contract::{Chord, Intent, KeyName, SHORTCUTS, Shortcut, When};
+use contract::{Chord, Intent, KeyName, SHORTCUTS, Shortcut, When};
 
 /// False for a shortcut that leads to a part that is not built: the help sheet and the health
 /// check.

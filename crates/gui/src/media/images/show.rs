@@ -4,10 +4,10 @@
 use eframe::egui;
 
 use super::picture::{ImageFailure, ImageState, Picture};
-use crate::contract::ImageRef;
 use crate::media::Media;
 use crate::theme::{Icon, color, radius, size};
 use crate::widgets::{Placeholder, spinner};
+use contract::ImageRef;
 
 /// A picture fitted inside `max_size`, with its loading and failed states drawn. Senses
 /// clicks. The picture is an `Image` node named `alt`; while loading there is a spinner named
@@ -95,10 +95,7 @@ fn failed(
 }
 
 fn hint(image: &ImageRef, failure: ImageFailure) -> String {
-    let name = image.path.file_name().map_or_else(
-        || image.path.display().to_string(),
-        |name| name.to_string_lossy().into_owned(),
-    );
+    let name = image.url.rsplit('/').next().unwrap_or(&image.url);
     match failure {
         ImageFailure::Missing => format!(
             "{name} is not in the content folder. Put the folder back or ingest the document again."

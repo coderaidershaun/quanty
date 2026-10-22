@@ -1,15 +1,21 @@
 //! What a test needs to look at one panel or the whole app with no backend: a window around a
 //! panel, the app on the fake backend, builders for the shared state, and small sample values.
 
+mod folder_fetch;
 mod harness;
+mod in_process;
+pub use folder_fetch::FolderFetch;
+pub use in_process::InProcess;
 pub mod sample;
 
 use std::path::PathBuf;
 
-use crate::contract::{Answer, AskDraft, ConceptGraph, Event, Intent, SearchReply};
 use crate::state::Shared;
+use contract::{Answer, AskDraft, ConceptGraph, Event, Intent, SearchReply};
 
-pub use harness::{Host, app, app_at, app_on, panel, run_until, save_png, settle, settle_within};
+pub use harness::{
+    Host, app, app_at, app_at_with_home, app_on, panel, run_until, save_png, settle, settle_within,
+};
 
 const QUESTION: &str = "How is the Black–Scholes formula derived?";
 
@@ -49,7 +55,7 @@ pub fn answered(reply: SearchReply, graph: ConceptGraph, answer: Answer) -> Shar
     shared
 }
 
-fn deliver(shared: &mut Shared, event: impl FnOnce(crate::contract::RequestId) -> Event) {
+fn deliver(shared: &mut Shared, event: impl FnOnce(contract::RequestId) -> Event) {
     let request = shared
         .ask
         .request

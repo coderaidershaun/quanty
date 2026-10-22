@@ -3,8 +3,7 @@
 
 use uuid::Uuid;
 
-use super::samples_folder;
-use crate::contract::{
+use contract::{
     Answer, AnswerBlock, ConceptGraph, ConceptId, DocId, EdgeKind, GraphEdge, GraphNode, ImageRef,
     ItemId, ItemKind, NodeId, NodeKind, Reason, ResultItem, RetrievalTrace, SearchReply, Usage,
 };
@@ -21,7 +20,7 @@ fn id(number: u128) -> Uuid {
 
 fn image(relative: &str) -> ImageRef {
     ImageRef {
-        path: samples_folder().join(relative),
+        url: format!("/content/{relative}"),
     }
 }
 

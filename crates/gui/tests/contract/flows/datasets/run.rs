@@ -3,16 +3,16 @@
 
 use std::time::{Duration, Instant};
 
+use backend::Runtime;
+use backend::fake::Fake;
+use contract::{
+    Command, DatasetProgress, DatasetRequest, DatasetStage, DocId, Event, FailureKind, ModelTokens,
+    RequestId, Tab, Usage,
+};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::backend::Backend;
-use gui::backend::fake::Fake;
-use gui::contract::{
-    Command, DatasetProgress, DatasetRequest, DatasetStage, DocId, Event, FailureKind, ModelTokens,
-    RequestId, Tab, Usage,
-};
 use gui::panels::datasets;
 use gui::state::{DatasetJob, Shared};
 use gui::testkit::{self, run_until};
@@ -104,7 +104,7 @@ fn a_dry_run_tells_its_plan() {
     ));
 }
 
-fn next_event(backend: &mut Backend) -> Event {
+fn next_event(backend: &mut Runtime<impl backend::Handler>) -> Event {
     let started = Instant::now();
     loop {
         if let Some(event) = backend.try_next() {
@@ -131,7 +131,7 @@ fn the_fake_plays_every_stage_in_order_and_ends_once() {
     let fake = Fake::scene("datasets-ready", &testkit::samples_folder())
         .expect("the scene starts")
         .instant();
-    let mut backend = Backend::start(fake, || {}).expect("the runtime starts");
+    let mut backend = Runtime::start_own_threads(fake, || {}).expect("the runtime starts");
     let build = DatasetRequest {
         name: "all-stages".to_owned(),
         ..DatasetRequest::default()

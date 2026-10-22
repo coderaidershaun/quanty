@@ -10,12 +10,12 @@ use eframe::egui;
 use super::row;
 use super::states::whole_area;
 use super::tabs::TabCx;
-use crate::contract::{ImageRef, PagePiece, PageView, PieceKind};
 use crate::media::Media;
 use crate::media::images::{self, ImageState, Picture};
 use crate::theme::{size, space};
 use crate::widgets::Placeholder;
 use canvas::{Figure, Shown};
+use contract::{ImageRef, PagePiece, PageView, PieceKind};
 use view::{View, Viewport};
 use zoom_bar::Percent;
 

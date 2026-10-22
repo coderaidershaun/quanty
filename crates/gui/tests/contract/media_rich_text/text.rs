@@ -1,10 +1,10 @@
 //! Checks blocks of stored text: they are read as the pipeline writes them, laid out once more
 //! when their formulas settle, and copied as their stored source.
 
+use contract::Intent;
 use eframe::egui;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
-use gui::contract::Intent;
 use gui::media::math::{MathImage, MathRef, MathState};
 use gui::media::rich_text::{self, RichText};
 use gui::testkit::{self, Host};

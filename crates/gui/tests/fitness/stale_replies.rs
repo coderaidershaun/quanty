@@ -3,7 +3,7 @@
 //! This is a fitness test because the failure makes no noise: an answer to an old question
 //! would be shown under a new one, as if it were right.
 
-use gui::contract::{
+use contract::{
     Answer, AskDraft, AskMode, Command, ConceptGraph, Effect, Event, Failure, Intent, Loadable,
     RequestId,
 };
@@ -32,7 +32,7 @@ fn step() -> impl Strategy<Value = Step> {
 }
 
 /// A reply that carries the question it answers in every place that is shown.
-fn search_reply_for(question: &str) -> gui::contract::SearchReply {
+fn search_reply_for(question: &str) -> contract::SearchReply {
     let mut reply = sample::search_reply();
     for result in &mut reply.results {
         result.text = question.to_owned();

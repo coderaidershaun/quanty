@@ -11,8 +11,8 @@ use super::scene::{
     node_text, scaled_font,
 };
 use super::view::View;
-use crate::contract::{ConceptGraph, GraphNode};
 use crate::theme::{Kind, Tone, color, radius, size, space, stroke};
+use contract::{ConceptGraph, GraphNode};
 
 const RING_OFFSET: f32 = space::XXS;
 

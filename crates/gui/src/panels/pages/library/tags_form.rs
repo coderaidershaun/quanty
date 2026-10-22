@@ -3,11 +3,11 @@
 use eframe::egui;
 
 use super::{CANCEL, SAVE, SaveStep};
-use crate::contract::{DocId, Document, DocumentTagsEdit, Intent};
 use crate::panels::labels::{TAGS, caption, list_of, text_of};
 use crate::state::{Library, Shared};
 use crate::theme::space;
 use crate::widgets::{Button, Notice, TextInput};
+use contract::{DocId, Document, DocumentTagsEdit, Intent};
 
 const TAGS_HINT: &str = "With commas between them";
 

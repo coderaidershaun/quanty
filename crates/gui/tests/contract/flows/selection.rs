@@ -3,11 +3,11 @@
 
 use std::time::{Duration, Instant};
 
+use contract::{ConceptId, Loadable, NodeId, NodeKind, ResultItem};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::NodeT as _;
 use gui::app::layout::{DEFAULT_WINDOW, MIN_WINDOW};
-use gui::contract::{ConceptId, Loadable, NodeId, NodeKind, ResultItem};
 use gui::state::SourceTarget;
 use gui::testkit;
 

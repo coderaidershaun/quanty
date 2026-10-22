@@ -44,3 +44,9 @@ repos:
         types: [rust]
         pass_filenames: false
         stages: [pre-push]
+      - id: check-wasm
+        name: browser UI checks
+        entry: scripts/check-wasm.sh
+        language: system
+        types: [rust]
+        pass_filenames: false

@@ -4,10 +4,10 @@
 mod table;
 mod text;
 
+use contract::Intent;
 use eframe::egui;
 use eframe::egui::epaint::text::ByteRangeExt as _;
 use egui_kittest::Harness;
-use gui::contract::Intent;
 use gui::media::rich_text::Clicked;
 use gui::testkit::Host;
 

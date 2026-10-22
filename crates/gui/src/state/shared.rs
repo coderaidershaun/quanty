@@ -1,24 +1,16 @@
 //! The state of the whole window, and the one place that matches each intent and each event to
 //! the rule that handles it.
 
-use std::path::PathBuf;
+use std::collections::BTreeMap;
 
 use super::{
-    AskSession, Balances, Contents, DatabaseLink, DatasetJob, ExportJob, Health, IngestJob,
-    Insights, Library, Shelf, SourceNav,
+    AskSession, Balances, Contents, DatasetJob, ExportJob, Health, IngestJob, Insights, Library,
+    Shelf, SourceNav,
 };
-use crate::contract::{
+use contract::{
     Command, Effect, Event, Failure, Intent, Loadable, Notice, NoticeId, NoticeKind, Panel,
     RequestId, StartupFacts, Tab,
 };
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
-pub enum Quit {
-    #[default]
-    No,
-    Asking,
-    Confirmed,
-}
 
 /// Counters that only go up. A panel acts when one is above what it saw last.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -26,7 +18,7 @@ pub struct Cues {
     pub focus_ask_bar: u64,
     /// The Ingest panel copies `picked_pdf` into its draft.
     pub pdf_picks: u64,
-    pub picked_pdf: Option<PathBuf>,
+    pub picked_pdf: Option<contract::UploadedPdf>,
     /// The source view shows its target again.
     pub source_shows: u64,
     /// The Ingest panel chooses the media `saved_media` once the catalogue that holds it arrives.
@@ -41,7 +33,6 @@ pub struct Shared {
     /// The panel that has the whole Ask tab. The other panels of the tab are not drawn.
     pub maximised: Option<Panel>,
     pub help_open: bool,
-    pub quit: Quit,
     pub cues: Cues,
     pub ask: AskSession,
     pub source: SourceNav,
@@ -56,8 +47,9 @@ pub struct Shared {
     /// Newest first, this session only.
     pub notices: Vec<Notice>,
     pub health: Health,
-    pub database: DatabaseLink,
     pub balances: Balances,
+    pub model_choice_errors: BTreeMap<choices::WorkKind, Failure>,
+    model_choice_requests: BTreeMap<choices::WorkKind, RequestId>,
     next_request: u64,
     next_notice: u64,
 }
@@ -65,7 +57,6 @@ pub struct Shared {
 impl Shared {
     pub fn new(facts: StartupFacts) -> Shared {
         Shared {
-            database: DatabaseLink::chosen_by(&facts),
             health: Health::new(facts),
             ..Shared::default()
         }
@@ -89,8 +80,7 @@ impl Shared {
                     effects.push(Effect::CopyText(markdown));
                 }
             }
-            Intent::Export(export) => self.ask_where_to_export(export, effects),
-            Intent::ExportPathPicked { export, path } => self.start_export(export, path, effects),
+            Intent::Export(export) => self.start_export(export, effects),
             Intent::Ask(draft) => self.start_ask(draft, effects),
             Intent::CancelAsk => self.cancel_ask(effects),
             Intent::SelectResult(number) => self.select_result(number, effects),
@@ -126,14 +116,21 @@ impl Shared {
                     .for_each(|notice| notice.read = true);
             }
             Intent::RecheckHealth => self.recheck_health(effects),
-            Intent::RequestQuit => self.request_quit(effects),
-            Intent::ConfirmQuit => self.confirm_quit(effects),
-            Intent::DismissQuit => self.quit = Quit::No,
+            Intent::ChooseModel { work, choice } => {
+                *self.health.facts.model_choices.of_mut(work) = choice.clone();
+                let request = self.issue_request();
+                self.model_choice_requests.insert(work, request);
+                self.model_choice_errors.remove(&work);
+                effects.push(Effect::Send(Command::SaveModelChoice {
+                    request,
+                    work,
+                    choice,
+                }));
+            }
             Intent::ReadBalances => self.read_balances(effects),
             Intent::OpenBillingPage(provider) => {
                 effects.push(Effect::OpenUrl(provider.billing_page().to_owned()));
             }
-            Intent::UseDatabase(database) => self.use_database(database, effects),
         }
         self.read_after_a_paid_job(before, effects);
     }
@@ -143,6 +140,18 @@ impl Shared {
         let before = self.paid_jobs();
         self.hear_paid_reply(&event);
         match event {
+            Event::ModelChoiceSaved { request, result } => {
+                if let Some(work) = self
+                    .model_choice_requests
+                    .iter()
+                    .find_map(|(work, pending)| (*pending == request).then_some(*work))
+                {
+                    self.model_choice_requests.remove(&work);
+                    if let Err(failure) = result {
+                        self.model_choice_errors.insert(work, failure);
+                    }
+                }
+            }
             Event::Search { request, result } => self.search_arrived(request, result, effects),
             Event::Graph { request, result } => self.graph_arrived(request, result),
             Event::Answer { request, result } => self.answer_arrived(request, result),
@@ -150,7 +159,7 @@ impl Shared {
                 request,
                 format,
                 result,
-            } => self.export_finished(request, format, result),
+            } => self.export_finished(request, format, result, effects),
             Event::Page { request, result } => self.page_arrived(request, result),
             Event::PageConcepts { request, result } => self.page_concepts_arrived(request, result),
             Event::ChapterContents { request, result } => {
@@ -197,9 +206,6 @@ impl Shared {
                 state,
             } => self.health_arrived(request, service, state),
             Event::Balances { request, found } => self.balances_arrived(request, found),
-            Event::DatabaseUsed { request, result } => {
-                self.database_used(request, result, effects);
-            }
         }
         self.read_after_a_paid_job(before, effects);
     }
@@ -212,7 +218,6 @@ impl Shared {
             && !self.contents_is_busy()
             && !self.insights_is_busy()
             && self.health.pending.is_none()
-            && !self.database.is_checking()
             && !self.ingest.is_working()
             && !self.datasets.is_running()
             && !self.balances.is_reading()
@@ -267,23 +272,6 @@ impl Shared {
             self.cancel_ask(effects);
         } else {
             self.maximised = None;
-        }
-    }
-
-    fn request_quit(&mut self, effects: &mut Vec<Effect>) {
-        if self.ingest.is_running() && self.quit == Quit::No {
-            self.quit = Quit::Asking;
-        } else {
-            effects.push(Effect::CloseWindow);
-        }
-    }
-
-    fn confirm_quit(&mut self, effects: &mut Vec<Effect>) {
-        self.quit = Quit::Confirmed;
-        if self.ingest.is_running() {
-            self.cancel_ingest(effects);
-        } else {
-            effects.push(Effect::CloseWindow);
         }
     }
 }

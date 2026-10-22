@@ -12,11 +12,11 @@ mod tabs;
 
 use eframe::egui;
 
-use crate::contract::Loadable;
 use crate::panels::PanelCx;
 use crate::state::SourceTarget;
 use crate::theme::space;
 use crate::widgets::{Surface, panel_frame};
+use contract::Loadable;
 use follow::marked_piece;
 use tabs::{SourceTab, TabCx};
 

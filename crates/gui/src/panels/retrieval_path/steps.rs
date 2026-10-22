@@ -1,9 +1,9 @@
 //! Every word of the path and the rule that picks it: what the panel says when it has no steps
 //! to show, and the five steps themselves.
 
-use crate::contract::{Failure, Loadable, NothingFound, RetrievalTrace};
 use crate::state::AskSession;
 use crate::theme::Icon;
+use contract::{Failure, Loadable, NothingFound, RetrievalTrace};
 
 pub(super) const TITLE: &str = "Retrieval Path";
 pub(super) const SEARCHING: &str = "Searching";

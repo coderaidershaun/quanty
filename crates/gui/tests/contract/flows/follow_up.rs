@@ -2,11 +2,11 @@
 //! new ask with the same mode and filters, a plain key stays in the question box, and every way to
 //! copy reaches the clipboard.
 
+use contract::{AnswerBlock, Category, Command, DocId, Filters};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::contract::{AnswerBlock, Category, Command, DocId, Filters};
 use gui::testkit;
 use uuid::Uuid;
 
@@ -285,7 +285,7 @@ fn copies_reach_the_clipboard(harness: &mut Window) {
         .ask
         .results()
         .iter()
-        .find(|result| result.kind == gui::contract::ItemKind::Formula)
+        .find(|result| result.kind == contract::ItemKind::Formula)
         .map(|result| result.text.clone())
         .expect("a formula result");
     let texts = copied_by(harness, |harness| {

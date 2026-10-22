@@ -3,8 +3,8 @@
 
 use eframe::egui::{Pos2, Rect, Vec2, pos2, vec2};
 
-use crate::contract::PageBox;
 use crate::theme::space;
+use contract::PageBox;
 
 /// The well shows this far round a page that fits the width.
 const GUTTER: f32 = space::MD;

@@ -6,8 +6,8 @@ use std::borrow::Borrow;
 
 use eframe::egui;
 
-use crate::contract::{Failure, Usage};
 use crate::theme::{TextRole, space};
+use contract::{Failure, Usage};
 
 pub(super) const AUTHORS: &str = "Authors";
 pub(super) const TAGS: &str = "Tags";

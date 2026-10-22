@@ -1,29 +1,40 @@
-//! The picture cache: one entry for each path, the order pictures are decoded in, and the byte
+//! The picture cache: one entry for each URL, the order pictures are decoded in, and the byte
 //! budget that keeps the textures from growing without bound.
 
 use std::collections::HashMap;
+use std::sync::mpsc::{Receiver, Sender, channel};
+use std::time::Duration;
 
 use eframe::egui;
+use web_time::Instant;
 
 use super::decode::{DecodeJob, Decoded, Loaded, decode};
 use super::picture::{ImageFailure, ImageState, Picture};
-use crate::contract::ImageRef;
-use crate::media::{Offload, Urgency, Workers};
+use crate::media::{Fetch, Offload, Urgency, Workers};
+use contract::ImageRef;
 
 const BUDGET: usize = 256 * 1024 * 1024;
-const DECODE_THREADS: usize = 2;
 /// A stored size is never longer than this, whatever the graphics card allows: it is plenty for
 /// a page.
 const MAX_STORED_SIDE: u32 = 4096;
 
 pub struct Images {
     workers: Workers<DecodeJob, Decoded>,
+    fetch: Box<dyn Fetch>,
+    fetched: Receiver<Fetched>,
+    sender: Sender<Fetched>,
+    ctx: egui::Context,
     entries: HashMap<ImageRef, Entry>,
     /// The bytes of every stored size of every ready picture.
     bytes: usize,
     /// A picture is wanted when it was asked for since the last poll.
     polls: u64,
     max_side: u32,
+}
+
+struct Fetched {
+    image: ImageRef,
+    result: Result<Vec<u8>, String>,
 }
 
 struct Entry {
@@ -59,15 +70,14 @@ impl Entry {
 }
 
 impl Images {
-    pub fn new(ctx: &egui::Context, offload: Offload) -> Images {
+    pub fn new(ctx: &egui::Context, offload: Offload, fetch: Box<dyn Fetch>) -> Images {
+        let (sender, fetched) = channel();
         Images {
-            workers: Workers::start(
-                offload,
-                "quanty-images",
-                DECODE_THREADS,
-                ctx.clone(),
-                decode,
-            ),
+            workers: Workers::start(offload, ctx.clone(), decode),
+            fetch,
+            fetched,
+            sender,
+            ctx: ctx.clone(),
             entries: HashMap::new(),
             bytes: 0,
             polls: 0,
@@ -80,6 +90,7 @@ impl Images {
         let last_drawn = self.polls;
         self.polls += 1;
         self.max_side = max_side(ctx);
+        self.take_fetched();
         while let Some(decoded) = self.workers.take_done() {
             self.store(decoded);
         }
@@ -89,7 +100,15 @@ impl Images {
 
     /// With `Offload::Manual`: decodes every queued picture on the calling thread.
     pub fn run_pending(&mut self) {
+        self.take_fetched();
         self.workers.run_pending();
+    }
+
+    pub fn run_for(&mut self, duration: Duration) {
+        let started = Instant::now();
+        self.take_fetched();
+        self.workers
+            .run_for(duration.saturating_sub(started.elapsed()));
     }
 
     pub fn is_idle(&self) -> bool {
@@ -124,7 +143,7 @@ impl Images {
         }
     }
 
-    /// Forgets a failure, so the next `get` reads the file again.
+    /// Forgets a failure, so the next `get` fetches the picture again.
     pub fn retry(&mut self, image: &ImageRef) {
         let failed = self
             .entries
@@ -142,26 +161,43 @@ impl Images {
             urgency,
         };
         self.entries.insert(image.clone(), entry);
-        self.workers.submit(self.job_for(image), urgency);
+        let sender = self.sender.clone();
+        let requested = image.clone();
+        let ctx = self.ctx.clone();
+        self.fetch.get(
+            &image.url,
+            Box::new(move |result| {
+                let _ = sender.send(Fetched {
+                    image: requested,
+                    result,
+                });
+                ctx.request_repaint();
+            }),
+        );
     }
 
-    /// The queue cannot move a job, so a queued one is taken out and put in again at the front.
-    /// A job that already runs is not in the queue and is left alone.
-    fn move_to_front(&self, image: &ImageRef) {
-        if self.workers.cancel(|job| job.path == image.path) > 0 {
-            self.workers.submit(self.job_for(image), Urgency::Now);
-        }
+    fn move_to_front(&mut self, image: &ImageRef) {
+        self.workers.promote(|job| job.url == image.url);
     }
 
-    fn job_for(&self, image: &ImageRef) -> DecodeJob {
-        DecodeJob {
-            path: image.path.clone(),
-            max_side: self.max_side,
+    fn take_fetched(&mut self) {
+        while let Ok(fetched) = self.fetched.try_recv() {
+            let Some(entry) = self.entries.get_mut(&fetched.image) else {
+                continue;
+            };
+            self.workers.submit(
+                DecodeJob {
+                    url: fetched.image.url,
+                    bytes: fetched.result,
+                    max_side: self.max_side,
+                },
+                entry.urgency,
+            );
         }
     }
 
     fn store(&mut self, decoded: Decoded) {
-        let image = ImageRef { path: decoded.path };
+        let image = ImageRef { url: decoded.url };
         let Some(entry) = self.entries.get_mut(&image) else {
             return;
         };
@@ -192,10 +228,10 @@ impl Images {
         }
         let mut cancelled = Vec::new();
         self.workers.cancel(|job| {
-            let hit = unwanted.iter().any(|image| image.path == job.path);
+            let hit = unwanted.iter().any(|image| image.url == job.url);
             if hit {
                 cancelled.push(ImageRef {
-                    path: job.path.clone(),
+                    url: job.url.clone(),
                 });
             }
             hit

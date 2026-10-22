@@ -4,11 +4,22 @@
 
 use std::path::PathBuf;
 
-/// The longest default file name a save dialog offers, before its extension.
+/// The longest generated file name before its extension.
 const FILE_NAME_LENGTH: usize = 80;
 
 /// What one file holds, in the order it holds it.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Default,
+)]
 pub struct Document {
     pub title: String,
     /// The one line under the title that says where the text comes from, such as the question an
@@ -21,7 +32,9 @@ pub struct Document {
 
 /// Every `caption` is one line of Markdown that may hold `**label**`, and may be empty. A `cite`
 /// is the number of the source the block comes from.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
+)]
 pub enum Block {
     Heading(String),
     /// CommonMark with GitHub tables, `$…$` and `$$…$$` formulas and footnote marks. `cites` are
@@ -70,7 +83,9 @@ pub(crate) fn language_word(language: Option<&str>) -> &str {
         .unwrap_or("")
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
+)]
 pub struct Source {
     pub number: usize,
     /// The document and the page as printed, such as "Hull, chapter 2: Options, p. 7 — Figure 2.1".
@@ -78,7 +93,9 @@ pub struct Source {
 }
 
 /// The kinds of file a document is written as.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord,
+)]
 pub enum Format {
     Pdf,
     Markdown,
@@ -104,8 +121,8 @@ impl Format {
         }
     }
 
-    /// The file name a save dialog offers: `words` without the characters a file name may not
-    /// hold, at most 80 characters, then the extension. `Document` when nothing is left.
+    /// Builds a file name with at most 80 characters before its extension, removing forbidden
+    /// characters. Uses `Document` when nothing is left.
     pub fn file_name(self, words: &str) -> String {
         let spaced: String = words
             .chars()

@@ -2,7 +2,7 @@
 //! never builds a string.
 
 use super::phase::AnswerTab;
-use crate::contract::{ItemKind, Reason, ResultItem};
+use contract::{ItemKind, Reason, ResultItem};
 
 /// Text passages have no count of their own: they are in `results` only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

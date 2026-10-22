@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 
 use super::shared::{Shared, push_cancel};
-use crate::contract::{
+use contract::{
     Balance, BalanceReads, Command, Effect, Event, FailureKind, IngestOutcome, Provider, RequestId,
 };
 

@@ -31,7 +31,7 @@ pub struct ThrowawayStores {
 impl ThrowawayStores {
     pub fn new(test_name: &str) -> Self {
         let stamp = unique_name(test_name);
-        let settings = Config::load_local().expect("the settings should load");
+        let settings = Config::load().expect("the settings should load");
         let graph = ThrowawayGraph::new(&settings, test_name);
         let temporary = tempfile::tempdir().expect("a temporary folder should be made");
         let config = Config {

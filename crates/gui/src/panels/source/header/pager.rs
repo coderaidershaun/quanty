@@ -3,10 +3,10 @@
 
 use eframe::egui;
 
-use crate::contract::DocId;
 use crate::state::SourceNav;
 use crate::theme::{TextRole, color};
 use crate::widgets::{Step, Stepper};
+use contract::DocId;
 
 const UNKNOWN: &str = "–";
 /// A change of the pager's width smaller than this comes from rounding. It is not worth laying

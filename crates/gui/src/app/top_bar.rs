@@ -4,10 +4,10 @@ use eframe::egui;
 
 use super::layout;
 use super::region::region;
-use crate::contract::{self, Intent};
 use crate::panels::PanelCx;
 use crate::theme::{color, hairline};
 use crate::widgets::{self, TabStrip};
+use contract::{self, Intent};
 
 fn label(tab: contract::Tab) -> &'static str {
     match tab {

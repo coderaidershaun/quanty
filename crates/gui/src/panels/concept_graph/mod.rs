@@ -14,12 +14,12 @@ mod view;
 
 use eframe::egui;
 
-use crate::contract::{ConceptGraph, NodeId};
 use crate::panels::PanelCx;
 use crate::state::AskSession;
 use crate::theme::space;
 use crate::widgets::{Surface, panel_frame};
 use canvas::{Canvas, Stage};
+use contract::{ConceptGraph, NodeId};
 use header::Areas;
 use scene::{Scene, SceneKey};
 use view::View;

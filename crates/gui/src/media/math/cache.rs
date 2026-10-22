@@ -1,9 +1,9 @@
-//! The formulas that were asked for and what became of each: queued, typeset on a worker thread,
-//! and kept as textures within a byte budget.
+//! Queued formulas become textures that stay within a byte budget.
 
 use std::collections::HashMap;
 use std::error::Error as _;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::time::Duration;
 
 use eframe::egui;
 
@@ -12,8 +12,6 @@ use super::typeset::{TypesetError, typeset};
 use crate::media::{Offload, Urgency, Workers};
 
 const DEFAULT_BUDGET: usize = 64 * 1024 * 1024;
-const WORKER_NAME: &str = "quanty-math";
-const TYPESET_THREADS: usize = 1;
 const BYTES_PER_PIXEL: usize = 4;
 /// Below this a formula cannot be read.
 const MIN_EM_PX: f32 = 4.0;
@@ -106,7 +104,7 @@ pub struct Math {
 impl Math {
     pub fn new(ctx: &egui::Context, offload: Offload) -> Math {
         Math {
-            workers: Workers::start(offload, WORKER_NAME, TYPESET_THREADS, ctx.clone(), work),
+            workers: Workers::start(offload, ctx.clone(), work),
             entries: HashMap::new(),
             budget: DEFAULT_BUDGET,
             bytes: 0,
@@ -138,6 +136,10 @@ impl Math {
     /// With `Offload::Manual`: typesets every queued formula on the calling thread.
     pub fn run_pending(&mut self) {
         self.workers.run_pending();
+    }
+
+    pub fn run_for(&mut self, duration: Duration) {
+        self.workers.run_for(duration);
     }
 
     pub fn is_idle(&self) -> bool {
@@ -264,8 +266,7 @@ fn em_px(size: f32, pixels_per_point: f32) -> u16 {
         .clamp(MIN_EM_PX, MAX_EM_PX) as u16
 }
 
-/// The job of a worker thread. No panic leaves it: a formula that panics the typesetting library
-/// is a formula that fails.
+/// A formula that panics the typesetting library is treated as a failure.
 fn work(ctx: &egui::Context, job: Job) -> Done {
     let result =
         catch_unwind(AssertUnwindSafe(|| make(ctx, &job))).unwrap_or(Err(TypesetError::Panicked));

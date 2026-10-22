@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use super::shared::{Shared, push_cancel};
 use super::{IngestJob, Open};
-use crate::contract::{
+use contract::{
     Catalogue, Command, DocId, DocumentTagsEdit, Effect, Failure, Loadable, MediaEdit, NewMedia,
     NoticeKind, RequestId,
 };

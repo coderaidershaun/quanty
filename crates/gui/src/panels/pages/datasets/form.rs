@@ -3,11 +3,11 @@
 
 use eframe::egui;
 
-use crate::contract::{DatasetRequest, DocId};
 use crate::panels::labels::caption;
 use crate::state::Library;
 use crate::theme::{TextRole, space};
 use crate::widgets::{ControlSize, Dropdown, Step, Stepper, TextInput, paint_caret};
+use contract::{DatasetRequest, DocId};
 
 const NAME: &str = "Dataset name";
 const NAME_PLACEHOLDER: &str = "Letters, digits, -, _ and .";

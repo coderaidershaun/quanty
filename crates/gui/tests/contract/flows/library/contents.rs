@@ -3,12 +3,12 @@
 //! found says so, and the Concepts view lists the concepts of the document and says when the graph
 //! is down.
 
+use backend::fake::Fake;
+use backend::{Handler, Reply};
+use contract::{Command, DocId, Event, Failure, PieceKind, Tab};
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::Queryable as _;
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::backend::fake::Fake;
-use gui::backend::{Handler, Reply};
-use gui::contract::{Command, DocId, Event, Failure, PieceKind, Tab};
 use gui::state::SourceTarget;
 use gui::testkit;
 

@@ -4,12 +4,12 @@
 use eframe::egui;
 
 use super::{Form, Local, can_edit, delete, tags_form};
-use crate::contract::{Document, Intent};
 use crate::panels::PanelCx;
 use crate::panels::labels::TAGS;
 use crate::state::Busy;
 use crate::theme::{Icon, TextRole, color, space};
 use crate::widgets::{Button, Chip, ControlSize, Notice};
+use contract::{Document, Intent};
 
 const NO_TAGS: &str = "No tags";
 const COPY_ID: &str = "Copy id";

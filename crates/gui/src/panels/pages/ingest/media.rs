@@ -5,7 +5,6 @@
 use eframe::egui;
 
 use super::Local;
-use crate::contract::{Catalogue, Category, Failure, Intent, Loadable, Media, MediaEdit};
 use crate::panels::PanelCx;
 use crate::panels::labels::caption;
 use crate::panels::pages::media_card::{
@@ -14,6 +13,7 @@ use crate::panels::pages::media_card::{
 use crate::state::{MediaEditing, MediaSave};
 use crate::theme::{TextRole, space};
 use crate::widgets::{Card, ControlSize, Dropdown};
+use contract::{Catalogue, Category, Failure, Intent, Loadable, Media, MediaEdit};
 
 const MEDIA: &str = "Media";
 const ADD_NEW_MEDIA: &str = "Add new media…";

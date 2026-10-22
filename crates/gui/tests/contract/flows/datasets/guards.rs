@@ -1,12 +1,12 @@
 //! While a build runs no delete starts, and while a delete is on its way no build starts: the
 //! buttons of the one are off and say why, and what is pushed anyway sends nothing.
 
+use backend::fake::Fake;
+use backend::{Handler, Reply};
+use contract::{Command, DatasetRequest, DocId, Intent};
 use eframe::egui::accesskit::Role;
-use egui_kittest::kittest::NodeT as _;
+use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::backend::fake::Fake;
-use gui::backend::{Handler, Reply};
-use gui::contract::{Command, DatasetRequest, DocId, Intent};
 use gui::testkit::{self, run_until};
 use uuid::Uuid;
 
@@ -109,4 +109,54 @@ fn a_delete_on_its_way_turns_the_start_off() {
 fn a_build_and_a_delete_hold_each_other_off() {
     a_build_that_runs_turns_every_delete_off();
     a_delete_on_its_way_turns_the_start_off();
+    a_job_on_the_server_turns_new_paid_work_off();
+}
+
+fn a_job_on_the_server_turns_new_paid_work_off() {
+    let fake = Fake::scene("ingest-ready", &testkit::samples_folder()).unwrap();
+    let request = fake
+        .opening()
+        .into_iter()
+        .find_map(|intent| match intent {
+            Intent::CheckIngest(request) => Some(request),
+            _ => None,
+        })
+        .unwrap();
+    let mut shared = gui::state::Shared::new(contract::StartupFacts {
+        running: vec![contract::RunningJob {
+            kind: contract::JobKind::Ingest,
+            name: "another chapter".into(),
+        }],
+        ..Default::default()
+    });
+    shared.ingest = gui::state::IngestJob::Checked {
+        request: request.clone(),
+        preflight: contract::Preflight {
+            name: request.name.clone(),
+            pages: Some(7),
+            state: Some(contract::ChapterState::New),
+            blockers: Vec::new(),
+        },
+    };
+    let mut local = gui::panels::ingest::Local::default();
+    let mut panel = testkit::panel([720.0, 600.0], shared, move |ui, cx| {
+        gui::panels::ingest::show(ui, &mut local, cx)
+    });
+    panel.run_ok();
+    let start = panel.get_by_role_and_label(Role::Button, "Start ingest");
+    assert!(start.accesskit_node().is_disabled());
+    panel.get_by_label("An ingest is running on the server: another chapter. Wait for it to end.");
+    let mut effects = Vec::new();
+    panel
+        .state_mut()
+        .shared
+        .apply_intent(Intent::StartIngest, &mut effects);
+    panel.state_mut().shared.apply_intent(
+        Intent::StartDatasetBuild(DatasetRequest::default()),
+        &mut effects,
+    );
+    assert!(
+        effects.is_empty(),
+        "no paid work is sent while another job runs on the server"
+    );
 }

@@ -25,8 +25,5 @@ crates/gui/tests/snapshots/**/*.old.png
 # Waste
 .scratch
 
-# Saved desktop/CLI model selection
+# Saved model selection
 .quanty-model.json
-
-# Saved databases (holds keys)
-.quanty-databases.json

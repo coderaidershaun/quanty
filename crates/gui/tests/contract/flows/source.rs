@@ -5,10 +5,10 @@
 
 use std::time::{Duration, Instant};
 
+use contract::{Category, DocId, Intent, Loadable, PieceKind};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use gui::app::layout::{DEFAULT_WINDOW, MIN_WINDOW};
-use gui::contract::{Category, DocId, Intent, Loadable, PieceKind};
 use gui::testkit;
 
 use super::{

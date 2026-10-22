@@ -6,10 +6,10 @@ use egui::text::{CCursor, CCursorRange};
 use super::Local;
 use super::layout::{Rects, slot};
 use super::note::refusal;
-use crate::contract::{AskDraft, AskMode, Intent};
 use crate::panels::PanelCx;
 use crate::theme::Icon;
 use crate::widgets::{Button, ControlSize, Dropdown, TextInput};
+use contract::{AskDraft, AskMode, Intent};
 
 const PLACEHOLDER: &str = "Ask a question about your library";
 const MODES: [(&str, AskMode); 2] = [

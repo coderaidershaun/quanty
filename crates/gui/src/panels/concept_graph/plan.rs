@@ -4,7 +4,7 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, VecDeque};
 
-use crate::contract::{ConceptGraph, ConceptId, EdgeKind, NodeId, NodeKind};
+use contract::{ConceptGraph, ConceptId, EdgeKind, NodeId, NodeKind};
 
 pub(super) const NODE_CAP: usize = 36;
 

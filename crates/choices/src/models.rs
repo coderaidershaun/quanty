@@ -1,11 +1,10 @@
-//! The model choices, one for each kind of work, that the desktop app, CLI tools, MCP server and
-//! OCR share.
+//! Keeps one saved model choice for each kind of work so the app and command line tools agree.
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 /// The model used when no choice has been saved or configured.
 pub const DEFAULT_CODEX_MODEL: &str = "gpt-6.1-sol";
-/// The model identifiers and labels offered by the desktop picker.
+/// The model identifiers and labels offered by the model picker.
 pub const MODEL_CHOICES: &[(&str, &str)] = &[
     ("gpt-6.1-sol", "Codex · GPT-6.1 Sol"),
     ("gpt-6-astra", "Codex · GPT-6 Astra"),
@@ -71,7 +70,7 @@ pub enum SettingsError {
 }
 
 /// The model and effort chosen for one kind of work.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ModelSettings {
     pub provider: String,
@@ -188,7 +187,7 @@ impl ModelSettings {
 }
 
 /// The kinds of work that call a model. Each keeps its own choice.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum WorkKind {
     Ask,
     Ingest,
@@ -204,7 +203,7 @@ impl WorkKind {
 const WORK_KEYS: [&str; 3] = ["ask", "ingest", "datasets"];
 
 /// The model choice of each kind of work, as saved.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WorkChoices {
     pub ask: ModelSettings,

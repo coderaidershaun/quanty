@@ -1,14 +1,11 @@
-//! The one export the person can have at a time: the save dialog asked for, the file written, and
-//! the notice that says how it ended.
-
-use std::path::PathBuf;
+//! Keeps one export active at a time and opens its download when the file is ready.
 
 use export::Format;
 
 use super::shared::Shared;
-use crate::contract::{
-    Command, Effect, ExportFile, ExportPlace, ExportRequest, Failure, Notice, NoticeId, NoticeKind,
-    RequestId,
+use contract::{
+    Command, Download, Effect, ExportFile, ExportPlace, ExportRequest, Failure, Notice, NoticeId,
+    NoticeKind, RequestId,
 };
 
 /// The export that is being written or that ended last, and where in the window it was asked.
@@ -16,6 +13,7 @@ use crate::contract::{
 pub struct ExportJob {
     pub place: ExportPlace,
     pub state: ExportState,
+    pub download: Option<Download>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -42,6 +40,7 @@ impl Shared {
         let Some(ExportJob {
             place: asked,
             state: ExportState::Ended(id),
+            ..
         }) = &self.export
         else {
             return None;
@@ -52,18 +51,7 @@ impl Shared {
         self.notices.iter().find(|notice| notice.id == *id)
     }
 
-    pub(super) fn ask_where_to_export(&mut self, export: ExportRequest, effects: &mut Vec<Effect>) {
-        if !self.is_exporting() {
-            effects.push(Effect::PickSavePath(export));
-        }
-    }
-
-    pub(super) fn start_export(
-        &mut self,
-        export: ExportRequest,
-        path: PathBuf,
-        effects: &mut Vec<Effect>,
-    ) {
+    pub(super) fn start_export(&mut self, export: ExportRequest, effects: &mut Vec<Effect>) {
         if self.is_exporting() {
             return;
         }
@@ -71,13 +59,14 @@ impl Shared {
         self.export = Some(ExportJob {
             place: export.place,
             state: ExportState::Writing(request),
+            download: None,
         });
         effects.push(Effect::Send(Command::Export {
             request,
             file: ExportFile {
                 format: export.format,
                 document: export.document,
-                path,
+                file_name: export.file_name,
             },
         }));
     }
@@ -86,24 +75,30 @@ impl Shared {
         &mut self,
         request: RequestId,
         format: Format,
-        result: Result<PathBuf, Failure>,
+        result: Result<Download, Failure>,
+        effects: &mut Vec<Effect>,
     ) {
         let place = match &self.export {
             Some(ExportJob {
                 place,
                 state: ExportState::Writing(waiting),
+                ..
             }) if *waiting == request => *place,
             _ => return,
         };
         let what = place.what();
         let name = format.name();
+        let download = result.as_ref().ok().cloned();
         let notice = match result {
-            Ok(path) => self.add_notice(
-                NoticeKind::Done,
-                format!("Exported {what} as {name}"),
-                format!("Saved to {}.", path.display()),
-                None,
-            ),
+            Ok(download) => {
+                effects.push(Effect::OpenUrl(download.url.clone()));
+                self.add_notice(
+                    NoticeKind::Done,
+                    format!("Exported {what} as {name}"),
+                    format!("Your browser is downloading {}.", download.file_name),
+                    None,
+                )
+            }
             Err(failure) => self.add_notice(
                 NoticeKind::Failed,
                 format!("Could not export {what} as {name}"),
@@ -114,6 +109,7 @@ impl Shared {
         self.export = Some(ExportJob {
             place,
             state: ExportState::Ended(notice),
+            download,
         });
     }
 }

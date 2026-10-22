@@ -7,11 +7,11 @@ use std::mem::Discriminant;
 
 use eframe::egui;
 
-use crate::contract::{Loadable, SearchReply};
 use crate::panels::PanelCx;
 use crate::state::AskSession;
 use crate::theme::space;
 use crate::widgets;
+use contract::{Loadable, SearchReply};
 use steps::{Body, Step};
 
 #[derive(Debug, Default)]

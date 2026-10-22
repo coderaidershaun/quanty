@@ -7,10 +7,10 @@ mod pickers;
 use eframe::egui;
 
 use super::row;
-use crate::contract::{Intent, Panel};
 use crate::panels::PanelCx;
 use crate::theme::Icon;
 use crate::widgets::{Button, section_header};
+use contract::{Intent, Panel};
 use pager::PagerText;
 use pickers::Lists;
 

@@ -1,7 +1,7 @@
 //! The one dataset build the person can have at a time: started, watched, finished.
 
 use super::shared::Shared;
-use crate::contract::{
+use contract::{
     Command, DatasetProgress, DatasetReport, DatasetRequest, Effect, Failure, NoticeKind, RequestId,
 };
 
@@ -40,7 +40,9 @@ impl Shared {
     /// A build reads the converted documents that a delete removes, so none starts while a delete
     /// is on its way. An ingest may run beside it.
     pub fn can_start_dataset_build(&self) -> bool {
-        !self.datasets.is_running() && !self.library.is_deleting()
+        !self.datasets.is_running()
+            && !self.library.is_deleting()
+            && self.health.facts.running.is_empty()
     }
 
     pub(super) fn start_dataset_build(

@@ -4,13 +4,13 @@
 use eframe::egui;
 
 use super::{Local, concepts, contents, insights, overview};
-use crate::contract::{Document, DocumentView, Intent, Media};
 use crate::panels::PanelCx;
 use crate::panels::labels::NO_MEDIA;
 use crate::panels::pages::media_card;
 use crate::state::Contents;
 use crate::theme::{TextRole, Tone, space};
 use crate::widgets::{Tab, TabStrip};
+use contract::{Document, DocumentView, Intent, Media};
 
 const NOT_WHOLE: &str = "The ingest of this document did not finish, so a search may miss parts of it. Ingest it again to finish it.";
 

@@ -7,9 +7,9 @@ mod question;
 
 use eframe::egui;
 
-use crate::contract::AskDraft;
 use crate::panels::PanelCx;
 use crate::state::Shared;
+use contract::AskDraft;
 use note::Note;
 
 #[derive(Debug, Default)]

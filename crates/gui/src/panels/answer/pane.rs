@@ -5,13 +5,13 @@ use eframe::egui;
 
 use super::listing::{Listing, Row};
 use super::phase::{AnswerTab, Phase};
-use crate::contract::{AskMode, Intent, Loadable, ResultItem, Usage};
 use crate::media::code;
 use crate::media::rich_text::{self, Clicked};
 use crate::panels::PanelCx;
 use crate::panels::heights::Heights;
 use crate::state::AskSession;
 use crate::theme::TextRole;
+use contract::{AskMode, Intent, Loadable, ResultItem, Usage};
 
 /// The button that reads "Copied". It goes back to its name when the pointer leaves it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

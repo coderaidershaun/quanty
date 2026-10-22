@@ -312,6 +312,13 @@ async fn a_pdf_sent_as_base64_is_saved_under_the_content_folder_and_ingested() {
     let client = connect(server).await;
     let bytes = std::fs::read(sample_pdf()).unwrap();
 
+    let saved = stores
+        .config()
+        .content_folder
+        .join("_uploads/option-volatility-and-pricing/chapter-1-sample-pages.pdf");
+    std::fs::create_dir_all(saved.parent().unwrap()).unwrap();
+    std::fs::write(&saved, b"%PDF-an-older-upload").unwrap();
+
     let first = call(
         &client,
         "ingest_pdf",

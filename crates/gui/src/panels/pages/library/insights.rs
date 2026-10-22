@@ -4,10 +4,6 @@
 
 use eframe::egui;
 
-use crate::contract::{
-    Catalogue, ChapterInsights, DocId, DocumentView, ExportPlace, Failure, Insight, Intent,
-    Loadable,
-};
 use crate::media::math::{self, MathRef};
 use crate::media::rich_text::{self, Clicked, DollarBlock, RichText, dollar_blocks};
 use crate::panels::PanelCx;
@@ -15,6 +11,10 @@ use crate::panels::exporting;
 use crate::panels::labels::{COPY_COMMAND, TRY_AGAIN};
 use crate::theme::{Icon, TextRole, space};
 use crate::widgets::{Button, Chip, ControlSize, Placeholder};
+use contract::{
+    Catalogue, ChapterInsights, DocId, DocumentView, ExportPlace, Failure, Insight, Intent,
+    Loadable,
+};
 
 const NO_INSIGHTS_FOR_PART: &str = "No insights for this part";
 const NO_INSIGHTS_FOR_PART_HINT: &str =

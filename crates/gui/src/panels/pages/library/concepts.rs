@@ -3,12 +3,12 @@
 
 use eframe::egui;
 
-use crate::contract::{DocId, DocumentView, Failure, Intent, Loadable, PageConcept};
 use crate::panels::PanelCx;
 use crate::panels::heights::Heights;
 use crate::panels::labels::TRY_AGAIN;
 use crate::theme::{Icon, TextRole, color, space};
 use crate::widgets::Placeholder;
+use contract::{DocId, DocumentView, Failure, Intent, Loadable, PageConcept};
 
 const LOADING: &str = "Finding the concepts of this document";
 const FAILED: &str = "The concepts could not be read";

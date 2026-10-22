@@ -1,8 +1,6 @@
-//! The settings every program of this project reads, from the environment, the chosen database
-//! and the `.env` file.
+//! The settings every program reads from the environment and the `.env` file.
 
-use crate::{ApiKey, Database, Databases, DatabasesError};
-use choices::{Chosen, DATABASES_FILE, LOCAL_DATABASE};
+use crate::ApiKey;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -33,16 +31,6 @@ const DEFAULT_DATASET_FOLDER: &str = "datasets";
 const DEFAULT_DATASET_CACHE_FOLDER: &str = "data/dataset-cache";
 
 const DOTENV_FILE_NAME: &str = ".env";
-
-/// The settings that name a library. A person who sets any of them by hand keeps all six.
-const STORE_NAMES: [&str; 6] = [
-    QDRANT_URL,
-    QDRANT_API_KEY,
-    FALKORDB_URL,
-    FALKORDB_PASSWORD,
-    FALKORDB_GRAPH,
-    CONTENT_DIR,
-];
 
 /// A setting that nobody set has its local default.
 #[derive(Debug, Clone)]
@@ -105,109 +93,25 @@ pub enum ConfigError {
     // The bad line is left out on purpose: it may be a key.
     #[error("{} is not a list of NAME=value lines", path.display())]
     DotenvParse { path: PathBuf },
-
-    #[error(transparent)]
-    Databases(#[from] DatabasesError),
 }
 
 impl Config {
-    /// Reads the process environment, then the `.env` found in the current folder or the nearest
-    /// parent that has one, then the local defaults. The process environment is never changed.
-    /// The chosen database is not read, so a test that builds its settings here never follows the
-    /// choice made in the app.
+    /// Reads the process environment, then the `.env` found in the current folder or its nearest
+    /// parent, then defaults. The process environment is never changed.
     ///
     /// # Errors
     /// - [`ConfigError::CurrentFolder`] when the current folder cannot be found
-    /// - [`ConfigError::DotenvRead`] and [`ConfigError::DotenvParse`] for a `.env` that is
-    ///   unreadable or not a list of `NAME=value` lines
-    pub fn load_local() -> Result<Config, ConfigError> {
-        Config::load_local_in_home().map(|(config, _home)| config)
-    }
-
-    /// The settings of [`Config::load_local`] with the database chosen in the databases file
-    /// beside that `.env` (or in the current folder when there is no `.env`) applied. When the
-    /// environment names a store setting the file is not read at all, so a broken file never
-    /// stops a command that set its own stores.
-    ///
-    /// # Errors
-    /// - Every error of [`Config::load_local`]
-    /// - [`ConfigError::Databases`] for a databases file that cannot be read or understood, and
-    ///   for a chosen name that is neither Local nor saved
+    /// - [`ConfigError::DotenvRead`] and [`ConfigError::DotenvParse`] for an unreadable or invalid file
     pub fn load() -> Result<Config, ConfigError> {
-        let (config, home) = Config::load_local_in_home()?;
-        if Config::environment_names_a_store(process_environment) {
-            return Ok(config);
-        }
-        let databases = Databases::load_from(&home.join(DATABASES_FILE))?;
-        Ok(config.with_chosen(&databases)?)
-    }
-
-    /// The local settings and the folder that holds the `.env` they came from, which is where
-    /// the saved choices live.
-    fn load_local_in_home() -> Result<(Config, PathBuf), ConfigError> {
         let current_folder = std::env::current_dir().map_err(ConfigError::CurrentFolder)?;
         let dotenv_file = current_folder
             .ancestors()
             .map(|folder| folder.join(DOTENV_FILE_NAME))
             .find(|candidate| candidate.is_file());
-        let config = Config::from_sources(process_environment, dotenv_file.as_deref())?;
-        let home = dotenv_file
-            .as_deref()
-            .and_then(Path::parent)
-            .map_or(current_folder, Path::to_path_buf);
-        Ok((config, home))
+        Config::from_sources(process_environment, dotenv_file.as_deref())
     }
 
-    /// Whether the environment sets any of `QDRANT_URL`, `QDRANT_API_KEY`, `FALKORDB_URL`,
-    /// `FALKORDB_PASSWORD`, `FALKORDB_GRAPH` or `CONTENT_DIR` to a value that is not blank. Then
-    /// the person's own setting wins and no saved database is applied, all six settings or none,
-    /// so a secret never meets another server.
-    pub fn environment_names_a_store(environment: impl Fn(&str) -> Option<String>) -> bool {
-        STORE_NAMES
-            .iter()
-            .any(|name| non_blank(environment(name)).is_some())
-    }
-
-    /// The settings with the chosen saved database applied. They are unchanged when nothing is
-    /// chosen and when Local is.
-    ///
-    /// # Errors
-    /// [`DatabasesError::ChosenNotSaved`] when the chosen name is neither Local nor saved.
-    pub fn with_chosen(self, databases: &Databases) -> Result<Config, DatabasesError> {
-        match databases.chosen()? {
-            Chosen::Saved(database) => Ok(self.with_database(database)),
-            Chosen::Nothing | Chosen::Local => Ok(self),
-        }
-    }
-
-    /// The settings with the two stores and the content folder of a database. Nothing else
-    /// changes.
-    pub fn with_database(self, database: &Database) -> Config {
-        Config {
-            qdrant_url: database.qdrant_url.clone(),
-            qdrant_api_key: database.qdrant_api_key.clone(),
-            falkordb_url: database.falkordb_url.clone(),
-            falkordb_password: database.falkordb_password.clone(),
-            falkordb_graph: database.falkordb_graph.clone(),
-            content_folder: database.content_folder.clone(),
-            ..self
-        }
-    }
-
-    /// The database called Local: what these settings say of the stores and the content folder.
-    pub fn local_database(&self) -> Database {
-        Database {
-            name: LOCAL_DATABASE.into(),
-            qdrant_url: self.qdrant_url.clone(),
-            qdrant_api_key: self.qdrant_api_key.clone(),
-            falkordb_url: self.falkordb_url.clone(),
-            falkordb_password: self.falkordb_password.clone(),
-            falkordb_graph: self.falkordb_graph.clone(),
-            content_folder: self.content_folder.clone(),
-        }
-    }
-
-    /// The rules of [`Config::load_local`] with both sources given, so a caller controls them. The
+    /// The rules of [`Config::load`] with both sources given, so a caller controls them. The
     /// environment wins over the file. A value that is empty or only spaces counts as unset, and
     /// so does a file that does not exist.
     ///

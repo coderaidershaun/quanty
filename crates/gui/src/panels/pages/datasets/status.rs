@@ -4,9 +4,6 @@
 use eframe::egui;
 
 use super::form;
-use crate::contract::{
-    DatasetProgress, DatasetReport, DatasetRequest, DatasetStage, Failure, Intent,
-};
 use crate::panels::PanelCx;
 use crate::panels::labels::{
     START_OFF_WHILE_DELETING, TRY_AGAIN, cost_text, detail, spent_text, tokens_by_model,
@@ -14,13 +11,14 @@ use crate::panels::labels::{
 use crate::state::{DatasetJob, Shared};
 use crate::theme::{TextRole, color, space};
 use crate::widgets::{self, Button, Notice};
+use contract::{DatasetProgress, DatasetReport, DatasetRequest, DatasetStage, Failure, Intent};
 
 const START: &str = "Start build";
 const COST: &str =
     "Paid work: the selected model writes the rewrites and the answers; a dry run is free.";
 const START_OFF_WITHOUT_NAME: &str = "Type a name for the dataset first.";
 const STARTING: &str = "Starting the build";
-const KEEP_OPEN: &str = "Keep the app open until this is done. If it stops, start the same build again: answers already written are not paid for twice.";
+const KEEP_OPEN: &str = "This build continues on the server if you close the tab. If it stops, start the same build again: answers already written are not paid for twice.";
 const FAILED: &str = "The build failed";
 const BUILD_ANOTHER: &str = "Build another";
 

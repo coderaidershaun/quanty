@@ -4,10 +4,10 @@
 
 use eframe::egui;
 
-use crate::contract::{Balance, FailureKind, Intent, Provider, ReadFailure};
 use crate::panels::PanelCx;
 use crate::theme::{Icon, TextRole, Tone, space};
 use crate::widgets::{Button, ControlSize, dot};
+use contract::{Balance, FailureKind, Intent, Provider, ReadFailure};
 
 /// The room kept at the right end of an entry for its link, so that a long hint is cut short
 /// before the link would pass the end of the entry.

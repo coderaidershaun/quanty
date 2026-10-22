@@ -5,7 +5,7 @@
 mod guards;
 mod run;
 
-use gui::contract::{Command, DatasetRequest, DatasetStage};
+use contract::{Command, DatasetRequest, DatasetStage};
 use gui::state::{DatasetJob, Shared};
 use gui::testkit;
 

@@ -3,7 +3,7 @@
 use export::{Format, InsightsSheet, SheetInsight, insights_document};
 
 use super::shared::{Shared, push_cancel};
-use crate::contract::{
+use contract::{
     Catalogue, ChapterInsights, Command, DocId, DocumentView, Effect, ExportPlace, ExportRequest,
     Failure, Loadable, RequestId,
 };
@@ -124,7 +124,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::contract::{
+    use contract::{
         Catalogue, ChapterLabel, Command, Document, DocumentView, Event, Intent, Media,
     };
 

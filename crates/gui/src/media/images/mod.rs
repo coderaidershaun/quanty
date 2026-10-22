@@ -1,5 +1,4 @@
-//! Pictures from disk as textures: asked for by path, decoded once off the window's thread, kept
-//! in a few sizes while they are used, and dropped when memory is short.
+//! Fetched pictures become textures in a few sizes and are dropped when memory is short.
 
 mod cache;
 mod chain;

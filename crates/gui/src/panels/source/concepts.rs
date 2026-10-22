@@ -4,11 +4,11 @@ use eframe::egui;
 
 use super::states::whole_area;
 use super::tabs::SourceTab;
-use crate::contract::{ConceptId, Failure, Intent, Loadable, PageConcept};
 use crate::panels::PanelCx;
 use crate::panels::labels::TRY_AGAIN;
 use crate::theme::{Icon, Kind, TextRole};
 use crate::widgets::{Chip, Placeholder};
+use contract::{ConceptId, Failure, Intent, Loadable, PageConcept};
 
 pub(super) const FAILED_TITLE: &str = "The concepts could not be read";
 

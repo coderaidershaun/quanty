@@ -2,12 +2,12 @@
 //! starts: every button that changes the library is off, on every page, and says why, and what is
 //! pushed anyway sends nothing.
 
+use backend::fake::Fake;
+use backend::{Handler, Reply};
+use contract::{Category, Command, DocId, DocumentTagsEdit, Intent, MediaEdit, NewMedia};
 use eframe::egui::accesskit::{Action, Role};
 use egui_kittest::kittest::NodeT as _;
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::backend::fake::Fake;
-use gui::backend::{Handler, Reply};
-use gui::contract::{Category, Command, DocId, DocumentTagsEdit, Intent, MediaEdit, NewMedia};
 use gui::state::Busy;
 use gui::testkit;
 

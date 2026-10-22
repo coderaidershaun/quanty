@@ -3,10 +3,10 @@
 
 use eframe::egui;
 
-use crate::contract::{ChapterLabel, DocId, DocumentName, Loadable, PageView};
 use crate::panels::labels::NO_MEDIA;
 use crate::state::Shared;
 use crate::widgets::Dropdown;
+use contract::{ChapterLabel, DocId, DocumentName, Loadable, PageView};
 
 const CHOOSE_MEDIA: &str = "Choose a media";
 const CHOOSE_DOCUMENT: &str = "Choose a document";

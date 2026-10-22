@@ -4,16 +4,16 @@
 
 use eframe::egui;
 
-use crate::contract::{
-    ChapterContents, ChapterItem, DocId, DocumentView, Failure, FailureKind, Intent, Loadable,
-    PieceKind,
-};
 use crate::panels::PanelCx;
 use crate::panels::heights::Heights;
 use crate::panels::labels::TRY_AGAIN;
 use crate::panels::source::{kind_name, piece_body};
 use crate::theme::{Icon, Kind, TextRole, color};
 use crate::widgets::{Card, Placeholder};
+use contract::{
+    ChapterContents, ChapterItem, DocId, DocumentView, Failure, FailureKind, Intent, Loadable,
+    PieceKind,
+};
 
 const LOADING: &str = "Reading the document";
 const NOT_FOUND: &str = "The pages of this document were not found";

@@ -2,7 +2,7 @@
 //! rules that keep the open item on the shelf when the catalogue changes.
 
 use super::shared::Shared;
-use crate::contract::{Catalogue, DocId, DocumentView, Effect, Tab};
+use contract::{Catalogue, DocId, DocumentView, Effect, Tab};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Open {
@@ -118,7 +118,7 @@ mod tests {
 
     use super::super::{Contents, Insights};
     use super::*;
-    use crate::contract::{Command, Document, Event, Failure, Intent, Media, RequestId};
+    use contract::{Command, Document, Event, Failure, Intent, Media, RequestId};
 
     fn doc(number: u128) -> DocId {
         DocId(Uuid::from_u128(number))

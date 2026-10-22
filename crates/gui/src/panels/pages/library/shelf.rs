@@ -4,13 +4,13 @@
 use eframe::egui;
 
 use super::{Local, TITLE};
-use crate::contract::{Catalogue, Category, DocId, Document, Intent, Media};
 use crate::panels::PanelCx;
 use crate::panels::labels::NO_MEDIA;
 use crate::panels::pages::media_card::category_icon;
 use crate::state::Open;
 use crate::theme::{Icon, TextRole, space};
 use crate::widgets::{ListRow, Placeholder, TextInput};
+use contract::{Catalogue, Category, DocId, Document, Intent, Media};
 
 const FIND: &str = "Find";
 const FIND_HINT: &str = "Find a media or chapter";
@@ -205,7 +205,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::contract::ChapterLabel;
+    use contract::ChapterLabel;
 
     fn chapter(id: u128, number: u32, name: &str) -> Document {
         Document {

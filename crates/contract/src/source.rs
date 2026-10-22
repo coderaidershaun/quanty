@@ -1,0 +1,128 @@
+//! A page of a chapter as it was saved on disk: its pictures and its pieces in reading order,
+//! and the concepts that appear on it.
+
+use super::ids::{ConceptId, DocId};
+use super::library::ChapterLabel;
+
+/// A server-relative URL to a PNG or JPEG. Also the key of the picture cache.
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Default,
+)]
+pub struct ImageRef {
+    pub url: String,
+}
+
+/// A rectangle on a page, in thousandths of its width and height.
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Default,
+)]
+pub struct PageBox {
+    pub left: u16,
+    pub top: u16,
+    pub right: u16,
+    pub bottom: u16,
+}
+
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord,
+)]
+pub enum PieceKind {
+    Heading { rank: u8 },
+    Text,
+    Formula,
+    Figure,
+    Table,
+    Footnote,
+    Code,
+}
+
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
+)]
+pub struct PagePiece {
+    pub number: u32,
+    pub kind: PieceKind,
+    /// The printed label. For a heading its printed number, for a footnote its marker.
+    pub label: Option<String>,
+    pub name: Option<String>,
+    pub caption: Option<String>,
+    /// The language of a piece of code, in lower case. `None` for any other piece, and for code of
+    /// an unknown language.
+    pub language: Option<String>,
+    /// The piece as saved. For code, the code as printed.
+    pub text: String,
+    pub image: Option<ImageRef>,
+    /// Where a figure was cut from the page. Only when the cut shows the figure.
+    pub cut: Option<PageBox>,
+}
+
+/// It is read from disk, so it works while the stores are down.
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Default,
+)]
+pub struct PageView {
+    pub doc: DocId,
+    pub page: u32,
+    /// The title of the document's media.
+    pub media: Option<String>,
+    /// `None` for a document with a title of its own.
+    pub chapter: Option<ChapterLabel>,
+    /// The title of a document with a title of its own, such as a paper, so the page can name its
+    /// document while the library is not read. `None` for a chapter, which its label names, and
+    /// for a picture that stands alone.
+    pub document_title: Option<String>,
+    pub page_count: u32,
+    pub printed_page: Option<String>,
+    /// `None`: the chapter has no page pictures, as a hand-written chapter has none.
+    pub image: Option<ImageRef>,
+    /// The neighbouring pages' pictures, so the source view can load them ahead of time.
+    pub previous_image: Option<ImageRef>,
+    pub next_image: Option<ImageRef>,
+    pub pieces: Vec<PagePiece>,
+}
+
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Default,
+)]
+pub struct PageConcept {
+    pub id: ConceptId,
+    pub name: String,
+    pub definition: String,
+}

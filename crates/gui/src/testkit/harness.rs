@@ -8,13 +8,13 @@ use eframe::egui;
 use egui_kittest::Harness;
 
 use crate::app::App;
-use crate::backend::Handler;
-use crate::backend::fake::Fake;
-use crate::contract::{Intent, StartupFacts};
 use crate::media::Media;
 use crate::panels::PanelCx;
 use crate::state::Shared;
 use crate::theme::{self, color};
+use backend::Handler;
+use backend::fake::Fake;
+use contract::{Intent, StartupFacts};
 
 const PIXELS_PER_POINT: f32 = 2.0;
 const SETTLE_LIMIT: Duration = Duration::from_secs(5);
@@ -84,7 +84,10 @@ pub fn panel(
             theme::install(&creation.egui_ctx);
             Host {
                 shared,
-                media: Media::manual(&creation.egui_ctx),
+                media: Media::manual_with_fetch(
+                    &creation.egui_ctx,
+                    Box::new(super::FolderFetch::new(super::samples_folder())),
+                ),
                 intents: Vec::new(),
                 ctx: creation.egui_ctx.clone(),
                 panel_size,
@@ -106,20 +109,40 @@ pub fn app(scene: &str, size: [f32; 2]) -> Harness<'static, App> {
 /// # Panics
 /// When the scene does not exist or the backend cannot start.
 pub fn app_at(scene: &str, size: [f32; 2], pixels_per_point: f32) -> Harness<'static, App> {
-    let home = repository_root();
-    let fake = Fake::scene(scene, &home)
+    app_at_with_home(
+        scene,
+        size,
+        pixels_per_point,
+        tempfile::tempdir().expect("a temporary fake home"),
+    )
+}
+
+pub fn app_at_with_home(
+    scene: &str,
+    size: [f32; 2],
+    pixels_per_point: f32,
+    home: tempfile::TempDir,
+) -> Harness<'static, App> {
+    let fake = Fake::scene(scene, home.path())
         .unwrap_or_else(|error| panic!("the test cannot start the scene `{scene}`: {error}"))
         .instant();
     let opening = fake.opening();
     let facts = StartupFacts {
-        local_database: Fake::local_database(&home),
-        databases: fake.databases(),
-        home,
-        env_file: None,
+        model_choices: Default::default(),
+        running: Vec::new(),
         fixture: Some(scene.to_owned()),
         anthropic_api_key_set: false,
     };
-    build_app(fake, facts, opening, size, pixels_per_point)
+    build_app(
+        super::in_process::Home {
+            handler: fake,
+            _folder: home,
+        },
+        facts,
+        opening,
+        size,
+        pixels_per_point,
+    )
 }
 
 /// The whole app on any backend, with no file dialog.
@@ -146,9 +169,11 @@ fn build_app(
         .with_size(egui::Vec2::from(size))
         .with_pixels_per_point(pixels_per_point)
         .build_eframe(move |creation| {
-            App::new(creation, handler, facts, opening)
-                .expect("the backend's threads start")
-                .with_file_picker(|| None)
+            let ctx = creation.egui_ctx.clone();
+            let transport = super::InProcess::new(handler, move || ctx.request_repaint())
+                .expect("the backend's threads start");
+            App::new(creation, Box::new(transport), facts, opening)
+                .with_fetch(Box::new(super::FolderFetch::new(super::samples_folder())))
         })
 }
 

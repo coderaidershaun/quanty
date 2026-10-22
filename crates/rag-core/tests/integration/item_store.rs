@@ -21,7 +21,7 @@ async fn a_collection_that_is_missing_is_told_from_one_that_is_there() {
         .duration_since(UNIX_EPOCH)
         .expect("the clock should be after 1970")
         .as_nanos();
-    let settings = Config::load_local().expect("the settings should load");
+    let settings = Config::load().expect("the settings should load");
     let config = Config {
         items_collection: format!(
             "{THROWAWAY_PREFIX}exists-{}-{nanoseconds}",
@@ -56,7 +56,7 @@ async fn a_collection_that_is_missing_is_told_from_one_that_is_there() {
 }
 
 fn throwaway_items(test_name: &str) -> Config {
-    let settings = Config::load_local().expect("the settings should load");
+    let settings = Config::load().expect("the settings should load");
     let config = Config {
         items_collection: collection_name(test_name),
         ..settings

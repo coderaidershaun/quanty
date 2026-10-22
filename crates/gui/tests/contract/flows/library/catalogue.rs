@@ -5,16 +5,15 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use backend::{Handler, Reply};
+use contract::{
+    Catalogue, Category, ChapterLabel, Command, DocId, Document, DocumentView, Event, Failure,
+    Intent, ItemCounts, Media, NewMedia, StartupFacts, Tab,
+};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::backend::fake::Fake;
-use gui::backend::{Handler, Reply};
-use gui::contract::{
-    Catalogue, Category, ChapterLabel, Command, Databases, DocId, Document, DocumentView, Event,
-    Failure, Intent, ItemCounts, Media, NewMedia, StartupFacts, Tab,
-};
 use gui::state::{Open, SourceTarget};
 use gui::testkit;
 use uuid::Uuid;
@@ -49,14 +48,11 @@ impl Handler for Listing {
 }
 
 fn open_on(handler: impl Handler, size: [f32; 2]) -> Window {
-    let home = testkit::samples_folder();
     let facts = StartupFacts {
-        local_database: Fake::local_database(&home),
-        databases: Databases::choosing_local(),
-        home,
-        env_file: None,
         fixture: None,
         anthropic_api_key_set: false,
+        model_choices: Default::default(),
+        running: Vec::new(),
     };
     let mut harness = testkit::app_on(handler, facts, Vec::new(), size);
     testkit::settle(&mut harness);

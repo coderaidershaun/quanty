@@ -8,7 +8,7 @@ use crate::throwaway::{COLLECTION_PREFIX, collection_name, remove_collection};
 #[tokio::test]
 #[ignore = "needs the local Qdrant from docker compose and bills nothing; run with: cargo test -p rag-core --test integration -- --ignored concept_store::"]
 async fn a_stored_concept_is_found_with_its_name_and_the_aliases_that_were_set_last() {
-    let settings = Config::load_local().expect("the settings should load");
+    let settings = Config::load().expect("the settings should load");
     let config = Config {
         concepts_collection: collection_name("concepts-read-back"),
         ..settings

@@ -13,7 +13,7 @@ use rag_core::Config;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::jobs::{self, Jobs};
+use crate::jobs::{Jobs, StopState};
 use crate::services::Services;
 pub(crate) use error::PdfIngestError;
 pub(crate) use pdf::base64_len;
@@ -69,7 +69,7 @@ pub(crate) struct IngestStatusArgs {
     job_id: String,
 }
 
-/// The end of the text of a job that failed.
+/// The end of the text of a job that failed or that `stop_job` stopped.
 const GO_ON: &str =
     "Send the same PDF again to go on: converted pages and kept answers are not paid for twice.";
 
@@ -122,10 +122,15 @@ impl<S: Services> Ingest<S> {
             graph,
             report: started.report,
         };
-        jobs::spawn(report, work.run(), move |report, ended| match ended {
-            Ok(outcome) => report.finish(&outcome),
-            Err(error) => report.fail(format!("{} {GO_ON}", error_text(error))),
-        });
+        self.jobs.spawn(
+            started.id,
+            report,
+            work.run(),
+            move |report, ended| match ended {
+                Ok(outcome) => report.finish(&outcome),
+                Err(error) => report.fail(format!("{} {GO_ON}", error_text(error))),
+            },
+        );
         let mut watcher = started.watcher;
         let report = watcher
             .wait_for(|report| report.stage.is_some() || report.state != JobState::Running)
@@ -134,7 +139,9 @@ impl<S: Services> Ingest<S> {
             .map_err(|_| PdfIngestError::Lost)?;
         match report.state {
             JobState::Failed => Err(PdfIngestError::Failed(report.error.unwrap_or_default())),
-            JobState::Running | JobState::Done | JobState::AlreadyIngested => Ok(report),
+            JobState::Running | JobState::Done | JobState::AlreadyIngested | JobState::Stopped => {
+                Ok(report)
+            }
         }
     }
 
@@ -160,6 +167,11 @@ impl<S: Services> Ingest<S> {
                 refused => refused,
             })?;
         Ok((ready, graph))
+    }
+
+    /// Stops the job with this id when it is running. `None` when no ingest job has the id.
+    pub(crate) async fn stop(&self, job_id: &str) -> Option<StopState> {
+        self.jobs.stop(job_id).await
     }
 
     /// The latest report of a job.

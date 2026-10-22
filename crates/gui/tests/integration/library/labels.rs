@@ -135,7 +135,7 @@ async fn the_labels_a_person_saves_are_in_the_next_catalogue_and_on_every_point_
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_save_of_labels_answers_once_when_the_stores_are_down() {
-    let cx = LiveContext::new(support::closed_ports_config(), RealServices);
+    let cx = LiveContext::new(support::closed_ports_config(), RealServices::default());
     let own = DocumentTagsEdit {
         doc: DocId(Uuid::from_u128(1)),
         add: owned(&["options"]),

@@ -6,13 +6,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use graph::FalkorGraph;
-use ocr::convert::services::{Jev, JevError};
+use ocr::convert::services::JevError;
 use ocr::{ChapterJob, ConversionSummary, ConvertError, PageProgress};
 use rag_core::{
     AgentCli, ApiKey, ConceptStore, Config, EmbedError, Embedder, GeminiEmbedder, ItemStore, Llm,
     WorkKind,
 };
-use rag_ingestion::{ConceptExtractor, InsightsWriter, Models, Stores};
+use rag_ingestion::{ConceptExtractor, InsightsWriter, KeyClients, Models, Stores};
 use rag_retrieval::Retriever;
 
 use crate::contract::{Failure, FailureKind};
@@ -42,7 +42,9 @@ pub trait Services: Send + Sync + 'static {
         on_page: &mut (dyn FnMut(PageProgress) + Send),
     ) -> impl Future<Output = Result<ConversionSummary, ConvertError>> + Send;
 
-    /// Asks Google whether it accepts `key`. It costs nothing, and it cannot see spent credit.
+    /// Asks Google whether it accepts `key`. It costs nothing, and it cannot see spent credit. The
+    /// real service makes its client when this is called and not when the future runs, so that a
+    /// time limit on the future never covers it.
     fn check_gemini_key(&self, key: &ApiKey)
     -> impl Future<Output = Result<(), EmbedError>> + Send;
 
@@ -51,7 +53,12 @@ pub trait Services: Send + Sync + 'static {
     fn check_jev_key(&self, key: &ApiKey) -> impl Future<Output = Result<(), JevError>> + Send;
 }
 
-pub struct RealServices;
+/// The real services. It keeps the clients that ask the providers about a key, so each is made
+/// once.
+#[derive(Default)]
+pub struct RealServices {
+    key_clients: KeyClients,
+}
 
 impl Services for RealServices {
     type Embedder = GeminiEmbedder;
@@ -78,12 +85,17 @@ impl Services for RealServices {
         ocr::convert_chapter_with_jev_key(job, jev_api_key, on_page).await
     }
 
-    async fn check_gemini_key(&self, key: &ApiKey) -> Result<(), EmbedError> {
-        GeminiEmbedder::new(key)?.check_key().await
+    fn check_gemini_key(
+        &self,
+        key: &ApiKey,
+    ) -> impl Future<Output = Result<(), EmbedError>> + Send {
+        let client = self.key_clients.gemini(key);
+        async move { client?.check_key().await }
     }
 
-    async fn check_jev_key(&self, key: &ApiKey) -> Result<(), JevError> {
-        Jev::new(key.expose())?.check_key().await
+    fn check_jev_key(&self, key: &ApiKey) -> impl Future<Output = Result<(), JevError>> + Send {
+        let client = self.key_clients.jev(key);
+        async move { client?.check_key().await }
     }
 }
 
@@ -198,17 +210,19 @@ impl<S: Services> LiveContext<S> {
     }
 
     /// Asks Google whether it accepts the key of the settings, so that no caller holds the key.
-    /// `None` when the settings have no key.
-    pub async fn check_gemini_key(&self) -> Option<Result<(), EmbedError>> {
+    /// `None` when the settings have no key. The client is made when this is called, and the
+    /// future is only the read, so a time limit around it never covers the making.
+    pub fn check_gemini_key(&self) -> Option<impl Future<Output = Result<(), EmbedError>> + Send> {
         let key = self.config.gemini_api_key.as_ref()?;
-        Some(self.services.check_gemini_key(key).await)
+        Some(self.services.check_gemini_key(key))
     }
 
     /// Asks Jev whether it accepts the key of the settings, so that no caller holds the key.
-    /// `None` when the settings have no key.
-    pub async fn check_jev_key(&self) -> Option<Result<(), JevError>> {
+    /// `None` when the settings have no key. The client is made when this is called, like the one
+    /// for Google.
+    pub fn check_jev_key(&self) -> Option<impl Future<Output = Result<(), JevError>> + Send> {
         let key = self.config.jev_api_key.as_ref()?;
-        Some(self.services.check_jev_key(key).await)
+        Some(self.services.check_jev_key(key))
     }
 
     /// Checks the agent of the Ingest choice without asking a question. The services can supply a

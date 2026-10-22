@@ -32,6 +32,34 @@ pub struct StoredChapter {
     pub gets_insights: bool,
 }
 
+/// What a run that writes missing insights does for one chosen document.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InsightsNeed<'a> {
+    /// The insights are missing: ask the model and save them in this converted folder.
+    Write(&'a Path),
+    /// The file is saved already, so nothing is asked.
+    AlreadySaved,
+    /// The content folder holds no finished converted chapter of the document.
+    NoChapter,
+    /// A part of a book that is not a chapter gets none.
+    BookPart,
+}
+
+impl StoredChapter {
+    /// What a run that writes missing insights does for this document: a part of a book first,
+    /// then a document with no converted folder, then a file that is saved already.
+    pub fn need(&self) -> InsightsNeed<'_> {
+        if !self.gets_insights {
+            return InsightsNeed::BookPart;
+        }
+        match (&self.folder, self.has_insights) {
+            (None, _) => InsightsNeed::NoChapter,
+            (Some(_), true) => InsightsNeed::AlreadySaved,
+            (Some(folder), false) => InsightsNeed::Write(folder),
+        }
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum StoredChaptersError {
     #[error("could not read the stored documents from the graph")]

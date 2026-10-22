@@ -4,7 +4,11 @@
 use std::future::Future;
 
 use ocr::{ChapterJob, ConversionSummary, ConvertError};
-use rag_core::{AgentCli, ApiKey, Config, EmbedError, Embedder, GeminiEmbedder, Llm, WorkKind};
+use rag_core::{
+    AgentCli, ApiKey, Config, EmbedError, Embedder, GeminiEmbedder, Llm, ModelSettings,
+    SettingsError, WorkKind,
+};
+use rag_ingestion::{KeyClients, KeyStates};
 
 /// Makes the outside services of one tool call. The graph is not part of it: a call always opens
 /// the FalkorDB graph that its settings name, and a test points those settings at a throwaway one.
@@ -29,9 +33,24 @@ pub trait Services: Send + Sync + 'static {
         job: &ChapterJob,
         config: &Config,
     ) -> impl Future<Output = Result<ConversionSummary, ConvertError>> + Send;
+
+    /// The state of the two API keys of `config`, from the one free call each provider allows. It
+    /// costs nothing, and it never fails: a check that cannot tell is a state.
+    fn check_keys(&self, config: &Config) -> impl Future<Output = KeyStates> + Send;
+
+    /// The saved model and thinking of one kind of work.
+    ///
+    /// # Errors
+    /// [`SettingsError`] when the saved choice cannot be read or is not valid.
+    fn model_choice(&self, work: WorkKind) -> Result<ModelSettings, SettingsError>;
 }
 
-pub struct PaidServices;
+/// The paid services. It keeps the clients that ask the providers about a key, so each is made
+/// once for the whole run of the server.
+#[derive(Default)]
+pub struct PaidServices {
+    key_clients: KeyClients,
+}
 
 impl Services for PaidServices {
     type Embedder = GeminiEmbedder;
@@ -54,5 +73,13 @@ impl Services for PaidServices {
         // environment.
         let jev_api_key = config.jev_api_key.as_ref().map(ApiKey::expose);
         ocr::convert_chapter_with_jev_key(job, jev_api_key, |_| {}).await
+    }
+
+    fn check_keys(&self, config: &Config) -> impl Future<Output = KeyStates> + Send {
+        self.key_clients.check(config)
+    }
+
+    fn model_choice(&self, work: WorkKind) -> Result<ModelSettings, SettingsError> {
+        ModelSettings::load_for(work)
     }
 }

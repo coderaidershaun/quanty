@@ -4,7 +4,10 @@
 use rmcp::model::Tool;
 use serde_json::{Value, json};
 
-use crate::support::{ClosedPorts, call, connect, structured};
+use mcp::QuantyServer;
+use rag_ingestion::{KeyReadFailure, KeyState, KeyStates};
+
+use crate::support::{ClosedPorts, StandInServices, call, connect, structured};
 
 fn property_names(tool: &Tool) -> Vec<String> {
     assert_eq!(
@@ -53,16 +56,24 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         [
             "answer",
             "build_dataset",
+            "chapter_concepts",
+            "chapter_contents",
+            "chapter_insights",
             "dataset_status",
+            "edit_document_tags",
+            "edit_media",
             "health",
             "ingest_pdf",
             "ingest_status",
+            "insights_status",
             "list_documents",
             "read_page",
-            "search"
+            "search",
+            "stop_job",
+            "write_insights"
         ]
     );
-    let expected: [(&str, &[&str], &[&str]); 9] = [
+    let expected: [(&str, &[&str], &[&str]); 17] = [
         (
             "answer",
             &[
@@ -90,7 +101,28 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
             ],
             &["name"],
         ),
+        (
+            "chapter_concepts",
+            &["document_id", "page"],
+            &["document_id"],
+        ),
+        (
+            "chapter_contents",
+            &["document_id", "kind"],
+            &["document_id"],
+        ),
+        ("chapter_insights", &["document_id"], &["document_id"]),
         ("dataset_status", &["job_id"], &["job_id"]),
+        (
+            "edit_document_tags",
+            &["add", "document_id", "remove"],
+            &["document_id"],
+        ),
+        (
+            "edit_media",
+            &["authors", "category", "media", "tags"],
+            &["media"],
+        ),
         ("health", &[], &[]),
         (
             "ingest_pdf",
@@ -108,6 +140,7 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
             &["media"],
         ),
         ("ingest_status", &["job_id"], &["job_id"]),
+        ("insights_status", &["job_id"], &["job_id"]),
         ("list_documents", &[], &[]),
         (
             "read_page",
@@ -121,6 +154,12 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
                 "tags",
             ],
             &["question"],
+        ),
+        ("stop_job", &["job_id"], &["job_id"]),
+        (
+            "write_insights",
+            &["all", "document_id", "dry_run", "media"],
+            &[],
         ),
     ];
     for (tool, (name, properties, required)) in tools.iter().zip(expected) {
@@ -158,6 +197,26 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         "{}",
         description("build_dataset")
     );
+    assert!(
+        description("write_insights").contains("PAID"),
+        "{}",
+        description("write_insights")
+    );
+    assert!(
+        description("write_insights").contains("dry_run"),
+        "{}",
+        description("write_insights")
+    );
+    assert!(
+        description("edit_media").contains("both stores"),
+        "{}",
+        description("edit_media")
+    );
+    assert!(
+        description("stop_job").contains("an ingest, an insights job or a dataset build"),
+        "{}",
+        description("stop_job")
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -173,4 +232,102 @@ async fn health_names_each_service_that_is_not_ready() {
     assert!(lines.contains("Qdrant: FAILED"), "{lines}");
     assert!(lines.contains("FalkorDB: FAILED"), "{lines}");
     assert!(lines.contains("agent:"), "{lines}");
+    assert!(lines.contains("Gemini key: ok (accepted)"), "{lines}");
+    assert!(lines.contains("Jev key: FAILED (missing)"), "{lines}");
+    assert_eq!(
+        report["keys"],
+        json!([
+            {
+                "key": "EMBEDDING_GEMINI_API_KEY",
+                "service": "Google Gemini",
+                "state": "accepted",
+                "detail": "the key was accepted; Google gives no balance to a key, so the credit is on the billing page",
+                "billing_page": "https://aistudio.google.com/billing",
+            },
+            {
+                "key": "CONVERTER_JEV_API_KEY",
+                "service": "Jev",
+                "state": "missing",
+                "detail": "CONVERTER_JEV_API_KEY is not set; add it to .env or to the environment, then start the server again",
+                "billing_page": "https://console.typesafe.ai/",
+            },
+        ])
+    );
+    let stand_in = json!({ "provider": "stand-in", "model": "stand-in", "thinking": "medium" });
+    let model = |work: &str, tools: Value| {
+        let mut model = stand_in.clone();
+        model["work"] = json!(work);
+        model["tools"] = tools;
+        model
+    };
+    assert_eq!(
+        report["models"],
+        json!([
+            model("ask", json!(["search", "answer"])),
+            model("ingest", json!(["ingest_pdf", "write_insights"])),
+            model("datasets", json!(["build_dataset"])),
+        ])
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn health_says_why_a_key_cannot_be_used() {
+    let ports = ClosedPorts::new();
+    let asked = async |gemini: KeyState, jev: KeyState| {
+        let services = StandInServices::new().with_key_states(KeyStates { gemini, jev });
+        let client = connect(QuantyServer::new(ports.config.clone(), services)).await;
+        let result = call(&client, "health", json!({})).await;
+        structured(&result).clone()
+    };
+
+    let refused = asked(
+        KeyState::Refused,
+        KeyState::Unread(KeyReadFailure::TimedOut),
+    )
+    .await;
+
+    assert_eq!(refused["healthy"], false);
+    assert_eq!(refused["keys"][0]["state"], "refused");
+    assert_eq!(
+        refused["keys"][0]["detail"],
+        "the provider refused the key; check it on the billing page, put a good key in .env, then start the server again"
+    );
+    assert_eq!(refused["keys"][1]["state"], "unread");
+    assert_eq!(
+        refused["keys"][1]["detail"],
+        "the provider gave no answer within 5 seconds"
+    );
+    let lines = refused["report"].as_str().unwrap();
+    assert!(lines.contains("Gemini key: FAILED (refused)"), "{lines}");
+    assert!(lines.contains("Jev key: FAILED (unread)"), "{lines}");
+
+    let spent = asked(
+        KeyState::OutOfCredit,
+        KeyState::Unread(KeyReadFailure::Status(500)),
+    )
+    .await;
+
+    assert_eq!(spent["healthy"], false);
+    assert_eq!(spent["keys"][0]["state"], "out_of_credit");
+    assert_eq!(
+        spent["keys"][0]["detail"],
+        "the provider says the prepaid credit is used up; add credit on the billing page"
+    );
+    assert_eq!(
+        spent["keys"][1]["detail"],
+        "the provider answered with HTTP 500"
+    );
+    let lines = spent["report"].as_str().unwrap();
+    assert!(
+        lines.contains("Gemini key: FAILED (out_of_credit)"),
+        "{lines}"
+    );
+    assert_eq!(
+        spent["keys"][0]["billing_page"],
+        "https://aistudio.google.com/billing"
+    );
+    assert_eq!(
+        spent["keys"][1]["billing_page"],
+        "https://console.typesafe.ai/"
+    );
 }

@@ -5,6 +5,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 use uuid::Uuid;
 
+use super::GO_ON;
 use crate::jobs::JobReport;
 use crate::usage::Spent;
 
@@ -22,6 +23,8 @@ pub(crate) enum JobState {
     AlreadyIngested,
     /// The ingest stopped. `error` says why. Send the same PDF again to go on.
     Failed,
+    /// `stop_job` stopped the ingest. `error` says what to do. Send the same PDF again to go on.
+    Stopped,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
@@ -63,7 +66,7 @@ pub(crate) struct IngestReport {
     /// What the ingest used. When `done`, and when `already_ingested` tried to write the insights.
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
     spent: Option<Spent>,
-    /// Why the ingest stopped, and what to do. When `failed`.
+    /// Why the ingest stopped, and what to do. When `failed` or `stopped`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) error: Option<String>,
 }
@@ -124,5 +127,15 @@ impl IngestReport {
 impl JobReport for IngestReport {
     fn is_running(&self) -> bool {
         self.state == JobState::Running
+    }
+
+    fn stopped(&mut self) {
+        self.stage = None;
+        self.state = JobState::Stopped;
+        self.error = Some(format!("stopped by `stop_job`. {GO_ON}"));
+    }
+
+    fn is_stopped(&self) -> bool {
+        self.state == JobState::Stopped
     }
 }

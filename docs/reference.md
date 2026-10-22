@@ -25,7 +25,7 @@ PDFs are turned into searchable items (text, LaTeX formulas, figures, tables and
 | `rag-dataset` | Builds Gemma 4 training data from the converted documents: whole sections, synthetic texts, checked fine-tuning examples and a manifest (`rag-dataset`) |
 | `export` | Writes a document, which is a title, blocks of Markdown, formulas, figures, tables and code, and the sources it cites, to one file that stands alone: a PDF, a Markdown file or an HTML file. It depends on no other crate of the workspace and on no window code, so the desktop app uses it today and any other front door can use it. It carries the fonts that its PDFs are printed with |
 | `gui` | The desktop app: a question, its answer with citations, the page each one stands on, the concept graph and the path of the search (`quanty`) |
-| `mcp` | An MCP server, so that an AI agent can search, read pages, get answers, ingest a PDF and build a training dataset (`quanty-mcp`) |
+| `mcp` | An MCP server, so that an AI agent can search, read pages, get answers, list the items and concepts of a chapter, read and write its insights, change labels, ingest a PDF, build a training dataset and stop a job (`quanty-mcp`) |
 
 ## Getting started
 
@@ -706,7 +706,7 @@ Not built yet: the notices tray, the help sheet and the health check.
 
 ## The MCP server
 
-`quanty-mcp` lets an AI agent search the stored library, read the pages of its documents, get a cited answer, send a PDF to be ingested and build a training dataset, over the Model Context Protocol. `build_dataset` starts a build, and `dataset_status` gives its stage, its usage and its cost while it runs. How to build and start it, its tools and their costs are in [mcp.md](mcp.md).
+`quanty-mcp` lets an AI agent search the stored library, read the pages of its documents, get a cited answer, list the formulas, figures, tables, code listings and concepts of a chapter, read its insights, send a PDF to be ingested, write the missing insights of stored chapters, change the labels of a media or a document, stop a job and build a training dataset, over the Model Context Protocol. `build_dataset` starts a build, and `dataset_status` gives its stage, its usage and its cost while it runs; `write_insights` and `insights_status` do the same for insights, and `stop_job` stops an ingest, an insights job or a build. `health` also gives the state of the Gemini and Jev keys, with the page where each credit is added, and the model of each kind of work, and the text of a failing call whose cause is a spent credit names that page. The tools do not delete a document or change a model choice: [mcp.md](mcp.md#8-what-is-not-a-tool) says why. How to build and start it, its tools and their costs are in [mcp.md](mcp.md).
 
 ## Costs
 
@@ -720,7 +720,7 @@ Every ingest and every question says what it used: the tokens of each model, and
 | `rag-dataset build` | At the end of the summary, one line for each model that was asked, then `cost of this run: ≈ $<cost>`. A dry run asks no model and prints `cost of this run: ≈ $0.00` |
 | `rag-query` and `rag-query --answer` | The same lines after the results or the answer, then `cost: ≈ $<cost>` |
 | The desktop app | `48k tokens, about $0.42 so far` beside the running ingest, and the same beside a running dataset build; the tokens of each model and the cost in the notice at the end of each; `12k tokens, about $0.03` in the row of tabs of the Answer panel |
-| The MCP server | `usage` and `cost_usd` in `search`, `answer`, a `done` report of `ingest_status`, and every report of `dataset_status`, as [mcp.md](mcp.md) shows |
+| The MCP server | `usage` and `cost_usd` in `search`, `answer`, a `done` report of `ingest_status`, and every report of `insights_status` and `dataset_status`, as [mcp.md](mcp.md) shows |
 
 A cost is the tokens of each model times the price of that model in the table below, added up. A model that the table does not have is counted at what `claude` reported for it. When a model has neither, the cost is `unknown` (`null` in the MCP server). A Codex model has no price, so the summary of a dataset build on one ends with `cost of this run: unknown` after its tokens, while the running line of the desktop app shows its tokens alone, such as `31k tokens so far`. A cost that would round to nothing shows as `under $0.01`.
 

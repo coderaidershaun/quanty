@@ -20,6 +20,9 @@ pub(crate) enum DatasetState {
     Done,
     /// The build stopped. `error` says why and what to do.
     Failed,
+    /// `stop_job` stopped the build. `error` says what to do. What the models used until then is
+    /// in `usage`.
+    Stopped,
 }
 
 /// How a dataset build is going, or how it ended.
@@ -47,7 +50,7 @@ pub(crate) struct DatasetReport {
     /// What the build wrote, as `rag-dataset build` prints it. When `done`.
     #[serde(skip_serializing_if = "Option::is_none")]
     summary: Option<String>,
-    /// Why the build stopped, and what to do. When `failed`.
+    /// Why the build stopped, and what to do. When `failed` or `stopped`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) error: Option<String>,
 }
@@ -101,6 +104,18 @@ impl DatasetReport {
 impl JobReport for DatasetReport {
     fn is_running(&self) -> bool {
         self.state == DatasetState::Running
+    }
+
+    fn stopped(&mut self) {
+        self.end(DatasetState::Stopped);
+        self.error = Some(
+            "stopped by `stop_job`; call `build_dataset` again: the answers a model already gave are kept and not paid for twice."
+                .to_owned(),
+        );
+    }
+
+    fn is_stopped(&self) -> bool {
+        self.state == DatasetState::Stopped
     }
 }
 

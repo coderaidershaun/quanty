@@ -217,7 +217,7 @@ async fn a_saved_book_is_listed_after_a_second_start_shows_its_chapter_and_is_no
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_catalogue_answers_once_when_the_stores_are_down() {
-    let cx = LiveContext::new(support::closed_ports_config(), RealServices);
+    let cx = LiveContext::new(support::closed_ports_config(), RealServices::default());
 
     let result = catalogue_of(&cx).await;
 

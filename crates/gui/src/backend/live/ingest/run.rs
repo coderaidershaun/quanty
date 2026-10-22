@@ -12,7 +12,7 @@ use crate::backend::Reply;
 use crate::backend::live::{LiveContext, Services};
 use crate::contract::{
     Event, Failure, IngestOutcome, IngestProgress, IngestReport, IngestRequest, IngestStage,
-    ItemCounts, PageToCheck, RequestId, Usage,
+    ItemCounts, PageToCheck, RequestId,
 };
 
 /// A cancel is not listened to: the work has no safe place to stop inside, so a run goes on to
@@ -113,6 +113,10 @@ impl ProgressLine {
                 items: items as u32,
             },
             IngestStep::Storing => IngestStage::Storing,
+            IngestStep::WritingArtifacts { done, total } => IngestStage::WritingArtifacts {
+                done: done as u32,
+                items: total as u32,
+            },
             IngestStep::WritingInsights => IngestStage::WritingInsights,
             IngestStep::ReadingConcepts { done, total } => IngestStage::ReadingConcepts {
                 done: done as u32,
@@ -169,12 +173,18 @@ fn report(outcome: PdfOutcome) -> IngestOutcome {
             doc_id,
             items,
             insights,
+            artifacts,
         } => IngestOutcome::AlreadyIngested {
             doc: doc_id.into(),
             items,
-            usage: insights
-                .as_ref()
-                .map_or_else(Usage::default, |summary| (&summary.usage).into()),
+            artifacts: artifacts.total,
+            usage: {
+                let mut usage = artifacts.usage;
+                if let Some(summary) = &insights {
+                    usage.add_all(&summary.usage);
+                }
+                (&usage).into()
+            },
             insights: insights.as_ref().map(|summary| (&summary.outcome).into()),
         },
         PdfOutcome::Ingested(summary) => IngestOutcome::Ingested(ingested(*summary)),
@@ -199,6 +209,7 @@ fn ingested(summary: PdfSummary) -> IngestReport {
         concepts_created: ingest.concepts.concepts_created,
         concepts_linked: ingest.concepts.concepts_linked,
         skipped_items: ingest.concepts.skipped_items.len(),
+        artifacts: ingest.artifacts.as_ref().map_or(0, |summary| summary.total),
         usage,
         pages_to_check: conversion
             .pages_to_check

@@ -65,7 +65,7 @@ fn a_checked_chapter_runs_to_done_and_loads_the_catalogue_again() {
     assert!(has(&harness, Role::Button, "Start ingest"));
     assert!(says(
         &harness,
-        "Checking is free. Starting is paid work: the selected agent and Jev convert each page, Gemini embeds the items, and the selected agent writes the insights, takeaways and cheat sheet and reads the concepts."
+        "Checking is free. Starting is paid work: the selected agent and Jev convert each page, Gemini embeds the items, and the selected agent writes artifact descriptions, the insights, takeaways and cheat sheet and reads the concepts."
     ));
     testkit::save_png(&mut harness, "app-ingest-ready");
 
@@ -280,7 +280,7 @@ struct Shown {
     cost: Option<&'static str>,
 }
 
-fn every_stage() -> [Shown; 13] {
+fn every_stage() -> [Shown; 14] {
     let spent = Some("192k tokens, about $1.68 so far");
     let shown = |progress, words, share, cost| Shown {
         progress,
@@ -354,6 +354,15 @@ fn every_stage() -> [Shown; 13] {
             Some("48k tokens, about $0.42 so far"),
         ),
         shown(
+            Some(progress(
+                IngestStage::WritingArtifacts { done: 2, items: 8 },
+                12,
+            )),
+            "Writing artifact descriptions — 2 of 8, about 25%",
+            Some(0.25),
+            spent,
+        ),
+        shown(
             Some(progress(IngestStage::WritingGraph, 12)),
             "Writing the graph",
             None,
@@ -406,6 +415,7 @@ fn every_stage() -> [Shown; 13] {
 
 #[test]
 fn every_stage_of_a_run_is_named_with_its_counts() {
+    super::insights::assert_artifacts_precede_store_changes();
     let request = IngestRequest {
         pdf: PathBuf::from("chapter-3-greeks.pdf"),
         media: "Option Volatility and Pricing".to_owned(),
@@ -460,4 +470,29 @@ fn every_stage_of_a_run_is_named_with_its_counts() {
         };
         assert!(is_cost_said, "`{words}` should cost {:?}", stage.cost);
     }
+    harness.state_mut().shared.ingest = IngestJob::Running {
+        request,
+        id: RequestId(1),
+        progress: Some(progress(
+            IngestStage::WritingArtifacts { done: 0, items: 1 },
+            1,
+        )),
+    };
+    harness.state_mut().shared.apply_event(
+        gui::contract::Event::IngestFinished {
+            request: RequestId(1),
+            result: Err(gui::contract::Failure::internal(
+                "invalid metadata response",
+            )),
+        },
+        &mut Vec::new(),
+    );
+    harness.run_ok();
+    assert!(
+        harness
+            .query_all_by_label_contains("Tokens: claude-sonnet-5-5 16k. Cost ≈ $0.14.")
+            .next()
+            .is_some(),
+        "a failed metadata run retains the latest reported spend"
+    );
 }

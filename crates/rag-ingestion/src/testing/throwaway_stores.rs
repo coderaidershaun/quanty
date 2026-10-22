@@ -85,29 +85,28 @@ impl ThrowawayStores {
         }
     }
 
-    /// The models of an ingest that writes no insights: an embedder that makes up vectors, and
-    /// the concept extractor with this language model and the cache folder and decision log of
-    /// this config. Insights are left out, so that a test of what is stored never writes into
-    /// the chapter folder it ingests. A test builds its models here and nowhere else, so it never
-    /// names those paths by hand.
-    pub fn models<L: Llm>(&self, llm: L) -> Models<StandInEmbedder, L> {
+    /// Uses these isolated stores, a stand-in embedder and the supplied model for artifacts and concepts.
+    /// Insights are disabled, but required artifact checkpoints can still be written to the chapter folder.
+    /// A test builds its models here and nowhere else, so it never names those paths by hand.
+    pub fn models<L: Llm + Clone>(&self, llm: L) -> Models<StandInEmbedder, L> {
         self.models_with_embedder(StandInEmbedder::default(), llm)
     }
 
-    pub fn models_with_embedder<L: Llm>(
+    pub fn models_with_embedder<L: Llm + Clone>(
         &self,
         embedder: StandInEmbedder,
         llm: L,
     ) -> Models<StandInEmbedder, L> {
         Models {
             embedder,
+            artifacts: crate::ArtifactWriter::new(llm.clone()),
             concepts: ConceptExtractor::new(llm, &self.config),
             insights: None,
         }
     }
 
     /// [`ThrowawayStores::models`] that also writes insights, asking a clone of `llm`. A clone of
-    /// a stand-in model shares what it records, so one value counts both kinds of question.
+    /// a stand-in model shares what it records, so one value counts every kind of question.
     pub fn models_writing_insights<L: Llm + Clone>(&self, llm: L) -> Models<StandInEmbedder, L> {
         Models {
             insights: Some(InsightsWriter::new(llm.clone())),

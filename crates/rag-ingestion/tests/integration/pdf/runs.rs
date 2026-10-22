@@ -52,6 +52,12 @@ fn assert_steps_of_one_run(steps: &[IngestStep], items: usize) {
     pages.sort_unstable();
     assert_eq!(pages, (1..=7).collect::<Vec<u32>>());
     let mut expected = vec![
+        IngestStep::WritingArtifacts { done: 0, total: 17 },
+        IngestStep::WritingArtifacts { done: 0, total: 17 },
+        IngestStep::WritingArtifacts {
+            done: 17,
+            total: 17,
+        },
         IngestStep::WritingGraph,
         IngestStep::Embedding { items },
         IngestStep::Storing,
@@ -119,7 +125,7 @@ async fn a_chapter_pdf_is_converted_and_ingested_in_one_run_and_a_second_run_doe
     );
     assert_steps_of_one_run(&pdf.steps(), n);
     // Items with the same text are asked about once, and a kept answer costs nothing.
-    let calls = summary.ingest.concepts.llm_calls;
+    let calls = summary.ingest.concepts.llm_calls + 1;
     let asked = format!(
         "tokens of stand-in: {} in, {} out, 0 cache read, 0 cache write",
         calls * 1000,
@@ -206,6 +212,14 @@ async fn a_chapter_pdf_is_converted_and_ingested_in_one_run_and_a_second_run_doe
             doc_id,
             items: n as u64,
             insights: None,
+            artifacts: rag_ingestion::ArtifactSummary {
+                total: ocr::read_chapter(&pdf.job.chapter_folder())
+                    .unwrap()
+                    .items()
+                    .len(),
+                written: 0,
+                usage: Default::default()
+            },
         }
     );
     let printed = second.to_string();
@@ -231,6 +245,37 @@ async fn a_chapter_pdf_is_converted_and_ingested_in_one_run_and_a_second_run_doe
         held_before,
         "a second run writes nothing"
     );
+    std::fs::remove_file(pdf.job.chapter_folder().join("artifacts.json")).unwrap();
+    let rejected = StandInLlm::replying_to_questions(|_, _| Ok(json!({"artifacts":[]})));
+    let failing = throwaway.models(rejected.clone());
+    let error = pdf.ingest(&failing, &stores).await.unwrap_err();
+    assert!(matches!(error, PdfError::Ingest(IngestError::Artifacts(_))));
+    assert_eq!(rejected.calls(), 2);
+    assert_eq!(held_by(&throwaway, &stores, doc_id).await, held_before);
+    assert!(failing.embedder.received().is_empty());
+    let repairing = StandInLlm::finding_nothing();
+    let repair_models = throwaway.models(repairing.clone());
+    let repaired = pdf.ingest(&repair_models, &stores).await.unwrap();
+    let PdfOutcome::AlreadyIngested { artifacts, .. } = repaired else {
+        panic!("repair must be metadata only");
+    };
+    assert_eq!(artifacts.written, 17);
+    assert_eq!(repairing.calls(), 1);
+    assert!(!artifacts.usage.is_empty());
+    assert!(repair_models.embedder.received().is_empty());
+    assert_eq!(pdf.conversions_started(), calls_before.3);
+    assert_eq!(held_by(&throwaway, &stores, doc_id).await, held_before);
+    // A direct re-ingest also keeps the old stores when required metadata fails.
+    std::fs::remove_file(pdf.job.chapter_folder().join("artifacts.json")).unwrap();
+    let error = rag_ingestion::ingest_chapter(
+        crate::support::chapter_at(&pdf.job.chapter_folder()),
+        &failing,
+        &stores,
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(error, IngestError::Artifacts(_)));
+    assert_eq!(held_by(&throwaway, &stores, doc_id).await, held_before);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -311,6 +356,14 @@ async fn a_run_that_stops_in_conversion_or_in_ingestion_is_finished_by_the_same_
             doc_id: document,
             items: n,
             insights: None,
+            artifacts: rag_ingestion::ArtifactSummary {
+                total: ocr::read_chapter(&working.job.chapter_folder())
+                    .unwrap()
+                    .items()
+                    .len(),
+                written: 0,
+                usage: Default::default()
+            },
         }
     );
 

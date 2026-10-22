@@ -1,7 +1,7 @@
 //! Reads a converted chapter back as one list of pieces in reading order, each with the section
 //! it sits under and the relationships it takes part in.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use crate::content::{
@@ -39,6 +39,9 @@ pub enum ReadChapterError {
         page_folder.display()
     )]
     UnknownPiece { page_folder: PathBuf, number: u32 },
+
+    #[error("piece {number} occurs more than once in {}; restore unique piece numbers before ingestion", page_folder.display())]
+    DuplicatePiece { page_folder: PathBuf, number: u32 },
 }
 
 /// Where a piece sits in the chapter: its page position and its number on that page.
@@ -140,7 +143,14 @@ pub fn read_chapter(chapter_folder: &Path) -> Result<Chapter, ReadChapterError> 
         let page = PageIndex::read(&page_folder)?;
         check_version(&page_folder.join(PAGE_INDEX_FILE), page.format_version)?;
         let first_piece_of_page = pieces.len();
+        let mut numbers = HashSet::new();
         for entry in &page.pieces {
+            if !numbers.insert(entry.number) {
+                return Err(ReadChapterError::DuplicatePiece {
+                    page_folder,
+                    number: entry.number,
+                });
+            }
             let file = page_folder.join(&entry.file);
             let content = read_piece_file(&file)?;
             let section = place_in_sections(&mut open_sections, entry, &content);

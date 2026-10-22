@@ -79,9 +79,11 @@ fn a_start_of_an_ingested_document_says_what_its_insights_cost() {
         tags: Vec::new(),
     };
     let ended = |insights, usage| IngestJob::Finished {
+        spent: Usage::default(),
         request: request.clone(),
         result: Ok(IngestOutcome::AlreadyIngested {
             doc: DocId(Uuid::from_u128(9)),
+            artifacts: 0,
             items: 120,
             insights: Some(insights),
             usage,
@@ -114,7 +116,7 @@ fn a_start_of_an_ingested_document_says_what_its_insights_cost() {
     };
     assert!(said(
         &harness,
-        "120 items are stored. Nothing was converted or embedded."
+        "120 items are stored with 0 artifact descriptions. Nothing was converted or embedded."
     ));
     assert!(said(
         &harness,
@@ -134,4 +136,83 @@ fn a_start_of_an_ingested_document_says_what_its_insights_cost() {
     ));
     assert!(!said(&harness, "Tokens:"));
     assert!(!said(&harness, "Cost"));
+    for (missing_artifacts, missing_insights, expected) in [
+        (
+            true,
+            false,
+            "A start writes the missing artifact descriptions.",
+        ),
+        (
+            true,
+            true,
+            "A start writes the missing artifact descriptions and insights.",
+        ),
+    ] {
+        harness.state_mut().shared.ingest = IngestJob::Checked {
+            request: request.clone(),
+            preflight: gui::contract::Preflight {
+                name: request.name.clone(),
+                pages: Some(12),
+                state: Some(gui::contract::ChapterState::IngestedWithoutMetadata {
+                    items: 120,
+                    missing_artifacts,
+                    missing_insights,
+                }),
+                blockers: Vec::new(),
+            },
+        };
+        harness.run_ok();
+        assert!(said(&harness, expected));
+        assert!(!said(&harness, "true"));
+        assert!(!said(&harness, "false"));
+    }
+    if let IngestJob::Checked { preflight, .. } = &mut harness.state_mut().shared.ingest {
+        preflight.state = Some(gui::contract::ChapterState::Converted);
+    }
+    harness.run_ok();
+    assert!(said(&harness, "missing artifact descriptions and insights"));
+}
+
+pub(super) fn assert_artifacts_precede_store_changes() {
+    use gui::backend::{Handler, Reply, fake::Fake};
+    use gui::contract::{Command, Event, IngestStage, RequestId};
+    let (reply, events, _stop) = Reply::collecting();
+    let fake = Fake::scene(
+        "ingest-ready",
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")),
+    )
+    .unwrap()
+    .instant();
+    let command = Command::Ingest {
+        request: RequestId(1),
+        ingest: IngestRequest {
+            pdf: "chapter.pdf".into(),
+            media: "Sample".into(),
+            category: Category::Book,
+            name: DocumentName::Title("Sample".into()),
+            tags: Vec::new(),
+        },
+    };
+    tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(fake.serve(command, reply));
+    let stages: Vec<_> = events
+        .try_iter()
+        .filter_map(|event| match event {
+            Event::IngestProgress { progress, .. } => Some(progress.stage),
+            _ => None,
+        })
+        .collect();
+    let metadata = stages
+        .iter()
+        .rposition(|stage| matches!(stage, IngestStage::WritingArtifacts { .. }))
+        .unwrap();
+    let graph = stages
+        .iter()
+        .position(|stage| matches!(stage, IngestStage::WritingGraph))
+        .unwrap();
+    assert!(
+        metadata < graph,
+        "fake progress must show required metadata before store replacement"
+    );
 }

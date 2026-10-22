@@ -268,6 +268,13 @@ fn ingest(error: &IngestError) -> Verdict {
         IngestError::Store(error) => store(error),
         IngestError::Graph(error) => graph(error),
         IngestError::Concepts(error) => concepts(error),
+        IngestError::Artifacts(rag_ingestion::ArtifactError::Model(error)) => llm(error),
+        IngestError::Artifacts(error) => Verdict::saying(
+            Kind::AgentFailed,
+            format!(
+                "Required artifact metadata could not finish: {error}. Correct the reported issue, then start again to resume; existing searchable data is kept."
+            ),
+        ),
         _ => Verdict::internal(),
     }
 }

@@ -246,6 +246,7 @@ async fn ingest_asks_about_every_item_and_writes_concepts_mentions_and_relations
             format!("relations written: {}, dropped: 1", 2 * n - 1),
             format!("claude calls made: {n}, cache hits: 0"),
             "items skipped: 0".to_owned(),
+            "artifacts: 11 complete, 0 written".to_owned(),
             format!(
                 "tokens of gemini-embedding-2: {embedded_tokens} in, 0 out, 0 cache read, 0 cache write (estimated)"
             ),

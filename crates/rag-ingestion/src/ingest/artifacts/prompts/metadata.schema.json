@@ -1,0 +1,1 @@
+{"type":"object","additionalProperties":false,"required":["artifacts"],"properties":{"artifacts":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["id","title","description"],"properties":{"id":{"type":"string"},"title":{"type":"string","minLength":1,"maxLength":80},"description":{"type":"string","minLength":1,"maxLength":280}}}}}}

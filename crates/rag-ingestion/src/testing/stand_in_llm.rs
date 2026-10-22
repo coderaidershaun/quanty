@@ -41,11 +41,12 @@ pub struct StandInLlm {
 }
 
 impl StandInLlm {
-    /// Finds no concept in any item, and answers the question about a whole document with
-    /// [`stand_in_insights_reply`].
+    /// Finds no concepts and supplies valid artifact and insight answers.
     pub fn finding_nothing() -> StandInLlm {
         StandInLlm::replying_to_questions(|question, _| {
-            if question.system_prompt == INSIGHTS_PROMPT {
+            if let Some(reply) = stand_in_artifacts_reply(&question.input) {
+                Ok(reply)
+            } else if question.system_prompt == INSIGHTS_PROMPT {
                 Ok(stand_in_insights_reply())
             } else {
                 Ok(json!({ "concepts": [], "relations": [] }))
@@ -62,18 +63,21 @@ impl StandInLlm {
         }
     }
 
-    /// `rule(input, earlier_calls)` gives the answer. `earlier_calls` is how many times this exact
-    /// input was asked before.
+    /// Artifact requests receive valid default answers; other requests use `rule(input, earlier_calls)`.
+    /// `earlier_calls` counts previous requests with this exact input.
     pub fn replying(
         rule: impl Fn(&str, usize) -> Result<Value, LlmError> + Send + Sync + 'static,
     ) -> StandInLlm {
         StandInLlm::replying_to_questions(move |question, earlier_calls| {
-            rule(&question.input, earlier_calls)
+            if let Some(reply) = stand_in_artifacts_reply(&question.input) {
+                Ok(reply)
+            } else {
+                rule(&question.input, earlier_calls)
+            }
         })
     }
 
-    /// Like [`StandInLlm::replying`], and the rule sees the whole question, so it can tell one kind
-    /// of question from another by its prompt.
+    /// The rule receives every complete question, including artifact requests, with no default answers.
     pub fn replying_to_questions(
         rule: impl Fn(&AskedQuestion, usize) -> Result<Value, LlmError> + Send + Sync + 'static,
     ) -> StandInLlm {
@@ -182,4 +186,14 @@ impl Llm for StandInLlm {
             usage: UsageTally::of(&self.model, usage),
         })
     }
+}
+
+/// A valid display answer for the exact target inventory in an artifact request.
+pub fn stand_in_artifacts_reply(input: &str) -> Option<Value> {
+    let value: Value = serde_json::from_str(input).ok()?;
+    let targets = value.get("targets")?.as_array()?;
+    Some(json!({"artifacts":targets.iter().map(|target| json!({
+        "id":target["id"], "title":format!("Chapter {}", target["kind"].as_str().unwrap_or("artifact")),
+        "description":"Explains the corresponding step in this chapter."
+    })).collect::<Vec<_>>()}))
 }

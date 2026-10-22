@@ -46,9 +46,7 @@ async fn check<S: Services>(
     Ok(preflight)
 }
 
-/// A document that is ingested is converted and stored, so a start pays for nothing unless its
-/// insights are not saved: then it pays for those alone, and the agent must be ready. A part of a
-/// book that is not a chapter gets no insights, so a start asks nothing for it.
+/// Stored documents need the agent only when artifact descriptions or enabled insights need repair.
 async fn ingested_check<S: Services>(
     cx: &LiveContext<S>,
     ingest: &IngestRequest,
@@ -59,7 +57,26 @@ async fn ingested_check<S: Services>(
     let gets = gets_insights(job.name(), Some(ingest.category.into()));
     // A file that cannot be read counts as none, as it does when the insights are written.
     let missing = gets && !matches!(ChapterInsights::read(&job.chapter_folder()), Ok(Some(_)));
-    let state = if missing {
+    let assessment = rag_ingestion::assess_artifacts(&job.chapter_folder());
+    let missing_artifacts = assessment.state != rag_ingestion::ArtifactState::Ready;
+    if matches!(
+        assessment.state,
+        rag_ingestion::ArtifactState::NoFolder | rag_ingestion::ArtifactState::TooLarge
+    ) {
+        blockers.push(metadata_blocker(assessment));
+    }
+    let state = if missing_artifacts {
+        if blockers.is_empty()
+            && let Err(failure) = cx.ingest_agent_ready().await
+        {
+            blockers.push(failure);
+        }
+        ChapterState::IngestedWithoutMetadata {
+            items,
+            missing_artifacts,
+            missing_insights: missing,
+        }
+    } else if missing {
         if let Err(failure) = cx.ingest_agent_ready().await {
             blockers.push(failure);
         }
@@ -113,6 +130,15 @@ async fn folder_check<S: Services>(
         }
         Err(error) => return Err(cx.failure(error)),
     };
+    if state == ChapterState::Converted {
+        let assessment = rag_ingestion::assess_artifacts(&folder);
+        if matches!(
+            assessment.state,
+            rag_ingestion::ArtifactState::NoFolder | rag_ingestion::ArtifactState::TooLarge
+        ) {
+            blockers.push(metadata_blocker(assessment));
+        }
+    }
     Ok(Preflight {
         name,
         pages,
@@ -132,4 +158,16 @@ fn converted_so_far(folder: &Path, saved: &ChapterIndex) -> ChapterState {
         }
     }
     ChapterState::PartlyConverted { pages_done }
+}
+
+fn metadata_blocker(assessment: rag_ingestion::ArtifactAssessment) -> Failure {
+    let reason = assessment
+        .reason
+        .unwrap_or_else(|| "required artifact metadata cannot be completed".to_owned());
+    let hint = if assessment.state == rag_ingestion::ArtifactState::NoFolder {
+        "Restore the saved converted chapter folder before repairing metadata. Existing searchable data is kept.".to_owned()
+    } else {
+        reason.clone()
+    };
+    Failure::new(crate::contract::FailureKind::SourceMissing, reason).with_hint(hint)
 }

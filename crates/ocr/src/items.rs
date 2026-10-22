@@ -63,6 +63,56 @@ impl<'a> ChapterItem<'a> {
 }
 
 impl Chapter {
+    /// Fingerprints source content and inventory without paths or generated sidecars.
+    pub fn artifact_source(&self) -> crate::content::ArtifactSource {
+        use crate::content::{ArtifactPiece, ArtifactSource, ArtifactTarget};
+        use sha2::{Digest, Sha256};
+        let manifest: Vec<_> = self
+            .items()
+            .iter()
+            .map(|item| {
+                let kind = match item.first.detail {
+                    PieceDetail::Formula { .. } => "formula",
+                    PieceDetail::Figure { .. } => "figure",
+                    PieceDetail::Table { .. } => "table",
+                    _ => "code",
+                };
+                ArtifactTarget {
+                    id: format!(
+                        "{}:{}:{}",
+                        self.index.source_sha256, item.first.id.page, item.first.id.number
+                    ),
+                    kind: kind.to_owned(),
+                    pieces: item
+                        .parts()
+                        .map(|piece| ArtifactPiece {
+                            page: piece.id.page,
+                            number: piece.id.number,
+                        })
+                        .collect(),
+                }
+            })
+            .collect();
+        let mut hash = Sha256::new();
+        let pieces: Vec<_> = self.pieces.iter().map(|piece| {
+            let mut detail = serde_json::to_value(&piece.detail).expect("piece details always serialize");
+            normalize_detail(&mut detail);
+            serde_json::json!({"page":piece.id.page,"number":piece.id.number,"printed":piece.printed_page_number,"detail":detail,"content":piece.content})
+        }).collect();
+        let mut content = serde_json::json!({"media":self.index.media_title,"name":self.index.name,"pieces":pieces});
+        content.sort_all_objects();
+        hash.update(content.to_string().as_bytes());
+        hash.update(serde_json::to_vec(&manifest).expect("source inventory always serializes"));
+        ArtifactSource {
+            signature: hash
+                .finalize()
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect(),
+            manifest,
+        }
+    }
+
     /// Every formula, figure, table and code listing, in reading order. A code piece on the next
     /// page, with no label and no caption, whose language agrees or is not known, with only
     /// footnotes between, continues the listing before it.
@@ -99,6 +149,20 @@ impl Chapter {
             }
         }
         items
+    }
+}
+
+fn normalize_detail(value: &mut serde_json::Value) {
+    if let Some(object) = value.as_object_mut() {
+        object.remove("image");
+        object.retain(|_, value| {
+            !value.is_null()
+                && value != ""
+                && value.as_array().is_none_or(|array| !array.is_empty())
+        });
+        for child in object.values_mut() {
+            normalize_detail(child);
+        }
     }
 }
 

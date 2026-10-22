@@ -2,8 +2,10 @@
 //! picture, converts and ingests a PDF, writes the insights of chapters that are stored already,
 //! relabels a stored media or document, or deletes a document or a whole media.
 
+// SMELL: command modules share this crowded folder with library jobs, making commands harder to find.
 mod cli;
 mod progress;
+mod stored_artifacts;
 mod stored_insights;
 
 use std::path::Path;
@@ -66,6 +68,9 @@ async fn run(cli: Cli) -> Result<ExitCode> {
         (Some(Command::Pdf(given)), _) => {
             convert_and_ingest(&given).await.map(|()| ExitCode::SUCCESS)
         }
+        (Some(Command::Artifacts(given)), _) => {
+            stored_artifacts::run(given.choice(), given.dry_run).await
+        }
         (Some(Command::Insights(given)), _) if given.dry_run => {
             stored_insights::list(given.choice()).await
         }
@@ -116,6 +121,7 @@ fn set_up_models(config: &Config) -> Result<Models<GeminiEmbedder, AgentCli>> {
         embedder: GeminiEmbedder::from_config(config).context("could not set up the embedder")?,
         concepts: ConceptExtractor::new(AgentCli::for_work(WorkKind::Ingest), config),
         insights: Some(InsightsWriter::new(AgentCli::for_work(WorkKind::Ingest))),
+        artifacts: rag_ingestion::ArtifactWriter::new(AgentCli::for_work(WorkKind::Ingest)),
     })
 }
 

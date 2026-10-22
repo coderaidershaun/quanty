@@ -242,6 +242,7 @@ impl<S: Services> LiveContext<S> {
     /// A failure that says the embedding key is missing.
     pub fn models(&self) -> Result<Models<S::Embedder, S::Llm>, Failure> {
         Ok(Models {
+            artifacts: rag_ingestion::ArtifactWriter::new(self.services.llm(WorkKind::Ingest)),
             embedder: self.services.embedder(&self.config)?,
             concepts: ConceptExtractor::new(self.services.llm(WorkKind::Ingest), &self.config),
             insights: Some(InsightsWriter::new(self.services.llm(WorkKind::Ingest))),

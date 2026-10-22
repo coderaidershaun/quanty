@@ -77,6 +77,14 @@ pub(in crate::backend::fake) fn steps() -> Vec<IngestProgress> {
         at(converting, spent_on_pages(saved))
     }));
     steps.extend([
+        at(
+            IngestStage::WritingArtifacts { done: 0, items: 8 },
+            every_page.clone(),
+        ),
+        at(
+            IngestStage::WritingArtifacts { done: 8, items: 8 },
+            every_page.clone(),
+        ),
         at(IngestStage::WritingGraph, every_page.clone()),
         at(IngestStage::Embedding { items: ITEMS }, every_page.clone()),
         at(IngestStage::Storing, every_page.clone()),
@@ -158,6 +166,7 @@ pub(in crate::backend::fake) fn report(request: &IngestRequest) -> IngestReport 
         concepts_created: 14,
         concepts_linked: 9,
         skipped_items: 1,
+        artifacts: 8,
         usage: Usage {
             models: vec![
                 model("claude-haiku-5-5", 44_000, 4_400),

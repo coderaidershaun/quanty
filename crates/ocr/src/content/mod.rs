@@ -1,7 +1,8 @@
 //! The saved shape of a converted chapter and of a picture that stands alone: folder and file
 //! names, and the `chapter.json`, `page.json` and `image.json` files that index them. It also
-//! holds the `insights.json` that an ingest saves beside `chapter.json`.
+//! holds the independently saved insights and artifact descriptions beside `chapter.json`.
 
+mod artifacts;
 mod catalogue;
 mod conversion;
 mod figure_image;
@@ -13,6 +14,10 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+pub use artifacts::{
+    ARTIFACTS_FILE, ARTIFACTS_VERSION, ArtifactEntry, ArtifactPiece, ArtifactSource,
+    ArtifactTarget, ArtifactText, ChapterArtifacts,
+};
 pub use catalogue::{Catalogue, ChapterEntry, ImageEntry, saved_images};
 pub use conversion::{
     CallRecord, CallStep, Checks, Conversion, MathCheck, PageCategories, Route, RouteReason,

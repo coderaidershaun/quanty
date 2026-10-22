@@ -69,6 +69,67 @@ async fn the_items_of_a_chapter_load_from_its_folder_while_the_stores_are_down()
     let first_part = first_part.strip_suffix('\n').unwrap_or(&first_part);
     assert_eq!(listing.piece.text, format!("{first_part}\n{continued}"));
     assert_eq!(listing.piece.language.as_deref(), Some("python"));
+    assert!(
+        contents.items.iter().all(|item| item.metadata.is_none()),
+        "source-stale metadata preserves original fallback content"
+    );
+    let source = ocr::read_chapter(saved.path()).unwrap().artifact_source();
+    let texts = [
+        source.manifest.first().unwrap(),
+        source.manifest.last().unwrap(),
+    ]
+    .map(|target| ocr::content::ArtifactEntry {
+        text: ocr::content::ArtifactText {
+            id: target.id.clone(),
+            title: "Source-backed title".to_owned(),
+            description: "Explains the source step.".to_owned(),
+        },
+        model: "fixture".to_owned(),
+        cache_identity: "fixture".to_owned(),
+    });
+    let mut metadata = ocr::content::ChapterArtifacts {
+        format_version: 1,
+        source,
+        generation_signature: "old-policy".to_owned(),
+        entries: texts.to_vec(),
+    };
+    metadata.write(saved.path()).unwrap();
+    let (partial, _) = loaded(&cx, DocId::default(), Some(saved.path())).await;
+    let partial = partial.unwrap();
+    assert_eq!(
+        partial
+            .items
+            .iter()
+            .filter(|item| item.metadata.is_some())
+            .count(),
+        2
+    );
+    assert_eq!(
+        partial
+            .items
+            .last()
+            .unwrap()
+            .metadata
+            .as_ref()
+            .unwrap()
+            .title,
+        "Source-backed title",
+        "multipart metadata joins by the first piece"
+    );
+    assert_eq!(partial.items.last().unwrap().piece, listing.piece);
+    metadata.entries[0].text.title.clear();
+    metadata.write(saved.path()).unwrap();
+    let (invalid, _) = loaded(&cx, DocId::default(), Some(saved.path())).await;
+    assert!(
+        invalid
+            .unwrap()
+            .items
+            .iter()
+            .all(|item| item.metadata.is_none())
+    );
+    std::fs::write(saved.path().join("artifacts.json"), "broken json").unwrap();
+    let (corrupt, _) = loaded(&cx, DocId::default(), Some(saved.path())).await;
+    assert_eq!(corrupt.unwrap(), contents);
 
     let failure = concepts.expect_err("the graph is down, so there are no concepts");
     assert_eq!(failure.kind, FailureKind::FalkorDbDown);
@@ -116,6 +177,23 @@ async fn the_fake_backend_lists_the_contents_of_every_sample_as_the_live_reader_
         let folder = document.folder.as_deref();
         let (faked, _concepts) = loaded(&fake, document.id, folder).await;
         let (live, _concepts) = loaded(&cx, document.id, folder).await;
+        let chapter = ocr::read_chapter(folder.unwrap()).unwrap();
+        let saved = ocr::content::ChapterArtifacts::read(folder.unwrap())
+            .unwrap()
+            .unwrap();
+        assert!(
+            saved.matches_source(&chapter.artifact_source()),
+            "expected {:?}, saved {:?}",
+            chapter.artifact_source(),
+            saved.source
+        );
+        assert!(
+            live.as_ref()
+                .unwrap()
+                .items
+                .iter()
+                .all(|item| item.metadata.is_some())
+        );
         assert_eq!(
             faked.expect("the fake should list the contents"),
             live.expect("the live reader should list the contents"),

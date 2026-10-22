@@ -217,7 +217,7 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
     let chapter = &catalogue.chapters[0].folder;
     std::fs::remove_file(chapter.join("insights.json")).unwrap();
 
-    let third = call(&client, "ingest_pdf", sent_again).await;
+    let third = call(&client, "ingest_pdf", sent_again.clone()).await;
 
     let third_job = structured(&third)["job_id"].as_str().unwrap();
     let writing = report_when_ended(&client, "ingest_status", third_job).await;
@@ -233,6 +233,29 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
     );
     assert!(writing["cost_usd"].is_number(), "{writing}");
     assert!(chapter.join("insights.json").is_file());
+    std::fs::remove_file(chapter.join("artifacts.json")).unwrap();
+    let fourth = call(&client, "ingest_pdf", sent_again).await;
+    let repaired = report_when_ended(
+        &client,
+        "ingest_status",
+        structured(&fourth)["job_id"].as_str().unwrap(),
+    )
+    .await;
+    assert_eq!(repaired["state"], "already_ingested", "{repaired}");
+    assert_eq!(repaired["artifacts_done"], 17);
+    assert_eq!(repaired["artifacts_total"], 17);
+    assert!(
+        repaired["summary"]
+            .as_str()
+            .unwrap()
+            .contains("artifacts: 17 complete, 17 written")
+    );
+    assert!(
+        repaired["usage"]
+            .as_array()
+            .is_some_and(|used| !used.is_empty())
+    );
+    assert!(chapter.join("artifacts.json").is_file());
 }
 
 #[tokio::test(flavor = "multi_thread")]

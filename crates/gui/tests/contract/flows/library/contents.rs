@@ -4,6 +4,7 @@
 //! is down.
 
 use eframe::egui::accesskit::Role;
+use egui_kittest::kittest::Queryable as _;
 use gui::app::layout::DEFAULT_WINDOW;
 use gui::backend::fake::Fake;
 use gui::backend::{Handler, Reply};
@@ -105,6 +106,27 @@ fn count_of(harness: &Window, view: &str) -> Option<String> {
     node(harness, Role::Tab, view).value()
 }
 
+fn assert_metadata(harness: &Window, kind: PieceKind) {
+    let chapter = shared(harness).contents.items.ready().unwrap();
+    let item = chapter.of_kind(kind).next().unwrap();
+    let metadata = item
+        .metadata
+        .as_ref()
+        .expect("source-valid fixture metadata");
+    assert_eq!(
+        harness
+            .query_all_by_role_and_label(Role::Label, &metadata.title)
+            .count(),
+        1,
+        "matching source names and captions are not repeated in Library"
+    );
+    assert!(are_stacked_in_order(
+        harness,
+        Role::Label,
+        &[&item.page_label(), &metadata.title, &metadata.description]
+    ));
+}
+
 #[test]
 fn each_view_lists_every_item_of_its_kind_in_reading_order_with_its_page() {
     let (mut harness, seen) = open_library("black-scholes");
@@ -121,6 +143,7 @@ fn each_view_lists_every_item_of_its_kind_in_reading_order_with_its_page() {
     );
     assert!(says(&harness, "python"));
     assert!(says(&harness, "The call price in Python"));
+    assert_metadata(&harness, PieceKind::Code);
     assert_eq!(count_of(&harness, "Code").as_deref(), Some("1"));
 
     click(&mut harness, Role::Tab, "Formulas");
@@ -129,6 +152,7 @@ fn each_view_lists_every_item_of_its_kind_in_reading_order_with_its_page() {
         "the formulas are in reading order"
     );
     assert!(says(&harness, "Black–Scholes call price"));
+    assert_metadata(&harness, PieceKind::Formula);
     scroll_to(&mut harness, view(), Wheel::Down, Role::Label, "(2.6)");
 
     click(&mut harness, Role::Tab, "Figures");
@@ -146,6 +170,7 @@ fn each_view_lists_every_item_of_its_kind_in_reading_order_with_its_page() {
         "the tables are in reading order"
     );
     assert!(has(&harness, Role::Label, "p. 100"));
+    assert_metadata(&harness, PieceKind::Table);
     assert!(has(&harness, Role::Label, "p. 246"));
 
     click(&mut harness, Role::Tab, "Figures");
@@ -155,6 +180,7 @@ fn each_view_lists_every_item_of_its_kind_in_reading_order_with_its_page() {
         &["Figure 13-4", "Figure 13-16"]
     ));
     assert!(says(&harness, "Dividend sensitivity."));
+    assert_metadata(&harness, PieceKind::Figure);
     // A figure card is taller than half the room, so the third is not laid out until it is
     // scrolled to, and its picture is not asked for.
     assert!(!has(&harness, Role::Label, "Figure 24-12"));
@@ -195,6 +221,20 @@ fn an_item_reads_its_page_in_ask_with_the_piece_shown() {
     assert_eq!(shared(&harness).source.target, Some(target));
     let shown = shared(&harness).source.page.ready().map(|page| page.page);
     assert_eq!(shown, Some(3), "the first page of the span is loaded");
+    let original = shared(&harness)
+        .source
+        .page
+        .ready()
+        .unwrap()
+        .pieces
+        .iter()
+        .find(|piece| piece.number == 11)
+        .unwrap();
+    assert_eq!(
+        original.caption.as_deref(),
+        Some("The call price in Python"),
+        "Source preserves the printed caption"
+    );
 }
 
 #[test]

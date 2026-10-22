@@ -25,8 +25,13 @@ pub enum ChapterState {
     Ingested {
         items: u64,
     },
-    /// Both stores hold the document, but its insights, takeaways and cheat sheet are not saved
-    /// yet, so a start asks the model for those alone.
+    /// Required artifact descriptions and insights have independent missing states.
+    IngestedWithoutMetadata {
+        items: u64,
+        missing_artifacts: bool,
+        missing_insights: bool,
+    },
+    /// Both stores hold the document, but a start must write its missing insights.
     IngestedWithoutInsights {
         items: u64,
     },
@@ -70,6 +75,11 @@ pub enum IngestStage {
     Storing,
     /// The agent is writing the insights, takeaways and cheat sheet of the whole document.
     WritingInsights,
+    /// Accepted artifact descriptions so far.
+    WritingArtifacts {
+        done: u32,
+        items: u32,
+    },
     /// `done` of all `items` are read.
     ReadingConcepts {
         done: u32,
@@ -91,7 +101,7 @@ const CUT_SHARE_OF_A_PAGE: f32 = 0.15;
 
 impl IngestStage {
     /// How much is done, from 0 to 1: of the work on the pages for the two page stages, of the
-    /// stage for the two concept stages, and `None` for a stage that does not count what it has
+    /// stage for artifact and concept work, and `None` for a stage that does not count what it has
     /// done.
     ///
     /// The cutting and the converting of the pages share one scale, so the share does not fall or
@@ -113,7 +123,8 @@ impl IngestStage {
                 let counts_as_done = saved as f32 + CUT_SHARE_OF_A_PAGE * cut_not_saved as f32;
                 (counts_as_done, pages)
             }
-            IngestStage::ReadingConcepts { done, items }
+            IngestStage::WritingArtifacts { done, items }
+            | IngestStage::ReadingConcepts { done, items }
             | IngestStage::LinkingConcepts { done, items } => (done as f32, items),
             IngestStage::CheckingStored
             | IngestStage::OpeningPdf
@@ -165,6 +176,8 @@ pub struct IngestReport {
     pub concepts_created: usize,
     pub concepts_linked: usize,
     pub skipped_items: usize,
+    /// Complete artifact descriptions after this run.
+    pub artifacts: usize,
     /// What the whole run used.
     pub usage: Usage,
     pub pages_to_check: Vec<PageToCheck>,
@@ -174,15 +187,13 @@ pub struct IngestReport {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum IngestOutcome {
-    /// Nothing was converted, embedded or stored. The insights, takeaways and cheat sheet were
-    /// asked for only when they were not saved yet, and `insights` says what became of them
-    /// (`None`: the run had no insights writer). `usage` is what this start spent, on the
-    /// insights alone, and is empty when nothing was asked. Own tags that were given have still
-    /// been written.
+    /// Search data was already complete; `usage` includes any artifact or insight repair.
+    /// `insights` is absent when disabled, and supplied document tags have still been written.
     AlreadyIngested {
         doc: DocId,
         items: u64,
         insights: Option<InsightsOutcome>,
+        artifacts: usize,
         usage: Usage,
     },
     Ingested(IngestReport),

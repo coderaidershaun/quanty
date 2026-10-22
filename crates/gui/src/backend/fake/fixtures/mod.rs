@@ -13,5 +13,5 @@ pub(super) use ask::{
     reply_without_concepts,
 };
 pub(super) use concepts::page_concepts;
-pub(super) use library::{catalogue, find_samples, page};
+pub(super) use library::{catalogue, chapter_folder, find_samples, page};
 pub(super) use reader::SampleError;

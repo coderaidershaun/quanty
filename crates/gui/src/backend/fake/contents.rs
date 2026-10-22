@@ -58,10 +58,11 @@ fn contents(samples: &Path, doc: DocId) -> Result<ChapterContents, fixtures::Sam
     let later = (2..=page_count)
         .map(|page| fixtures::page(samples, doc, page))
         .collect::<Result<Vec<_>, _>>()?;
-    let items = std::iter::once(first)
+    let mut items: Vec<_> = std::iter::once(first)
         .chain(later)
         .flat_map(items_of)
         .collect();
+    super::artifacts::attach(&fixtures::chapter_folder(samples, doc)?, &mut items);
     Ok(ChapterContents {
         doc,
         page_count,
@@ -91,6 +92,7 @@ fn items_of(view: PageView) -> impl Iterator<Item = ChapterItem> {
             last_page: None,
             last_printed_page: None,
             piece,
+            metadata: None,
         })
 }
 

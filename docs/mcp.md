@@ -453,3 +453,5 @@ For HTTP:
 ```
 
 Another agent that speaks MCP takes the same command, or the same URL.
+
+Required artifact descriptions are part of PDF ingestion, including metadata-only repair when both stores already hold the document. `ingest_status` reports `writing_artifacts` with `artifacts_done` and `artifacts_total`, and reports cumulative usage after accepted or rejected replies. Metadata failure ends the job as failed while preserving prior searchable data and accepted checkpoints. A missing converted folder or oversized pending request blocks repair. Source, embeddings and concept inputs keep their original content. Explicit bulk backfill is available through `rag-ingest artifacts --all --dry-run` and `rag-ingest artifacts --all`.

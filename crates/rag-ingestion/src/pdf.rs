@@ -1,6 +1,5 @@
-//! Takes one PDF all the way into the stores in one run: name it by the category of its media,
-//! convert its pages, then ingest the converted document. A PDF that is already ingested is not
-//! converted or stored again; only its missing insights are written.
+//! Converts and ingests a PDF in one run, or repairs its missing artifact descriptions and
+//! insights without repeating conversion or replacing stored search data.
 
 use std::fmt;
 use std::path::Path;
@@ -23,12 +22,13 @@ use crate::stores::Stores;
 #[derive(Debug, Clone, PartialEq)]
 pub enum PdfOutcome {
     /// Both stores already hold the whole document, so nothing was converted, embedded or stored.
-    /// Its insights were written only when the document gets them and they were not saved yet.
-    /// `insights` says what became of them, and is `None` when the models hold no insights writer.
+    /// Required artifact descriptions are complete; missing insights are written when enabled.
+    /// `insights` is `None` when the models hold no insights writer.
     AlreadyIngested {
         doc_id: DocId,
         items: u64,
         insights: Option<InsightsSummary>,
+        artifacts: crate::ArtifactSummary,
     },
     /// The chapter was converted, or was found converted, and then ingested.
     Ingested(Box<PdfSummary>),
@@ -98,8 +98,7 @@ pub struct ChapterPdf<'a, C, O> {
     /// hears the count of the pages, then each page as it is cut out and as it ends.
     pub convert: C,
     /// Hears each step of the run as it happens, with what the run used up to and with that step.
-    /// A PDF that is ingested already hears only the check of the stores, and the writing of its
-    /// insights when it gets them and they are not saved yet.
+    /// A PDF that is ingested already reports the store check and any artifact or insight repair.
     pub on_step: O,
 }
 
@@ -112,13 +111,20 @@ impl PdfOutcome {
     }
 
     /// What the whole run used: for a run that ingested, the conversion and the ingest; for a run
-    /// that found the document ingested, only the insights that it wrote.
+    /// that found the document ingested, only artifact and insight repair.
     pub fn usage(&self) -> UsageTally {
         match self {
-            PdfOutcome::AlreadyIngested { insights, .. } => insights
-                .as_ref()
-                .map(|insights| insights.usage.clone())
-                .unwrap_or_default(),
+            PdfOutcome::AlreadyIngested {
+                insights,
+                artifacts,
+                ..
+            } => {
+                let mut usage = artifacts.usage.clone();
+                if let Some(insights) = insights {
+                    usage.add_all(&insights.usage);
+                }
+                usage
+            }
             PdfOutcome::Ingested(summary) => summary.usage(),
         }
     }
@@ -153,30 +159,24 @@ impl fmt::Display for PdfOutcome {
             PdfOutcome::AlreadyIngested {
                 doc_id,
                 items,
-                insights: Some(insights),
-            } if insights.outcome.tried_to_write() => {
+                insights,
+                artifacts,
+            } => {
                 writeln!(formatter, "document id: {doc_id}")?;
                 writeln!(
                     formatter,
                     "already ingested: both stores hold all {items} items of this document, so nothing was converted, embedded or stored"
                 )?;
-                write!(formatter, "{}", insights.outcome.line(*doc_id))?;
-                write_usage(formatter, &insights.usage, insights.usage.cost_usd())
-            }
-            PdfOutcome::AlreadyIngested {
-                doc_id,
-                items,
-                insights,
-            } => {
-                writeln!(formatter, "document id: {doc_id}")?;
                 write!(
                     formatter,
-                    "already ingested: both stores hold all {items} items of this document, so nothing was converted, embedded, asked or written"
+                    "artifacts: {} complete, {} written",
+                    artifacts.total, artifacts.written
                 )?;
                 if let Some(insights) = insights {
                     write!(formatter, "\n{}", insights.outcome.line(*doc_id))?;
                 }
-                Ok(())
+                let usage = self.usage();
+                write_usage(formatter, &usage, usage.cost_usd())
             }
             PdfOutcome::Ingested(summary) => summary.fmt(formatter),
         }
@@ -193,10 +193,9 @@ impl fmt::Display for PdfOutcome {
 ///
 /// Both stores are checked before the first page is converted, so a store that is down fails the
 /// run before a page is paid for. A second call on the same PDF converts, embeds and stores
-/// nothing, and asks nothing, unless the chapter's insights are not saved yet: then it asks for
-/// those alone and writes only that file. A part of a book that is not a chapter gets no
-/// insights, so it never asks. A call that stopped in the conversion, or in the ingest, is
-/// finished by the same call again: the pages that were converted are kept, and an ingest writes
+/// nothing. It asks only for missing or stale artifact descriptions and missing enabled insights.
+/// Book parts require artifact descriptions but get no insights. A call stopped during conversion
+/// or ingestion is finished by the same call again: converted pages are kept, and an ingest writes
 /// the same points and nodes over themselves. A document that was ingested with an item that was
 /// skipped is not taken as ingested, so the next call asks about that item again.
 ///
@@ -229,15 +228,38 @@ where
     // while Qdrant is down, and so that a collection that was removed counts as holding no points.
     stores.items.ensure_collection().await?;
     if let Some(items) = items_of_ingested_document(document, stores).await? {
-        let insights = match &models.insights {
-            Some(writer) => {
-                Some(insights_of_ingested(writer, job, document, stores, &mut on_step).await?)
+        let assessment = crate::assess_artifacts(&job.chapter_folder());
+        let artifacts = if assessment.state == crate::ArtifactState::Ready {
+            crate::ArtifactSummary {
+                total: assessment.total,
+                written: 0,
+                usage: UsageTally::default(),
             }
+        } else {
+            models
+                .artifacts
+                .write_missing_reporting(
+                    &job.chapter_folder(),
+                    &mut Meter::new(&mut on_step, UsageTally::default()),
+                )
+                .await
+                .map_err(IngestError::from)?
+        };
+        let insights = match &models.insights {
+            Some(writer) => Some(
+                insights_of_ingested(writer, job, document, stores, &mut |step, usage| {
+                    let mut total = artifacts.usage.clone();
+                    total.add_all(usage);
+                    on_step(step, &total);
+                })
+                .await?,
+            ),
             None => None,
         };
         return Ok(PdfOutcome::AlreadyIngested {
             doc_id: document,
             items,
+            artifacts,
             insights,
         });
     }

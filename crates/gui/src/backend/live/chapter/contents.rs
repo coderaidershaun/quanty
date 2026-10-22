@@ -83,7 +83,32 @@ fn items_from_disk(
     Ok(ChapterContents {
         doc,
         page_count: chapter.index.page_count,
-        items: chapter.items().iter().map(item_view).collect(),
+        items: {
+            let source = chapter.artifact_source();
+            let saved = ocr::content::ChapterArtifacts::read(&folder)
+                .ok()
+                .flatten()
+                .filter(|saved| saved.matches_source(&source));
+            chapter
+                .items()
+                .iter()
+                .map(|item| {
+                    let mut view = item_view(item);
+                    let id = format!(
+                        "{}:{}:{}",
+                        chapter.index.source_sha256, item.first.id.page, item.first.id.number
+                    );
+                    view.metadata = saved
+                        .as_ref()
+                        .and_then(|saved| saved.text(&id))
+                        .map(|text| crate::contract::ArtifactMetadata {
+                            title: text.title.clone(),
+                            description: text.description.clone(),
+                        });
+                    view
+                })
+                .collect()
+        },
     })
 }
 
@@ -99,5 +124,6 @@ fn item_view(item: &ocr::ChapterItem<'_>) -> ChapterItem {
         last_page: item.last_page(),
         last_printed_page: item.last_printed_page().map(str::to_owned),
         piece,
+        metadata: None,
     }
 }

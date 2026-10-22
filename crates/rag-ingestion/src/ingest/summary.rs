@@ -29,6 +29,8 @@ pub enum IngestStep {
     /// The agent of the Ingest choice is about to be asked for the chapter's insights, takeaways
     /// and cheat sheet.
     WritingInsights,
+    /// Required display metadata accepted so far.
+    WritingArtifacts { done: usize, total: usize },
     /// `done` of `total` items were read for their concepts (a skipped item counts as read).
     ReadingConcepts { done: usize, total: usize },
     /// The concepts of `done` of `total` read items were written to the graph.
@@ -122,11 +124,13 @@ pub struct IngestSummary {
     /// The count of the whole collection after the run, not only of this chapter.
     pub points_in_collection: u64,
     pub concepts: ConceptSummary,
+    /// Required display metadata; standalone images have none.
+    pub artifacts: Option<super::ArtifactSummary>,
     /// What became of the chapter's insights. `None` when this run writes none: a picture that
     /// stands alone, or an ingest that was given no insights writer.
     pub insights: Option<InsightsSummary>,
-    /// What this ingest used: the embedding of its items and concepts, the concept questions and
-    /// the insights question, and for a picture its conversion.
+    /// Includes embeddings, artifact descriptions, insights and concept questions, plus conversion
+    /// for a standalone picture.
     pub usage: UsageTally,
 }
 
@@ -198,6 +202,13 @@ impl IngestSummary {
                 skipped.page,
                 skipped.id,
                 skipped.reason
+            )?;
+        }
+        if let Some(artifacts) = &self.artifacts {
+            write!(
+                formatter,
+                "\nartifacts: {} complete, {} written",
+                artifacts.total, artifacts.written
             )?;
         }
         if let Some(insights) = &self.insights {

@@ -246,6 +246,9 @@ pub(super) enum Command {
     /// choice unless --dry-run is given
     Insights(GivenChapters),
 
+    /// Complete required Library titles and descriptions from saved chapters, without rebuilding stores
+    Artifacts(GivenChapters),
+
     /// Change the own tags of a stored document, in both stores, with no embedding and no model
     Tag {
         /// The document id that an ingest prints, such as 5f3c2a1e-9b04-5d6e-8a17-2c4b7e90f1d3

@@ -10,7 +10,8 @@ pub mod reader;
 pub mod testing;
 
 pub use content::{
-    Catalogue, ChapterEntry, ChapterIndex, ChapterInsights, Cite, CiteKind, ContentError,
+    ArtifactEntry, ArtifactPiece, ArtifactSource, ArtifactTarget, ArtifactText, Catalogue,
+    ChapterArtifacts, ChapterEntry, ChapterIndex, ChapterInsights, Cite, CiteKind, ContentError,
     DocumentName, FigureImage, ImageEntry, ImageIndex, ImageShows, Insight, MediaDocument, PageBox,
     PieceDetail, RelationshipKind, Symbol, gets_insights, saved_images,
 };

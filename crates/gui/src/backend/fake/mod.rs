@@ -1,6 +1,7 @@
 //! A backend that answers every command from built-in data, so the whole app runs with no store
 //! and no model.
 
+mod artifacts;
 mod balances;
 mod contents;
 mod fixtures;

@@ -22,7 +22,7 @@ async fn a_model_that_both_converted_and_read_the_concepts_has_one_line_in_the_s
     let PdfOutcome::Ingested(summary) = &outcome else {
         panic!("expected the pdf to be ingested, got {outcome}");
     };
-    let calls = summary.ingest.concepts.llm_calls;
+    let calls = summary.ingest.concepts.llm_calls + 1;
     let printed = outcome.to_string();
     let lines: Vec<&str> = printed
         .lines()

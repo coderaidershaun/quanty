@@ -1,0 +1,198 @@
+{
+  "format_version": 1,
+  "source": {
+    "signature": "c5f6ad7813533dfe24fb503d296ab9e0ada759201470529adb2d955799d96b08",
+    "manifest": [
+      {
+        "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:2:3",
+        "kind": "formula",
+        "pieces": [
+          {
+            "page": 2,
+            "number": 3
+          }
+        ]
+      },
+      {
+        "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:2:8",
+        "kind": "formula",
+        "pieces": [
+          {
+            "page": 2,
+            "number": 8
+          }
+        ]
+      },
+      {
+        "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:3:1",
+        "kind": "table",
+        "pieces": [
+          {
+            "page": 3,
+            "number": 1
+          }
+        ]
+      },
+      {
+        "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:3:2",
+        "kind": "table",
+        "pieces": [
+          {
+            "page": 3,
+            "number": 2
+          }
+        ]
+      },
+      {
+        "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:4:2",
+        "kind": "formula",
+        "pieces": [
+          {
+            "page": 4,
+            "number": 2
+          }
+        ]
+      },
+      {
+        "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:4:4",
+        "kind": "formula",
+        "pieces": [
+          {
+            "page": 4,
+            "number": 4
+          }
+        ]
+      },
+      {
+        "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:5:1",
+        "kind": "figure",
+        "pieces": [
+          {
+            "page": 5,
+            "number": 1
+          }
+        ]
+      },
+      {
+        "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:6:1",
+        "kind": "figure",
+        "pieces": [
+          {
+            "page": 6,
+            "number": 1
+          }
+        ]
+      },
+      {
+        "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:6:3",
+        "kind": "formula",
+        "pieces": [
+          {
+            "page": 6,
+            "number": 3
+          }
+        ]
+      },
+      {
+        "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:6:7",
+        "kind": "table",
+        "pieces": [
+          {
+            "page": 6,
+            "number": 7
+          }
+        ]
+      },
+      {
+        "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:7:4",
+        "kind": "figure",
+        "pieces": [
+          {
+            "page": 7,
+            "number": 4
+          }
+        ]
+      }
+    ]
+  },
+  "generation_signature": "3677c9943733e9f39789d74ffa5dae73355b5dc068bc39a247556826ebe47f0d",
+  "entries": [
+    {
+      "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:2:3",
+      "title": "Forward price from carrying costs",
+      "description": "Relates the forward price to the cash price, financing costs and benefits of holding the asset.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    },
+    {
+      "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:2:8",
+      "title": "Annual financing cost",
+      "description": "Computes the one-year interest cost of borrowing 100,000 at an annual rate of 8 percent.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    },
+    {
+      "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:3:1",
+      "title": "Effect of changing interest rates on option values.",
+      "description": "Rows are option types and settlement styles; columns are rises or falls in domestic and foreign interest rates, giving the effect on option values.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    },
+    {
+      "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:3:2",
+      "title": "Effect of changing dividends on stock option values.",
+      "description": "Rows are stock option calls and puts; columns are a dividend being raised or cut, giving the effect on option values.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    },
+    {
+      "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:4:2",
+      "title": "Likelihood of the D-vine copula",
+      "description": "The likelihood of the D-vine copula is the product over observations, tree levels and pairs of the pair copula densities evaluated at the conditional distribution functions.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    },
+    {
+      "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:4:4",
+      "title": "Likelihood of a C-vine copula",
+      "description": "The likelihood of a C-vine copula is the product over observations, tree levels and pairs of the pair copula densities evaluated at the conditional distribution functions.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    },
+    {
+      "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:5:1",
+      "title": "Profit profiles of three spreads",
+      "description": "Compares how the theoretical profit or loss of three spreads changes with the underlying price.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    },
+    {
+      "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:6:1",
+      "title": "Dividend sensitivity.",
+      "description": "Compares the theoretical profit or loss of four spreads as the expected quarterly dividend changes.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    },
+    {
+      "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:6:3",
+      "title": "Gamma-to-theta ratio",
+      "description": "Expresses the chapter’s reward-to-risk comparison for an option position using gamma and theta.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    },
+    {
+      "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:6:7",
+      "title": "Spread efficiency comparison",
+      "description": "Compares gamma-to-theta ratios and resulting efficiencies for the three spreads.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    },
+    {
+      "id": "b37ff5181567b3ea99c0ec2b7aca436c036a127477f34dbe9299c8ab13cf0516:7:4",
+      "title": "FTSE 100 volatility surface. March 16. 2012.",
+      "description": "Shows how FTSE 100 implied volatility varies with exercise price and months to expiration on the stated date.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    }
+  ]
+}

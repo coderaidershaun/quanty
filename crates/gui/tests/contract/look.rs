@@ -226,6 +226,16 @@ static ROWS: &[Row] = &[
         },
     },
     Row {
+        picture: "library-tables",
+        scene: "black-scholes",
+        window: DEFAULT_WINDOW,
+        start: Start::AfterOpeningAViewOfAChapter {
+            media: BOOK_ROW,
+            chapter: CHAPTER_ROW,
+            view: "Tables",
+        },
+    },
+    Row {
         picture: "library-find",
         scene: "black-scholes",
         window: DEFAULT_WINDOW,

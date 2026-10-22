@@ -113,7 +113,24 @@ fn card(ui: &mut egui::Ui, doc: DocId, item: &ChapterItem, cx: &mut PanelCx<'_>)
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.label(TextRole::Small.rich(&pages).color(color::TEXT_MUTED));
-            piece_body(ui, piece, cx.media, cx.intents);
+            let mut body = piece.clone();
+            if let Some(metadata) = &item.metadata {
+                ui.label(TextRole::BodyStrong.rich(&metadata.title));
+                ui.label(TextRole::Body.rich(&metadata.description));
+                if body
+                    .name
+                    .as_deref()
+                    .is_some_and(|name| name == metadata.title || name == metadata.description)
+                {
+                    body.name = None;
+                }
+                if body.caption.as_deref().is_some_and(|caption| {
+                    caption == metadata.title || caption == metadata.description
+                }) {
+                    body.caption = None;
+                }
+            }
+            piece_body(ui, &body, cx.media, cx.intents);
         });
     if shown.action_clicked {
         cx.intents.push(Intent::OpenSource {

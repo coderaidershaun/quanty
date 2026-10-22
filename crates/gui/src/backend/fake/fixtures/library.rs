@@ -100,7 +100,10 @@ pub(in crate::backend::fake) fn find_samples(near: &Path) -> Option<PathBuf> {
         .find(|candidate| candidate.is_dir())
 }
 
-fn chapter_folder(samples: &Path, doc: DocId) -> Result<PathBuf, SampleError> {
+pub(in crate::backend::fake) fn chapter_folder(
+    samples: &Path,
+    doc: DocId,
+) -> Result<PathBuf, SampleError> {
     CHAPTERS
         .iter()
         .find(|(number, ..)| doc.0 == Uuid::from_u128(*number))

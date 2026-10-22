@@ -17,9 +17,8 @@ pub(crate) enum JobState {
     /// The PDF was converted and ingested.
     Done,
     /// Both stores already held this PDF, so nothing was converted, embedded or stored. When the
-    /// document gets insights and they were not saved yet, the agent was asked for them, and
-    /// `summary` and `usage` say what came of it; in every other case it cost nothing. The
-    /// `document_tags` that were sent are still written.
+    /// artifact descriptions or enabled insights need repair, `summary` and `usage` report that work.
+    /// Supplied `document_tags` are still written.
     AlreadyIngested,
     /// The ingest stopped. `error` says why. Send the same PDF again to go on.
     Failed,
@@ -38,6 +37,8 @@ pub(crate) enum Stage {
     /// sheet. A PDF that was ingested before insights were written is in this stage while its
     /// missing insights are written.
     WritingInsights,
+    /// Required artifact titles and descriptions are being written.
+    WritingArtifacts,
 }
 
 /// How an ingest job is going, or how it ended.
@@ -51,6 +52,10 @@ pub(crate) struct IngestReport {
     pub(super) stage: Option<Stage>,
     /// The title of the media.
     media: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    artifacts_done: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    artifacts_total: Option<usize>,
     /// The name of the PDF file.
     file: String,
     /// Give it to `read_page`. When `done` or `already_ingested`.
@@ -60,10 +65,11 @@ pub(crate) struct IngestReport {
     #[serde(skip_serializing_if = "Option::is_none")]
     items: Option<u64>,
     /// What the ingest did, as `rag-ingest pdf` prints it. When `done`, and when
-    /// `already_ingested` tried to write the insights.
+    /// `already_ingested` wrote artifact descriptions or tried to write insights.
     #[serde(skip_serializing_if = "Option::is_none")]
     summary: Option<String>,
-    /// What the ingest used. When `done`, and when `already_ingested` tried to write the insights.
+    /// Cumulative usage, retained on failure. Completed repeat runs include it when they wrote
+    /// artifact descriptions or tried to write insights.
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
     spent: Option<Spent>,
     /// Why the ingest stopped, and what to do. When `failed` or `stopped`.
@@ -78,6 +84,8 @@ impl IngestReport {
             state: JobState::Running,
             stage: None,
             media: media.to_owned(),
+            artifacts_done: None,
+            artifacts_total: None,
             file: file.to_owned(),
             document_id: None,
             items: None,
@@ -93,18 +101,23 @@ impl IngestReport {
         self.document_id = Some(outcome.doc_id().to_string());
         match outcome {
             PdfOutcome::AlreadyIngested {
-                items, insights, ..
+                items,
+                insights,
+                artifacts,
+                ..
             } => {
                 self.state = JobState::AlreadyIngested;
                 self.items = Some(*items);
-                // A run that tried to write the insights has something to tell, and any other
-                // run used nothing.
+                self.artifacts_done = Some(artifacts.total);
+                self.artifacts_total = Some(artifacts.total);
                 let tried = insights
                     .as_ref()
                     .is_some_and(|insights| insights.outcome.tried_to_write());
-                if tried {
+                if tried || artifacts.written > 0 {
                     self.summary = Some(outcome.to_string());
                     self.spent = Some((&outcome.usage()).into());
+                } else {
+                    self.spent = None;
                 }
             }
             PdfOutcome::Ingested(summary) => {
@@ -113,6 +126,18 @@ impl IngestReport {
                 self.summary = Some(outcome.to_string());
                 self.spent = Some((&summary.usage()).into());
             }
+        }
+    }
+
+    pub(super) fn progress(
+        &mut self,
+        spent: &rag_core::UsageTally,
+        artifacts: Option<(usize, usize)>,
+    ) {
+        self.spent = Some(spent.into());
+        if let Some((done, total)) = artifacts {
+            self.artifacts_done = Some(done);
+            self.artifacts_total = Some(total);
         }
     }
 

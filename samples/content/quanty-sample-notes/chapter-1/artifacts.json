@@ -1,0 +1,62 @@
+{
+  "format_version": 1,
+  "source": {
+    "signature": "15958e81f716c1053b6da3510a9f2a5c57fa87dfa69ad6621bb46dde69d69343",
+    "manifest": [
+      {
+        "id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1:1:5",
+        "kind": "formula",
+        "pieces": [
+          {
+            "page": 1,
+            "number": 5
+          }
+        ]
+      },
+      {
+        "id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1:1:7",
+        "kind": "formula",
+        "pieces": [
+          {
+            "page": 1,
+            "number": 7
+          }
+        ]
+      },
+      {
+        "id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1:2:3",
+        "kind": "table",
+        "pieces": [
+          {
+            "page": 2,
+            "number": 3
+          }
+        ]
+      }
+    ]
+  },
+  "generation_signature": "3677c9943733e9f39789d74ffa5dae73355b5dc068bc39a247556826ebe47f0d",
+  "entries": [
+    {
+      "id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1:1:5",
+      "title": "Call payoff at expiration",
+      "description": "The value of a call at expiration is the larger of the stock price minus the strike, and zero.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    },
+    {
+      "id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1:1:7",
+      "title": "Put payoff at expiration",
+      "description": "The value of a put at expiration is the larger of the strike minus the stock price, and zero.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    },
+    {
+      "id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1:2:3",
+      "title": "Option price sensitivity to inputs",
+      "description": "Shows whether call and put prices rise or fall when one pricing input increases and the others stay fixed.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    }
+  ]
+}

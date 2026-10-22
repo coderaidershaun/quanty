@@ -48,6 +48,7 @@ impl<S: Services> Work<S> {
         // The models are set up before the first page is converted, so a missing key for the
         // embedder fails before anything is paid for.
         let models = Models {
+            artifacts: rag_ingestion::ArtifactWriter::new(services.llm(WorkKind::Ingest)),
             embedder: services.embedder(&config)?,
             concepts: ConceptExtractor::new(services.llm(WorkKind::Ingest), &config),
             insights: Some(InsightsWriter::new(services.llm(WorkKind::Ingest))),
@@ -69,13 +70,23 @@ impl<S: Services> Work<S> {
                         report.send_modify(|report| report.stage = Some(Stage::Ingesting));
                         Ok(summary)
                     },
-                on_step: |step, _: &UsageTally| match step {
-                    IngestStep::WritingInsights => set_stage(&report, Stage::WritingInsights),
-                    // The concepts come after the insights, so the stage goes back to ingesting.
-                    IngestStep::ReadingConcepts { .. } | IngestStep::LinkingConcepts { .. } => {
-                        set_stage(&report, Stage::Ingesting);
+                on_step: |step, spent: &UsageTally| {
+                    let counts = match &step {
+                        IngestStep::WritingArtifacts { done, total } => Some((*done, *total)),
+                        _ => None,
+                    };
+                    report.send_modify(|report| report.progress(spent, counts));
+                    match step {
+                        IngestStep::WritingArtifacts { .. } => {
+                            set_stage(&report, Stage::WritingArtifacts)
+                        }
+                        IngestStep::WritingInsights => set_stage(&report, Stage::WritingInsights),
+                        // The concepts come after the insights, so the stage goes back to ingesting.
+                        IngestStep::ReadingConcepts { .. } | IngestStep::LinkingConcepts { .. } => {
+                            set_stage(&report, Stage::Ingesting);
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 },
             },
             &models,

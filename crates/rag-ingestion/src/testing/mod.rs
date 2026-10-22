@@ -13,7 +13,9 @@ use rag_core::{Category, MediaLabels};
 
 use crate::ChapterFolder;
 pub use stand_in_embedder::{StandInEmbedder, first_axis, vector_at};
-pub use stand_in_llm::{AskedQuestion, StandInLlm, stand_in_insights_reply};
+pub use stand_in_llm::{
+    AskedQuestion, StandInLlm, stand_in_artifacts_reply, stand_in_insights_reply,
+};
 pub use throwaway_stores::ThrowawayStores;
 
 /// The converted chapter in `folder`. Its media, when the graph does not have it yet, is made

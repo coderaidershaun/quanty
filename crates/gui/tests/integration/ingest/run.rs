@@ -45,6 +45,12 @@ fn assert_progress_of_one_run(progress: &[IngestProgress], items: u32, used: &Us
     }));
     expected.extend((0..=7).map(|saved| IngestStage::Converting { saved, pages: 7 }));
     expected.extend([
+        IngestStage::WritingArtifacts { done: 0, items: 17 },
+        IngestStage::WritingArtifacts { done: 0, items: 17 },
+        IngestStage::WritingArtifacts {
+            done: 17,
+            items: 17,
+        },
         IngestStage::WritingGraph,
         IngestStage::Embedding { items },
         IngestStage::Storing,
@@ -215,6 +221,7 @@ async fn a_checked_chapter_is_ingested_with_its_labels_and_a_second_start_finds_
         items: stored,
         insights,
         usage,
+        artifacts: _,
     }) = again
     else {
         panic!("expected the second start to find it ingested: {again:#?}");
@@ -244,6 +251,7 @@ async fn a_checked_chapter_is_ingested_with_its_labels_and_a_second_start_finds_
         items: stored,
         insights,
         usage,
+        artifacts: _,
     }) = writing
     else {
         panic!("expected the third start to find it ingested: {writing:#?}");
@@ -260,6 +268,43 @@ async fn a_checked_chapter_is_ingested_with_its_labels_and_a_second_start_finds_
     assert_eq!(models, ["stand-in"], "the insights alone were asked for");
     assert_eq!(pages.calls(), calls_so_far, "no page was converted again");
     assert!(file.is_file(), "the insights are written again");
+    std::fs::remove_file(folder.join("artifacts.json")).unwrap();
+    let missing = checked(&cx, &wanted).await.unwrap();
+    assert_eq!(
+        missing.state,
+        Some(ChapterState::IngestedWithoutMetadata {
+            items,
+            missing_artifacts: true,
+            missing_insights: false
+        })
+    );
+    let (progress, result) = started(&cx, &wanted).await;
+    let Ok(IngestOutcome::AlreadyIngested {
+        artifacts, usage, ..
+    }) = result
+    else {
+        panic!("metadata repair failed: {result:?}");
+    };
+    assert_eq!(artifacts, 17);
+    assert!(!usage.models.is_empty());
+    assert!(progress.iter().any(|progress| matches!(
+        progress.stage,
+        IngestStage::WritingArtifacts {
+            done: 17,
+            items: 17
+        }
+    )));
+    assert!(!progress.iter().any(|progress| matches!(
+        progress.stage,
+        IngestStage::Embedding { .. } | IngestStage::ReadingConcepts { .. }
+    )));
+    assert_eq!(pages.calls(), calls_so_far);
+    std::fs::rename(&folder, folder.with_extension("held")).unwrap();
+    let blocked = checked(&cx, &wanted).await.unwrap();
+    assert!(
+        !blocked.blockers.is_empty(),
+        "missing converted source blocks repair without another conversion"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

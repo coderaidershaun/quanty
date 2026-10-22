@@ -30,9 +30,9 @@ pub use jobs::{
     IngestStage, InsightsOutcome, PageToCheck, Preflight,
 };
 pub use library::{
-    Catalogue, Category, ChapterContents, ChapterInsights, ChapterItem, ChapterLabel, Document,
-    DocumentName, DocumentTagsEdit, DocumentView, Insight, ItemCounts, Media, MediaEdit, NewMedia,
-    is_same_name,
+    ArtifactMetadata, Catalogue, Category, ChapterContents, ChapterInsights, ChapterItem,
+    ChapterLabel, Document, DocumentName, DocumentTagsEdit, DocumentView, Insight, ItemCounts,
+    Media, MediaEdit, NewMedia, is_same_name,
 };
 pub use message::{Command, Effect, Event, Intent, Panel, Tab, unknown_health};
 pub use notice::{Notice, NoticeKind};

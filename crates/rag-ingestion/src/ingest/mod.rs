@@ -3,6 +3,7 @@
 //! same chapter or picture replaces what the earlier run stored, and asks the language model only
 //! for what is not kept or saved yet.
 
+mod artifacts;
 mod concepts;
 mod insights;
 mod items;
@@ -17,6 +18,10 @@ use rag_core::{
     LlmError, MediaLabels, StoreError, UsageTally, embedding_usage,
 };
 
+pub use artifacts::{
+    ArtifactAssessment, ArtifactError, ArtifactState, ArtifactSummary, ArtifactWriter,
+    assess_artifacts,
+};
 pub use concepts::{
     ASK_SCORE, Cache, ConceptError, ConceptExtractor, ConceptSummary, LINK_SCORE, SkippedItem,
 };
@@ -67,14 +72,18 @@ pub enum IngestError {
 
     #[error("could not extract the concepts of the document")]
     Concepts(#[from] ConceptError),
+
+    #[error("required artifact metadata could not be completed")]
+    Artifacts(#[from] ArtifactError),
 }
 
 /// The outside models an ingest pays for.
 pub struct Models<E, L> {
     pub embedder: E,
+    /// Required metadata for every chapter-backed artifact.
+    pub artifacts: ArtifactWriter<L>,
     pub concepts: ConceptExtractor<L>,
-    /// Writes the insights of a chapter. `None` for a caller that wants only the stores written,
-    /// such as a test of what is stored.
+    /// Optional insights for eligible chapters; required artifact descriptions are independent.
     pub insights: Option<InsightsWriter<L>>,
 }
 
@@ -116,6 +125,10 @@ struct ConvertedChapter {
 /// running it again stores them. A point is never stored without its node. Every stored picture
 /// path is absolute.
 ///
+/// Required artifact titles and descriptions are completed before any earlier points or nodes
+/// are replaced. A failed metadata request retains accepted checkpoints and prior search data.
+/// They are Library display fields and never change embedding or concept inputs.
+///
 /// The insights, the takeaways and the cheat sheet of a chapter are written after the points are
 /// stored, and only when the models hold an insights writer and the chapter's folder holds no
 /// saved file. A part of a book that is not a chapter, such as its index, gets none: the summary
@@ -134,7 +147,7 @@ struct ConvertedChapter {
 /// embedded.
 ///
 /// The document node carries a mark that it is ingested whole, with the number of its items. It
-/// is taken away when the run starts and set as the very last step, and only when no item was
+/// is taken away when prior store data is replaced and set as the last step, only when no item was
 /// skipped, so the mark is never there for a run that stopped or skipped an item.
 ///
 /// # Errors
@@ -146,6 +159,7 @@ struct ConvertedChapter {
 ///   calls fail
 /// - [`IngestError::VectorCount`] when the embedder returns another number of vectors than
 ///   there were items
+/// - [`IngestError::Artifacts`] when required metadata cannot be completed or saved
 /// - [`IngestError::Concepts`] when extraction stops, cannot compare two concepts, or cannot use
 ///   its cache folder, its decision log or a store. An item whose questions fail is not an error:
 ///   the summary names it.
@@ -265,6 +279,15 @@ async fn ingest_items<E: Embedder, L: Llm>(
 
     stores.items.ensure_collection().await?;
     stores.concepts.ensure_collection().await?;
+    let artifacts = match &chapter {
+        Some(chapter) => Some(
+            models
+                .artifacts
+                .write_missing_reporting(&chapter.folder, &mut meter)
+                .await?,
+        ),
+        None => None,
+    };
     meter.step(IngestStep::WritingGraph);
     replace_earlier_run(&node, &items, stores).await?;
 
@@ -308,6 +331,7 @@ async fn ingest_items<E: Embedder, L: Llm>(
         items_by_kind: ItemCounts::of(&items),
         points_in_collection,
         concepts,
+        artifacts,
         insights,
         usage: meter.into_spent(),
     })

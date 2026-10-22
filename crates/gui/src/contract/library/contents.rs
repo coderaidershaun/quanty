@@ -17,6 +17,15 @@ pub struct ChapterItem {
     /// `piece.number` is its number on `page`, so `Intent::OpenSource { doc, page, piece:
     /// Some(number) }` opens it.
     pub piece: PagePiece,
+    /// Accepted source-valid display metadata, independent of the printed piece.
+    pub metadata: Option<ArtifactMetadata>,
+}
+
+/// Common Library title and purpose above the original content.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ArtifactMetadata {
+    pub title: String,
+    pub description: String,
 }
 
 impl ChapterItem {

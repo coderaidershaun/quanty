@@ -17,11 +17,12 @@ pub use delete::{
     DeleteError, DocumentDeleteSummary, MediaDeleteSummary, delete_document, delete_media,
 };
 pub use ingest::{
-    ASK_SCORE, Cache as AnswerCache, ChapterChoice, ChapterFolder, ConceptError, ConceptExtractor,
+    ASK_SCORE, ArtifactAssessment, ArtifactError, ArtifactState, ArtifactSummary, ArtifactWriter,
+    Cache as AnswerCache, ChapterChoice, ChapterFolder, ConceptError, ConceptExtractor,
     ConceptSummary, IngestError, IngestStep, IngestSummary, InsightsNeed, InsightsOutcome,
     InsightsSummary, InsightsWriter, Item, ItemCounts, LINK_SCORE, LoneImage, Models, SkippedItem,
-    StoredChapter, StoredChaptersError, chapter_items, context_line, document_title, image_items,
-    ingest_chapter, ingest_image, stored_chapters, usage_of,
+    StoredChapter, StoredChaptersError, assess_artifacts, chapter_items, context_line,
+    document_title, image_items, ingest_chapter, ingest_image, stored_chapters, usage_of,
 };
 pub use keys::{KEY_CHECK_LIMIT, KeyClients, KeyReadFailure, KeyState, KeyStates, read_key_states};
 pub use labels::{RelabelError, Relabelled, TagChange, relabel_document_tags};

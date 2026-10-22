@@ -135,7 +135,7 @@ fn stand_in_claude_work_folder(stores: &ThrowawayStores) -> PathBuf {
     stores.temporary_folder().join("stand-in-claude")
 }
 
-fn rag_ingest_command(
+pub(crate) fn rag_ingest_command(
     stores: &ThrowawayStores,
     arguments: impl IntoIterator<Item = impl AsRef<OsStr>>,
 ) -> Command {

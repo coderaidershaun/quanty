@@ -4,7 +4,7 @@ use super::Quit;
 use super::shared::{Shared, push_cancel};
 use crate::contract::{
     Command, Effect, Failure, IngestOutcome, IngestProgress, IngestRequest, NoticeKind, Preflight,
-    RequestId,
+    RequestId, Usage,
 };
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
@@ -36,6 +36,8 @@ pub enum IngestJob {
     },
     Finished {
         request: IngestRequest,
+        /// Latest cumulative spend, retained even when the required stage fails.
+        spent: Usage,
         result: Result<IngestOutcome, Failure>,
     },
 }
@@ -164,8 +166,12 @@ impl Shared {
             IngestJob::Running { id, .. } | IngestJob::Stopping { id, .. } if *id == request => {}
             _ => return,
         }
-        let (IngestJob::Running { request, .. } | IngestJob::Stopping { request, .. }) =
-            std::mem::take(&mut self.ingest)
+        let (IngestJob::Running {
+            request, progress, ..
+        }
+        | IngestJob::Stopping {
+            request, progress, ..
+        }) = std::mem::take(&mut self.ingest)
         else {
             return;
         };
@@ -176,7 +182,12 @@ impl Shared {
         if self.quit == Quit::Confirmed {
             effects.push(Effect::CloseWindow);
         }
-        self.ingest = IngestJob::Finished { request, result };
+        let spent = progress.map_or_else(Usage::default, |progress| progress.spent);
+        self.ingest = IngestJob::Finished {
+            request,
+            result,
+            spent,
+        };
     }
 
     fn announce_ingest(

@@ -1,0 +1,130 @@
+{
+  "format_version": 1,
+  "source": {
+    "signature": "517f41847fa7200e8b32a686f85d10838324cb808ef341189ba164574aa85e49",
+    "manifest": [
+      {
+        "id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2:1:7",
+        "kind": "formula",
+        "pieces": [
+          {
+            "page": 1,
+            "number": 7
+          }
+        ]
+      },
+      {
+        "id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2:2:4",
+        "kind": "formula",
+        "pieces": [
+          {
+            "page": 2,
+            "number": 4
+          }
+        ]
+      },
+      {
+        "id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2:3:1",
+        "kind": "formula",
+        "pieces": [
+          {
+            "page": 3,
+            "number": 1
+          }
+        ]
+      },
+      {
+        "id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2:3:5",
+        "kind": "formula",
+        "pieces": [
+          {
+            "page": 3,
+            "number": 5
+          }
+        ]
+      },
+      {
+        "id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2:3:7",
+        "kind": "formula",
+        "pieces": [
+          {
+            "page": 3,
+            "number": 7
+          }
+        ]
+      },
+      {
+        "id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2:3:9",
+        "kind": "formula",
+        "pieces": [
+          {
+            "page": 3,
+            "number": 9
+          }
+        ]
+      },
+      {
+        "id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2:3:11",
+        "kind": "code",
+        "pieces": [
+          {
+            "page": 3,
+            "number": 11
+          }
+        ]
+      }
+    ]
+  },
+  "generation_signature": "3677c9943733e9f39789d74ffa5dae73355b5dc068bc39a247556826ebe47f0d",
+  "entries": [
+    {
+      "id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2:1:7",
+      "title": "Geometric Brownian motion",
+      "description": "The change in the stock price over a short time is a drift term proportional to the price plus a random term proportional to the price.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    },
+    {
+      "id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2:2:4",
+      "title": "Itô's lemma for the option value",
+      "description": "The change in the option value over a short time is a drift term plus a random term that depends on how sensitive the option is to the stock price.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    },
+    {
+      "id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2:3:1",
+      "title": "Black–Scholes partial differential equation",
+      "description": "Relates the option value’s changes with time and stock price under the chapter’s risk-neutral pricing argument.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    },
+    {
+      "id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2:3:5",
+      "title": "Black–Scholes call price",
+      "description": "The price of a European call is the stock price times N of d one, minus the strike discounted to today times N of d two.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    },
+    {
+      "id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2:3:7",
+      "title": "Black–Scholes put price",
+      "description": "The price of a European put is the strike discounted to today times N of minus d two, minus the stock price times N of minus d one.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    },
+    {
+      "id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2:3:9",
+      "title": "The terms d one and d two",
+      "description": "Defines the standardized quantities used in the Black–Scholes call and put pricing formulas.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    },
+    {
+      "id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2:3:11",
+      "title": "The call price in Python",
+      "description": "A Python function that returns the Black–Scholes price of a European call from the spot price, the strike, the interest rate, the volatility and the years to expiry.",
+      "model": "fixture",
+      "cache_identity": "handwritten-source-example"
+    }
+  ]
+}

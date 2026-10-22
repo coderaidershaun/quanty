@@ -19,7 +19,7 @@ use crate::widgets::{self, Button, Notice};
 
 const CHECKING: &str = "Checking the PDF";
 const CONNECTING: &str = "Connecting to the stores";
-const COST: &str = "Checking is free. Starting is paid work: the selected agent and Jev convert each page, Gemini embeds the items, and the selected agent writes the insights, takeaways and cheat sheet and reads the concepts.";
+const COST: &str = "Checking is free. Starting is paid work: the selected agent and Jev convert each page, Gemini embeds the items, and the selected agent writes artifact descriptions, the insights, takeaways and cheat sheet and reads the concepts.";
 const KEEP_OPEN: &str = "Keep the app open until this is done. If it stops, start the same PDF again: pages that are converted are not paid for twice.";
 
 /// `draft` is what the form holds now, made of its settled fields.
@@ -80,8 +80,15 @@ pub(super) fn show(
         IngestJob::Running { progress, .. } | IngestJob::Stopping { progress, .. } => {
             running(ui, progress.as_ref());
         }
-        IngestJob::Finished { request, result } => {
+        IngestJob::Finished {
+            request,
+            result,
+            spent,
+        } => {
             finished(ui, local, cx.intents, request, result);
+            if result.is_err() {
+                ui.label(TextRole::Small.rich(spent_sentence(spent)));
+            }
         }
     }
 }
@@ -109,12 +116,21 @@ fn checked_line(ui: &mut egui::Ui, preflight: &Preflight) {
             "{pages_done} are converted already and are not paid for again."
         )),
         Some(ChapterState::Converted) => Some(
-            "All are converted already: only the embedding, the insights and the concepts are paid for."
+            "All are converted already: embedding, missing artifact descriptions and insights, and concept extraction can incur costs."
                 .to_owned(),
         ),
         Some(ChapterState::Ingested { items }) => Some(format!(
             "Already ingested with {items} items: a start converts nothing and pays for nothing."
         )),
+        Some(ChapterState::IngestedWithoutMetadata { items, missing_artifacts, missing_insights }) => {
+            let missing = match (missing_artifacts, missing_insights) {
+                (true, true) => "artifact descriptions and insights",
+                (true, false) => "artifact descriptions",
+                (false, true) => "insights",
+                (false, false) => return,
+            };
+            Some(format!("Already ingested with {items} items. A start writes the missing {missing}. Nothing is converted or embedded."))
+        },
         Some(ChapterState::IngestedWithoutInsights { items }) => Some(format!(
             "Already ingested with {items} items, but its insights are not saved yet: a start pays only for the insights, takeaways and cheat sheet."
         )),
@@ -142,6 +158,9 @@ fn stage_words(stage: Option<IngestStage>) -> String {
         IngestStage::WritingGraph => "Writing the graph".to_owned(),
         IngestStage::Embedding { items } => format!("Embedding {items} items"),
         IngestStage::Storing => "Storing the items".to_owned(),
+        IngestStage::WritingArtifacts { done, items } => {
+            format!("Writing artifact descriptions — {done} of {items}")
+        }
         IngestStage::WritingInsights => {
             "Writing the insights, takeaways and cheat sheet".to_owned()
         }
@@ -205,8 +224,11 @@ fn finished(
             items,
             insights,
             usage,
+            artifacts,
         }) => {
-            let stored = format!("{items} items are stored. Nothing was converted or embedded.");
+            let stored = format!(
+                "{items} items are stored with {artifacts} artifact descriptions. Nothing was converted or embedded."
+            );
             let body = with_insights(stored, insights.as_ref()) + &spent_sentence(usage);
             Notice::info("Already ingested").body(&body).show(ui);
             not_written(ui, intents, *doc, insights.as_ref());
@@ -304,8 +326,12 @@ fn spent_sentence(usage: &Usage) -> String {
 
 fn summary(report: &IngestReport) -> String {
     let mut text = format!(
-        "{} pages, {}. {} concepts created, {} linked.",
-        report.pages, report.items, report.concepts_created, report.concepts_linked
+        "{} pages, {}. {} concepts created, {} linked. {} artifact descriptions complete.",
+        report.pages,
+        report.items,
+        report.concepts_created,
+        report.concepts_linked,
+        report.artifacts
     );
     text.push_str(&spent_sentence(&report.usage));
     match report.pages_to_check.len() {

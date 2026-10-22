@@ -9,5 +9,5 @@ pub use catalogue::{
     Catalogue, Category, ChapterLabel, Document, DocumentName, DocumentTagsEdit, DocumentView,
     ItemCounts, Media, MediaEdit, NewMedia, is_same_name,
 };
-pub use contents::{ChapterContents, ChapterItem};
+pub use contents::{ArtifactMetadata, ChapterContents, ChapterItem};
 pub use insights::{ChapterInsights, Insight};

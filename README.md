@@ -425,6 +425,18 @@ Messages you may see, and what to do.
 | "The page was not found" in the app, or `no converted chapter under content has the document id …` from `read_page`                                                      | The document's folder is not where quanty looks. Put it inside its media's folder under `content/`, or ingest its PDF again with `rag-ingest pdf`                                                                                                                                                                     |
 | `… cannot be ingested as a book chapter; rename it to chapter-<number>-<name>.pdf …` or `… so its pdf must be named chapter-<number>-<name>.pdf …` from `rag-ingest pdf` | The media is a book, so the file name gives the chapter. Rename the file, or give `--title` when the PDF is a part of the book that is not a chapter, such as its index. A media that the library does not have yet can be a paper or another media instead: give `--paper` or `--other`, whose PDF can have any name |
 
+## Artifact descriptions
+
+Converted documents require saved Library artifact titles and descriptions. Existing libraries can preview and backfill them without rebuilding search data:
+
+```sh
+rag-ingest artifacts --all --dry-run
+rag-ingest artifacts --document <document-id>
+```
+
+Backfill uses the selected Ingest model and saved chapter text. See [artifact metadata and backfill](docs/reference.md#artifact-titles-and-descriptions) for resumability, request limits and failure behavior.
+
+
 ## Licence
 
 MIT. See [LICENSE](LICENSE).

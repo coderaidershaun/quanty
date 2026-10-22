@@ -59,6 +59,11 @@ enum Start {
     AfterAClickOnAChapterRow,
     AfterTypingInTheFindBox,
     AfterAClickOnMaximiseInTheConceptGraph,
+    /// The Library tab, a media row, one of its chapter rows, then the Insights view.
+    AfterOpeningTheInsightsOf {
+        media: &'static str,
+        chapter: &'static str,
+    },
     /// The scene never rests, so it is looked at once its catalogue has loaded and its bar has
     /// come to the stall.
     AtTheStallOfItsBuild,
@@ -209,6 +214,24 @@ static ROWS: &[Row] = &[
         scene: "datasets-running",
         window: DEFAULT_WINDOW,
         start: Start::AtTheStallOfItsBuild,
+    },
+    Row {
+        picture: "library-insights",
+        scene: "black-scholes",
+        window: [1536.0, 2112.0],
+        start: Start::AfterOpeningTheInsightsOf {
+            media: "Quanty Sample Notes",
+            chapter: "Chapter 2 · Black Scholes In Depth",
+        },
+    },
+    Row {
+        picture: "library-insights-none",
+        scene: "black-scholes",
+        window: DEFAULT_WINDOW,
+        start: Start::AfterOpeningTheInsightsOf {
+            media: BOOK_ROW,
+            chapter: CHAPTER_ROW,
+        },
     },
 ];
 
@@ -366,6 +389,12 @@ impl Row {
             Start::AfterTypingInTheFindBox => type_in_the_find_box(&mut harness),
             Start::AfterAClickOnMaximiseInTheConceptGraph => {
                 maximise_the_concept_graph(&mut harness, self.window);
+            }
+            Start::AfterOpeningTheInsightsOf { media, chapter } => {
+                click(&mut harness, Role::Tab, "Library");
+                click(&mut harness, Role::Button, media);
+                click(&mut harness, Role::Button, chapter);
+                click(&mut harness, Role::Tab, "Insights");
             }
         }
         // The pointer is painted in the picture until a frame has run without it.

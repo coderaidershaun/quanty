@@ -7,6 +7,7 @@ mod commonmark;
 mod document;
 pub mod fonts;
 mod html;
+mod insights;
 mod markdown;
 mod math;
 mod pdf;
@@ -15,6 +16,7 @@ mod pictures;
 use std::path::{Path, PathBuf};
 
 pub use document::{Block, Document, Format, Source};
+pub use insights::{InsightsSheet, SheetInsight, insights_document};
 pub use markdown::fence_for;
 
 /// Why a document could not be written.

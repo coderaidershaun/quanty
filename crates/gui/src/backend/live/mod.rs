@@ -8,6 +8,7 @@ mod datasets;
 mod dispatch;
 mod failure;
 pub mod ingest;
+mod insights;
 mod library;
 pub mod query;
 pub mod source;

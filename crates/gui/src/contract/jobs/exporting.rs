@@ -5,6 +5,8 @@ use std::path::PathBuf;
 
 use export::{Document, Format};
 
+use crate::contract::DocId;
+
 /// What a panel asks to export: the document as a kind of file, the name the save dialog offers
 /// with its extension, and the place in the window that asked.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -29,6 +31,8 @@ pub struct ExportFile {
 pub enum ExportPlace {
     /// The written answer of the ask with this generation.
     Answer { generation: u64 },
+    /// The saved insights of this document, from the Insights view of the Library.
+    Insights { doc: DocId },
 }
 
 impl ExportPlace {
@@ -36,6 +40,7 @@ impl ExportPlace {
     pub fn what(self) -> &'static str {
         match self {
             ExportPlace::Answer { .. } => "the answer",
+            ExportPlace::Insights { .. } => "the insights",
         }
     }
 }

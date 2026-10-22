@@ -28,7 +28,7 @@ use crate::flows::{
     shared,
 };
 
-/// What each of the six views that are not built yet says under its title.
+/// What each of the five views that are not built yet says under its title.
 const VIEW_ON_ITS_WAY: &str = "This view comes in a later version of quanty.";
 
 /// Lists one catalogue that the test wrote by hand and refuses every other command.
@@ -301,7 +301,7 @@ fn each_document_row_opens_its_page(harness: &mut Window) {
     click(harness, Role::Tab, "Library");
 }
 
-/// The six views that are not built yet say so with a placeholder, and none of them asks the
+/// The five views that are not built yet say so with a placeholder, and none of them asks the
 /// backend for anything.
 fn the_other_views_show_their_placeholder_and_ask_for_nothing(harness: &mut Window, seen: &Seen) {
     open_document(harness, BOOK, SAMPLE_PAGES);
@@ -309,7 +309,11 @@ fn the_other_views_show_their_placeholder_and_ask_for_nothing(harness: &mut Wind
         is_open_tab(harness, "Overview"),
         "the Overview is the first view"
     );
-    for view in DocumentView::ALL.into_iter().skip(1) {
+    let not_built = DocumentView::ALL
+        .into_iter()
+        .skip(1)
+        .filter(|view| *view != DocumentView::Insights);
+    for view in not_built {
         click(harness, Role::Tab, view.label());
         assert!(
             is_open_tab(harness, view.label()),
@@ -329,13 +333,11 @@ fn the_other_views_show_their_placeholder_and_ask_for_nothing(harness: &mut Wind
             view.label()
         );
     }
-    let asked = seen.count(|command| {
-        matches!(
-            command,
-            Command::LoadChapterContents { .. } | Command::LoadChapterInsights { .. }
-        )
-    });
-    assert_eq!(asked, 0, "no view asks for the contents of a chapter yet");
+    let asked = seen.count(|command| matches!(command, Command::LoadChapterContents { .. }));
+    assert_eq!(
+        asked, 0,
+        "no view but Insights asks for the contents of a chapter yet"
+    );
 
     open_document(harness, NOTES, BLACK_SCHOLES);
     assert!(

@@ -1,0 +1,45 @@
+{
+  "model": "sonnet",
+  "prompt-version": "1",
+  "insights": [
+    {
+      "text": "The expected growth rate $\\mu$ of the stock drops out of the price. A portfolio of one option and $\\Delta = \\partial V / \\partial S$ shares sold short has no $dW$ term left, so it is riskless and must earn the risk-free rate $r$, and nothing in that argument depends on $\\mu$.",
+      "pages": [
+        2,
+        3
+      ]
+    },
+    {
+      "text": "Volatility enters through the curvature term $\\frac{1}{2}\\sigma^2 S^2 \\frac{\\partial^2 V}{\\partial S^2}$, which is what the hedged position gains as the stock moves. The more the stock moves, the more that curvature is worth.",
+      "pages": [
+        3
+      ]
+    },
+    {
+      "text": "The equation alone has many solutions. The one that prices an option is picked out by its value on the expiration date, which for a call is\n\n$$V = \\max(S - K, 0)$$\n\nand for a put $\\max(K - S, 0)$.",
+      "pages": [
+        3
+      ]
+    },
+    {
+      "text": "Each assumption is a simplification: no dividends, a constant $\\sigma$ and $r$, trading that is continuous and costs nothing, no risk-free profit, and exercise only at expiration. Real markets break most of them, and the extensions of the model relax them one at a time.",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "text": "Put–call parity, $C - P = S - K e^{-rT}$, has no $\\sigma$ in it and holds whatever model drives the stock, so it checks any pair of quoted prices. The call and the put also share $d_1$ and $d_2$, so one calculation prices both.",
+      "pages": [
+        3
+      ]
+    }
+  ],
+  "takeaways": [
+    "The stock follows $dS = \\mu S\\,dt + \\sigma S\\,dW$, so its price can never become negative.",
+    "Holding the option and selling $\\Delta = \\partial V / \\partial S$ shares removes the random part over a short time.",
+    "A riskless portfolio must earn the risk-free rate $r$, and setting its change equal to $r \\Pi\\, dt$ gives the Black–Scholes equation.",
+    "The price of an option does not depend on how fast the stock is expected to rise.",
+    "A call bought and a put sold at the same strike and expiration are worth $S - K e^{-rT}$."
+  ],
+  "cheat-sheet": "### Assumptions\n\n- No dividends during the life of the option.\n- The volatility $\\sigma$ and the rate $r$ are constants.\n- Trading is continuous and costs nothing, and short sales of any size are allowed.\n- No risk-free profit can be made.\n- The option is European: it is exercised only at expiration.\n\n### The equation\n\n$$\\frac{\\partial V}{\\partial t} + \\frac{1}{2}\\sigma^2 S^2 \\frac{\\partial^2 V}{\\partial S^2} + r S \\frac{\\partial V}{\\partial S} - r V = 0$$\n\n### The prices\n\n$$C = S\\,N(d_1) - K e^{-rT} N(d_2)$$\n\n$$P = K e^{-rT} N(-d_2) - S\\,N(-d_1)$$\n\n$$d_1 = \\frac{\\ln(S/K) + \\left(r + \\frac{1}{2}\\sigma^2\\right)T}{\\sigma\\sqrt{T}}, \\qquad d_2 = d_1 - \\sigma\\sqrt{T}$$\n\n| Symbol | Meaning |\n| --- | --- |\n| $S$ | the stock price now |\n| $K$ | the strike |\n| $r$ | the risk-free rate |\n| $\\sigma$ | the volatility |\n| $T$ | the time left until expiration |\n| $N$ | the distribution function of the standard normal |\n\n### Rules of thumb\n\n- The price of an option does not depend on the expected growth rate $\\mu$.\n- $C - P = S - K e^{-rT}$ under any model of the stock.\n- One calculation of $d_1$ and $d_2$ prices both options."
+}

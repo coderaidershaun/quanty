@@ -3,10 +3,10 @@
 use std::path::Path;
 
 use graph::{ConceptNode, DocumentNode, ItemNode, Mention};
+use gui::backend::Reply;
 use gui::backend::fake::Fake;
 use gui::backend::live::source::{self, PageTarget};
 use gui::backend::live::{LiveContext, Services};
-use gui::backend::{Handler, Reply};
 use gui::contract::{
     Command, DocId, Event, Failure, FailureKind, PageConcept, PageView, RequestId,
 };
@@ -15,7 +15,7 @@ use ocr::{ChapterIndex, DocumentName, FigureImage, ImageShows, PieceDetail};
 use rag_core::{ConceptId, DocumentLabels, ItemId, ItemKind};
 use uuid::Uuid;
 
-use crate::support::{self, closed, sample_chapter};
+use crate::support::{self, closed, sample_chapter, served};
 
 const REQUEST: RequestId = RequestId(7);
 const VOLATILITY: &str = "option-volatility-and-pricing/chapter-1";
@@ -249,12 +249,6 @@ fn saved_chapter(folder: &Path) {
         conversion: None,
     };
     page.write(&page_folder).unwrap();
-}
-
-async fn served(backend: &impl Handler, command: Command) -> Vec<Event> {
-    let (reply, events, _stop) = Reply::collecting();
-    backend.serve(command, reply).await;
-    events.try_iter().collect()
 }
 
 async fn page_failure<S: Services>(cx: &LiveContext<S>, target: &PageTarget) -> Failure {

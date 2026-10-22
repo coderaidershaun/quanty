@@ -60,6 +60,50 @@ fn the_contract_reads_a_chapter_file_name_as_the_converter_does() {
 }
 
 #[test]
+fn the_contract_tells_which_documents_get_insights_as_the_converter_does() {
+    let names = [
+        (
+            contract::DocumentName::Chapter {
+                number: 2,
+                name: "Greeks".to_owned(),
+            },
+            ocr::DocumentName::Chapter {
+                number: 2,
+                name: "Greeks".to_owned(),
+            },
+        ),
+        (
+            contract::DocumentName::Title("Index".to_owned()),
+            ocr::DocumentName::Title("Index".to_owned()),
+        ),
+    ];
+    let categories = [
+        (
+            Some(contract::Category::Book),
+            Some(rag_core::Category::Book),
+        ),
+        (
+            Some(contract::Category::Paper),
+            Some(rag_core::Category::Paper),
+        ),
+        (
+            Some(contract::Category::Other),
+            Some(rag_core::Category::Other),
+        ),
+        (None, None),
+    ];
+    for (name, converter_name) in &names {
+        for (category, converter_category) in categories {
+            assert_eq!(
+                name.gets_insights(category),
+                ocr::gets_insights(converter_name, converter_category),
+                "{name:?} in {category:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn the_dataset_form_starts_at_the_defaults_of_the_dataset_crate() {
     let form = contract::DatasetRequest::default();
     assert_eq!(form.rewrites, DEFAULT_REWRITES);

@@ -1,42 +1,37 @@
 # The MCP server
 
-`quanty-mcp` lets an AI agent use quanty: search the stored library of books, papers and other media, read the pages of its documents, list the formulas, figures, tables, code listings and concepts of a chapter, read its insights and export them to a file, send a PDF to be ingested, write the missing insights of stored chapters, change the labels of a media or a document, stop a job, and build a training dataset from the converted documents. It speaks the [Model Context Protocol](https://modelcontextprotocol.io), over standard input and output (the default) or over HTTP on this machine.
+`quanty-mcp` lets an AI agent use quanty: search the stored library of books, papers and other media, read the pages of its documents, list the formulas, figures, tables, code listings and concepts of a chapter, read its insights and export them to a file, send a PDF to be ingested, write the missing insights of stored chapters, change the labels of a media or a document, stop a job, and build a training dataset from the converted documents. It speaks the [Model Context Protocol](https://modelcontextprotocol.io), through quanty’s authenticated HTTP endpoint, or through `quanty-mcp` over standard input and output on the server itself.
 
 ## 1. Before you start it
 
-The server uses the same things as the other commands. Do the set up in the [README](../README.md#quickstart-run-the-app) first:
+The running `quanty` server exposes the one library named by its `.env`: Qdrant, FalkorDB, the graph and the content folder. Set it up using [server.md](server.md), including the Gemini and Jev keys, Poppler, and the selected model CLI's sign-in as the service account. Do not set `ANTHROPIC_API_KEY` when using the Claude subscription.
 
-- Qdrant and FalkorDB are running (`docker compose up -d`).
-- `.env` holds the two keys, `EMBEDDING_GEMINI_API_KEY` and `CONVERTER_JEV_API_KEY`.
-- `claude` is signed in, and `ANTHROPIC_API_KEY` is not set.
-- Poppler is installed (only `ingest_pdf` needs it).
+Set `QUANTY_MCP_TOKEN` to a private random token (`openssl rand -hex 32`) in the server's environment file and restart quanty. Every remote call requires `Authorization: Bearer <QUANTY_MCP_TOKEN>`. The browser's password cookie does not authorize MCP. Without a configured token, `/mcp` returns 404; with a missing or wrong bearer token, it returns 401.
 
-The `health` tool tells an agent whether Qdrant, FalkorDB, the sign-in of the Ingest choice's agent and the two keys are ready, and which model each kind of work uses. It does not check `ANTHROPIC_API_KEY` or Poppler.
+The `health` tool checks the stores, model sign-in and keys for this library, and reports the model choices. The environment takes precedence over `.env`; remaining values use the defaults. There is one library per server.
 
-### Which database it uses
-
-The server reads the library from the database that is chosen in the desktop app, the file `.quanty-databases.json` beside `.env`: its Qdrant, its FalkorDB, its graph and its content folder. See [Choose a database](guide.md#choose-a-database). With no such file, or with Local chosen, it uses the local Docker stores and `content/`, as before.
-
-- **It reads the choice once, when it starts.** After you switch the database in the app, restart the server, or it keeps using the database it started on. An agent that started it must start it again.
-- **A store setting in the client wins.** When the configuration of the MCP client (the `env` of an entry in `.mcp.json`, or the environment of the command) sets any of `QDRANT_URL`, `QDRANT_API_KEY`, `FALKORDB_URL`, `FALKORDB_PASSWORD`, `FALKORDB_GRAPH` or `CONTENT_DIR` to a value that is not blank, the server ignores the chosen database and uses the environment, `.env` and the defaults for all six. This is the rule of every program: [reference.md](reference.md#the-order-of-sources) has it.
-- **The `health` tool** checks the stores of the database the server started on.
-
-### Where it must start
-
-The settings in `.env`, and the folders `content` and `data/…`, are found from the folder the command is started in. An agent starts a stdio server in the agent's own project folder, where there is no `.env`. So the server must start in the quanty folder, or every setting of `.env` (the two keys too) must be given as environment, with absolute folders. The snippets below start it in the quanty folder.
+For stdio, start `quanty-mcp` on the server itself with `/srv/quanty` as its working directory. A client started in a different project must supply that working directory, or provide all settings and absolute folder paths in its environment.
 
 ## 2. Start it
 
-```bash
-cargo build --release -p mcp          # makes target/release/quanty-mcp
+Remote MCP is part of the same quanty service as the app:
+
+```text
+https://quanty.example.com/mcp
+Authorization: Bearer YOUR_QUANTY_MCP_TOKEN
 ```
 
-| Transport | Command | Where it listens |
-| --- | --- | --- |
-| Standard input and output | `target/release/quanty-mcp` | the agent starts it and talks to it |
-| HTTP | `target/release/quanty-mcp --http 8321` | `http://127.0.0.1:8321/mcp` |
+The endpoint uses streamable HTTP behind Caddy HTTPS. See [section 10](#10-add-it-to-claude-code) for client configuration.
 
-The HTTP server listens on `127.0.0.1` only, and it has **no login**: any program on this machine can call it. It accepts only requests whose `Host` is this machine, and it grants no cross-site access, so a web page cannot call it. `export_insights` writes a file where the caller says, so over HTTP with no login any local program can make the server write a file, as the same user could anyway. In stdio mode nothing but the protocol is written to standard output; the log goes to standard error.
+For stdio on the host:
+
+```bash
+cargo build --release -p mcp
+cd /srv/quanty
+/path/to/quanty/target/release/quanty-mcp
+```
+
+The client starts that process. Standard output carries only MCP; logs go to standard error. `quanty-mcp` provides stdio only. Local stdio uses its process account and library settings, without the HTTP bearer token.
 
 ## 3. The tools
 
@@ -87,7 +82,7 @@ First calls to try, in this order:
 | `limit` | Keep only the first `limit` results (from 1) |
 | `explain` | `true` adds `trace`, which says how the search got to the results |
 
-Gives `results`, best first. Each result has `number`, `document_id`, `document` (its title: the book and the chapter, or a title of its own), `media` (the title of its media; a picture that stands alone has none), `category` (left out when there is no media), `authors`, `media_tags` (the tags of the media), `tags` (the document's own tags), `page` (the place of the page in the document, from 1), `printed_page` (the number printed on the page: cite with it), `last_page` and `last_printed_page` (only for a code listing that page breaks cut, which is one result: the place and the printed number of the page it ends on; left out for every other item), `kind`, `label`, `language` (the language of a code listing in lower case, left out when it is not known), `score`, `reason`, `text` and, for a figure, `picture` (the path of its picture on this machine). `reason` is `{"why": "nearest"}`, `{"why": "concept", "concept": …}` or `{"why": "cited", "by": …, "label": …}`. With `explain`, `trace` has `documents_searched`, `seeds`, `question_concepts`, `seed_concepts`, `related_concepts`, `candidates`, `ranked`, `capped` and `kept`. It also gives `usage` and `cost_usd`, as below. Give the `document_id` and `page` of a result to `read_page` to read around it; for a code listing with `last_page`, read each page from `page` to `last_page`.
+Gives `results`, best first. Each result has `number`, `document_id`, `document` (its title: the book and the chapter, or a title of its own), `media` (the title of its media; a picture that stands alone has none), `category` (left out when there is no media), `authors`, `media_tags` (the tags of the media), `tags` (the document's own tags), `page` (the place of the page in the document, from 1), `printed_page` (the number printed on the page: cite with it), `last_page` and `last_printed_page` (only for a code listing that page breaks cut, which is one result: the place and the printed number of the page it ends on; left out for every other item), `kind`, `label`, `language` (the language of a code listing in lower case, left out when it is not known), `score`, `reason`, `text` and, for a figure, `picture` (the path of its picture on the server). `reason` is `{"why": "nearest"}`, `{"why": "concept", "concept": …}` or `{"why": "cited", "by": …, "label": …}`. With `explain`, `trace` has `documents_searched`, `seeds`, `question_concepts`, `seed_concepts`, `related_concepts`, `candidates`, `ranked`, `capped` and `kept`. It also gives `usage` and `cost_usd`, as below. Give the `document_id` and `page` of a result to `read_page` to read around it; for a code listing with `last_page`, read each page from `page` to `last_page`.
 
 ### `answer`
 
@@ -131,7 +126,7 @@ Lists every formula, figure, table and code listing of one converted document, i
 | `document_id` | Required. From `list_documents` or a search result |
 | `page` | Only the concepts of this page: the `page` of a search result or of `chapter_contents` (from 1), not the printed number. The whole document when left out |
 
-Gives `document_id`, `title` (the whole stored title), `page` (only when asked) and `concepts`, the most mentioned first: each has `name` and a one-line `definition`. A page with no concept gives an empty list. It reads FalkorDB, as the desktop app does beside a page.
+Gives `document_id`, `title` (the whole stored title), `page` (only when asked) and `concepts`, the most mentioned first: each has `name` and a one-line `definition`. A page with no concept gives an empty list. It reads FalkorDB, as the browser app does beside a page.
 
 ### `chapter_insights`
 
@@ -158,7 +153,7 @@ It costs nothing. It reads the file, and it reads the graph only for a document 
 | `path` | Required. The absolute path of the file to write, on the machine the server runs on, ending in `.pdf`, `.md` or `.html` as `format` is. Its folder must exist |
 | `overwrite` | `true` to replace a file that is at `path`. `false` when left out: a file that is there is kept and the call fails |
 
-Writes what `chapter_insights` reads to one file that stands alone, the same file that **Export** in the Insights view of the desktop app writes: the title of the document, a line that names the model, the insights with their pages, the takeaways and the cheat sheet. The PDF has its formulas typeset, the HTML file has its pictures inside it, and the Markdown file keeps its formulas as `$…$`. Every check runs before anything is written, in this order: `format`, that `path` is absolute, that it ends with the extension of the format (whatever the capitals), that its folder is there, that no file is at `path` unless `overwrite` is `true` (a link that points nowhere counts as a file), and then the saved insights, which it reads as `chapter_insights` does. A document with no saved insights is refused with a text that says to call `write_insights`, which is paid, and so is a part of a book that is not a chapter, which gets none. It makes no folder. Gives `document_id`, `format`, `path` (as it was given) and `bytes` (the size of the file). It costs nothing: it asks no model and embeds nothing. The tool says `destructive` to the client because `overwrite` can replace a file.
+Writes what `chapter_insights` reads to one file that stands alone, the same file that **Export** in the Insights view of the browser app writes: the title of the document, a line that names the model, the insights with their pages, the takeaways and the cheat sheet. The PDF has its formulas typeset, the HTML file has its pictures inside it, and the Markdown file keeps its formulas as `$…$`. Every check runs before anything is written, in this order: `format`, that `path` is absolute, that it ends with the extension of the format (whatever the capitals), that its folder is there, that no file is at `path` unless `overwrite` is `true` (a link that points nowhere counts as a file), and then the saved insights, which it reads as `chapter_insights` does. A document with no saved insights is refused with a text that says to call `write_insights`, which is paid, and so is a part of a book that is not a chapter, which gets none. It makes no folder. Gives `document_id`, `format`, `path` (as it was given) and `bytes` (the size of the file). It costs nothing: it asks no model and embeds nothing. The tool says `destructive` to the client because `overwrite` can replace a file.
 
 ### `edit_media`
 
@@ -229,7 +224,7 @@ See part 7.
 | `document_tags` | The tags of this PDF only. They are added to the tags that the document has |
 | `document_title` | The title of the document. For a paper or another media it defaults to the title of the media. For a book it names a part that is not a chapter, such as "Index" or "Glossary": the document is stored as "<book>, <title>" and the file can have any name. Leave it out for a book's chapter, whose file is named `chapter-<number>-<name>.pdf` |
 
-An ingest never changes a stored media: to change its labels, use `edit_media` (or `edit_document_tags` for the tags of one document), `rag-ingest media`, or the Library tab of the desktop app. The media is found by its title whatever its capitals and the space at its ends.
+An ingest never changes a stored media: to change its labels, use `edit_media` (or `edit_document_tags` for the tags of one document), `rag-ingest media`, or the Library tab of the browser app. The media is found by its title whatever its capitals and the space at its ends.
 
 The PDF is sent one of two ways. Give exactly one of them.
 
@@ -359,17 +354,17 @@ Good to know:
 
 Gives `job_id`, `kind` (`ingest`, `insights` or `dataset`), `state` and `status_tool` (the tool that says how the job ended). `state` is `stopped` when the job was running and is stopped now, and `ended` when it had ended already: it is left as it is, and its status tool has how it ended.
 
-What was paid for is kept, so the same work started again goes on from there: converted pages and kept answers of an ingest, the answers a model already gave in a dataset build, and the insights that are saved. The status tool of a stopped job gives `state: "stopped"` and an `error` that says what to call again. This is what the Stop button of the desktop app does. A new job of the same kind can start at once.
+What was paid for is kept, so the same work started again goes on from there: converted pages and kept answers of an ingest, the answers a model already gave in a dataset build, and the insights that are saved. The status tool of a stopped job gives `state: "stopped"` and an `error` that says what to call again. This is what the Stop button of the browser app does. A new job of the same kind can start at once.
 
 ## 8. What is not a tool
 
-The tools do what the desktop app does where an agent needs it. These are left out on purpose.
+The tools do what the browser app does where an agent needs it. These are left out on purpose.
 
 | Not a tool | Why |
 | --- | --- |
 | Deleting a document or a whole media | A delete removes converted pages, points and graph nodes and cannot be undone, and making them again is paid work. An agent never needs it to read or learn, and a stored page can hold words that lead an agent to call such a tool. A required `confirm` field guards nothing, because a misled agent fills it too. Delete in the Library tab, or with `rag-ingest delete-document` and `rag-ingest delete-media` |
-| Changing the model or thinking of a kind of work | It decides what the desktop app, the command line and this server spend on every paid call. The person sets it in the top bar or in `.quanty-model.json`. `health` shows it, and an agent needs no other model to do its work |
-| Exporting an answer to PDF, Markdown or HTML | The agent already holds the answer, its claims and its sources as JSON. The desktop app builds the file from its own window, and a tool would need the server to keep every answer between calls |
+| Changing the model or thinking of a kind of work | It decides what the browser app, the command line and this server spend on every paid call. The person sets it in the top bar or in `.quanty-model.json`. `health` shows it, and an agent needs no other model to do its work |
+| Exporting an answer to PDF, Markdown or HTML | The agent already holds the answer, its claims and its sources as JSON. The browser app asks quanty to export the answer it holds, and a tool would need the server to keep every answer between calls |
 | Checking a PDF before sending it | A PDF that is ingested already costs nothing and says so, and `list_documents` shows what is stored |
 | Saving a media before its first PDF | `ingest_pdf` makes a new media with its labels, and a media with no document holds nothing to read |
 | Cancelling an ask | The client cancels its own call |
@@ -414,52 +409,53 @@ A failure comes back as a tool error (`isError: true`) with a text that says wha
 
 ## 10. Add it to Claude Code
 
-Build it first (`cargo build --release -p mcp`), and replace `/path/to/quanty` with the quanty folder. The folder is in single quotes inside the `-c` text, so that a folder with a space in its name works.
-
 ### With `claude mcp add`
 
-```bash
-# standard input and output
-claude mcp add quanty -- sh -c "cd '/path/to/quanty' && exec '/path/to/quanty/target/release/quanty-mcp'"
+Connect a client on any machine to the server's one library:
 
-# HTTP: start `quanty-mcp --http 8321` yourself, then
-claude mcp add --transport http quanty http://127.0.0.1:8321/mcp
+```bash
+claude mcp add --transport http quanty https://quanty.example.com/mcp --header "Authorization: Bearer YOUR_QUANTY_MCP_TOKEN"
 ```
 
-Run in the quanty folder, this form of the first command needs no path typed, because `$PWD` writes the absolute path of the folder into the entry. `--scope user` adds the server for every project, not only the current one:
+Replace the host and token. Keep client configuration private; a bearer token grants access to the MCP tools, including paid jobs and server-side file exports. Add `--scope user` to register it for every project.
+
+For a stdio client running on the server itself, build and install `quanty-mcp`, then use the service account and working directory:
 
 ```bash
-claude mcp add --scope user quanty -- sh -c "cd '$PWD' && exec '$PWD/target/release/quanty-mcp'"
+claude mcp add quanty -- sh -c "cd '/srv/quanty' && exec '/usr/local/bin/quanty-mcp'"
 ```
 
 ### With `.mcp.json`
 
-Put this file in the project folder of the agent (or give the same entry to `claude mcp add-json`).
-
-```json
-{
-  "mcpServers": {
-    "quanty": {
-      "command": "sh",
-      "args": ["-c", "cd '/path/to/quanty' && exec '/path/to/quanty/target/release/quanty-mcp'"]
-    }
-  }
-}
-```
-
-For HTTP:
+Place this private file in the client project's folder:
 
 ```json
 {
   "mcpServers": {
     "quanty": {
       "type": "http",
-      "url": "http://127.0.0.1:8321/mcp"
+      "url": "https://quanty.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_QUANTY_MCP_TOKEN"
+      }
     }
   }
 }
 ```
 
-Another agent that speaks MCP takes the same command, or the same URL.
+For stdio on the host, replace that entry with:
+
+```json
+{
+  "mcpServers": {
+    "quanty": {
+      "command": "sh",
+      "args": ["-c", "cd '/srv/quanty' && exec '/usr/local/bin/quanty-mcp'"]
+    }
+  }
+}
+```
+
+Another MCP client uses the same HTTPS URL and authorization header, or starts the same stdio command locally on the host.
 
 Required artifact descriptions are part of PDF ingestion, including metadata-only repair when both stores already hold the document. `ingest_status` reports `writing_artifacts` with `artifacts_done` and `artifacts_total`, and reports cumulative usage after accepted or rejected replies. Metadata failure ends the job as failed while preserving prior searchable data and accepted checkpoints. A missing converted folder or oversized pending request blocks repair. Source, embeddings and concept inputs keep their original content. Explicit bulk backfill is available through `rag-ingest artifacts --all --dry-run` and `rag-ingest artifacts --all`.

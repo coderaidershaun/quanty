@@ -1,0 +1,17 @@
+[Unit]
+Description=Qdrant for Quanty
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=quanty
+Group=quanty
+WorkingDirectory=/srv/quanty
+EnvironmentFile=/srv/quanty/.env
+ExecStartPre=/usr/bin/test -n "${QDRANT_API_KEY}"
+ExecStart=/usr/bin/env QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY} /usr/local/bin/qdrant --config-path /etc/quanty/qdrant-config.yaml
+Restart=on-failure
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

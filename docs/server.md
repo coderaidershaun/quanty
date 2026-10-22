@@ -1,240 +1,245 @@
-# Keep the stores on a server
+# Run quanty on an Ubuntu server, no Docker
 
-quanty can keep its library on a server instead of on your own machine. Then every machine you work on, and every agent, uses the same library. This page sets that up for a Linux server that runs Docker and that you reach with SSH.
+One Ubuntu 24.04 LTS x86_64 host runs quanty, Qdrant, Redis 8 with FalkorDB, and Caddy. People open the app over HTTPS; agents use the same host's `/mcp`. The stores and quanty listen on loopback. Only Caddy's ports 80 and 443 need to be public. Point a DNS A record (and an AAAA record only if IPv6 works) at the host before requesting HTTPS.
 
-No quanty program runs on the server. The server runs the two stores, Qdrant and FalkorDB, in Docker, and it shares the folder with the converted pages. quanty on each of your machines talks to the stores through an SSH tunnel.
+The supplied installer targets Ubuntu 24.04 LTS x86_64. The pinned FalkorDB module requires glibc 2.38 and GLIBCXX 3.4.31; Ubuntu 22.04 cannot load it. Other Ubuntu releases and architectures have not been verified. Commands below use a dedicated `quanty` account whose home is `/srv/quanty`. Keep all model sign-ins under that account. The deployment files were checked against official vendor sources on 22 October 2026; the installer has not been executed on Ubuntu as part of this documentation change.
 
-```
-your machine                                  the server
-quanty ── 127.0.0.1:16334 ─┐                  127.0.0.1:6334  Qdrant  (API key)
-          127.0.0.1:16379 ─┼── SSH tunnel ──► 127.0.0.1:6379  FalkorDB (password)
-          127.0.0.1:10445 ─┘                  127.0.0.1:445   the content share (optional)
-```
-
-Nothing on the server listens to the internet except SSH. The two stores still have a key and a password, because a port on the server's own loopback address can be reached by every account on that server.
-
-[Choose a database](guide.md#choose-a-database) in the guide describes the sheet in the app that you use at the end. [Where a library lives](guide.md#where-a-library-lives) describes the three folders that make a library.
-
-## 1. Start the stores on the server
-
-Log in to the server and make a folder for the library. `/srv/quanty` is the example. It is the root of the library: the stores keep their files under `data/` in it, and the converted pages go in `content/`.
+## 1. The account and folders
 
 ```bash
-sudo mkdir -p /srv/quanty && sudo chown "$USER" /srv/quanty
-cd /srv/quanty
-mkdir content
+sudo useradd --system --user-group --create-home --home-dir /srv/quanty --shell /bin/bash quanty
+sudo install -d -o quanty -g quanty -m 0750 /srv/quanty/content /srv/quanty/data
+sudo -u quanty git clone https://github.com/coderaidershaun/quanty.git /srv/quanty/src
 ```
 
-Make the key and the password. These two commands write them to a file that only you can read, and print nothing. Keep a copy in your password manager, because the app asks for both.
+For an existing account, check `getent passwd quanty` instead of running `useradd` again. The repository is separate from the library:
 
-```bash
-printf 'QDRANT_API_KEY=%s\nFALKORDB_PASSWORD=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > .env
-chmod 600 .env
-```
-
-This `.env` belongs to the server's Docker Compose. It is not the `.env` of quanty. Read the values with `cat .env` when you need them.
-
-Write the Compose file. It is the `docker-compose.yaml` of the quanty repository, changed in a few places. Both ports bind to the loopback address of the server (`127.0.0.1`), and the ports that quanty does not use are gone: 6333, the REST port of Qdrant, and 3000, the browser of FalkorDB. Qdrant gets its API key. FalkorDB gets its password.
-
-```bash
-cat > docker-compose.yaml <<'EOF'
-services:
-  qdrant:
-    image: qdrant/qdrant
-    ports: ["127.0.0.1:6334:6334"]
-    environment:
-      - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY}
-    volumes: ["./data/qdrant:/qdrant/storage"]
-  falkordb:
-    image: falkordb/falkordb
-    ports: ["127.0.0.1:6379:6379"]
-    environment:
-      - REDIS_ARGS=--requirepass ${FALKORDB_PASSWORD}
-      - REDISCLI_AUTH=${FALKORDB_PASSWORD}
-    volumes: ["./data/falkordb:/var/lib/falkordb/data"]
-EOF
-```
-
-The settings come from the makers of the stores:
-
-- **Qdrant** takes its API key from `QDRANT__SERVICE__API_KEY`, and a client sends it in the `api-key` header. See [Qdrant security](https://qdrant.tech/documentation/security/). Qdrant says that a key sent over a connection that is not encrypted can leak, which is why the tunnel matters: do not open port 6334 to the internet.
-- **FalkorDB** takes a password through `REDIS_ARGS`, as `--requirepass`. See the [FalkorDB configuration page](https://docs.falkordb.com/getting-started/configuration.html).
-- **`REDISCLI_AUTH`** is read by `redis-cli`, the tool inside the FalkorDB container. With it set there, the backup commands below need no password on their command line, where a process list and a shell history would show it. See the [`redis-cli` page](https://redis.io/docs/latest/develop/tools/cli/).
-
-Start the stores and check them:
-
-```bash
-docker compose up -d
-docker compose ps                              # both say running
-docker compose exec falkordb redis-cli PING    # PONG: the password works
-```
-
-Anyone who can run Docker on the server can read the key and the password, so give that right only to people who may read the library.
-
-## 2. Open the tunnel
-
-Do this on each machine that uses the library, before you start quanty. Replace `me@server` with your SSH login.
-
-```bash
-ssh -N -L 16334:127.0.0.1:6334 -L 16379:127.0.0.1:6379 -L 10445:127.0.0.1:445 me@server
-```
-
-It prints nothing and stays open, so give it a terminal of its own. Each `-L` brings one port of the server to a port of your machine:
-
-| On your machine | Goes to, on the server | What it is |
-| --- | --- | --- |
-| `127.0.0.1:16334` | `127.0.0.1:6334` | Qdrant |
-| `127.0.0.1:16379` | `127.0.0.1:6379` | FalkorDB |
-| `127.0.0.1:10445` | `127.0.0.1:445` | The content share, only if you use SMB in step 3 |
-
-The local ports are not 6334 and 6379, so the Docker stores on your own machine, Local, and the server can both be used on the same day. Leave the last `-L` out if you use `sshfs` in step 3. To make a dropped connection end the command, so that you notice, add `-o ExitOnForwardFailure=yes -o ServerAliveInterval=30`.
-
-Check that both ports answer:
-
-```bash
-nc -z 127.0.0.1 16334 && nc -z 127.0.0.1 16379 && echo "the tunnel is open"
-```
-
-## 3. Share the content folder
-
-The converted pages of every document are files under the content folder. The Library, the Source panel and `read_page` read them, and an ingest writes them. So every machine must reach the same folder, the one on the server. Choose one way. Both mount the folder on your machine.
-
-**Mount it at the same path on every machine, for example `/Volumes/quanty-content`, and mount it before you start quanty.** There are two reasons:
-
-- The pictures of figures in an answer are looked for at the path they were saved under. They show only when every machine reaches the folder at the same path.
-- quanty refuses a saved database whose content folder is not there. If it were not mounted and quanty made the folder itself, an ingest would write its pages to your own disk.
-
-### With `sshfs`
-
-Nothing to install on the server. On your machine you need `sshfs`, and on a Mac also macFUSE (see their pages); on Debian or Ubuntu, `sudo apt install sshfs`. It uses SSH itself, so it does not need the tunnel's last `-L`.
-
-```bash
-sudo mkdir -p /Volumes/quanty-content && sudo chown "$USER" /Volumes/quanty-content
-sshfs me@server:/srv/quanty/content /Volumes/quanty-content -o reconnect
-```
-
-Unmount it with `umount /Volumes/quanty-content`, or on Linux `fusermount -u /Volumes/quanty-content`.
-
-### With SMB through the tunnel
-
-SMB is the file sharing that a Mac and a Windows PC have built in. Samba on the server answers on its loopback address only, and the tunnel's last `-L` brings it to port 10445 of your machine.
-
-On the server, install Samba, give your account a Samba password, and make it listen on the loopback address only:
-
-```bash
-sudo apt install samba
-sudo smbpasswd -a "$USER"
-```
-
-In `/etc/samba/smb.conf`, add these two lines inside the existing `[global]` section, and the share at the end of the file. Replace `me` with your account.
-
-```ini
-   interfaces = lo
-   bind interfaces only = yes
-```
-
-```ini
-[quanty-content]
-   path = /srv/quanty/content
-   valid users = me
-   read only = no
-```
-
-Then restart it with `sudo systemctl restart smbd`.
-
-On a Mac, with the tunnel open, choose Go, then Connect to Server in the Finder (`⌘K`) and type `smb://127.0.0.1:10445/quanty-content`. The Mac mounts it at `/Volumes/quanty-content`. On Linux, with `cifs-utils` installed:
-
-```bash
-sudo mkdir -p /Volumes/quanty-content
-sudo mount -t cifs //127.0.0.1/quanty-content /Volumes/quanty-content -o port=10445,username=me,uid=$(id -u),gid=$(id -g)
-```
-
-If the tunnel drops, a mounted folder stops answering. Open the tunnel again, then unmount and mount the folder again.
-
-Check the mount before you start quanty:
-
-```bash
-ls /Volumes/quanty-content
-```
-
-## 4. Add the database in the app
-
-With the tunnel open and the folder mounted, start quanty. Click the entry at the right end of the footer (**Database: …**), choose **New…** in the **Database** list, fill in the seven fields, and press **Use**.
-
-| Field | What to put in it |
+| Path | Holds |
 | --- | --- |
-| **Name** | Any name, such as `Server` |
-| **Qdrant URL** | `http://127.0.0.1:16334` |
-| **Qdrant API key** | `QDRANT_API_KEY` from the server's `.env` |
-| **FalkorDB URL** | `falkor://127.0.0.1:16379` |
-| **FalkorDB password** | `FALKORDB_PASSWORD` from the server's `.env` |
-| **Graph** | `quanty` |
-| **Content folder** | The mount, `/Volumes/quanty-content` |
+| `/srv/quanty/content/` | Converted pages, pictures, insights and source PDFs saved under `_uploads/` |
+| `/srv/quanty/data/qdrant/` | Vectors |
+| `/srv/quanty/data/falkordb/` | The graph's persisted Redis files |
+| `/srv/quanty/data/uploads/` | Temporary PDF uploads; unused folders older than seven days are removed at server start |
+| `/srv/quanty/data/exports/` | Temporary downloads; folders older than one day are removed at server start |
+| `/srv/quanty/.env` | The one library's settings and secrets; mode `0600`, owned by `quanty` |
 
-**Use** connects to both stores and checks the content folder, and switches only when all three are fine. If it cannot, the sheet says what, and the database you had stays. The footer then reads **Database: Server · connected**. The choice is saved in `.quanty-databases.json`, so the next start uses it, and so do `rag-ingest`, `rag-query`, `rag-dataset` and the MCP server of that quanty folder.
+The library itself is the three folders `content`, `data/qdrant` and `data/falkordb`. Kept model answers under `data/` and built `datasets/` are useful to retain too.
 
-Check from the command line:
+## 2. Install the services
 
-```bash
-cargo run --release -p rag-ingestion --bin rag-ingest -- health
-```
-
-The Qdrant and FalkorDB lines name the loopback addresses of the tunnel and say `ok`. A `FAILED` line says what is wrong. The usual causes are a tunnel that is not open and a key or password that was copied wrong, and the [Troubleshooting](troubleshooting.md) table lists them.
-
-The MCP server reads the choice only when it starts, so restart it after a switch. If you give an MCP client one of the store settings, the server ignores the chosen database: [mcp.md](mcp.md#which-database-it-uses) says why and how.
-
-## 5. Back the library up
-
-The library is the three folders under the root: `content`, `data/qdrant` and `data/falkordb`. A backup is a copy of them taken while the stores are stopped. Run this on the server, in `/srv/quanty`, with no ingest running on any machine.
+Read [install-ubuntu.sh](../deploy/install-ubuntu.sh), then run it from the clone:
 
 ```bash
-cd /srv/quanty
-docker compose exec falkordb redis-cli SAVE
-docker compose stop
-BACKUP="$HOME/quanty-library-$(date +%F).tar.gz"
-sudo tar -czf "$BACKUP" content data/qdrant data/falkordb
-sudo chown "$USER" "$BACKUP"
-docker compose start
+cd /srv/quanty/src
+sudo deploy/install-ubuntu.sh quanty.example.com
 ```
 
-- `SAVE` makes FalkorDB write its whole graph to its file in `data/falkordb` now, before it stops. FalkorDB's own file is the copy that matters. Its documentation says that `SAVE` blocks until the snapshot is written, and Redis says that a snapshot file is never changed once it is made.
-- The password is not on any command line. `redis-cli` reads it from `REDISCLI_AUTH`, which step 1 set in the container. Do not use `redis-cli -a`: the password would show in the process list and in your shell history.
-- The `sudo` is because the stores' files belong to the account their container runs as, often root.
-- Qdrant's own backup tool is the snapshot. A copy of its stopped folder is simpler and keeps the library in one place. After you restore one, check it with `rag-ingest health` and one search.
+Replace the hostname. Version variables are at the top: Qdrant `1.20.0`, FalkorDB `6.0.3`, Node `24.22.1` LTS, Rust `1.97.1`, Trunk `0.22.0`, Codex `0.163.0` and Claude Code `2.1.308`. Redis and Caddy receive the supported packages from their official apt repositories; the script checks that Redis is at least version 8.
 
-Copy the file off the server, so that a lost disk loses nothing:
+Use a dedicated host: installing apt packages and including the FalkorDB configuration changes its Redis service. Repeated runs keep existing `.env`, library folders, CLI sign-ins, binaries and service configuration. They rebuild quanty; they do not upgrade already installed pinned binaries. Review configuration changes and upgrades separately. If Caddy already has a configuration, the script writes `/etc/quanty/Caddyfile.proposed` for you to review and install.
+
+The following sections explain the installer's operations and show checks to run on the server.
+
+### Qdrant
+
+[Qdrant's release](https://github.com/qdrant/qdrant/releases/tag/v1.20.0) supplies the Linux tarball:
 
 ```bash
-scp me@server:quanty-library-2026-10-22.tar.gz .
+QDRANT_VERSION=1.20.0
+curl -fL "https://github.com/qdrant/qdrant/releases/download/v${QDRANT_VERSION}/qdrant-x86_64-unknown-linux-gnu.tar.gz" -o /tmp/qdrant.tar.gz
+tar -xzf /tmp/qdrant.tar.gz -C /tmp
+sudo install -m 0755 /tmp/qdrant /usr/local/bin/qdrant
 ```
 
-To load a backup on your own machine, use the steps in [Where a library lives](guide.md#where-a-library-lives).
+The installer creates the API key with `openssl rand -hex 32` only when it first creates `.env`. [qdrant-config.yaml](../deploy/qdrant-config.yaml) sets storage to `/srv/quanty/data/qdrant`, disables telemetry and binds to `127.0.0.1`. [qdrant.service](../deploy/qdrant.service) reads `QDRANT_API_KEY` from the same `.env` and passes it to Qdrant as `QDRANT__SERVICE__API_KEY`. Its pre-start check refuses an empty key. YAML does not substitute environment variables.
 
-## 6. Move a library
+Qdrant 1.20 requires an HTTP listener, so HTTP `6333` and gRPC `6334` both stay on loopback with the API key. Quanty uses `6334`; the administrative check uses `6333`. See [Qdrant configuration](https://github.com/qdrant/qdrant/blob/v1.20.0/src/settings.rs) and [the listener startup](https://github.com/qdrant/qdrant/blob/v1.20.0/src/main.rs).
 
-This is the same for a library that comes from another server, from a backup, or from the Docker stores of your laptop. A laptop keeps its library in the same three folders under the quanty folder, so a laptop's library moves to a server in the same way.
+```bash
+sudo systemctl enable --now qdrant
+read -rsp 'Qdrant API key: ' QDRANT_API_KEY; echo
+curl --fail -H "api-key: $QDRANT_API_KEY" http://127.0.0.1:6333/collections
+unset QDRANT_API_KEY
+```
 
-1. **Make the tarball** where the library is now. On a server, step 5 does it. On a laptop, the [back up](guide.md#where-a-library-lives) commands of the guide do it. A tarball you already have is the same.
-2. **Set the new server up** with step 1 above, up to the Compose file, but do not run `docker compose up -d` yet. New keys are fine: a key and a password are settings of the stores and are not in the library.
-3. **Put the library in** on the new server, then start the stores:
+The reply is JSON with the collections; a fresh library has none.
 
-   ```bash
-   scp quanty-library-2026-10-22.tar.gz me@newserver:
-   ssh me@newserver
-   cd /srv/quanty
-   sudo tar -xzf ~/quanty-library-2026-10-22.tar.gz
-   docker compose up -d
-   ```
+### Redis 8 and FalkorDB
 
-4. **Share the content folder** again as in step 3, and mount it on your machine at the same path as before.
-5. **Open the tunnel** to the new server and **add the database** in the app, as in step 4, with the new keys. Or change the address and the keys of the database that you had. Press **Use**.
+Use [Redis's apt repository](https://redis.io/docs/latest/operate/oss_and_stack/install/install-stack/linux/), since the Ubuntu archive can contain Redis 7:
 
-The Library then lists the moved documents.
+```bash
+sudo apt-get install -y lsb-release curl gpg
+curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+sudo chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
+sudo apt-get update
+sudo apt-get install -y redis libgomp1
+redis-server --version
+```
 
-- **Figure pictures.** The pictures of figures in an answer are stored under the old absolute path of the content folder. A moved library shows them only when its content folder is reached at the same path as before. Pages, formulas, tables and code do not depend on it.
-- **The Qdrant version.** Run the same Qdrant on the new server, or a newer one by at most one minor version. Qdrant states this rule for restoring its snapshots, and it is the safe rule for a copied folder too. The version is at the top of the log: `docker compose logs qdrant | head`.
-- **The kept answers** (`data/concept-cache`, `data/dataset-cache`) and the built datasets are not part of the library, and the tarball does not hold them.
+The [FalkorDB release](https://github.com/FalkorDB/FalkorDB/releases/tag/v6.0.3) supplies `falkordb-x64.so` and its SHA-256 file:
 
-## 7. A private network instead of a tunnel
+```bash
+FALKORDB_VERSION=6.0.3
+curl -fL "https://github.com/FalkorDB/FalkorDB/releases/download/v${FALKORDB_VERSION}/falkordb-x64.so" -o /tmp/falkordb-x64.so
+curl -fL "https://github.com/FalkorDB/FalkorDB/releases/download/v${FALKORDB_VERSION}/falkordb-x64.so.sha256" -o /tmp/falkordb-x64.so.sha256
+(cd /tmp && sha256sum -c falkordb-x64.so.sha256)
+sudo install -D -m 0755 /tmp/falkordb-x64.so /opt/falkordb/falkordb.so
+```
 
-A private network such as Tailscale or WireGuard works the same way. Install it on the server and on your machines, bind the two ports to the server's private address in place of `127.0.0.1` in step 1, and use that address in place of `127.0.0.1:16334` and `127.0.0.1:16379` in the app. There is no tunnel command to run.
+The installer generates `FALKORDB_PASSWORD` with `openssl rand -hex 32` on first creation of `.env`. It renders [redis-falkordb.conf](../deploy/redis-falkordb.conf) to `/etc/redis/quanty/falkordb.conf`, replacing its password placeholder with that value. Redis does not expand environment variables in `requirepass`. The rendered file is `root:redis`, mode `0640`. The installer appends one `include /etc/redis/quanty/falkordb.conf` to `/etc/redis/redis.conf`, preserving the original file's settings. It grants Redis traversal of the library root, owns only `data/falkordb` as `redis`, and adds a systemd writable-path override for that folder.
+
+The drop-in loads the module, requires the password, binds to `127.0.0.1` and puts its data in `/srv/quanty/data/falkordb`. On password rotation, update `.env` and the rendered Redis `requirepass` together, then restart Redis and quanty. Rerunning the installer intentionally does not replace an existing configuration.
+
+```bash
+sudo systemctl restart redis-server
+read -rsp 'FalkorDB password: ' REDISCLI_AUTH; echo
+export REDISCLI_AUTH
+redis-cli PING
+redis-cli MODULE LIST
+unset REDISCLI_AUTH
+```
+
+Expect `PONG` and a module named `graph`.
+
+## 3. Model tools and headless sign-in
+
+Poppler supplies `pdftoppm` and `pdfinfo`. The installer installs `poppler-utils` and Node's official LTS tarball. For a manual first installation:
+
+```bash
+sudo apt-get install -y poppler-utils xz-utils
+NODE_VERSION=24.22.1
+curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" -o "/tmp/node-v${NODE_VERSION}-linux-x64.tar.xz"
+curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt" -o /tmp/SHASUMS256.txt
+(cd /tmp && grep " node-v${NODE_VERSION}-linux-x64.tar.xz$" SHASUMS256.txt | sha256sum -c -)
+sudo install -d -m 0755 /opt/node
+sudo tar -xJf "/tmp/node-v${NODE_VERSION}-linux-x64.tar.xz" -C /opt/node --strip-components=1
+```
+
+The [Codex npm package](https://learn.chatgpt.com/docs/cli) and [Claude Code npm package](https://code.claude.com/docs/en/setup#install-with-npm) go under `/srv/quanty/.npm-global`. Install and sign in as the service account, with Node 22 or newer on `PATH`:
+
+```bash
+sudo -iu quanty
+export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.cargo/bin:/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+CODEX_VERSION=0.163.0
+CLAUDE_VERSION=2.1.308
+npm install --global --prefix "$HOME/.npm-global" "@openai/codex@$CODEX_VERSION" "@anthropic-ai/claude-code@$CLAUDE_VERSION"
+codex login --device-auth
+codex login status
+claude setup-token
+```
+
+[Codex device authentication](https://learn.chatgpt.com/docs/auth) displays a URL and code to complete in your browser. As an alternative, copy an existing `~/.codex/auth.json` securely into `/srv/quanty/.codex/auth.json` and make it readable only by `quanty`; a login stored only in a desktop keychain must first be made available as a file. Treat that file as a password.
+
+`claude setup-token` prints a long-lived subscription token. Put it in `/srv/quanty/.env` as `CLAUDE_CODE_OAUTH_TOKEN='…'`, or securely copy your authenticated `~/.claude` configuration to `/srv/quanty/.claude`, with private permissions and `quanty` ownership. On platforms that store credentials outside that folder, use `setup-token` instead. Do not set `ANTHROPIC_API_KEY`: Claude calls must use the signed-in subscription. Run the sign-in commands only yourself; the installer never signs in or copies credentials. Exit the service account shell when finished.
+
+## 4. Rust, Trunk and the build
+
+The installer uses [rustup](https://rust-lang.org/tools/install) with the pinned Rust toolchain, adds `wasm32-unknown-unknown` and installs [Trunk](https://trunkrs.dev/). For a manual build as `quanty`:
+
+```bash
+sudo -iu quanty
+export PATH="$HOME/.cargo/bin:$HOME/.npm-global/bin:/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.97.1 --profile minimal
+rustup target add wasm32-unknown-unknown
+cargo install --locked trunk --version 0.22.0
+cd /srv/quanty/src/crates/web-ui
+trunk build --release
+cd ../..
+cargo build --release -p server
+exit
+sudo install -m 0755 /srv/quanty/src/target/release/quanty /usr/local/bin/quanty
+```
+
+Build the UI first: its `dist/` is embedded when the server builds. Rebuild the server after every UI build. To use stdio MCP on this host too, build `cargo build --release -p mcp` in the repository and install `target/release/quanty-mcp` in `/usr/local/bin`.
+
+## 5. Settings and the quanty unit
+
+Edit `/srv/quanty/.env` privately. The installer supplies database secrets, a shared login password, an MCP token and a session key. Add the Gemini and Jev keys. The example below names every server setting; [`.env.example`](../.env.example) also lists collections, caches and model defaults.
+
+| Setting | Meaning | Default |
+| --- | --- | --- |
+| `QUANTY_LISTEN` | Bind address; the supplied unit explicitly overrides it with loopback | `127.0.0.1:8080` |
+| `QUANTY_PASSWORD` | Shared browser login; required on a non-loopback listen address | none |
+| `QUANTY_MCP_TOKEN` | Bearer token for `/mcp`; without one the route returns 404 | none |
+| `QUANTY_SESSION_KEY` | 64 hex characters; keeps sessions valid across restarts | random on each start |
+| `QUANTY_UPLOAD_LIMIT_MB` | Maximum PDF upload size in MiB | `1024` |
+| `QDRANT_URL` | Qdrant gRPC address | `http://localhost:6334` |
+| `QDRANT_API_KEY` | Qdrant API key; the deployment requires it | none |
+| `FALKORDB_URL` | Redis/FalkorDB address | `falkor://localhost:6379` |
+| `FALKORDB_PASSWORD` | Redis password; the deployment requires it | none |
+| `FALKORDB_GRAPH` | Graph name | `quanty` |
+| `CONTENT_DIR` | Converted content on this host | `content` |
+| `EMBEDDING_GEMINI_API_KEY` | Embedding key | none |
+| `CONVERTER_JEV_API_KEY` | Jev conversion key | none |
+| `LLM_PROVIDER`, `LLM_MODEL`, `LLM_THINKING` | Model defaults, superseded by saved choices | `codex`, `gpt-6.1-sol`, `medium` |
+
+Generate any missing secrets with `openssl rand -hex 32`. Use simple `NAME=value` or single-quoted values; the same file is read by systemd and quanty. Keep secrets out of URLs. Preserve `QUANTY_SESSION_KEY` during upgrades, or everyone must sign in again.
+
+[quanty.service](../deploy/quanty.service) sets `User=quanty`, `WorkingDirectory=/srv/quanty`, the environment file, the service account's CLI paths, and `ExecStart=/usr/local/bin/quanty --listen 127.0.0.1:8080`. It restarts on failure. Changing the account requires changing its home and `PATH` consistently.
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now quanty
+sudo systemctl restart quanty
+curl --fail http://127.0.0.1:8080/healthz
+```
+
+Expect `ok`. This proves the HTTP process is alive; use `rag-ingest health` or MCP `health` to check the stores and model tools.
+
+## 6. Caddy and the first login
+
+[Caddy's official apt instructions](https://caddyserver.com/docs/install#debian-ubuntu-raspbian) install the signing key and stable repository. The installer performs these steps:
+
+```bash
+sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg /etc/apt/sources.list.d/caddy-stable.list
+sudo apt-get update
+sudo apt-get install -y caddy
+```
+
+Use [deploy/Caddyfile](../deploy/Caddyfile) with your hostname in `/etc/caddy/Caddyfile`. It proxies HTTP and WebSockets to `127.0.0.1:8080`, permits request bodies up to `1GB`, and enables zstd/gzip. Caddy manages HTTPS certificates. If the installer wrote a proposed file, review it, then install it:
+
+```bash
+sudo install -m 0644 /etc/quanty/Caddyfile.proposed /etc/caddy/Caddyfile
+sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+sudo systemctl reload caddy
+```
+
+Open `https://quanty.example.com` and enter `QUANTY_PASSWORD`. The HttpOnly session cookie lasts 30 days. Five wrong passwords within a minute cause a one-minute 429 response. `POST /logout` clears the cookie. Keep a password set behind Caddy: a password-free loopback server trusts every request Caddy forwards.
+
+To connect Claude Code, use [the MCP guide](mcp.md#10-add-it-to-claude-code):
+
+```bash
+claude mcp add --transport http quanty https://quanty.example.com/mcp --header "Authorization: Bearer YOUR_QUANTY_MCP_TOKEN"
+```
+
+## 7. Back up and move a library
+
+Finish any ingest or dataset build first. Save Redis, stop the three data-serving units, then archive the three library folders:
+
+```bash
+read -rsp 'FalkorDB password: ' REDISCLI_AUTH; echo
+export REDISCLI_AUTH
+redis-cli SAVE
+unset REDISCLI_AUTH
+sudo systemctl stop quanty qdrant redis-server
+sudo tar -C /srv/quanty -czf "/var/backups/quanty-library-$(date +%F-%H%M%S).tar.gz" content data/qdrant data/falkordb
+sudo systemctl start redis-server qdrant quanty
+```
+
+Back up `.env`, `.quanty-model.json` and CLI credentials separately in encrypted storage with private permissions. Keep caches and datasets too if you want resumable model work. Caddy may keep running while the data services are stopped.
+
+To move a library, install the same store versions on the new host, stop the three units there and keep its newly created folders aside. Transfer and extract the archive under `/srv/quanty`, preserving the relative folder names. Set the new host's `.env` to its loopback stores and `/srv/quanty/content`; restore secrets and sign-ins securely. Make `content` and `data/qdrant` belong to `quanty`, and `data/falkordb` to `redis`, with traversal for Redis as the installer sets. Then start the stores and quanty, check health and the Library, and update DNS. For already ingested absolute picture paths, keep the content path identical when moving. No format migration is provided; this server release starts with a fresh library.
+
+## 8. When a unit fails
+
+```bash
+sudo systemctl status quanty qdrant redis-server caddy
+sudo journalctl -u quanty -u qdrant -u redis-server -u caddy -n 100 --no-pager
+```
+
+Check database secrets, ownership and available disk space. For Redis, confirm version 8 or newer, `libgomp1`, the module path, and the writable-path override. For a model CLI, check its `PATH` and sign-in as `quanty`, then restart quanty after editing `.env`. For a 503 missing-bundle page, build Trunk before rebuilding the server. For HTTPS, check DNS and inbound ports 80/443. See [troubleshooting](troubleshooting.md) for login, connection and upload failures.

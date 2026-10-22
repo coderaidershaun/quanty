@@ -1,12 +1,11 @@
 # Using quanty
 
-How to choose a model and a database, where a library lives, how to add a PDF, and how to use the desktop app, the command line and the costs. To install and start quanty, see the [README](../README.md).
+How to choose a model, find your library, add a PDF, and use the browser app and command line. To install and start quanty, see the [README](../README.md).
 
 - [Choose a model](#choose-a-model)
-- [Choose a database](#choose-a-database)
 - [Where a library lives](#where-a-library-lives)
 - [Add your first PDF](#add-your-first-pdf)
-- [The desktop app](#the-desktop-app)
+- [The app in the browser](#the-app-in-the-browser)
 - [Command line](#command-line)
 - [Costs](#costs)
 - [Start fresh](#start-fresh)
@@ -14,20 +13,20 @@ How to choose a model and a database, where a library lives, how to add a PDF, a
 
 ## Choose a model
 
-The **Model** and **Thinking** dropdowns in the desktop top bar are for the tab on screen. Ask,
+The **Model** and **Thinking** dropdowns in the top bar are for the tab on screen. Ask,
 Ingest and Datasets each keep their own Model and Thinking choice, which the top bar shows on that
 tab; Library has none. Ask is for answers, Ingest for page conversion and concept extraction, and
 Datasets for dataset builds. The default is **Codex / GPT-6.1 Sol / Medium**. Claude models remain
 in the same menu. The controls use the app's existing dropdown styling and save immediately;
 finish any running operation before switching.
 
-All language-model calls run headlessly through the installed CLI. Run `codex login` once
-with your ChatGPT account, or sign in with `claude` when using Claude. No OpenAI API key is
+All language-model calls run headlessly through the installed CLI. On the server, run `codex login --device-auth` once
+with your ChatGPT account, or use `claude setup-token` when using Claude; [server.md](server.md#3-model-tools-and-headless-sign-in) explains service account credentials. No OpenAI API key is
 needed. Codex CLI 0.162.1 is tested; it must support `--ignore-user-config` and `--ignore-rules`.
 
-The saved choices are `.quanty-model.json` in the Quanty home folder. The file holds `ask`,
+The saved choices are `.quanty-model.json` in the server’s quanty home folder. The file holds `ask`,
 `ingest` and `datasets`, one choice for each kind of work, each with `provider`, `model` and
-`thinking`. The desktop app, command line tools, OCR and MCP server read it before creating a model
+`thinking`. The server, command line tools, OCR and MCP server read it before creating a model
 client, so no restart is needed. `rag-query` and the MCP `search` and `answer` tools use the Ask
 choice. `rag-ingest` (concepts, the insights of a chapter, `pdf`, `insights` and `health`), page
 conversion (`ocr` and the app's ingest) and the MCP `ingest_pdf`, `write_insights` and `health`
@@ -39,91 +38,25 @@ version must be restarted. Without that file, `LLM_PROVIDER`, `LLM_MODEL` and `L
 to `gpt-6.1-sol` with `medium` thinking. Supported levels are `low`, `medium`, `high`, `xhigh`,
 `max` and, for models that support it, `ultra`. `CODEX_BIN` can name a custom Codex executable.
 
-PDF pages are rendered locally and attached as images, with their text layer, to headless
+PDF pages are rendered on the server and attached as images, with their text layer, to headless
 Codex. No model shell tools are needed. Gemini embedding and Jev conversion settings keep
 their existing roles. Codex usage records tokens; dollar cost is unknown when no price is
 available. [Codex non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode)
 describes the CLI protocol.
 
-## Choose a database
-
-A database is the place a library lives. It is three things: the Qdrant store, the FalkorDB store, and the content folder that holds the converted pages. The default is **Local**: the two Docker stores on this machine and the `content/` folder of the quanty folder. You can choose a pair of stores on a server instead, and then two machines that choose the same database see the same library. [server.md](server.md) sets a server up, step by step.
-
-At the right end of the footer, on every tab, an entry says which database is in use. It reads **Database: not chosen** when none is, and **Database: Office · connected** when one is, such as one called Office. After the name it can also say `not checked`, `checking…` or `down`. A click on it opens the sheet.
-
-- **The first start.** When no database has been chosen yet, the sheet is the first thing the window shows, and nothing loads until you press **Use**. **Local** is the first choice in the list. It cannot be skipped: **Esc** and a click beside the sheet do nothing, and **Cancel** is off.
-- **Every later start.** The app starts on the database you chose, checks it, and the footer entry says how the check ended. No sheet opens.
-- **The sheet.** The **Database** list holds Local, each database you saved, and **New…**. A saved database has seven fields:
-
-| Field | What to put in it |
-| --- | --- |
-| **Name** | Any name, except Local in any capitals |
-| **Qdrant URL** | The gRPC address of Qdrant, such as `http://localhost:6334`. It is the gRPC port, not 6333 |
-| **Qdrant API key** | Only when that Qdrant has an API key set. The box hides what you type |
-| **FalkorDB URL** | Such as `falkor://localhost:6379` |
-| **FalkorDB password** | Only when that FalkorDB has a password set. The box hides what you type |
-| **Graph** | The name of the graph, `quanty` unless you changed it |
-| **Content folder** | The absolute path of the folder that holds the converted pages |
-
-- **Local** is shown and cannot be edited in the sheet. It is what `.env`, the environment and the defaults say, so change Local by editing `.env`.
-- **Use** connects to both stores, 5 seconds for each, and makes the database the one in use only when both answer. For a saved database the content folder must be there too. When something fails, the sheet says what, and nothing changes: the database in use, the footer and the Library stay as they were. **Use** is off while an ask, an ingest or a dataset build runs, and while the fields do not pass the checks, with the reason when the pointer rests on it.
-- **Forget** removes a saved database from the list. It is off for the one in use. **Cancel** closes the sheet and is off while no database is in use.
-- Keep a key or a password in its own field. A key that is part of a URL can show up in a message.
-
-The choice is saved as `.quanty-databases.json` in the quanty folder, beside `.env`. It holds the keys as plain text, so only your account can read it, and git ignores it. You can also write it by hand: [reference.md](reference.md#the-file) shows the file, with `"chosen": "Local"` for Local, which is never listed under `saved`.
-
-Every program that reads the stores obeys the choice: the app, `rag-ingest`, `rag-query`, `rag-dataset` and the MCP server. `quanty-mcp` reads it once, when it starts, so restart it after you switch. A file that cannot be read, or a chosen name that is not in the list, stops a program with `could not read the settings`.
-
-**The environment wins.** When any of `QDRANT_URL`, `QDRANT_API_KEY`, `FALKORDB_URL`, `FALKORDB_PASSWORD`, `FALKORDB_GRAPH` or `CONTENT_DIR` is set to a value in the environment, the command line programs and the MCP server ignore the chosen database altogether, and all six settings come from your environment, `.env` and the defaults. A value in `.env` does not count here, only one in the environment. In the app, Local is then treated as chosen. [reference.md](reference.md#the-order-of-sources) has the rule in full, and [what the app does then](reference.md#in-the-desktop-app).
-
 ## Where a library lives
 
-A library is three folders under one root, and the root is the quanty folder for Local:
+The server owns one library, named by its `.env`. The browser needs only the server's URL. On the Ubuntu deployment the library is three folders:
 
 | Folder | What it holds |
 | --- | --- |
-| `data/qdrant` | The Qdrant store: every vector |
-| `data/falkordb` | The FalkorDB store: the graph |
-| `content` | The converted pages, the page pictures and the saved insights |
+| `/srv/quanty/data/qdrant` | Vectors |
+| `/srv/quanty/data/falkordb` | The graph |
+| `/srv/quanty/content` | Converted pages, pictures, insights and uploaded source PDFs |
 
-The rest of `data/` (`concept-cache`, `dataset-cache`, `concept-decisions.jsonl`) and `datasets/` are kept answers and built outputs. They stay on the machine that made them, and a library does not need them.
+`data/uploads` and `data/exports` stage uploads and downloads. The rest of `data/` holds kept model answers; `datasets/` holds built training data. Those folders stay on the server. Closing a browser tab does not copy or remove them.
 
-To back a library up, move it or load it, stop the stores, copy the three folders, start the stores, and add the database in the app. No quanty command does it, and none is needed.
-
-**Back it up.** Run this in the quanty folder, with no ingest running. `SAVE` makes FalkorDB write its file now, so the copy is current. Docker Desktop on a Mac needs no `sudo`. On Linux, the store folders can belong to root, so put `sudo` before `tar` and `rsync`.
-
-```bash
-docker compose exec falkordb redis-cli SAVE
-docker compose stop
-tar -czf "quanty-library-$(date +%F).tar.gz" content data/qdrant data/falkordb
-docker compose start
-```
-
-**Load a backup** on this machine. This replaces the library you have now, so move it out of the way first. Extract in the quanty folder:
-
-```bash
-docker compose down
-mv content content.old && mv data/qdrant data/qdrant.old && mv data/falkordb data/falkordb.old
-tar -xzf quanty-library-2026-10-22.tar.gz
-docker compose up -d
-```
-
-Local now shows the loaded library. Delete the `.old` folders when you are sure.
-
-**Move it to a new server**, or bring a laptop's library to a server. Set the server up first, as [server.md](server.md) shows, but do not start its stores yet: copy into a root where `data` and `content` are empty or not there. Replace `me@server` and `/srv/quanty` with your login and the root there. `-R` keeps the folder names. The first two lines save and stop the local stores, so that their files are complete:
-
-```bash
-docker compose exec falkordb redis-cli SAVE
-docker compose stop
-rsync -aR content data/qdrant data/falkordb me@server:/srv/quanty/
-docker compose start                 # the local stores again, if you still want them
-ssh me@server 'cd /srv/quanty && docker compose up -d'
-```
-
-**Then add the database in the app.** The stores of a moved library are at a new address, so a database that names the old address finds nothing. Click the footer entry, choose **New…**, fill in the seven fields for the new place (for a server, the addresses are the ones of the tunnel, as [server.md](server.md#4-add-the-database-in-the-app) shows), and press **Use**. Or change the address of the entry you already have. The Library then lists the moved documents.
-
-> [!NOTE]
-> The pictures of figures in an answer are looked for at the path they were saved under. That path is the content folder as it was on the machine that ingested, written out in full. So a moved library shows its figure pictures only when its content folder is reached at the same path as before. Pages, formulas, tables and code do not depend on it. A later version may store relative paths.
+Back up the three library folders together after saving Redis and stopping quanty and both stores. Keep settings and credentials securely too. [The server guide](server.md#7-back-up-and-move-a-library) gives the backup and move procedure.
 
 ## Add your first PDF
 
@@ -202,15 +135,15 @@ Three flags label what you ingest. All three are optional.
 
 `--author` and `--tag` are used only when the library does not have that media yet: change a stored media with `rag-ingest media`. A media that the library already has keeps its own category, whatever `--book`, `--paper` or `--other` says.
 
-## The desktop app
+## The app in the browser
 
-The app is for people. It opens one window with four tabs: **Ask**, **Library**, **Ingest** and **Datasets**.
+Open your quanty server's HTTPS URL and sign in with its shared password. For a laptop, start it with:
 
 ```bash
-cargo run --release -p gui    # builds and opens target/release/quanty
+cargo run --release -p server -- --open
 ```
 
-The six panels of Ask, every button and every key are in [reference.md](reference.md#the-desktop-app). Not built yet: the notices tray, the help sheet and the health check.
+The default loopback address needs no login when no password is configured. The browser app has four tabs: **Ask**, **Library**, **Ingest** and **Datasets**. Its session survives a reload and, with a configured session key, a server restart. The detailed controls are in [reference.md](reference.md#the-server-and-the-app).
 
 <details>
 <summary>Keys</summary>
@@ -232,7 +165,7 @@ The six panels of Ask, every button and every key are in [reference.md](referenc
 - Read the answer with its citations, the page each citation stands on, the concept graph, the steps of the search, and questions to ask next.
 - **Answer** costs one Gemini embedding call and one call to the selected model on your selected agent subscription. **Results only** writes no answer and costs the embedding call alone.
 - **Maximise**, at the top right of the page's panel and of the concept graph, gives that panel the whole tab. **Restore**, in the same place, puts every panel back.
-- **Share** opens a menu: **Copy as Markdown**, or **Export as PDF…**, **Export as Markdown…** and **Export as HTML…**, which save the written answer, with its formulas, figures, tables, code and sources, as one file that stands alone. An export is free.
+- **Share** opens a menu: **Copy as Markdown**, or **Export as PDF…**, **Export as Markdown…** and **Export as HTML…**, which download the written answer, with its formulas, figures, tables, code and sources, as one file that stands alone. An export is free.
 
 ### Library
 
@@ -245,9 +178,9 @@ The six panels of Ask, every button and every key are in [reference.md](referenc
 ### Ingest
 
 - The **Add media** journey. Choose a media in the **Media** list, or choose **Add new media…**, pick its category, type its title, authors and tags, and press **Save media**.
-- Press **Choose a PDF**. For a book, **Part of the book** offers **Chapter** and **Other part**. A chapter's number and name are filled in from a file named `chapter-<number>-<name>.pdf`. An other part, such as the index or the glossary, takes a **Title**. **Tags for this PDF** are the document's own tags.
+- Press **Choose a PDF** to upload a local file to the server. For a book, **Part of the book** offers **Chapter** and **Other part**. A chapter's number and name are filled in from a file named `chapter-<number>-<name>.pdf`. An other part, such as the index or the glossary, takes a **Title**. **Tags for this PDF** are the document's own tags.
 - The check then runs by itself and is free: it says how many pages the PDF has and how many are converted already, or what would stop a start. For a chapter that is stored but has no insights yet, it says that a start pays only for the insights, takeaways and cheat sheet; for a part of a book that is not a chapter it says that a start pays for nothing.
-- **Start ingest** is paid work, the same as `rag-ingest pdf`: the words under it name what is paid, the pages, the embedding, the insights, takeaways and cheat sheet, and the concepts. Keep the app open while it runs; if it stops, start the same PDF again and it carries on. **Add another PDF** keeps the media chosen for the next PDF.
+- **Start ingest** is paid work, the same as `rag-ingest pdf`: the words under it name what is paid, the pages, the embedding, the insights, takeaways and cheat sheet, and the concepts. Closing the tab leaves an ingest running on the server. After a reload, the app reports that work is running and disables a second start; it does not reattach to progress. If the job fails, choose the same PDF again to continue from saved work. **Add another PDF** keeps the media chosen for the next PDF.
 - At the end the tab says what became of the insights, takeaways and cheat sheet: written (the Library shows them under **Insights**), saved already, none for a part of a book that is not a chapter, or not written, with the reason and the command `rag-ingest insights --document <id>`, which is paid, and a **Copy command** button. A start of a PDF that is ingested already says the same, and what the insights cost when the agent was asked for them.
 
 <details>
@@ -268,13 +201,13 @@ The percent is an estimate: it runs from the first page cut out to the last page
 
 - Fill in a form: the dataset's name, **Media** (or **All media**), the documents to hold out of training, the rewrites and the questions per section, the most SFT examples, and a dry-run box. The other options keep the defaults of `rag-dataset build`.
 - **Start build** is paid work on the model chosen in the top bar, the same as `rag-dataset build`. Tick the dry-run box and it is free: it exports, checks and plans, and asks no model.
-- While it runs the bar shows the stage in words with "about N%" and the spend so far. At the end a notice gives the counts and the dataset's folder, and **Try again** or **Build another** goes on from there.
+- One ingest or dataset build can run at a time across browser tabs. Closing a tab leaves the job running on the server. While connected, its bar shows the stage in words with "about N%" and the spend so far. At the end a notice gives the counts and the dataset's folder, and **Try again** or **Build another** goes on from there.
 
 ### The footer
 
 Every tab has a strip at the foot of the window with three entries. At the left, one for **Google Gemini**, the embedding key, and one for **Jev**, the converter key. Each entry says what is known about that account, and has a link to the page where you see and top up your credit: **Billing** opens the Google AI Studio billing page, and **Console** opens the Jev console.
 
-At the right end, the third entry is the database in use: **Database: not chosen**, or **Database: <name> · connected**. A click on it opens the sheet that [Choose a database](#choose-a-database) describes. Its states are `not checked`, `checking…`, `connected` and `down`. When the database is down, a short hint stands beside the entry, and the sheet shows the whole reason when you open it. The app checks the database at start, and again each time you press **Use**, never on a timer. Neither a key nor a password is ever shown.
+At the right end, the connection entry says **Connected**, **Reconnecting** or **Lost**. It describes the browser's connection to quanty. After reconnecting, the app checks health and refreshes the catalogue. A command sent while disconnected fails with "not connected to the server"; try it again once connected.
 
 It never shows an amount. Neither provider lets an API key read a balance. Google says that [you can only manage your Prepay credit balance in AI Studio](https://ai.google.dev/gemini-api/docs/billing), and [no method of its API](https://ai.google.dev/api/all-methods) returns one. The [API of Jev](https://api.typesafe.ai/openapi.json) has only `/v1/models` and `/v1/systemone`, and its [error table](https://docs.typesafe.ai/api/errors) has no credit error. So an entry says one of these instead:
 
@@ -327,28 +260,30 @@ Converted pages and the answers about concepts are kept on disk, so a run that s
 
 These cost nothing:
 
-- The two stores, which run on your machine.
+- The two stores, which run beside quanty on the server.
 - `health`, `--fixture`, `list_documents`, `read_page`, `chapter_contents`, `chapter_concepts`, `chapter_insights`, `export_insights`, `edit_media`, `edit_document_tags`, `ingest_status`, `insights_status`, `dataset_status`, `stop_job`, `media`, `tag`, `delete-document`, `delete-media` and `insights --dry-run`.
 - A dry run of a dataset: `rag-dataset build --dry-run`, `dry_run: true` in `build_dataset`, and the dry-run box of the Datasets tab.
-- The check, every edit, every delete and every export of the desktop app.
+- The check, every edit, every delete and every export of the browser app.
 
-`delete-document`, `delete-media` and a delete in the desktop app cost nothing to run, but they remove the converted pages, so the same PDF ingested again is converted again, which is paid work.
+`delete-document`, `delete-media` and a delete in the browser app cost nothing to run, but they remove the converted pages, so the same PDF ingested again is converted again, which is paid work.
 
 ## Start fresh
 
-To empty the library and begin again, stop the stores and remove the two folders that quanty made on your machine.
-
-> [!CAUTION]
-> This deletes every stored media and document, every converted page (with the PDFs that the MCP server saved under `content/_uploads`), every kept answer about concepts, every kept answer of the dataset builds, and the log of concept decisions. It cannot be undone.
+On the server, finish running work and take a backup first. Stop quanty and both stores before replacing library folders. This removes the current library from use; ingesting its PDFs again is paid work.
 
 ```bash
-docker compose down       # stops Qdrant and FalkorDB
-rm -rf data content       # the stores, the kept answers and the converted documents
-docker compose up -d
-cargo run --release -p rag-ingestion --bin rag-ingest -- health
+sudo systemctl stop quanty qdrant redis-server
+cd /srv/quanty
+stamp=$(date +%F-%H%M%S)
+sudo mv content "content.$stamp"
+sudo mv data "data.$stamp"
+sudo install -d -o quanty -g quanty -m 0750 content data data/qdrant data/uploads data/exports
+sudo install -d -o redis -g redis -m 0750 data/falkordb
+sudo setfacl -m u:redis:--x /srv/quanty /srv/quanty/data
+sudo systemctl start redis-server qdrant quanty
 ```
 
-Nothing in git is touched: `samples/` stays. To ingest the PDFs again is paid work again, because nothing is kept to go on from: see [Costs](#costs). The built datasets are in `datasets/`, which `rm -rf data content` leaves: remove it too to drop them. The kept answers of their models are in `data/dataset-cache`, so they go with `data`, and a dataset built again is paid work again. When `.env` names other places with `CONTENT_DIR`, `CONCEPT_CACHE_DIR`, `CONCEPT_DECISION_LOG`, `DATASET_DIR` or `DATASET_CACHE_DIR`, remove those too.
+The old folders remain beside the new ones until you deliberately delete them. Built datasets remain in `datasets/`. Preserve `.env`, credentials and model choices. If `.env` names other content or cache folders, account for those separately. On a Mac using Docker for its stores, use the Mac quickstart's reset procedure instead.
 
 ## Artifact descriptions
 

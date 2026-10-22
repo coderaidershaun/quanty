@@ -7,10 +7,10 @@ use eframe::egui::{
     self, Color32, Galley, Rect, Response, Sense, Stroke, StrokeKind, WidgetInfo, WidgetType, vec2,
 };
 
-use super::ControlSize;
-use super::look::{Look, focus_ring};
-use super::progress::paint_spinner;
 use crate::theme::{Icon, TextRole, Tone, color, radius, space, stroke};
+use crate::widgets::ControlSize;
+use crate::widgets::look::{Look, focus_ring};
+use crate::widgets::progress::paint_spinner;
 
 const MIN_WIDTH_PER_HEIGHT: f32 = 2.4;
 
@@ -144,7 +144,7 @@ impl<'a> Button<'a> {
     }
 
     /// Draws the button as if the pointer or the keyboard were on it, unless `look` is `None`.
-    pub(super) fn preview(mut self, look: Option<Look>) -> Self {
+    pub(in crate::widgets) fn preview(mut self, look: Option<Look>) -> Self {
         self.forced = look;
         self
     }

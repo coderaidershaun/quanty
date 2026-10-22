@@ -5,8 +5,9 @@ use eframe::egui::{
     self, Align, Layout, Response, Stroke, WidgetInfo, WidgetType, text::LayoutJob, vec2,
 };
 
-use super::{Button, ControlSize, spinner};
 use crate::theme::{Icon, TextRole, Tone, color, radius, size, space, stroke};
+use crate::widgets::controls::Button;
+use crate::widgets::{ControlSize, spinner};
 
 pub struct Notice<'a> {
     title: &'a str,

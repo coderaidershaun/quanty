@@ -83,6 +83,9 @@ pub(super) enum Ingest {
     Fails(FailureKind),
     /// The ingest plays to page 3 of 12 and never ends.
     Stalls,
+    /// The play stores nothing either, and ends as if the items were stored and the insights
+    /// could not be written.
+    InsightsNotWritten,
 }
 
 /// How a started build ends. Nothing is written either way.
@@ -125,7 +128,7 @@ const HEALTHY: Script = Script {
     },
 };
 
-static SCENES: [Scene; 25] = [
+static SCENES: [Scene; 26] = [
     Scene {
         name: "idle",
         about: "Healthy, with the sample library and nothing asked.",
@@ -305,6 +308,16 @@ static SCENES: [Scene; 25] = [
         rests: true,
         script: Script {
             ingest: Ingest::Fails(FailureKind::PageFailed),
+            opening: Opening::ChecksAChapter,
+            ..HEALTHY
+        },
+    },
+    Scene {
+        name: "ingest-insights-failed",
+        about: "The Ingest tab, with a chapter checked and a start that stores its items but cannot write its insights.",
+        rests: true,
+        script: Script {
+            ingest: Ingest::InsightsNotWritten,
             opening: Opening::ChecksAChapter,
             ..HEALTHY
         },

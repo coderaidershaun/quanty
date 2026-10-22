@@ -13,7 +13,7 @@ use self::document::DocumentFields;
 use self::media::MediaChoice;
 use crate::contract::{Catalogue, Category, IngestRequest, Intent, Media, is_same_name};
 use crate::panels::PanelCx;
-use crate::panels::media_card::MediaFields;
+use crate::panels::pages::media_card::MediaFields;
 use crate::panels::seam::column;
 use crate::state::{IngestJob, MediaEditing, Shared};
 use crate::theme::{TextRole, space};

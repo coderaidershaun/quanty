@@ -88,7 +88,7 @@ fn assert_scene(name: &str, shared: &Shared) {
                 && source.page.ready().is_some()
                 && is_failed(&source.concepts, FailureKind::FalkorDbDown)
         }
-        "ingest-ready" | "ingest-failed" | "ingest-running" => {
+        "ingest-ready" | "ingest-failed" | "ingest-insights-failed" | "ingest-running" => {
             let is_checked = matches!(
                 &shared.ingest,
                 IngestJob::Checked { preflight, .. }
@@ -146,7 +146,7 @@ fn open_scene(name: &str, rests: bool) -> Harness<'static, App> {
 
 #[test]
 fn every_scene_opens_and_every_sample_page_loads() {
-    assert_eq!(fake::scenes().len(), 25);
+    assert_eq!(fake::scenes().len(), 26);
     for scene in fake::scenes() {
         let mut harness = open_scene(scene.name, scene.rests);
         assert_scene(scene.name, harness.state().shared());

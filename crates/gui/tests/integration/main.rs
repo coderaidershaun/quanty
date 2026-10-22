@@ -4,14 +4,11 @@
 
 mod app;
 mod balances;
-mod contents;
+mod chapter;
 mod copied_rules;
 mod datasets;
 mod ingest;
-mod insights;
 mod library;
-mod media_images;
-mod media_math;
+mod media;
 mod query;
-mod source;
 mod support;

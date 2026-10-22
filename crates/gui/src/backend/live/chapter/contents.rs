@@ -6,17 +6,17 @@ use std::path::{Path, PathBuf};
 
 use ocr::ReadChapterError;
 
-use super::chapters::{FolderFault, chapter_folder};
+use super::folder::{FolderFault, chapter_folder};
 use super::source::piece_view;
-use super::{LiveContext, Services};
 use crate::backend::Reply;
+use crate::backend::live::{LiveContext, Services};
 use crate::contract::{
     ChapterContents, ChapterItem, DocId, Event, Failure, PageConcept, PagePiece, RequestId,
 };
 
 /// Sends the items, then the concepts: always both, always in this order. The window takes the
 /// concepts as the end of the load, so it would wait for ever without them.
-pub(super) async fn load_chapter_contents<S: Services>(
+pub(in crate::backend::live) async fn load_chapter_contents<S: Services>(
     cx: &LiveContext<S>,
     request: RequestId,
     doc: DocId,

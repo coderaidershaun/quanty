@@ -2,17 +2,15 @@
 //! work the window asks for.
 
 mod balances;
-mod chapters;
-mod contents;
+mod chapter;
 mod context;
 mod convert;
 mod datasets;
 mod dispatch;
 mod failure;
 pub mod ingest;
-mod insights;
 mod library;
 pub mod query;
-pub mod source;
 
+pub use chapter::source;
 pub use context::{Kept, LiveContext, RealServices, Services};

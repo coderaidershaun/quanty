@@ -1,6 +1,7 @@
 //! The window itself: it drains what the backend sent, draws the panels, and applies what they
 //! asked for.
 
+mod balances;
 pub mod launch;
 pub mod layout;
 mod model_picker;

@@ -4,9 +4,9 @@ use eframe::egui::{
     self, Align, Color32, Response, Sense, Stroke, StrokeKind, WidgetInfo, WidgetType, pos2, vec2,
 };
 
-use super::Button;
-use super::look::{Look, focus_ring};
 use crate::theme::{Icon, Kind, TextRole, Tone, color, radius, size, space, stroke};
+use crate::widgets::controls::Button;
+use crate::widgets::look::{Look, focus_ring};
 
 const MARGIN: f32 = space::MD;
 
@@ -64,7 +64,7 @@ impl<'a> Card<'a> {
 
     /// Draws the card as if the pointer or the keyboard were on it, unless `look` is `None`.
     /// Only a clickable card has a look to show.
-    pub(super) fn preview(mut self, look: Option<Look>) -> Self {
+    pub(in crate::widgets) fn preview(mut self, look: Option<Look>) -> Self {
         self.forced = look;
         self
     }

@@ -142,6 +142,20 @@ pub struct PageToCheck {
     pub reasons: Vec<String>,
 }
 
+/// What became of the insights, takeaways and cheat sheet of the document at the end of a run.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum InsightsOutcome {
+    Written,
+    /// The file was there already, so nothing was asked.
+    AlreadySaved,
+    /// Nothing was saved, and this is why. The items are stored all the same.
+    NotWritten {
+        reason: String,
+    },
+    /// A part of a book that is not a chapter, such as its index, gets none.
+    NoneForBookPart,
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
 pub struct IngestReport {
     pub doc: DocId,
@@ -154,16 +168,22 @@ pub struct IngestReport {
     /// What the whole run used.
     pub usage: Usage,
     pub pages_to_check: Vec<PageToCheck>,
+    /// `None`: the run had no insights writer.
+    pub insights: Option<InsightsOutcome>,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum IngestOutcome {
     /// Nothing was converted, embedded or stored. The insights, takeaways and cheat sheet were
-    /// asked for only when they were not saved yet, and own tags that were given have still been
-    /// written.
+    /// asked for only when they were not saved yet, and `insights` says what became of them
+    /// (`None`: the run had no insights writer). `usage` is what this start spent, on the
+    /// insights alone, and is empty when nothing was asked. Own tags that were given have still
+    /// been written.
     AlreadyIngested {
         doc: DocId,
         items: u64,
+        insights: Option<InsightsOutcome>,
+        usage: Usage,
     },
     Ingested(IngestReport),
     Cancelled,

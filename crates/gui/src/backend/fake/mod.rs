@@ -318,7 +318,9 @@ impl Fake {
         let script = self.scene.script.ingest;
         let played = match script {
             Ingest::Stalls => fixtures::ingest::steps_to_the_stall(),
-            Ingest::Done | Ingest::Fails(_) => fixtures::ingest::steps(),
+            Ingest::Done | Ingest::Fails(_) | Ingest::InsightsNotWritten => {
+                fixtures::ingest::steps()
+            }
         };
         for progress in played {
             self.wait(STEP_WAIT).await;
@@ -327,6 +329,9 @@ impl Fake {
         self.wait(STEP_WAIT).await;
         let result = match script {
             Ingest::Done => Ok(IngestOutcome::Ingested(fixtures::ingest::report(ingest))),
+            Ingest::InsightsNotWritten => Ok(IngestOutcome::Ingested(
+                fixtures::ingest::report_with_insights_not_written(ingest),
+            )),
             Ingest::Fails(kind) => Err(self.failure(kind)),
             Ingest::Stalls => std::future::pending().await,
         };

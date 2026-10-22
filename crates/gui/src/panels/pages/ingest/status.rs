@@ -5,12 +5,13 @@ use eframe::egui;
 
 use super::{Local, Missing};
 use crate::contract::{
-    ChapterState, Failure, IngestOutcome, IngestProgress, IngestReport, IngestRequest, IngestStage,
-    Intent, Preflight,
+    ChapterInsights, ChapterState, DocId, Failure, IngestOutcome, IngestProgress, IngestReport,
+    IngestRequest, IngestStage, InsightsOutcome, Intent, Preflight, Usage,
 };
 use crate::panels::PanelCx;
 use crate::panels::labels::{
-    START_OFF_WHILE_DELETING, TRY_AGAIN, cost_text, detail, spent_text, tokens_by_model,
+    COPY_COMMAND, START_OFF_WHILE_DELETING, TRY_AGAIN, cost_text, detail, spent_text,
+    tokens_by_model,
 };
 use crate::state::IngestJob;
 use crate::theme::{TextRole, color, space};
@@ -18,7 +19,7 @@ use crate::widgets::{self, Button, Notice};
 
 const CHECKING: &str = "Checking the PDF";
 const CONNECTING: &str = "Connecting to the stores";
-const COST: &str = "Checking is free. Starting is paid work: the selected agent and Jev convert each page, Gemini embeds the items, and the selected agent reads the concepts.";
+const COST: &str = "Checking is free. Starting is paid work: the selected agent and Jev convert each page, Gemini embeds the items, and the selected agent writes the insights, takeaways and cheat sheet and reads the concepts.";
 const KEEP_OPEN: &str = "Keep the app open until this is done. If it stops, start the same PDF again: pages that are converted are not paid for twice.";
 
 /// `draft` is what the form holds now, made of its settled fields.
@@ -108,7 +109,7 @@ fn checked_line(ui: &mut egui::Ui, preflight: &Preflight) {
             "{pages_done} are converted already and are not paid for again."
         )),
         Some(ChapterState::Converted) => Some(
-            "All are converted already: only the embedding and the concepts are paid for."
+            "All are converted already: only the embedding, the insights and the concepts are paid for."
                 .to_owned(),
         ),
         Some(ChapterState::Ingested { items }) => Some(format!(
@@ -193,16 +194,22 @@ fn finished(
 ) {
     match result {
         Ok(IngestOutcome::Ingested(report)) => {
+            let body = with_insights(summary(report), report.insights.as_ref());
             Notice::success(&format!("Ingested {}", report.title))
-                .body(&summary(report))
+                .body(&body)
                 .show(ui);
+            not_written(ui, intents, report.doc, report.insights.as_ref());
         }
-        Ok(IngestOutcome::AlreadyIngested { items, .. }) => {
-            Notice::info("Already ingested")
-                .body(&format!(
-                    "{items} items are stored. Nothing was converted or embedded."
-                ))
-                .show(ui);
+        Ok(IngestOutcome::AlreadyIngested {
+            doc,
+            items,
+            insights,
+            usage,
+        }) => {
+            let stored = format!("{items} items are stored. Nothing was converted or embedded.");
+            let body = with_insights(stored, insights.as_ref()) + &spent_sentence(usage);
+            Notice::info("Already ingested").body(&body).show(ui);
+            not_written(ui, intents, *doc, insights.as_ref());
         }
         Ok(IngestOutcome::Cancelled) => {
             Notice::info("Stopped")
@@ -232,19 +239,75 @@ fn finished(
     });
 }
 
+/// What became of the insights, said in one sentence, when it is not a failure: that has a notice
+/// of its own.
+fn insights_sentence(outcome: &InsightsOutcome) -> Option<&'static str> {
+    match outcome {
+        InsightsOutcome::Written => Some(
+            "The insights, takeaways and cheat sheet are written: the Library shows them under Insights.",
+        ),
+        InsightsOutcome::AlreadySaved => {
+            Some("The insights were saved already, so nothing was asked for them.")
+        }
+        InsightsOutcome::NoneForBookPart => {
+            Some("A part of a book that is not a chapter gets no insights.")
+        }
+        InsightsOutcome::NotWritten { .. } => None,
+    }
+}
+
+fn with_insights(mut text: String, insights: Option<&InsightsOutcome>) -> String {
+    if let Some(sentence) = insights.and_then(insights_sentence) {
+        text.push(' ');
+        text.push_str(sentence);
+    }
+    text
+}
+
+/// Under the notice of an end that stored the items: why the insights were not written, and the
+/// command that writes them.
+fn not_written(
+    ui: &mut egui::Ui,
+    intents: &mut Vec<Intent>,
+    doc: DocId,
+    insights: Option<&InsightsOutcome>,
+) {
+    let Some(InsightsOutcome::NotWritten { reason }) = insights else {
+        return;
+    };
+    let command = ChapterInsights::command_for(doc);
+    let why = reason.trim_end().trim_end_matches('.');
+    let body = format!(
+        "Why: {why}. The items are stored, so run {command} to write them; it asks the model of the Ingest choice once, which is paid."
+    );
+    ui.add_space(space::SM);
+    let notice = Notice::warning("The insights were not written")
+        .body(&body)
+        .action(COPY_COMMAND)
+        .show(ui);
+    if notice.action_clicked {
+        intents.push(Intent::CopyText(command));
+    }
+}
+
+/// " Tokens: …. Cost …." for a run that used a model, and nothing for one that used none.
+fn spent_sentence(usage: &Usage) -> String {
+    if usage.models.is_empty() {
+        return String::new();
+    }
+    format!(
+        " Tokens: {}. Cost {}.",
+        tokens_by_model(usage),
+        cost_text(usage.cost_usd)
+    )
+}
+
 fn summary(report: &IngestReport) -> String {
     let mut text = format!(
         "{} pages, {}. {} concepts created, {} linked.",
         report.pages, report.items, report.concepts_created, report.concepts_linked
     );
-    let usage = &report.usage;
-    if !usage.models.is_empty() {
-        text.push_str(&format!(
-            " Tokens: {}. Cost {}.",
-            tokens_by_model(usage),
-            cost_text(usage.cost_usd)
-        ));
-    }
+    text.push_str(&spent_sentence(&report.usage));
     match report.pages_to_check.len() {
         0 => {}
         1 => text.push_str(" 1 page needs a check."),

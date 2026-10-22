@@ -2,8 +2,8 @@
 
 use eframe::egui;
 
-use super::Button;
 use crate::theme::{TextRole, color, radius, shadow, space, stroke};
+use crate::widgets::controls::Button;
 
 const CONFIRM_WIDTH: f32 = 360.0;
 

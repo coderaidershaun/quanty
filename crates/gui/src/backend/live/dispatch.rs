@@ -1,10 +1,9 @@
 //! Hands each command to the part of the live backend that does it. Each part sends its own
 //! events.
 
-use super::contents;
 use super::context::{LiveContext, Services};
 use super::source::PageTarget;
-use super::{balances, datasets, ingest, insights, library, query, source};
+use super::{balances, chapter, datasets, ingest, library, query, source};
 use crate::backend::{Handler, Reply, exporting};
 use crate::contract::{Command, Event, RequestId, unknown_health};
 
@@ -29,7 +28,7 @@ impl<S: Services> Handler for LiveContext<S> {
                 doc,
                 folder,
             } => {
-                contents::load_chapter_contents(self, request, doc, folder, &reply).await;
+                chapter::load_chapter_contents(self, request, doc, folder, &reply).await;
             }
             Command::LoadCatalogue { request } => {
                 library::load_catalogue(self, request, &reply).await;
@@ -63,7 +62,7 @@ impl<S: Services> Handler for LiveContext<S> {
                 request,
                 doc,
                 folder,
-            } => insights::load_chapter_insights(self, request, doc, folder, &reply).await,
+            } => chapter::load_chapter_insights(self, request, doc, folder, &reply).await,
             Command::Cancel(_) => {}
             Command::ReadBalances { request } => balances::read(self, request, &reply).await,
         }

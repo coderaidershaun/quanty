@@ -8,7 +8,7 @@ use super::Local;
 use crate::contract::{Catalogue, Category, Failure, Intent, Loadable, Media, MediaEdit};
 use crate::panels::PanelCx;
 use crate::panels::labels::caption;
-use crate::panels::media_card::{
+use crate::panels::pages::media_card::{
     self, FormSetup, MediaFields, Pencil, Pressed, Purpose, Save, would_change,
 };
 use crate::state::{MediaEditing, MediaSave};

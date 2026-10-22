@@ -5,7 +5,7 @@ use eframe::egui;
 
 use super::SaveStep;
 use crate::contract::{Failure, Intent, Media, is_same_name};
-use crate::panels::media_card::{
+use crate::panels::pages::media_card::{
     self, FormSetup, MediaFields, Pressed, Purpose, Save, would_change,
 };
 use crate::state::{Library, MediaEditing, Shared};

@@ -63,6 +63,10 @@ fn a_checked_chapter_runs_to_done_and_loads_the_catalogue_again() {
         "Chapter 3 · Greeks — 12 pages. Not converted yet."
     ));
     assert!(has(&harness, Role::Button, "Start ingest"));
+    assert!(says(
+        &harness,
+        "Checking is free. Starting is paid work: the selected agent and Jev convert each page, Gemini embeds the items, and the selected agent writes the insights, takeaways and cheat sheet and reads the concepts."
+    ));
     testkit::save_png(&mut harness, "app-ingest-ready");
 
     type_into(&mut harness, "Tags for this PDF", ", vega");
@@ -94,6 +98,10 @@ fn a_checked_chapter_runs_to_done_and_loads_the_catalogue_again() {
     assert!(says(
         &harness,
         "Tokens: claude-haiku-5-5 48k, claude-sonnet-5-5 192k, gemini-embedding-2 9k (estimated). Cost ≈ $1.75."
+    ));
+    assert!(says(
+        &harness,
+        "The insights, takeaways and cheat sheet are written: the Library shows them under Insights."
     ));
     assert!(has(&harness, Role::Button, "Add another PDF"));
     testkit::save_png(&mut harness, "app-ingest-done");

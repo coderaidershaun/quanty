@@ -4,7 +4,7 @@
 use eframe::egui;
 
 use crate::contract::{ChapterLabel, DocId, DocumentName, Loadable, PageView};
-use crate::panels::media_card::NO_MEDIA;
+use crate::panels::labels::NO_MEDIA;
 use crate::state::Shared;
 use crate::widgets::Dropdown;
 

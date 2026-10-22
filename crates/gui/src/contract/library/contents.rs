@@ -1,8 +1,8 @@
 //! Every formula, figure, table and code listing of one document, read from its chapter folder on
 //! disk, so the Library shows them while the stores are down.
 
-use super::ids::DocId;
-use super::source::{PagePiece, PieceKind};
+use crate::contract::ids::DocId;
+use crate::contract::source::{PagePiece, PieceKind};
 
 /// One item with the page it is on. A code listing that page breaks cut is one item: its
 /// `piece.text` is the whole listing, and `last_page` is the page it ends on.

@@ -277,7 +277,8 @@ The six panels of Ask, every button and every key are in [docs/reference.md](doc
 - The **Add media** journey. Choose a media in the **Media** list, or choose **Add new media…**, pick its category, type its title, authors and tags, and press **Save media**.
 - Press **Choose a PDF**. For a book, **Part of the book** offers **Chapter** and **Other part**. A chapter's number and name are filled in from a file named `chapter-<number>-<name>.pdf`. An other part, such as the index or the glossary, takes a **Title**. **Tags for this PDF** are the document's own tags.
 - The check then runs by itself and is free: it says how many pages the PDF has and how many are converted already, or what would stop a start. For a chapter that is stored but has no insights yet, it says that a start pays only for the insights, takeaways and cheat sheet; for a part of a book that is not a chapter it says that a start pays for nothing.
-- **Start ingest** is paid work, the same as `rag-ingest pdf`. Keep the app open while it runs; if it stops, start the same PDF again and it carries on. **Add another PDF** keeps the media chosen for the next PDF.
+- **Start ingest** is paid work, the same as `rag-ingest pdf`: the words under it name what is paid, the pages, the embedding, the insights, takeaways and cheat sheet, and the concepts. Keep the app open while it runs; if it stops, start the same PDF again and it carries on. **Add another PDF** keeps the media chosen for the next PDF.
+- At the end the tab says what became of the insights, takeaways and cheat sheet: written (the Library shows them under **Insights**), saved already, none for a part of a book that is not a chapter, or not written, with the reason and the command `rag-ingest insights --document <id>`, which is paid, and a **Copy command** button. A start of a PDF that is ingested already says the same, and what the insights cost when the agent was asked for them.
 
 <details>
 <summary>What the <b>Ingest</b> bar shows while it runs</summary>
@@ -335,6 +336,7 @@ The server finds `.env`, `content/` and `data/` from the folder it starts in: th
 | `chapter_contents`   | Lists every formula, figure, table and code listing of a document, in reading order | Free                                               |
 | `chapter_concepts`   | Lists the concepts of a document, or of one page of it           | Free                                               |
 | `chapter_insights`   | Gives the insights, takeaways and cheat sheet written for a document | Free                                           |
+| `export_insights`    | Writes the saved insights, takeaways and cheat sheet of a document to a PDF, Markdown or HTML file | Free; writes one file             |
 | `answer`             | Writes an answer from what `search` finds, with its sources      | A Gemini call and the subscription usage of the agent of the Ask choice |
 | `edit_media`         | Changes the category, authors or tags of a stored media, in both stores | Free                                        |
 | `edit_document_tags` | Adds tags to a stored document or takes tags away, in both stores | Free                                              |
@@ -346,7 +348,7 @@ The server finds `.env`, `content/` and `data/` from the folder it starts in: th
 | `dataset_status`     | Says how a dataset build is going and what it spent so far       | Free                                               |
 | `stop_job`           | Stops a running ingest, insights job or dataset build            | Free                                               |
 
-An agent that can write its own answer should call `search`, not `answer`. The arguments, the first calls to try, `.mcp.json`, HTTP, how to send a PDF, how to write insights, how to stop a job and how to build a dataset are in [docs/mcp.md](docs/mcp.md). The tools do not delete and do not change the model choice: [docs/mcp.md](docs/mcp.md#8-what-is-not-a-tool) says why.
+An agent that can write its own answer should call `search`, not `answer`. The arguments, the first calls to try, `.mcp.json`, HTTP, how to send a PDF, how to write and export insights, how to stop a job and how to build a dataset are in [docs/mcp.md](docs/mcp.md). The tools do not delete and do not change the model choice: [docs/mcp.md](docs/mcp.md#8-what-is-not-a-tool) says why.
 
 ## Command line
 
@@ -388,9 +390,9 @@ Converted pages and the answers about concepts are kept on disk, so a run that s
 These cost nothing:
 
 - The two stores, which run on your machine.
-- `health`, `--fixture`, `list_documents`, `read_page`, `ingest_status`, `dataset_status`, `media`, `tag`, `delete-document`, `delete-media` and `insights --dry-run`.
+- `health`, `--fixture`, `list_documents`, `read_page`, `chapter_contents`, `chapter_concepts`, `chapter_insights`, `export_insights`, `edit_media`, `edit_document_tags`, `ingest_status`, `insights_status`, `dataset_status`, `stop_job`, `media`, `tag`, `delete-document`, `delete-media` and `insights --dry-run`.
 - A dry run of a dataset: `rag-dataset build --dry-run`, `dry_run: true` in `build_dataset`, and the dry-run box of the Datasets tab.
-- The check, every edit and every delete of the desktop app.
+- The check, every edit, every delete and every export of the desktop app.
 
 `delete-document`, `delete-media` and a delete in the desktop app cost nothing to run, but they remove the converted pages, so the same PDF ingested again is converted again, which is paid work.
 

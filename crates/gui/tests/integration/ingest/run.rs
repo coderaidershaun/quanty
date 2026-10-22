@@ -1,36 +1,16 @@
-//! Checks that the live backend checks and runs an ingest of a PDF of a saved media: a new
-//! chapter or paper is converted, stored and labelled, and a store that is down fails the run with
-//! nothing paid for.
-
-use std::sync::Arc;
+//! Checks that a new chapter or paper is converted, stored and labelled, that a second start finds
+//! it ingested, and that a part of a book is stored under its book.
 
 use gui::backend::live::{LiveContext, Services};
-use gui::backend::{Handler, Reply};
 use gui::contract::{
-    Catalogue, Category, ChapterState, Command, Document, DocumentName, Event, Failure,
-    FailureKind, IngestOutcome, IngestProgress, IngestRequest, IngestStage, NewMedia, PageView,
-    Preflight, RequestId, Usage,
+    Catalogue, Category, ChapterState, Command, Document, DocumentName, Event, IngestOutcome,
+    IngestProgress, IngestRequest, IngestStage, InsightsOutcome, NewMedia, PageView, Preflight,
+    Usage,
 };
-use ocr::testing::{Scenario, StubServices, sample_pdf};
-use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores};
+use ocr::testing::sample_pdf;
 
+use super::{REQUEST, SAMPLE_BOOK, checked, events_of, request, started};
 use crate::support;
-
-const REQUEST: RequestId = RequestId(7);
-const SAMPLE_BOOK: &str = "Option Volatility and Pricing";
-
-fn request() -> IngestRequest {
-    IngestRequest {
-        pdf: sample_pdf(),
-        media: SAMPLE_BOOK.to_owned(),
-        category: Category::Book,
-        name: DocumentName::Chapter {
-            number: 1,
-            name: "Sample Pages".to_owned(),
-        },
-        tags: Vec::new(),
-    }
-}
 
 /// Saves the media the way the Ingest tab does before its first PDF.
 async fn saved<S: Services>(cx: &LiveContext<S>, media: NewMedia) {
@@ -49,65 +29,6 @@ async fn saved<S: Services>(cx: &LiveContext<S>, media: NewMedia) {
         ),
         "expected the media to be saved: {events:#?}"
     );
-}
-
-async fn events_of<S: Services>(cx: &LiveContext<S>, command: Command) -> Vec<Event> {
-    let (reply, events, _stop) = Reply::collecting();
-    cx.serve(command, reply).await;
-    events.try_iter().collect()
-}
-
-async fn checked<S: Services>(
-    cx: &LiveContext<S>,
-    ingest: &IngestRequest,
-) -> Result<Preflight, Failure> {
-    let command = Command::Preflight {
-        request: REQUEST,
-        ingest: ingest.clone(),
-    };
-    let events = events_of(cx, command).await;
-    let [
-        Event::Preflight {
-            request: REQUEST,
-            result,
-        },
-    ] = events.as_slice()
-    else {
-        panic!("expected one preflight for {REQUEST:?}: {events:#?}");
-    };
-    result.clone()
-}
-
-async fn started<S: Services>(
-    cx: &LiveContext<S>,
-    ingest: &IngestRequest,
-) -> (Vec<IngestProgress>, Result<IngestOutcome, Failure>) {
-    let command = Command::Ingest {
-        request: REQUEST,
-        ingest: ingest.clone(),
-    };
-    let events = events_of(cx, command).await;
-    let Some((
-        Event::IngestFinished {
-            request: REQUEST,
-            result,
-        },
-        before,
-    )) = events.split_last()
-    else {
-        panic!("the last event must end the ingest of {REQUEST:?}: {events:#?}");
-    };
-    let progress = before
-        .iter()
-        .map(|event| match event {
-            Event::IngestProgress {
-                request: REQUEST,
-                progress,
-            } => progress.clone(),
-            other => panic!("only progress comes before the end: {other:#?}"),
-        })
-        .collect();
-    (progress, result.clone())
 }
 
 /// The stage turns to converting when the last of the seven pages of the sample is cut out, before
@@ -229,6 +150,7 @@ async fn a_checked_chapter_is_ingested_with_its_labels_and_a_second_start_finds_
         panic!("expected the chapter to be ingested: {finished:#?}");
     };
     assert_eq!(report.pages, 7);
+    assert_eq!(report.insights, Some(InsightsOutcome::Written));
     let counts = report.items;
     let items = counts.total();
     assert!(items > 0, "{report:#?}");
@@ -288,13 +210,20 @@ async fn a_checked_chapter_is_ingested_with_its_labels_and_a_second_start_finds_
         [IngestStage::CheckingStored],
         "nothing is converted: {progress:?}"
     );
+    let Ok(IngestOutcome::AlreadyIngested {
+        doc,
+        items: stored,
+        insights,
+        usage,
+    }) = again
+    else {
+        panic!("expected the second start to find it ingested: {again:#?}");
+    };
     assert_eq!(
-        again,
-        Ok(IngestOutcome::AlreadyIngested {
-            doc: report.doc,
-            items,
-        })
+        (doc, stored, insights),
+        (report.doc, items, Some(InsightsOutcome::AlreadySaved))
     );
+    assert!(usage.models.is_empty(), "nothing was asked: {usage:?}");
     assert_eq!(pages.calls(), calls_so_far, "no page was converted again");
 
     // A chapter stored before insights existed has no file: a start writes only that file.
@@ -310,7 +239,25 @@ async fn a_checked_chapter_is_ingested_with_its_labels_and_a_second_start_finds_
     let stages: Vec<IngestStage> = progress.iter().map(|progress| progress.stage).collect();
     let writes_only_the_file = [IngestStage::CheckingStored, IngestStage::WritingInsights];
     assert_eq!(stages, writes_only_the_file);
-    assert_eq!(writing, again);
+    let Ok(IngestOutcome::AlreadyIngested {
+        doc,
+        items: stored,
+        insights,
+        usage,
+    }) = writing
+    else {
+        panic!("expected the third start to find it ingested: {writing:#?}");
+    };
+    assert_eq!(
+        (doc, stored, insights),
+        (report.doc, items, Some(InsightsOutcome::Written))
+    );
+    let models: Vec<&str> = usage
+        .models
+        .iter()
+        .map(|model| model.model.as_str())
+        .collect();
+    assert_eq!(models, ["stand-in"], "the insights alone were asked for");
     assert_eq!(pages.calls(), calls_so_far, "no page was converted again");
     assert!(file.is_file(), "the insights are written again");
 }
@@ -419,6 +366,7 @@ async fn a_part_of_a_book_is_ingested_with_its_book_in_its_stored_title() {
         panic!("expected the part to be ingested: {finished:#?}");
     };
     assert_eq!(report.title, "Option Volatility and Pricing, Index");
+    assert_eq!(report.insights, Some(InsightsOutcome::NoneForBookPart));
     let catalogue = catalogue_of(&cx).await;
     let book = catalogue
         .media_of(report.doc)
@@ -446,55 +394,4 @@ async fn a_part_of_a_book_is_ingested_with_its_book_in_its_stored_title() {
         Some("Index"),
         "the page names the part by its own title"
     );
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p gui --test integration -- --ignored ingest::"]
-async fn a_signed_out_claude_blocks_the_check_of_a_new_pdf() {
-    let stores = ThrowawayStores::new("ingest-signed-out");
-    let config = stores.config().clone();
-    let pages = Arc::new(StubServices::new(Scenario::SampleChapter));
-    let services = support::StandInServices {
-        stores,
-        embedder: Box::new(StandInEmbedder::default),
-        llm: Box::new(|_work| StandInLlm::signed_out()),
-        pages: Arc::clone(&pages),
-    };
-    let cx = LiveContext::new(config, services);
-
-    let preflight = checked(&cx, &request())
-        .await
-        .expect("a check of a readable pdf over stores that answer");
-
-    assert_eq!(
-        (preflight.state, preflight.pages),
-        (Some(ChapterState::New), Some(7))
-    );
-    let kinds: Vec<FailureKind> = preflight
-        .blockers
-        .iter()
-        .map(|blocker| blocker.kind)
-        .collect();
-    assert_eq!(kinds, [FailureKind::ClaudeSignedOut]);
-    assert_eq!(pages.calls(), [], "no page was converted");
-}
-
-#[tokio::test]
-async fn with_the_stores_down_the_check_and_the_start_fail_with_the_store_named_and_nothing_is_paid()
- {
-    let folder = tempfile::tempdir().expect("a temporary folder should be made");
-    let (cx, pages) = support::closed_with_stub_pages(&folder.path().join("content"));
-    let wanted = request();
-    let stores = [FailureKind::FalkorDbDown, FailureKind::QdrantDown];
-
-    let failure = checked(&cx, &wanted)
-        .await
-        .expect_err("a check needs a store");
-
-    assert!(stores.contains(&failure.kind), "{failure:?}");
-    let (progress, finished) = started(&cx, &wanted).await;
-    assert!(progress.is_empty(), "nothing was paid for: {progress:?}");
-    let failure = finished.expect_err("a start needs the stores");
-    assert!(stores.contains(&failure.kind), "{failure:?}");
-    assert_eq!(pages.calls(), [], "no page was converted");
 }

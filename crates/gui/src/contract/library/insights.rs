@@ -1,9 +1,9 @@
 //! The insights, takeaways and cheat sheet of one document, as they were saved in its chapter
 //! folder when it was ingested or written for it later, and the words that go with them.
 
-use super::failure::{Failure, FailureKind};
-use super::ids::DocId;
-use super::library::{Catalogue, Category, DocumentName};
+use super::catalogue::{Catalogue, Category, DocumentName};
+use crate::contract::failure::{Failure, FailureKind};
+use crate::contract::ids::DocId;
 
 /// One insight: a short Markdown paragraph that may hold `$…$` formulas, and the pages it rests on.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]

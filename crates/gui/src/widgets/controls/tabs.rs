@@ -2,8 +2,8 @@
 
 use eframe::egui::{self, Color32, WidgetInfo, WidgetType, accesskit::Role, text::LayoutJob};
 
-use super::look::{Look, focus_ring};
 use crate::theme::{TextRole, color, hairline, radius, size, space, stroke};
+use crate::widgets::look::{Look, focus_ring};
 
 /// The label alone is the accessible name, and a test or a screen reader reads the count as the
 /// value of the tab.
@@ -47,7 +47,7 @@ impl<'a> TabStrip<'a> {
     }
 
     /// Draws every tab as if the pointer or the keyboard were on it.
-    pub(super) fn preview(mut self, look: Look) -> Self {
+    pub(in crate::widgets) fn preview(mut self, look: Look) -> Self {
         self.forced = Some(look);
         self
     }

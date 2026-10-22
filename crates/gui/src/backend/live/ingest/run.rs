@@ -12,7 +12,7 @@ use crate::backend::Reply;
 use crate::backend::live::{LiveContext, Services};
 use crate::contract::{
     Event, Failure, IngestOutcome, IngestProgress, IngestReport, IngestRequest, IngestStage,
-    ItemCounts, PageToCheck, RequestId,
+    ItemCounts, PageToCheck, RequestId, Usage,
 };
 
 /// A cancel is not listened to: the work has no safe place to stop inside, so a run goes on to
@@ -163,14 +163,19 @@ fn tag_change(ingest: &IngestRequest) -> TagChange {
     }
 }
 
-// SMELL: what became of the insights is dropped here, so the app does not say when they could not
-// be written, nor what a start of an ingested document spent on them. The next check still shows
-// a file that is missing.
 fn report(outcome: PdfOutcome) -> IngestOutcome {
     match outcome {
-        PdfOutcome::AlreadyIngested { doc_id, items, .. } => IngestOutcome::AlreadyIngested {
+        PdfOutcome::AlreadyIngested {
+            doc_id,
+            items,
+            insights,
+        } => IngestOutcome::AlreadyIngested {
             doc: doc_id.into(),
             items,
+            usage: insights
+                .as_ref()
+                .map_or_else(Usage::default, |summary| (&summary.usage).into()),
+            insights: insights.as_ref().map(|summary| (&summary.outcome).into()),
         },
         PdfOutcome::Ingested(summary) => IngestOutcome::Ingested(ingested(*summary)),
     }
@@ -207,5 +212,9 @@ fn ingested(summary: PdfSummary) -> IngestReport {
                     .collect(),
             })
             .collect(),
+        insights: ingest
+            .insights
+            .as_ref()
+            .map(|summary| (&summary.outcome).into()),
     }
 }

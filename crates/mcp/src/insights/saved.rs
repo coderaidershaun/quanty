@@ -64,7 +64,7 @@ struct InsightView {
 }
 
 /// What the converted folder of a document holds of insights.
-enum Saved {
+pub(crate) enum Saved {
     Written(ChapterInsights),
     NotWrittenYet,
     NoneForBookPart,
@@ -127,7 +127,7 @@ pub(crate) async fn chapter_insights(
     })
 }
 
-async fn saved_insights(
+pub(crate) async fn saved_insights(
     config: &Config,
     id: DocId,
     entry: &ChapterEntry,

@@ -3,8 +3,8 @@
 
 use eframe::egui::{self, Response, Sense, WidgetInfo, WidgetType, pos2, text::LayoutJob, vec2};
 
-use super::look::{Look, focus_ring};
 use crate::theme::{Icon, TextRole, color, radius, size, space, stroke};
+use crate::widgets::look::{Look, focus_ring};
 
 pub struct ListRow<'a> {
     label: &'a str,
@@ -58,7 +58,7 @@ impl<'a> ListRow<'a> {
     }
 
     /// Draws the row as if the pointer or the keyboard were on it, unless `look` is `None`.
-    pub(super) fn preview(mut self, look: Option<Look>) -> Self {
+    pub(in crate::widgets) fn preview(mut self, look: Option<Look>) -> Self {
         self.forced = look;
         self
     }

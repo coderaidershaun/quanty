@@ -8,7 +8,7 @@ use ocr::content::CHAPTER_INDEX_FILE;
 use ocr::{Catalogue, ChapterEntry, ChapterIndex, ContentError};
 use rag_core::DocId;
 
-use super::{LiveContext, Services};
+use crate::backend::live::{LiveContext, Services};
 use crate::contract::Failure;
 
 /// Why the folder of a document's chapter could not be used.
@@ -71,7 +71,7 @@ pub(super) fn chapter_folder(
 /// copy of the same PDF. A stored folder is used only when its `chapter.json` reads and names
 /// this document: a folder that now holds another document is not this document's folder. The
 /// scan of `content_root` finds a document that was stored before folders were kept.
-pub(super) fn chapters_on_disk<'a>(
+pub(in crate::backend::live) fn chapters_on_disk<'a>(
     documents: impl IntoIterator<Item = (DocId, Option<&'a Path>)>,
     content_root: &Path,
 ) -> HashMap<DocId, ChapterEntry> {

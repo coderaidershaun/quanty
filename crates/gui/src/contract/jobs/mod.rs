@@ -9,5 +9,5 @@ pub use datasets::{DatasetProgress, DatasetReport, DatasetRequest, DatasetStage}
 pub use exporting::{ExportFile, ExportPlace, ExportRequest};
 pub use ingest::{
     ChapterState, IngestOutcome, IngestProgress, IngestReport, IngestRequest, IngestStage,
-    PageToCheck, Preflight,
+    InsightsOutcome, PageToCheck, Preflight,
 };

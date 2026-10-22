@@ -4,8 +4,8 @@
 
 use eframe::egui;
 
-use super::PanelCx;
 use crate::contract::{Balance, FailureKind, Intent, Provider, ReadFailure};
+use crate::panels::PanelCx;
 use crate::theme::{Icon, TextRole, Tone, color, hairline, space};
 use crate::widgets::{Button, ControlSize, dot};
 
@@ -13,7 +13,7 @@ use crate::widgets::{Button, ControlSize, dot};
 /// before the link would pass the end of the entry.
 const LINK_ROOM: f32 = 104.0;
 
-pub fn show(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
+pub(super) fn show(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
     let footer = ui.max_rect();
     let painter = ui.painter();
     let line = hairline(painter, color::HAIRLINE);

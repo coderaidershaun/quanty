@@ -7,21 +7,14 @@ use std::path::PathBuf;
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::contract::{Category, DocumentName, IngestRequest, Intent};
+use gui::contract::{Category, DocumentName, IngestRequest};
 use gui::testkit;
 
 use super::recording::Seen;
-use super::{choose_in_the_media_list, is_preflight, last_checked, open};
+use super::{choose_in_the_media_list, is_preflight, last_checked, open, pick};
 use crate::flows::{Window, click, field, has, press, retype, says, type_into};
 
 const BOOK: &str = "Quanty Sample Notes";
-
-fn pick(harness: &mut Window, file: &str) {
-    harness
-        .state_mut()
-        .push(Intent::PdfPicked(PathBuf::from(file)));
-    testkit::settle(harness);
-}
 
 #[test]
 fn a_pdf_is_checked_by_itself_and_a_book_waits_for_its_chapter() {

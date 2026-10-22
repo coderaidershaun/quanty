@@ -6,8 +6,8 @@ use eframe::egui::{
     text::LayoutJob,
 };
 
-use super::look::{Look, focus_ring};
 use crate::theme::{Icon, Kind, TextRole, Tone, color, radius, size, space, stroke};
+use crate::widgets::look::{Look, focus_ring};
 
 pub struct CitationChip {
     number: usize,
@@ -30,7 +30,7 @@ impl CitationChip {
     }
 
     /// Draws the chip as if the pointer or the keyboard were on it, unless `look` is `None`.
-    pub(super) const fn preview(mut self, look: Option<Look>) -> Self {
+    pub(in crate::widgets) const fn preview(mut self, look: Option<Look>) -> Self {
         self.forced = look;
         self
     }
@@ -137,7 +137,7 @@ impl<'a> Chip<'a> {
     }
 
     /// Draws the chip as if the pointer or the keyboard were on it.
-    pub(super) fn preview(mut self, look: Look) -> Self {
+    pub(in crate::widgets) fn preview(mut self, look: Look) -> Self {
         self.forced = Some(look);
         self
     }

@@ -23,7 +23,9 @@ use crate::services::Services;
 pub(crate) use error::InsightsToolError;
 pub(crate) use report::InsightsReport;
 use report::InsightsState;
-pub(crate) use saved::{ChapterInsightsArgs, InsightsView, chapter_insights};
+pub(crate) use saved::{
+    ChapterInsightsArgs, InsightsView, Saved, chapter_insights, saved_insights,
+};
 use work::Work;
 
 /// What an agent gives `write_insights`. Give exactly one of `document_id`, `media` and `all`.

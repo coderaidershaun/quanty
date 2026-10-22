@@ -2,6 +2,7 @@
 //! process.
 
 mod datasets;
+mod exporting;
 mod failures;
 mod ingest;
 mod insights;

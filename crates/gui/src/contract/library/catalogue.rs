@@ -3,10 +3,10 @@
 
 use std::fmt;
 
-use super::ids::DocId;
+use crate::contract::ids::DocId;
 // SMELL: `source` names `ChapterLabel` from here and this file names `PieceKind` from `source`, so
 // the two modules import each other. `DocumentView` is the only use here.
-use super::source::PieceKind;
+use crate::contract::source::PieceKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct ItemCounts {

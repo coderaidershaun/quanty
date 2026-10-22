@@ -1,6 +1,6 @@
-//! The ids, the item kind, the category, the document name, the label shapes, the steps of a build
-//! and what a run used, to and from the types of the backend. Every part of the live backend
-//! converts through these and writes none of its own.
+//! The ids, the item kind, the category, the document name, the label shapes, the steps of a build,
+//! what a run used and what became of its insights, to and from the types of the backend. Every
+//! part of the live backend converts through these and writes none of its own.
 
 use std::collections::BTreeSet;
 
@@ -9,8 +9,8 @@ use rag_core::{LabelFilter, MediaLabels, Tag, UsageTally, WantedDocument, author
 use rag_ingestion::{MediaChange, TagChange};
 
 use crate::contract::{
-    Category, ConceptId, DatasetStage, DocId, DocumentName, DocumentTagsEdit, Filters, ItemId,
-    ItemKind, MediaEdit, ModelTokens, NewMedia, PageConcept, Usage,
+    Category, ConceptId, DatasetStage, DocId, DocumentName, DocumentTagsEdit, Filters,
+    InsightsOutcome, ItemId, ItemKind, MediaEdit, ModelTokens, NewMedia, PageConcept, Usage,
 };
 
 impl From<rag_core::DocId> for DocId {
@@ -224,6 +224,19 @@ impl From<&UsageTally> for Usage {
         Usage {
             models,
             cost_usd: tally.cost_usd(),
+        }
+    }
+}
+
+impl From<&rag_ingestion::InsightsOutcome> for InsightsOutcome {
+    fn from(outcome: &rag_ingestion::InsightsOutcome) -> InsightsOutcome {
+        match outcome {
+            rag_ingestion::InsightsOutcome::Written { .. } => InsightsOutcome::Written,
+            rag_ingestion::InsightsOutcome::AlreadySaved { .. } => InsightsOutcome::AlreadySaved,
+            rag_ingestion::InsightsOutcome::NotWritten { reason } => InsightsOutcome::NotWritten {
+                reason: reason.clone(),
+            },
+            rag_ingestion::InsightsOutcome::NoneForBookPart => InsightsOutcome::NoneForBookPart,
         }
     }
 }

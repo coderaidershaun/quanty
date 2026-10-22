@@ -1,10 +1,12 @@
-//! The tools that change the library: the labels of a media and the tags of a document.
+//! The tools that change the library or write to the machine: the labels of a media, the tags of a
+//! document, and the file an export of insights makes.
 
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::{Json, tool, tool_router};
 
 use super::QuantyServer;
 use super::failure::ToolError;
+use crate::exporting::{self, ExportInsightsArgs, ExportResult};
 use crate::library::{
     self, DocumentTagsView, EditDocumentTagsArgs, EditMediaArgs, MediaLabelsView,
 };
@@ -44,6 +46,25 @@ impl<S: Services> QuantyServer<S> {
     ) -> Result<Json<DocumentTagsView>, ToolError> {
         Ok(Json(
             library::edit_document_tags(&self.shared.config, args).await?,
+        ))
+    }
+
+    /// Writes the saved insights, takeaways and cheat sheet of one document to a file that stands
+    /// alone, the same file the desktop app exports: a PDF with typeset formulas, a Markdown file,
+    /// or an HTML page. It writes to `path` on the machine the server runs on, and never replaces
+    /// a file unless `overwrite` is true. It costs nothing. A document with no saved insights gets
+    /// them from `write_insights` first.
+    #[tool(annotations(
+        read_only_hint = false,
+        destructive_hint = true,
+        idempotent_hint = true
+    ))]
+    async fn export_insights(
+        &self,
+        Parameters(args): Parameters<ExportInsightsArgs>,
+    ) -> Result<Json<ExportResult>, ToolError> {
+        Ok(Json(
+            exporting::export_insights(&self.shared.config, args).await?,
         ))
     }
 }

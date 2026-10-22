@@ -5,9 +5,10 @@ use std::ops::RangeInclusive;
 
 use eframe::egui::{self, Align, CornerRadius, Margin, Response, Stroke};
 
-use super::look::focus_ring;
-use super::{Button, ControlSize};
+use super::Button;
 use crate::theme::{Icon, TextRole, color, radius, size, space, stroke};
+use crate::widgets::ControlSize;
+use crate::widgets::look::focus_ring;
 
 /// It is the one widget that edits the caller's own text, because egui needs a `&mut String`.
 pub struct TextInput<'a> {

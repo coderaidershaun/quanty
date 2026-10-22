@@ -5,16 +5,17 @@ use export::Format;
 
 use super::ask::{Answer, AskDraft, SearchReply};
 use super::concept_graph::ConceptGraph;
-use super::contents::ChapterContents;
 use super::failure::Failure;
 use super::health::{Balance, BalanceReads, Provider, ReadFailure, Service, ServiceState};
 use super::ids::{ConceptId, DocId, NoticeId, RequestId};
-use super::insights::ChapterInsights;
 use super::jobs::{
     DatasetProgress, DatasetReport, DatasetRequest, ExportFile, ExportRequest, IngestOutcome,
     IngestProgress, IngestRequest, Preflight,
 };
-use super::library::{Catalogue, DocumentTagsEdit, DocumentView, MediaEdit, NewMedia};
+use super::library::{
+    Catalogue, ChapterContents, ChapterInsights, DocumentTagsEdit, DocumentView, MediaEdit,
+    NewMedia,
+};
 use super::source::{PageConcept, PageView};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]

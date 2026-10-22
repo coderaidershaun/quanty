@@ -4,8 +4,8 @@
 use std::path::Path;
 
 use graph::{ConceptNode, DocumentNode, ItemNode, Mention};
+use gui::backend::Handler;
 use gui::backend::fake::Fake;
-use gui::backend::{Handler, Reply};
 use gui::contract::{
     ChapterContents, Command, DocId, Event, Failure, FailureKind, PageConcept, PieceKind, RequestId,
 };
@@ -14,7 +14,7 @@ use ocr::{ChapterIndex, PieceDetail};
 use rag_core::{ConceptId, DocumentLabels, ItemId, ItemKind};
 use uuid::Uuid;
 
-use crate::support::{self, IN_DEPTH, closed, copy_folder, sample_chapter};
+use crate::support::{self, IN_DEPTH, closed, copy_folder, sample_chapter, served};
 
 const REQUEST: RequestId = RequestId(7);
 const NO_CONTENT_FOLDER: &str = "/no/such/content/folder";
@@ -221,12 +221,6 @@ fn add_page_with_code(chapter: &Path, code: &str) {
     let mut index = ChapterIndex::read(chapter).expect("the chapter index should be read");
     index.page_count = 4;
     index.write(chapter).expect("the chapter should be saved");
-}
-
-async fn served(backend: &impl Handler, command: Command) -> Vec<Event> {
-    let (reply, events, _stop) = Reply::collecting();
-    backend.serve(command, reply).await;
-    events.try_iter().collect()
 }
 
 /// The items, then the concepts, each for `REQUEST`, as the window takes them.

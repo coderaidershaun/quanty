@@ -13,6 +13,7 @@ use rmcp::model::{CallToolResponse, CallToolResult, ContentBlock};
 
 use super::health::{GEMINI_BILLING_PAGE, JEV_CONSOLE_PAGE};
 use crate::datasets::DatasetToolError;
+use crate::exporting::ExportToolError;
 use crate::ingest::PdfIngestError;
 use crate::insights::InsightsToolError;
 use crate::jobs::StopError;
@@ -36,6 +37,9 @@ pub(super) enum ToolError {
 
     #[error(transparent)]
     Insights(#[from] InsightsToolError),
+
+    #[error(transparent)]
+    Export(#[from] ExportToolError),
 
     #[error(transparent)]
     Dataset(#[from] DatasetToolError),
@@ -105,20 +109,21 @@ impl ToolError {
                     | RetrievalError::Answer(rag_retrieval::AnswerError::Llm(_))
             ),
             ToolError::Library(error) => error.is_service_failure(),
-            ToolError::Insights(error) => match error {
-                InsightsToolError::Library(error) => error.is_service_failure(),
-                InsightsToolError::Graph(_)
-                | InsightsToolError::Category(_)
-                | InsightsToolError::ModelNotReady(_) => true,
-                // None of these is a service. The text of a job that failed already got its
-                // hint, if it needed one, when the job ended.
-                InsightsToolError::Unreadable(_)
-                | InsightsToolError::Choice
-                | InsightsToolError::Busy { .. }
-                | InsightsToolError::UnknownJob { .. }
-                | InsightsToolError::Lost
-                | InsightsToolError::Failed(_)
-                | InsightsToolError::Stopped(_) => false,
+            ToolError::Insights(error) => is_service_failure_of_insights(error),
+            ToolError::Export(error) => match error {
+                ExportToolError::Insights(error) => is_service_failure_of_insights(error),
+                // None of these is a service: the arguments, the document or the writing of the
+                // file is the cause.
+                ExportToolError::Format { .. }
+                | ExportToolError::NotAbsolute { .. }
+                | ExportToolError::Extension { .. }
+                | ExportToolError::NoFolder { .. }
+                | ExportToolError::Exists { .. }
+                | ExportToolError::NotWrittenYet { .. }
+                | ExportToolError::BookPart { .. }
+                | ExportToolError::Export(_)
+                | ExportToolError::Length { .. }
+                | ExportToolError::Stopped(_) => false,
             },
             // A conversion also fails for the PDF itself, or for a reply that broke a rule twice,
             // and no service is the cause then. It points at a service only when the services
@@ -165,6 +170,25 @@ impl ToolError {
             },
             ToolError::Stop(StopError::UnknownJob { .. }) => false,
         }
+    }
+}
+
+/// Whether a store or the agent stopped a tool that reads or writes insights.
+fn is_service_failure_of_insights(error: &InsightsToolError) -> bool {
+    match error {
+        InsightsToolError::Library(error) => error.is_service_failure(),
+        InsightsToolError::Graph(_)
+        | InsightsToolError::Category(_)
+        | InsightsToolError::ModelNotReady(_) => true,
+        // None of these is a service. The text of a job that failed already got its hint, if it
+        // needed one, when the job ended.
+        InsightsToolError::Unreadable(_)
+        | InsightsToolError::Choice
+        | InsightsToolError::Busy { .. }
+        | InsightsToolError::UnknownJob { .. }
+        | InsightsToolError::Lost
+        | InsightsToolError::Failed(_)
+        | InsightsToolError::Stopped(_) => false,
     }
 }
 

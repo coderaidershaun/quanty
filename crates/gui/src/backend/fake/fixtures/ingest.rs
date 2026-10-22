@@ -7,7 +7,7 @@ use uuid::Uuid;
 use super::library::document_title;
 use crate::contract::{
     Category, ChapterState, DocId, DocumentName, IngestProgress, IngestReport, IngestRequest,
-    IngestStage, ItemCounts, ModelTokens, PageToCheck, Preflight, Usage,
+    IngestStage, InsightsOutcome, ItemCounts, ModelTokens, PageToCheck, Preflight, Usage,
 };
 
 const PAGES: u32 = 12;
@@ -27,7 +27,7 @@ const ITEMS: u32 = ITEM_COUNTS.total() as u32;
 /// The page at which the play of a scene whose ingest never ends stops for ever.
 const STALLED_AT_PAGE: u32 = 3;
 
-/// The chapter that the three ingest scenes check as they open: the form as the page draws it,
+/// The chapter that the four ingest scenes check as they open: the form as the page draws it,
 /// so the page leaves it alone.
 pub(in crate::backend::fake) fn request() -> IngestRequest {
     IngestRequest {
@@ -143,7 +143,13 @@ fn stored_title(request: &IngestRequest) -> String {
     }
 }
 
+/// The report of the play. The insights are written, unless the document is one that gets none.
 pub(in crate::backend::fake) fn report(request: &IngestRequest) -> IngestReport {
+    let insights = if request.name.gets_insights(Some(request.category)) {
+        InsightsOutcome::Written
+    } else {
+        InsightsOutcome::NoneForBookPart
+    };
     IngestReport {
         doc: DocId(Uuid::from_u128(9)),
         title: stored_title(request),
@@ -167,5 +173,18 @@ pub(in crate::backend::fake) fn report(request: &IngestRequest) -> IngestReport 
             page: 7,
             reasons: vec!["A figure may be cut short.".to_owned()],
         }],
+        insights: Some(insights),
+    }
+}
+
+/// The same report for a run whose insights could not be written, with the items stored.
+pub(in crate::backend::fake) fn report_with_insights_not_written(
+    request: &IngestRequest,
+) -> IngestReport {
+    IngestReport {
+        insights: Some(InsightsOutcome::NotWritten {
+            reason: "claude reached its usage limit".to_owned(),
+        }),
+        ..report(request)
     }
 }

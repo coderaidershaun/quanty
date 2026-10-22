@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 use ocr::content::{PAGE_IMAGE_FILE, PageIndex, own_title, page_folder_name};
 use ocr::{Chapter, ChapterPiece, ContentError, ImageShows, PieceDetail, ReadChapterError};
 
-use super::chapters::{FolderFault, chapter_folder};
-use super::{LiveContext, Services};
+use super::folder::{FolderFault, chapter_folder};
 use crate::backend::Reply;
+use crate::backend::live::{LiveContext, Services};
 use crate::contract::{
     DocId, DocumentName, Event, Failure, ImageRef, PageBox, PageConcept, PagePiece, PageView,
     PieceKind, RequestId,

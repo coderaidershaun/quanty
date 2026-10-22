@@ -3,12 +3,15 @@
 //! its end.
 
 mod check;
+mod insights;
 mod media;
 mod run;
 
+use std::path::PathBuf;
+
 use eframe::egui;
 use eframe::egui::accesskit::Role;
-use gui::contract::{Command, IngestRequest};
+use gui::contract::{Command, IngestRequest, Intent};
 use gui::testkit;
 
 use super::recording::{self, Seen};
@@ -30,6 +33,13 @@ fn open(scene: &str, size: [f32; 2]) -> (Window, Seen) {
 
 fn place_of(seen: &Seen, is: fn(&Command) -> bool) -> Option<usize> {
     seen.all().iter().position(is)
+}
+
+fn pick(harness: &mut Window, file: &str) {
+    harness
+        .state_mut()
+        .push(Intent::PdfPicked(PathBuf::from(file)));
+    testkit::settle(harness);
 }
 
 fn open_the_form_of_a_new_media(harness: &mut Window) {

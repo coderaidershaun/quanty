@@ -3,16 +3,16 @@
 
 use std::path::{Path, PathBuf};
 
-use super::chapters::chapters_on_disk;
-use super::{LiveContext, Services};
+use super::folder::chapters_on_disk;
 use crate::backend::Reply;
+use crate::backend::live::{LiveContext, Services};
 use crate::contract::{ChapterInsights, DocId, Event, Failure, Insight, RequestId};
 
 /// Sends one `Event::ChapterInsights`: the insights saved in the folder of `doc`, `None` when it
 /// holds no file yet, or why the file could not be found or read. The folder is the one the
 /// catalogue gave, when it holds this document's chapter, and else the one found under the
 /// content folder. No store and no model is reached.
-pub(super) async fn load_chapter_insights<S: Services>(
+pub(in crate::backend::live) async fn load_chapter_insights<S: Services>(
     cx: &LiveContext<S>,
     request: RequestId,
     doc: DocId,

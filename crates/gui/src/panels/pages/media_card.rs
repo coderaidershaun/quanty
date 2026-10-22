@@ -5,12 +5,10 @@
 
 use eframe::egui;
 
-use super::labels::{AUTHORS, LIST_PLACEHOLDER, TAGS, caption, list_of, text_of};
 use crate::contract::{Category, Failure, Media, MediaEdit, NewMedia};
+use crate::panels::labels::{AUTHORS, LIST_PLACEHOLDER, TAGS, caption, list_of, text_of};
 use crate::theme::{Icon, TextRole, Tone, space};
 use crate::widgets::{Badge, Button, Chip, ControlSize, Notice, TextInput};
-
-pub(super) const NO_MEDIA: &str = "No media";
 
 const EDIT: &str = "Edit";
 const CATEGORY: &str = "Category";

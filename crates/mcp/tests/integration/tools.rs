@@ -62,6 +62,7 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
             "dataset_status",
             "edit_document_tags",
             "edit_media",
+            "export_insights",
             "health",
             "ingest_pdf",
             "ingest_status",
@@ -73,7 +74,7 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
             "write_insights"
         ]
     );
-    let expected: [(&str, &[&str], &[&str]); 17] = [
+    let expected: [(&str, &[&str], &[&str]); 18] = [
         (
             "answer",
             &[
@@ -122,6 +123,11 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
             "edit_media",
             &["authors", "category", "media", "tags"],
             &["media"],
+        ),
+        (
+            "export_insights",
+            &["document_id", "format", "overwrite", "path"],
+            &["document_id", "format", "path"],
         ),
         ("health", &[], &[]),
         (
@@ -211,6 +217,16 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         description("edit_media").contains("both stores"),
         "{}",
         description("edit_media")
+    );
+    assert!(
+        description("export_insights").contains("file"),
+        "{}",
+        description("export_insights")
+    );
+    assert!(
+        description("export_insights").contains("overwrite"),
+        "{}",
+        description("export_insights")
     );
     assert!(
         description("stop_job").contains("an ingest, an insights job or a dataset build"),

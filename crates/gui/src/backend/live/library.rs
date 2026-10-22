@@ -9,7 +9,7 @@ use ocr::ChapterEntry;
 use ocr::content::{media_folder_name, own_title};
 use rag_ingestion::{MediaChange, Stores, TagChange, relabel_document_tags, relabel_media};
 
-use super::chapters::chapters_on_disk;
+use super::chapter::chapters_on_disk;
 use super::{LiveContext, Services};
 use crate::backend::Reply;
 use crate::contract::{

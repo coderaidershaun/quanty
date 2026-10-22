@@ -272,6 +272,18 @@ async fn a_part_of_a_book_gets_no_insights_and_every_tool_says_so() {
         read["document_title"],
         "Option Volatility and Pricing, Index"
     );
+
+    let target = library.stores.temporary_folder().join("index.md");
+    let exported = call(
+        &client,
+        "export_insights",
+        json!({ "document_id": id, "format": "markdown", "path": target }),
+    )
+    .await;
+
+    let text = error_text(&exported);
+    assert!(text.contains("a part of a book"), "{text}");
+    assert!(!target.exists(), "nothing is written for a part of a book");
 }
 
 #[tokio::test(flavor = "multi_thread")]

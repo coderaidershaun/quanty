@@ -1,6 +1,6 @@
 # The MCP server
 
-`quanty-mcp` lets an AI agent use quanty: search the stored library of books, papers and other media, read the pages of its documents, list the formulas, figures, tables, code listings and concepts of a chapter and read its insights, send a PDF to be ingested, write the missing insights of stored chapters, change the labels of a media or a document, stop a job, and build a training dataset from the converted documents. It speaks the [Model Context Protocol](https://modelcontextprotocol.io), over standard input and output (the default) or over HTTP on this machine.
+`quanty-mcp` lets an AI agent use quanty: search the stored library of books, papers and other media, read the pages of its documents, list the formulas, figures, tables, code listings and concepts of a chapter, read its insights and export them to a file, send a PDF to be ingested, write the missing insights of stored chapters, change the labels of a media or a document, stop a job, and build a training dataset from the converted documents. It speaks the [Model Context Protocol](https://modelcontextprotocol.io), over standard input and output (the default) or over HTTP on this machine.
 
 ## 1. Before you start it
 
@@ -28,11 +28,11 @@ cargo build --release -p mcp          # makes target/release/quanty-mcp
 | Standard input and output | `target/release/quanty-mcp` | the agent starts it and talks to it |
 | HTTP | `target/release/quanty-mcp --http 8321` | `http://127.0.0.1:8321/mcp` |
 
-The HTTP server listens on `127.0.0.1` only, and it has **no login**: any program on this machine can call it. It accepts only requests whose `Host` is this machine, and it grants no cross-site access, so a web page cannot call it. In stdio mode nothing but the protocol is written to standard output; the log goes to standard error.
+The HTTP server listens on `127.0.0.1` only, and it has **no login**: any program on this machine can call it. It accepts only requests whose `Host` is this machine, and it grants no cross-site access, so a web page cannot call it. `export_insights` writes a file where the caller says, so over HTTP with no login any local program can make the server write a file, as the same user could anyway. In stdio mode nothing but the protocol is written to standard output; the log goes to standard error.
 
 ## 3. The tools
 
-Seventeen tools. A tool that costs money says so in its description, and so does this table.
+Eighteen tools. A tool that costs money says so in its description, and so does this table.
 
 | Tool | What it does | Costs |
 | --- | --- | --- |
@@ -43,6 +43,7 @@ Seventeen tools. A tool that costs money says so in its description, and so does
 | `chapter_contents` | Every formula, figure, table and code listing of a document, in reading order | Nothing, and it needs no store |
 | `chapter_concepts` | The concepts of a document, or of one page of it | Nothing; it reads FalkorDB |
 | `chapter_insights` | The insights, takeaways and cheat sheet written for a document | Nothing, and it needs no store |
+| `export_insights` | Writes the saved insights, takeaways and cheat sheet of a document to a PDF, Markdown or HTML file | Nothing; writes one file |
 | `edit_media` | Changes the category, authors or tags of a stored media, in both stores | Nothing |
 | `edit_document_tags` | Adds tags to a stored document or takes tags away, in both stores | Nothing |
 | `health` | Whether Qdrant, FalkorDB, the sign-in of the Ingest choice's agent and the two keys are ready, and the model of each kind of work | Nothing |
@@ -139,6 +140,17 @@ Gives what the agent of the Ingest choice wrote about the whole document when it
 | `none_for_book_part` | A part of a book that is not a chapter, such as its index, gets none |
 
 It costs nothing. It reads the file, and it reads the graph only for a document with a title of its own that has no file, to see whether it is a part of a book. A file that cannot be read is a tool error that names it and says to call `write_insights`, which writes it again.
+
+### `export_insights`
+
+| Argument | |
+| --- | --- |
+| `document_id` | Required. From `list_documents` or a search result |
+| `format` | Required. `pdf`, `markdown` or `html`, whatever the capitals |
+| `path` | Required. The absolute path of the file to write, on the machine the server runs on, ending in `.pdf`, `.md` or `.html` as `format` is. Its folder must exist |
+| `overwrite` | `true` to replace a file that is at `path`. `false` when left out: a file that is there is kept and the call fails |
+
+Writes what `chapter_insights` reads to one file that stands alone, the same file that **Export** in the Insights view of the desktop app writes: the title of the document, a line that names the model, the insights with their pages, the takeaways and the cheat sheet. The PDF has its formulas typeset, the HTML file has its pictures inside it, and the Markdown file keeps its formulas as `$…$`. Every check runs before anything is written, in this order: `format`, that `path` is absolute, that it ends with the extension of the format (whatever the capitals), that its folder is there, that no file is at `path` unless `overwrite` is `true` (a link that points nowhere counts as a file), and then the saved insights, which it reads as `chapter_insights` does. A document with no saved insights is refused with a text that says to call `write_insights`, which is paid, and so is a part of a book that is not a chapter, which gets none. It makes no folder. Gives `document_id`, `format`, `path` (as it was given) and `bytes` (the size of the file). It costs nothing: it asks no model and embeds nothing. The tool says `destructive` to the client because `overwrite` can replace a file.
 
 ### `edit_media`
 
@@ -376,6 +388,11 @@ A failure comes back as a tool error (`isError: true`) with a text that says wha
 | `write_insights` when the agent of the Ingest choice is not signed in, for a job that is not a dry run | That no insights were written, to sign it in or give `dry_run: true`, and: call the `health` tool |
 | An insights job is already running | Its `job_id`, and: ask `insights_status`, and call `write_insights` again when that job has ended |
 | `chapter_insights` for a file that cannot be read | The file, and: call `write_insights` with the `document_id`, which is paid |
+| `export_insights` with a `format` that is not `pdf`, `markdown` or `html`, a `path` that is not absolute, that does not end with the extension of the format, or whose folder is not there | What was given and what is allowed. Nothing is written |
+| `export_insights` when a file is at `path` and `overwrite` is not `true` | The path, and: give another path, or `overwrite: true` to replace it |
+| `export_insights` for a document with no saved insights | The id, and: call `write_insights` with this `document_id`, which is paid, then export again |
+| `export_insights` for a part of a book that is not a chapter | The id, and that a part of a book gets no insights, so there is nothing to export |
+| `export_insights` when the file cannot be written | That it could not be written, with the path and the reason that the system gave |
 | `chapter_concepts` for a document that the graph does not hold | The id, and: call `list_documents` |
 | `edit_media` or `edit_document_tags` with nothing to change, a blank tag, a bad `category` or a blank `media` | What is missing or not valid. It is checked before any store is reached, so nothing changes |
 | `edit_media` for a media that is not stored, or `edit_document_tags` for a document that is not | The title or id, and: call `list_documents` |

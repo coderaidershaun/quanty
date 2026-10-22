@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
-use mcp::serve_http;
+use mcp::http_service;
 use rmcp::ServiceExt;
 use rmcp::transport::StreamableHttpClientTransport;
 use serde_json::{Value, json};
@@ -45,7 +45,8 @@ async fn the_tools_are_called_over_streamable_http_on_a_local_port() {
     let ports = ClosedPorts::new();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
-    tokio::spawn(serve_http(ports.server(), listener));
+    let router = http_service(ports.server());
+    tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
     let transport = StreamableHttpClientTransport::from_uri(format!("http://{address}/mcp"));
     let client = ().serve(transport).await.unwrap();
 

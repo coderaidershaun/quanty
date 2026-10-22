@@ -1,0 +1,124 @@
+//! One server gives browsers and agents access to the same library.
+
+mod auth;
+mod bundle;
+mod content;
+mod downloads;
+mod jobs;
+pub mod launch;
+mod uploads;
+mod ws;
+
+use axum::{
+    Json, Router,
+    extract::DefaultBodyLimit,
+    middleware,
+    routing::{get, post},
+};
+use backend::Handler;
+use contract::StartupFacts;
+pub use launch::{Settings, SettingsError};
+use std::{path::PathBuf, sync::Arc, time::Duration};
+
+#[derive(Debug, thiserror::Error)]
+pub enum RouterError {
+    #[error(transparent)]
+    Settings(#[from] SettingsError),
+    #[error("could not clean old staged files: {0}")]
+    Cleanup(#[source] std::io::Error),
+}
+
+/// Inputs shared by the browser routes and the agent endpoint.
+pub struct ServerOptions {
+    pub settings: Settings,
+    pub content: PathBuf,
+    pub fixture: Option<String>,
+    pub mcp: Router,
+}
+
+/// Serves a live or fixture backend through the same authenticated routes.
+///
+/// # Errors
+/// Refuses unsafe settings or staging folders that cannot be cleaned.
+pub fn router<H: Handler>(handler: H, options: ServerOptions) -> Result<Router, RouterError> {
+    let ServerOptions {
+        settings,
+        content,
+        fixture,
+        mcp,
+    } = options;
+    settings.validate()?;
+    uploads::clean_old_folders(
+        &settings.home.join("data/uploads"),
+        Duration::from_secs(7 * 86400),
+    )
+    .map_err(RouterError::Cleanup)?;
+    uploads::clean_old_folders(
+        &settings.home.join("data/exports"),
+        Duration::from_secs(86400),
+    )
+    .map_err(RouterError::Cleanup)?;
+    let auth = auth::Auth::new(settings.clone());
+    let guard = jobs::Guard::default();
+    let facts_guard = guard.clone();
+    let home = settings.home.clone();
+    let sockets = ws::SocketState {
+        handler: Arc::new(handler),
+        guard,
+    };
+    let protected = Router::new()
+        .route(
+            "/api/facts",
+            get(move || {
+                let home = home.clone();
+                let fixture = fixture.clone();
+                let guard = facts_guard.clone();
+                async move {
+                    let model_choices =
+                        choices::WorkChoices::load_from(&home.join(choices::MODEL_SETTINGS_FILE))
+                            .map_err(|error| {
+                            tracing::error!(%error, "could not load model choices");
+                            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+                        })?;
+                    Ok::<_, axum::http::StatusCode>(Json(StartupFacts {
+                        fixture,
+                        anthropic_api_key_set: std::env::var_os("ANTHROPIC_API_KEY")
+                            .is_some_and(|v| !v.is_empty()),
+                        model_choices,
+                        running: guard.running(),
+                    }))
+                }
+            }),
+        )
+        .merge(
+            Router::new()
+                .route("/api/ws", get(ws::upgrade::<H>))
+                .with_state(sockets),
+        )
+        .merge(
+            Router::new()
+                .route("/api/upload", post(uploads::upload))
+                .layer(DefaultBodyLimit::max(settings.upload_limit))
+                .route("/api/download/{id}/{file}", get(downloads::download))
+                .with_state(settings),
+        )
+        .merge(
+            Router::new()
+                .route("/content/{*path}", get(content::picture))
+                .with_state(content),
+        )
+        .route("/logout", post(auth::logout).with_state(auth.clone()))
+        .fallback(bundle::serve)
+        .layer(middleware::from_fn_with_state(auth.clone(), auth::protect));
+    let mcp = mcp.layer(middleware::from_fn_with_state(auth.clone(), auth::bearer));
+    Ok(protected
+        .merge(mcp)
+        .route(
+            "/login",
+            get(auth::login_page)
+                .post(auth::login)
+                .with_state(auth.clone()),
+        )
+        .route("/healthz", get(|| async { "ok" }))
+        .layer(middleware::from_fn_with_state(auth, auth::check_origin)))
+}

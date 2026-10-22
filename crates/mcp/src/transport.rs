@@ -8,7 +8,6 @@ use rmcp::service::ServerInitializeError;
 use rmcp::transport::stdio;
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::transport::{StreamableHttpServerConfig, StreamableHttpService};
-use tokio::net::TcpListener;
 use tokio::task::JoinError;
 
 use crate::server::QuantyServer;
@@ -25,14 +24,6 @@ pub enum ServeError {
 
     #[error("the MCP server stopped without an answer")]
     Stopped(#[source] JoinError),
-
-    #[error("the HTTP server stopped")]
-    Http(#[source] std::io::Error),
-
-    #[error(
-        "a request can be {bytes} bytes, which is more than this machine can hold; give the server a smaller limit on the size of a PDF"
-    )]
-    RequestTooBig { bytes: u64 },
 }
 
 /// Serves the tools on the standard input and output until the client closes them. Nothing but
@@ -50,32 +41,18 @@ pub async fn serve_stdio<S: Services>(server: QuantyServer<S>) -> Result<(), Ser
     Ok(())
 }
 
-/// Serves the tools over streamable HTTP at `/mcp` on the socket of `listener`, until the
-/// listener fails. Only a `Host` of this machine is accepted, which stops a web page from reaching
-/// the server through another name. The caller binds the listener, and binds it to a loopback
-/// address only: the server has no login.
-///
-/// # Errors
-/// - [`ServeError::RequestTooBig`] when the request size that a PDF needs does not fit in memory
-/// - [`ServeError::Http`] when the listener fails
-pub async fn serve_http<S: Services>(
-    server: QuantyServer<S>,
-    listener: TcpListener,
-) -> Result<(), ServeError> {
-    let largest_request = server.largest_request_bytes();
-    let largest_request =
-        usize::try_from(largest_request).map_err(|_| ServeError::RequestTooBig {
-            bytes: largest_request,
-        })?;
-    // The default of 4 MiB is too small for a chapter PDF sent as base64.
-    let config = StreamableHttpServerConfig::default().with_max_request_body_bytes(largest_request);
+/// Exposes `/mcp` for a server that authenticates every request before dispatch.
+/// Browser origins are refused; authenticated CLI clients can use a public host.
+pub fn http_service<S: Services>(server: QuantyServer<S>) -> axum::Router {
+    let largest_request = usize::try_from(server.largest_request_bytes()).unwrap_or(usize::MAX);
+    let config = StreamableHttpServerConfig::default()
+        .with_max_request_body_bytes(largest_request)
+        .disable_allowed_hosts()
+        .enforce_origin_validation();
     let service = StreamableHttpService::new(
         move || Ok(server.clone()),
         Arc::new(LocalSessionManager::default()),
         config,
     );
-    let router = axum::Router::new().nest_service(HTTP_PATH, service);
-    axum::serve(listener, router)
-        .await
-        .map_err(ServeError::Http)
+    axum::Router::new().nest_service(HTTP_PATH, service)
 }

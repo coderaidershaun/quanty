@@ -42,19 +42,20 @@ The shortest path to the desktop app on a laptop. Run every command in the quant
 **Try it first, with nothing set up.** With Rust installed and nothing else (no keys, no Docker), this opens the app shown above on its built-in sample data. `--fixture list` names the other scenes.
 
 ```bash
-cargo run --release -p gui -- --fixture black-scholes
+cargo run --release -p gui
+cargo run --release -p gui -- --fixture black-scholes # with example
 ```
 
 **Then set it up for real.**
 
 1. **Install the tools.**
 
-   | You need | What it is for |
-   | --- | --- |
-   | Rust (stable, with `cargo`) | Builds every program |
-   | Docker, with `docker compose` | Runs the two stores: Qdrant (vectors) and FalkorDB (the graph) |
-   | [Poppler](https://poppler.freedesktop.org/) (`brew install poppler`) | Reads a PDF when it is converted |
-   | The `codex` CLI, signed in (or `claude`) | Reads pages, finds concepts and writes answers, on the subscription of each agent you choose |
+   | You need                                                             | What it is for                                                                               |
+   | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+   | Rust (stable, with `cargo`)                                          | Builds every program                                                                         |
+   | Docker, with `docker compose`                                        | Runs the two stores: Qdrant (vectors) and FalkorDB (the graph)                               |
+   | [Poppler](https://poppler.freedesktop.org/) (`brew install poppler`) | Reads a PDF when it is converted                                                             |
+   | The `codex` CLI, signed in (or `claude`)                             | Reads pages, finds concepts and writes answers, on the subscription of each agent you choose |
 
 2. **Start the stores.** Start Docker Desktop first, then:
 
@@ -72,10 +73,10 @@ cargo run --release -p gui -- --fixture black-scholes
    unset ANTHROPIC_API_KEY
    ```
 
-   | Key | What it is for |
-   | --- | --- |
-   | `EMBEDDING_GEMINI_API_KEY` | Gemini embeddings: it embeds every page and every question |
-   | `CONVERTER_JEV_API_KEY` | The Jev API, which is asked whether a page holds math: only when a PDF is converted |
+   | Key                        | What it is for                                                                      |
+   | -------------------------- | ----------------------------------------------------------------------------------- |
+   | `EMBEDDING_GEMINI_API_KEY` | Gemini embeddings: it embeds every page and every question                          |
+   | `CONVERTER_JEV_API_KEY`    | The Jev API, which is asked whether a page holds math: only when a PDF is converted |
 
    > [!IMPORTANT]
    > `ANTHROPIC_API_KEY` must not be set, in the shell or in `.env`. When Claude is selected and it is set, quanty asks `claude` nothing, so that the work is billed to the subscription and not to the API.
@@ -187,15 +188,15 @@ Keep the two stores, Qdrant and FalkorDB, on an Ubuntu server, so that every mac
 
 7. **Add the database in the app.** Start quanty, click the entry at the right end of the footer, choose **New…**, fill in the seven fields, and press **Use**. The footer then reads **Database: Server · connected**.
 
-   | Field | What to put in it |
-   | --- | --- |
-   | **Name** | Any name, such as `Server` |
-   | **Qdrant URL** | `http://127.0.0.1:16334` |
-   | **Qdrant API key** | `QDRANT_API_KEY` from `/srv/quanty/.env` on the server |
-   | **FalkorDB URL** | `falkor://127.0.0.1:16379` |
+   | Field                 | What to put in it                                         |
+   | --------------------- | --------------------------------------------------------- |
+   | **Name**              | Any name, such as `Server`                                |
+   | **Qdrant URL**        | `http://127.0.0.1:16334`                                  |
+   | **Qdrant API key**    | `QDRANT_API_KEY` from `/srv/quanty/.env` on the server    |
+   | **FalkorDB URL**      | `falkor://127.0.0.1:16379`                                |
    | **FalkorDB password** | `FALKORDB_PASSWORD` from `/srv/quanty/.env` on the server |
-   | **Graph** | `quanty` |
-   | **Content folder** | `/Volumes/quanty-content` |
+   | **Graph**             | `quanty`                                                  |
+   | **Content folder**    | `/Volumes/quanty-content`                                 |
 
 [docs/server.md](docs/server.md) goes on with the other way to share the content folder (SMB), backups, moving a library to a new server, and a private network instead of a tunnel.
 

@@ -21,3 +21,13 @@ pub use messages::{
     Choice, Confirm, Notice, NoticeResponse, Placeholder, PlaceholderResponse, modal,
 };
 pub use progress::{indeterminate_bar, progress_bar, spinner};
+
+pub(crate) fn interactive_cursor(ui: &eframe::egui::Ui, response: &eframe::egui::Response) {
+    if response.enabled()
+        && response.sense.senses_click()
+        && response.hovered()
+        && let Some(cursor) = ui.visuals().interact_cursor
+    {
+        ui.ctx().set_cursor_icon(cursor);
+    }
+}

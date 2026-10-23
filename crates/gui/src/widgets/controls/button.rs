@@ -305,6 +305,7 @@ impl egui::Widget for Button<'_> {
             Sense::click()
         };
         let (rect, response) = ui.allocate_exact_size(vec2(width, height), sense);
+        crate::widgets::interactive_cursor(ui, &response);
         let is_enabled = ui.is_enabled() && !self.is_loading;
         let name = self.accessible_name.unwrap_or(self.label);
         response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, is_enabled, name));

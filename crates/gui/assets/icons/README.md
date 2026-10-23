@@ -5,12 +5,11 @@ the app's paper-and-ink theme; the bookmark connects the monogram to its researc
 library. The tile has a transparent outer margin.
 
 `quanty.svg` is the editable, hand-authored source. `icon.png` is the 1024 × 1024
-RGBA master. The other PNGs cover 16, 32, 64, 128 and 256 pixels.
+RGBA master. The browser icon sizes are exported from this artwork.
 
-These files preserve the app's artwork. The browser bundle has its own favicon
-and manifest images under `crates/web-ui/assets/`; changing this artwork does
-not update those images automatically.
+These files preserve the app's artwork. The browser bundle holds its favicon
+and manifest images under `crates/web-ui/assets/`; changing the master does not
+update those exports automatically.
 
-The SVG was rendered with CairoSVG and the PNG sizes were exported
-with Pillow. All PNGs are RGBA with transparent corners. The delivered design
-is an original vector asset.
+The SVG was rendered with CairoSVG. The PNG has transparent corners. The
+delivered design is an original vector asset.

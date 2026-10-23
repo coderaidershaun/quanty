@@ -258,8 +258,9 @@ fn preview(
                     ui.allocate_ui_with_layout(THUMBNAIL, top_down, |ui| {
                         ui.set_min_size(THUMBNAIL);
                         let media = &mut *pane.cx.media;
-                        clicked =
-                            images::show(ui, media, image, &row.kind_label, THUMBNAIL).clicked();
+                        let response = images::show(ui, media, image, &row.kind_label, THUMBNAIL);
+                        crate::widgets::interactive_cursor(ui, &response);
+                        clicked = response.clicked();
                     });
                 }
                 ui.vertical(|ui| {

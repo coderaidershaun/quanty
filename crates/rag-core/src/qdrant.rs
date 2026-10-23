@@ -99,8 +99,8 @@ impl Collection {
         // Without `skip_compatibility_check` the client starts a thread on build, and it prints to
         // standard output when the store is down, which would end up in the middle of a report.
         // SMELL: a key that is not printable ASCII cannot be sent as a header, and the client
-        // then writes the whole key into its error message. A saved database refuses such a key,
-        // but a key from the environment or `.env` is not checked.
+        // then writes the whole key into its error message. Keys from the environment or `.env`
+        // are not checked.
         let client = Qdrant::from_url(&config.qdrant_url)
             .api_key(config.qdrant_api_key.as_ref().map(ApiKey::expose))
             .timeout(REQUEST_TIMEOUT)

@@ -72,7 +72,7 @@ impl Settings {
         };
         let invalid = |name, reason| SettingsError::Invalid { name, reason };
         let listen = value("QUANTY_LISTEN")
-            .unwrap_or_else(|| "127.0.0.1:8080".into())
+            .unwrap_or_else(|| "127.0.0.1:7878".into())
             .parse()
             .map_err(|_| invalid("QUANTY_LISTEN", "expected an IP address and port"))?;
         let session_key = match value("QUANTY_SESSION_KEY") {

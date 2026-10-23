@@ -159,7 +159,9 @@ pub(super) fn show(ui: &mut egui::Ui, draft: &mut DatasetRequest, choices: &Choi
     is_changed |= pick_count(ui, &QUESTIONS, &mut draft.questions);
     is_changed |= pick_count(ui, &MAX_SFT, &mut draft.max_sft);
     ui.add_space(space::SM);
-    is_changed |= ui.checkbox(&mut draft.dry_run, DRY_RUN).changed();
+    let response = ui.checkbox(&mut draft.dry_run, DRY_RUN);
+    crate::widgets::interactive_cursor(ui, &response);
+    is_changed |= response.changed();
     is_changed
 }
 
@@ -208,7 +210,9 @@ fn pick_held_out(ui: &mut egui::Ui, draft: &mut DatasetRequest, choices: &Choice
                 .show_ui(ui, |ui| {
                     for (id, label) in offered {
                         let mut is_held = draft.holdout.contains(id);
-                        if ui.checkbox(&mut is_held, label.as_str()).changed() {
+                        let response = ui.checkbox(&mut is_held, label.as_str());
+                        crate::widgets::interactive_cursor(ui, &response);
+                        if response.changed() {
                             is_changed = true;
                             draft.holdout = offered
                                 .iter()
@@ -224,6 +228,7 @@ fn pick_held_out(ui: &mut egui::Ui, draft: &mut DatasetRequest, choices: &Choice
                         }
                     }
                 });
+            crate::widgets::interactive_cursor(ui, &combo.response);
             ui.ctx()
                 .accesskit_node_builder(combo.response.id, |node| node.set_label(HOLD_OUT));
         });

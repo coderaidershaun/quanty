@@ -133,6 +133,7 @@ impl<'a> Canvas<'a> {
                 ui.id().with(node.id),
                 Sense::click(),
             );
+            crate::widgets::interactive_cursor(ui, &response);
             let is_selected = match node.id {
                 NodeId::Concept(id) => ask.focused_concept == Some(id),
                 NodeId::Item(number) => ask.selected_result == Some(number),

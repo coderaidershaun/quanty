@@ -49,6 +49,7 @@ impl CitationChip {
     }
 
     fn name_and_paint(&self, ui: &egui::Ui, rect: Rect, response: Response) -> Response {
+        crate::widgets::interactive_cursor(ui, &response);
         response.widget_info(|| {
             let label = format!("Citation {}", self.number);
             WidgetInfo::selected(WidgetType::Button, ui.is_enabled(), self.is_selected, label)
@@ -201,6 +202,7 @@ impl egui::Widget for Chip<'_> {
             egui::Sense::click()
         };
         let (rect, response) = ui.allocate_exact_size(side, sense);
+        crate::widgets::interactive_cursor(ui, &response);
         response.widget_info(|| {
             let is_enabled = ui.is_enabled();
             if self.is_stamp {

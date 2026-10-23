@@ -255,6 +255,7 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
                     })
             })
             .inner;
+        crate::widgets::interactive_cursor(ui, &response.response);
         ui.ctx()
             .accesskit_node_builder(response.response.id, |node| node.set_label(self.label));
         chosen

@@ -73,7 +73,7 @@ if [[ ! -e $QUANTY_HOME/.env ]]; then
     mcp_token=$(openssl rand -hex 32)
     session_key=$(openssl rand -hex 32)
     cat > "$scratch/quanty.env" <<ENV
-QUANTY_LISTEN=127.0.0.1:8080
+QUANTY_LISTEN=127.0.0.1:7878
 QUANTY_PASSWORD=$login_password
 QUANTY_MCP_TOKEN=$mcp_token
 QUANTY_SESSION_KEY=$session_key

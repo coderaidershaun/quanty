@@ -9,7 +9,7 @@ Group=quanty
 WorkingDirectory=/srv/quanty
 EnvironmentFile=/srv/quanty/.env
 Environment=PATH=/srv/quanty/.local/bin:/srv/quanty/.npm-global/bin:/srv/quanty/.cargo/bin:/opt/node/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/usr/local/bin/quanty --listen 127.0.0.1:8080
+ExecStart=/usr/local/bin/quanty --listen 127.0.0.1:7878
 Restart=on-failure
 UMask=0077
 

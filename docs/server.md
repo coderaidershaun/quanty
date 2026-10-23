@@ -160,7 +160,7 @@ Edit `/srv/quanty/.env` privately. The installer supplies database secrets, a sh
 
 | Setting | Meaning | Default |
 | --- | --- | --- |
-| `QUANTY_LISTEN` | Bind address; the supplied unit explicitly overrides it with loopback | `127.0.0.1:8080` |
+| `QUANTY_LISTEN` | Bind address; the supplied unit explicitly overrides it with loopback | `127.0.0.1:7878` |
 | `QUANTY_PASSWORD` | Shared browser login; required on a non-loopback listen address | none |
 | `QUANTY_MCP_TOKEN` | Bearer token for `/mcp`; without one the route returns 404 | none |
 | `QUANTY_SESSION_KEY` | 64 hex characters; keeps sessions valid across restarts | random on each start |
@@ -177,13 +177,13 @@ Edit `/srv/quanty/.env` privately. The installer supplies database secrets, a sh
 
 Generate any missing secrets with `openssl rand -hex 32`. Use simple `NAME=value` or single-quoted values; the same file is read by systemd and quanty. Keep secrets out of URLs. Preserve `QUANTY_SESSION_KEY` during upgrades, or everyone must sign in again.
 
-[quanty.service](../deploy/quanty.service) sets `User=quanty`, `WorkingDirectory=/srv/quanty`, the environment file, the service account's CLI paths, and `ExecStart=/usr/local/bin/quanty --listen 127.0.0.1:8080`. It restarts on failure. Changing the account requires changing its home and `PATH` consistently.
+[quanty.service](../deploy/quanty.service) sets `User=quanty`, `WorkingDirectory=/srv/quanty`, the environment file, the service account's CLI paths, and `ExecStart=/usr/local/bin/quanty --listen 127.0.0.1:7878`. It restarts on failure. Changing the account requires changing its home and `PATH` consistently.
 
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now quanty
 sudo systemctl restart quanty
-curl --fail http://127.0.0.1:8080/healthz
+curl --fail http://127.0.0.1:7878/healthz
 ```
 
 Expect `ok`. This proves the HTTP process is alive; use `rag-ingest health` or MCP `health` to check the stores and model tools.
@@ -201,7 +201,7 @@ sudo apt-get update
 sudo apt-get install -y caddy
 ```
 
-Use [deploy/Caddyfile](../deploy/Caddyfile) with your hostname in `/etc/caddy/Caddyfile`. It proxies HTTP and WebSockets to `127.0.0.1:8080`, permits request bodies up to `1GB`, and enables zstd/gzip. Caddy manages HTTPS certificates. If the installer wrote a proposed file, review it, then install it:
+Use [deploy/Caddyfile](../deploy/Caddyfile) with your hostname in `/etc/caddy/Caddyfile`. It proxies HTTP and WebSockets to `127.0.0.1:7878`, permits request bodies up to `1GB`, and enables zstd/gzip. Caddy manages HTTPS certificates. If the installer wrote a proposed file, review it, then install it:
 
 ```bash
 sudo install -m 0644 /etc/quanty/Caddyfile.proposed /etc/caddy/Caddyfile

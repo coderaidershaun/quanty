@@ -94,6 +94,7 @@ impl<'a> TabStrip<'a> {
         let measured = self.galley(ui, tab, role, color::TEXT);
         let (rect, response) =
             ui.allocate_exact_size(egui::vec2(measured.size().x, height), egui::Sense::click());
+        crate::widgets::interactive_cursor(ui, &response);
         // egui has no widget type for a tab, so the tab is named as a button and is given its
         // role afterwards.
         response

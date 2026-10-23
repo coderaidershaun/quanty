@@ -274,7 +274,9 @@ fn pick_several(ui: &mut egui::Ui, options: &[String], width: f32, chosen: &mut 
                 }
                 for tag in options {
                     let mut is_chosen = chosen.contains(tag);
-                    if ui.checkbox(&mut is_chosen, tag.as_str()).changed() {
+                    let response = ui.checkbox(&mut is_chosen, tag.as_str());
+                    crate::widgets::interactive_cursor(ui, &response);
+                    if response.changed() {
                         if is_chosen {
                             chosen.push(tag.clone());
                             chosen.sort();
@@ -284,6 +286,7 @@ fn pick_several(ui: &mut egui::Ui, options: &[String], width: f32, chosen: &mut 
                     }
                 }
             });
+        crate::widgets::interactive_cursor(ui, &combo.response);
         ui.ctx()
             .accesskit_node_builder(combo.response.id, |node| node.set_label("Tags"));
     });

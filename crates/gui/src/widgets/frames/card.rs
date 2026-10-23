@@ -80,6 +80,7 @@ impl<'a> Card<'a> {
         }
         let scope = ui.scope_builder(builder, |ui| self.framed(ui, add_contents));
         let (inner, action_clicked) = scope.inner;
+        crate::widgets::interactive_cursor(ui, &scope.response);
         if let Some(label) = self.clickable {
             scope.response.widget_info(|| {
                 WidgetInfo::selected(WidgetType::Button, ui.is_enabled(), self.is_selected, label)

@@ -13,7 +13,6 @@ contract.workspace = true
 eframe.workspace = true
 egui-phosphor.workspace = true
 egui_kittest = { workspace = true, optional = true }
-ehttp.workspace = true
 export.workspace = true
 image.workspace = true
 percent-encoding = { workspace = true, optional = true }
@@ -32,6 +31,3 @@ gui = { workspace = true, features = ["testing"] }
 proptest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-rfd.workspace = true

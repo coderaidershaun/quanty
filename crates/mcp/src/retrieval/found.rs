@@ -80,7 +80,7 @@ pub(super) struct ItemView {
     /// The item as a reader would quote it: the LaTeX of a formula, the Markdown of a table, the
     /// explanation of a figure, the code as printed for code.
     text: String,
-    /// The path of the picture of a figure, on the disk of the machine the server runs on.
+    /// The picture URL relative to the app base, contained beneath content/.
     #[serde(skip_serializing_if = "Option::is_none")]
     picture: Option<String>,
 }
@@ -141,12 +141,13 @@ impl SearchResult {
         hits: &[SearchHit],
         trace: Option<SearchTrace>,
         usage: &UsageTally,
+        content: &std::path::Path,
     ) -> SearchResult {
         SearchResult {
             results: hits
                 .iter()
                 .enumerate()
-                .map(|(index, hit)| Found::of(index + 1, hit))
+                .map(|(index, hit)| Found::of(index + 1, hit, content))
                 .collect(),
             trace: trace.map(Trace::from),
             spent: usage.into(),
@@ -155,18 +156,18 @@ impl SearchResult {
 }
 
 impl Found {
-    fn of(number: usize, hit: &SearchHit) -> Found {
+    fn of(number: usize, hit: &SearchHit, content: &std::path::Path) -> Found {
         Found {
             number,
-            item: (&hit.item.payload).into(),
+            item: ItemView::from_payload(&hit.item.payload, content),
             score: hit.item.score,
             reason: (&hit.reason).into(),
         }
     }
 }
 
-impl From<&ItemPayload> for ItemView {
-    fn from(payload: &ItemPayload) -> ItemView {
+impl ItemView {
+    pub(super) fn from_payload(payload: &ItemPayload, content: &std::path::Path) -> ItemView {
         let labels = &payload.document_labels;
         ItemView {
             document_id: payload.doc_id.to_string(),
@@ -187,7 +188,7 @@ impl From<&ItemPayload> for ItemView {
             picture: payload
                 .image_path
                 .as_ref()
-                .map(|path| path.display().to_string()),
+                .and_then(|path| rag_core::content_url(path, content)),
         }
     }
 }

@@ -39,7 +39,11 @@ async fn search_gives_the_placed_item_first_and_explain_says_how_it_was_found() 
     let picture = std::fs::canonicalize(sample_chapter_folder())
         .unwrap()
         .join("page-num-5/01-figure.png");
-    assert_eq!(first["picture"], picture.display().to_string());
+    assert!(picture.is_file());
+    assert_eq!(
+        first["picture"],
+        "content/option-volatility-and-pricing/chapter-1/page-num-5/01-figure.png"
+    );
     let numbers: Vec<u64> = results
         .iter()
         .map(|result| result["number"].as_u64().unwrap())

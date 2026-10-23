@@ -11,12 +11,12 @@ use crate::transport::SocketTransport;
 use crate::upload;
 
 pub(crate) fn start() {
-    let mut request = ehttp::Request::get("/api/facts");
+    let mut request = ehttp::Request::get("api/facts");
     request.mode = ehttp::Mode::SameOrigin;
     ehttp::fetch(request, |result| match result {
         Ok(response) if response.status == 401 => {
             if let Some(window) = web_sys::window()
-                && let Err(error) = window.location().set_href("/login")
+                && let Err(error) = window.location().set_href("login")
             {
                 failed(&format!("could not open the login page: {error:?}"));
             }
@@ -54,7 +54,7 @@ async fn run(facts: StartupFacts) {
             Box::new(move |creation| {
                 let (sender, intents) = channel();
                 let ctx = creation.egui_ctx.clone();
-                let transport = SocketTransport::connect("/api/ws", ctx.clone(), sender.clone())
+                let transport = SocketTransport::connect("api/ws", ctx.clone(), sender.clone())
                     .map_err(|error| {
                         std::io::Error::other(format!("could not connect: {error:?}"))
                     })?;

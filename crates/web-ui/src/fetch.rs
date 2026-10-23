@@ -4,7 +4,7 @@ pub(crate) struct EhttpFetch;
 
 impl gui::media::Fetch for EhttpFetch {
     fn get(&self, url: &str, done: Box<dyn FnOnce(Result<Vec<u8>, String>) + Send>) {
-        let mut request = ehttp::Request::get(url);
+        let mut request = ehttp::Request::get(url.strip_prefix('/').unwrap_or(url));
         request.mode = ehttp::Mode::SameOrigin;
         ehttp::fetch(request, move |result| {
             done(result.and_then(|response| {

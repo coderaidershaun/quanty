@@ -299,3 +299,100 @@ async fn mcp_requires_bearer_and_accepts_public_hosts_but_refuses_browser_origin
         404
     );
 }
+
+#[tokio::test]
+async fn trusted_fixture_exposes_descriptor_and_free_tools() {
+    let server = configured(None, |settings, _| {
+        settings.trusted_integration = true;
+        settings.mcp_token = None;
+    })
+    .await;
+    let client = server.client();
+    let descriptor: serde_json::Value = client
+        .get(server.url("/jet-app.json"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(descriptor["version"], 1);
+    assert_eq!(descriptor["embedding"], "relative-paths");
+    assert_eq!(descriptor["mcp"], "mcp");
+    let transport = StreamableHttpClientTransport::with_client(
+        client.clone(),
+        StreamableHttpClientTransportConfig::with_uri(server.url("/mcp")),
+    );
+    let running = ().serve(transport).await.unwrap();
+    let tools = running.list_all_tools().await.unwrap();
+    assert_eq!(tools.len(), 1);
+    assert_eq!(tools[0].name, "fixture_page");
+    let result = running
+        .call_tool(rmcp::model::CallToolRequestParams::new("fixture_page"))
+        .await
+        .unwrap();
+    assert_ne!(result.is_error, Some(true));
+    assert!(
+        result.structured_content.unwrap()["image"]
+            .as_str()
+            .unwrap()
+            .starts_with("content/")
+    );
+    running.cancel().await.unwrap();
+    for method in [
+        reqwest::Method::GET,
+        reqwest::Method::POST,
+        reqwest::Method::DELETE,
+    ] {
+        assert_eq!(
+            client
+                .request(method, server.url("/mcp"))
+                .header("host", "attacker.example")
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            403
+        );
+    }
+    assert_eq!(
+        client
+            .post(server.url("/mcp"))
+            .header("origin", server.url(""))
+            .header("content-type", "application/json")
+            .header("accept", "application/json, text/event-stream")
+            .body(r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        403
+    );
+    for origin in [server.url(""), "https://attacker.example".into()] {
+        let response = client
+            .post(server.url("/api/upload"))
+            .header("origin", &origin)
+            .header("x-forwarded-proto", "https")
+            .header("x-forwarded-host", "jet.example")
+            .header("x-forwarded-prefix", "/apps/test-id")
+            .header("x-file-name", "test.pdf")
+            .body("%PDF-1.7\n")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            if origin == server.url("") { 200 } else { 403 }
+        );
+    }
+    assert_eq!(
+        client
+            .get(server.url("/jet-app.json"))
+            .header("host", "attacker.example")
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        403
+    );
+}

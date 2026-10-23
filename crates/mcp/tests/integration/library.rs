@@ -37,10 +37,7 @@ async fn read_page_gives_the_pieces_of_a_page_in_reading_order() {
     assert_eq!(page["printed_page"], "147");
     assert_eq!(
         page["page_image"],
-        sample_chapter_folder()
-            .join("page-num-4/page.png")
-            .display()
-            .to_string()
+        "content/option-volatility-and-pricing/chapter-1/page-num-4/page.png"
     );
     let pieces = page["pieces"].as_array().unwrap();
     let kinds: Vec<&str> = pieces
@@ -96,7 +93,10 @@ async fn read_page_gives_the_pieces_of_a_page_in_reading_order() {
     assert_eq!(figure["kind"], "figure");
     assert_eq!(figure["label"], "Figure 13-4");
     let picture = sample_chapter_folder().join("page-num-5/01-figure.png");
-    assert_eq!(figure["picture"], picture.display().to_string());
+    assert_eq!(
+        figure["picture"],
+        "content/option-volatility-and-pricing/chapter-1/page-num-5/01-figure.png"
+    );
     assert!(picture.is_file());
     assert!(
         figure.get("caption").is_none(),
@@ -240,7 +240,12 @@ async fn chapter_contents_lists_every_item_of_a_chapter_by_kind() {
         [("Figure 13-4", 5), ("Figure 13-16", 6), ("Figure 24-12", 7)]
     );
     for figure in figures {
-        let picture = std::path::Path::new(figure["picture"].as_str().unwrap());
+        let relative = figure["picture"]
+            .as_str()
+            .unwrap()
+            .strip_prefix("content/")
+            .unwrap();
+        let picture = sample_content_folder().join(relative);
         assert!(picture.is_file(), "{picture:?}");
     }
 

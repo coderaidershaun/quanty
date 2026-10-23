@@ -46,6 +46,7 @@ async fn login_protects_pages_and_api_and_logout_ends_the_session() {
         .await
         .unwrap();
     assert!(page.contains("type=\"password\""));
+    assert!(page.contains("action=\"login\""));
     assert!(!page.contains("<script"));
     assert_eq!(
         client

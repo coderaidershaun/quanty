@@ -210,7 +210,7 @@ pub(crate) async fn login_page() -> Html<String> {
 }
 fn page(message: &str) -> Html<String> {
     Html(format!(
-        r#"<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>quanty — sign in</title><style>body{{background:#f8f5ee;color:#322f28;font:18px Georgia,serif;max-width:24rem;margin:15vh auto;padding:1rem}}input,button{{box-sizing:border-box;width:100%;padding:.7rem;margin:.5rem 0;font:inherit}}button{{background:#d8cbb2;border:1px solid #94846a;cursor:pointer}}</style><h1>quanty</h1><form method="post" action="/login"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required autofocus><button>Sign in</button><p>{message}</p></form></html>"#
+        r#"<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>quanty — sign in</title><style>body{{background:#f8f5ee;color:#322f28;font:18px Georgia,serif;max-width:24rem;margin:15vh auto;padding:1rem}}input,button{{box-sizing:border-box;width:100%;padding:.7rem;margin:.5rem 0;font:inherit}}button{{background:#d8cbb2;border:1px solid #94846a;cursor:pointer}}</style><h1>quanty</h1><form method="post" action="login"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required autofocus><button>Sign in</button><p>{message}</p></form></html>"#
     ))
 }
 #[derive(serde::Deserialize)]
@@ -297,6 +297,12 @@ pub(crate) async fn logout(State(auth): State<Auth>, headers: HeaderMap) -> impl
 }
 
 pub(crate) async fn bearer(State(auth): State<Auth>, request: Request, next: Next) -> Response {
+    if auth.settings.trusted_integration {
+        if !has_local_host(request.headers(), auth.settings.listen) {
+            return StatusCode::FORBIDDEN.into_response();
+        }
+        return next.run(request).await;
+    }
     let Some(token) = auth.settings.mcp_token.as_deref() else {
         return StatusCode::NOT_FOUND.into_response();
     };

@@ -28,6 +28,9 @@ struct Args {
     /// Open the server address in a browser.
     #[arg(long)]
     open: bool,
+    /// Expose tools without credentials on loopback for a trusted app host.
+    #[arg(long)]
+    trusted_integration: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -62,6 +65,7 @@ fn main() -> anyhow::Result<()> {
     if let Some(listen) = args.listen {
         settings.listen = listen;
     }
+    settings.trusted_integration = args.trusted_integration;
     settings.validate().context("could not start quanty")?;
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -74,11 +78,16 @@ fn main() -> anyhow::Result<()> {
                 let fake = Fake::scene(&scene, &home).context("could not start the fixture")?;
                 let samples =
                     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../samples/content");
+                let fixture_mcp = if settings.trusted_integration {
+                    mcp::fixture_http_service()
+                } else {
+                    axum::Router::new()
+                };
                 let options = server::ServerOptions {
                     settings,
                     content: samples,
                     fixture: Some(scene),
-                    mcp: axum::Router::new(),
+                    mcp: fixture_mcp,
                     background_jobs,
                 };
                 serve(fake, options, args.open).await

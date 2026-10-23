@@ -69,7 +69,21 @@ pub fn router<H: Handler>(handler: H, options: ServerOptions) -> Result<Router, 
         handler: Arc::new(handler),
         guard,
     };
+    let has_mcp =
+        mcp.has_routes() && (settings.trusted_integration || settings.mcp_token.is_some());
     let protected = Router::new()
+        .route(
+            "/jet-app.json",
+            get(move || async move {
+                let mut descriptor = serde_json::json!({
+                    "version": 1, "name": "Quanty", "ui": "./", "embedding": "relative-paths"
+                });
+                if has_mcp {
+                    descriptor["mcp"] = "mcp".into();
+                }
+                Json(descriptor)
+            }),
+        )
         .route(
             "/api/facts",
             get(move || {

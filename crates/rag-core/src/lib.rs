@@ -7,6 +7,7 @@ mod codex;
 mod concept;
 mod concept_store;
 mod config;
+mod content;
 mod embedder;
 mod error_chain;
 mod item;
@@ -23,6 +24,7 @@ pub use codex::{CodexCli, CodexError};
 pub use concept::ConceptId;
 pub use concept_store::{ConceptHit, ConceptPoint, ConceptStore, concept_input};
 pub use config::{Config, ConfigError};
+pub use content::content_url;
 pub use embedder::{
     DocumentInput, EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, EmbedError, Embedder, Embedding,
     GeminiEmbedder, embedding_usage, question_usage,

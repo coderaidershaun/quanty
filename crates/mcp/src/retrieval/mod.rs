@@ -155,6 +155,7 @@ pub(crate) async fn search<S: Services>(
         &hits,
         args.explain.unwrap_or(false).then_some(found.trace),
         &found.results.usage,
+        &config.content_folder,
     ))
 }
 
@@ -181,7 +182,7 @@ pub(crate) async fn answer<S: Services>(
         return Ok(AnswerResult::unanswered(&results.usage));
     }
     let written = rag_retrieval::answer(&llm, &asked.question, &results).await?;
-    Ok(written.into())
+    Ok(AnswerResult::from_answer(written, &config.content_folder))
 }
 
 /// The graph is connected first, so a store that is down stops the call before anything is

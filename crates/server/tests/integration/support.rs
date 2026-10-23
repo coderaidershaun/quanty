@@ -187,11 +187,15 @@ async fn start(
     let mut settings = settings.clone();
     settings.listen = address;
     let fake = Fake::scene("black-scholes", &settings.home).unwrap();
-    let mcp = mcp::http_service(mcp::QuantyServer::with_background_jobs(
-        mcp_config,
-        NoPaidServices,
-        background_jobs.clone(),
-    ));
+    let mcp = if settings.trusted_integration {
+        mcp::fixture_http_service()
+    } else {
+        mcp::http_service(mcp::QuantyServer::with_background_jobs(
+            mcp_config,
+            NoPaidServices,
+            background_jobs.clone(),
+        ))
+    };
     let app = router(
         fake,
         server::ServerOptions {

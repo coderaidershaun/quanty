@@ -70,7 +70,7 @@ impl<S: Services> QuantyServer<S> {
     /// Lists every formula, figure, table and code listing of one document (a book's chapter, a
     /// part of a book or a paper) in reading order, with the page each is on, its section, label,
     /// caption or name, and its whole text: the LaTeX of a formula, the code as printed, the
-    /// explanation of a figure with the path of its picture, the Markdown of a table. A code
+    /// explanation of a figure with the app-relative URL of its picture, the Markdown of a table. A code
     /// listing that page breaks cut is one item. Give `kind` for one kind only. It reads the
     /// saved chapter, needs no store and costs nothing. Give the `page` of an item to `read_page`
     /// to read around it.

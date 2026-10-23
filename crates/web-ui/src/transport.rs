@@ -41,13 +41,14 @@ impl SocketTransport {
         let location = web_sys::window()
             .expect("the browser provides a window")
             .location();
-        let protocol = if location.protocol()? == "https:" {
-            "wss"
+        let url = web_sys::Url::new_with_base(path, &location.href()?)?;
+        url.set_protocol(if location.protocol()? == "https:" {
+            "wss:"
         } else {
-            "ws"
-        };
+            "ws:"
+        });
         let mut transport = Self {
-            url: format!("{protocol}://{}{path}", location.host()?),
+            url: url.href(),
             socket: None,
             ctx,
             intents,
@@ -140,7 +141,16 @@ impl SocketTransport {
                 }
                 WsEvent::Message(WsMessage::Text(text)) => {
                     match serde_json::from_str::<Frame>(&text) {
-                        Ok(Frame::Event(event)) => self.events.push_back(event),
+                        Ok(Frame::Event(mut event)) => {
+                            if let Event::Exported {
+                                result: Ok(download),
+                                ..
+                            } = &mut event
+                            {
+                                download.url = download.url.trim_start_matches('/').to_owned();
+                            }
+                            self.events.push_back(event);
+                        }
                         Ok(Frame::Finished(request)) => {
                             self.outstanding.remove(&request);
                             self.failures.remove(&request);

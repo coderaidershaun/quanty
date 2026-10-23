@@ -4,6 +4,7 @@
 mod args;
 mod datasets;
 mod exporting;
+mod fixture;
 mod ingest;
 mod insights;
 mod jobs;
@@ -14,6 +15,7 @@ mod services;
 mod transport;
 mod usage;
 
+pub use fixture::fixture_http_service;
 pub use jobs::{BackgroundJob, BackgroundJobs, BackgroundReservation, JobKind};
 pub use server::QuantyServer;
 pub use services::{PaidServices, Services};

@@ -19,7 +19,7 @@ pub(crate) fn pick(sender: Sender<Intent>, ctx: egui::Context) {
             percent_encoding::NON_ALPHANUMERIC,
         )
         .to_string();
-        let mut request = ehttp::Request::post("/api/upload", file.read().await);
+        let mut request = ehttp::Request::post("api/upload", file.read().await);
         request.mode = ehttp::Mode::SameOrigin;
         request.headers =
             ehttp::Headers::new(&[("X-File-Name", &name), ("Content-Type", "application/pdf")]);

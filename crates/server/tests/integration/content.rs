@@ -18,8 +18,13 @@ async fn pictures_are_contained_and_resize_to_a_png_with_cache_headers() {
     })
     .await;
     let client = server.client();
+    let content = server.home.path().join("content");
+    let reference = rag_core::content_url(&content.join("page.png"), &content).unwrap();
+    assert_eq!(reference, "content/page.png");
+    assert!(rag_core::content_url(&server.home.path().join("outside.png"), &content).is_none());
+    assert!(rag_core::content_url(&content.join("../outside.png"), &content).is_none());
     let response = client
-        .get(server.url("/content/page.png"))
+        .get(server.url(&format!("/{reference}")))
         .send()
         .await
         .unwrap();

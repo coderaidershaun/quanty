@@ -15,6 +15,7 @@ pub struct Settings {
     pub listen: SocketAddr,
     pub password: Option<String>,
     pub mcp_token: Option<String>,
+    pub trusted_integration: bool,
     pub session_key: Key,
     pub upload_limit: usize,
 }
@@ -38,6 +39,10 @@ pub enum SettingsError {
     },
     #[error("QUANTY_PASSWORD is required when listening outside loopback")]
     PasswordRequired,
+    #[error("trusted integration requires a loopback listen address")]
+    TrustedListen,
+    #[error("trusted integration cannot be combined with a password or MCP token")]
+    TrustedCredentials,
 }
 
 impl Settings {
@@ -109,6 +114,7 @@ impl Settings {
             listen,
             password: value("QUANTY_PASSWORD"),
             mcp_token: value("QUANTY_MCP_TOKEN"),
+            trusted_integration: false,
             session_key,
             upload_limit,
         })
@@ -119,6 +125,14 @@ impl Settings {
     /// # Errors
     /// Refuses an unauthenticated server outside loopback.
     pub fn validate(&self) -> Result<(), SettingsError> {
+        if self.trusted_integration {
+            if !self.listen.ip().is_loopback() {
+                return Err(SettingsError::TrustedListen);
+            }
+            if self.password.is_some() || self.mcp_token.is_some() {
+                return Err(SettingsError::TrustedCredentials);
+            }
+        }
         if !self.listen.ip().is_loopback() && self.password.as_ref().is_none_or(String::is_empty) {
             return Err(SettingsError::PasswordRequired);
         }

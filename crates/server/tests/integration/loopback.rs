@@ -31,6 +31,30 @@ async fn listen_flags_override_environment_and_home_settings_and_loopback_needs_
         .unwrap();
     assert!(!failed.status.success());
     assert!(String::from_utf8_lossy(&failed.stderr).contains("QUANTY_PASSWORD is required"));
+    for (listen, credential, expected) in [
+        ("0.0.0.0:0", None, "requires a loopback"),
+        ("127.0.0.1:0", Some("QUANTY_PASSWORD"), "cannot be combined"),
+        (
+            "127.0.0.1:0",
+            Some("QUANTY_MCP_TOKEN"),
+            "cannot be combined",
+        ),
+    ] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_quanty"));
+        command.env_clear().arg("--home").arg(home.path()).args([
+            "--fixture",
+            "black-scholes",
+            "--trusted-integration",
+            "--listen",
+            listen,
+        ]);
+        if let Some(credential) = credential {
+            command.env(credential, "secret");
+        }
+        let output = command.output().await.unwrap();
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains(expected));
+    }
     let mut child = Command::new(env!("CARGO_BIN_EXE_quanty"))
         .env_clear()
         .env("QUANTY_LISTEN", "0.0.0.0:56789")

@@ -243,3 +243,41 @@ sudo journalctl -u quanty -u qdrant -u redis-server -u caddy -n 100 --no-pager
 ```
 
 Check database secrets, ownership and available disk space. For Redis, confirm version 8 or newer, `libgomp1`, the module path, and the writable-path override. For a model CLI, check its `PATH` and sign-in as `quanty`, then restart quanty after editing `.env`. For a 503 missing-bundle page, build Trunk before rebuilding the server. For HTTPS, check DNS and inbound ports 80/443. See [troubleshooting](troubleshooting.md) for login, connection and upload failures.
+
+## Trusted app-host integration
+
+Build the browser with `cd crates/web-ui && trunk build --release`, then build
+`cargo build -p server` from the repository root. The same bundle works at `/`
+and beneath a host's `/apps/{id}/` mount; assets, API calls, sockets and pictures
+resolve beneath the visible app base. The mount URL must end in `/`.
+
+For a free, self-contained Jet check, use a fresh home with no credentials:
+
+```sh
+mkdir -p /tmp/quanty-jet-fixture
+target/debug/quanty --home /tmp/quanty-jet-fixture --listen 127.0.0.1:8080 \
+  --fixture black-scholes --trusted-integration
+```
+
+Register port `8080` in Jet. `jet-app.json` declares the relative UI and MCP
+endpoints. The fixture exposes only `fixture_page`, a local sample with a
+contained picture URL; it never constructs a store or model client. Normal
+fixture mode continues to leave MCP absent. To connect a real library, omit
+`--fixture` and select its home; metadata discovery is free, but its ordinary
+paid tools remain paid.
+
+`--trusted-integration` is explicit and loopback-only. It rejects configured
+`QUANTY_PASSWORD` and `QUANTY_MCP_TOKEN` rather than silently ignoring them.
+Standalone password and token modes retain their existing checks. The host must
+forward the upstream Host and translate a validated browser Origin to the
+upstream origin. `X-Forwarded-Proto` identifies the public host scheme,
+`X-Forwarded-Host` its authority and `X-Forwarded-Prefix` the mount without its
+last slash. In trusted mode the Origin check compares against the upstream
+HTTP origin, including when the public host uses HTTPS. Do not expose this
+credential-free mode outside a trusted single-user server.
+
+Browser acceptance is in `crates/server/tests/browser/root-and-mounted.mjs`.
+Set `PLAYWRIGHT_MODULE` to a Playwright module, `CHROME_BINARY` to Chrome,
+`QUANTY_BINARY` if the executable is elsewhere, and `ARTIFACT_DIR` for screenshots
+and network logs. It runs the actual built bundle directly and through a
+prefix-stripping HTTP/WebSocket test proxy.

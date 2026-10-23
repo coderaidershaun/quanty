@@ -63,8 +63,8 @@ impl AnswerResult {
     }
 }
 
-impl From<Answer> for AnswerResult {
-    fn from(answer: Answer) -> AnswerResult {
+impl AnswerResult {
+    pub(super) fn from_answer(answer: Answer, content: &std::path::Path) -> AnswerResult {
         let mut sources: BTreeMap<usize, SourceView> = BTreeMap::new();
         let claims: Vec<ClaimView> = answer
             .claims
@@ -74,7 +74,7 @@ impl From<Answer> for AnswerResult {
                 for source in claim.sources {
                     sources.entry(source.number).or_insert_with(|| SourceView {
                         number: source.number,
-                        item: (&source.payload).into(),
+                        item: ItemView::from_payload(&source.payload, content),
                     });
                 }
                 ClaimView {

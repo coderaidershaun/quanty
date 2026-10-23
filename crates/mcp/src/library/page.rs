@@ -29,7 +29,7 @@ pub(crate) struct PageView {
     /// The page number as printed in the book. Left out when the page shows none.
     #[serde(skip_serializing_if = "Option::is_none")]
     printed_page: Option<String>,
-    /// The path of the picture of the whole page, on the disk of the machine the server runs on.
+    /// The whole-page picture URL relative to the app base, contained beneath content/.
     #[serde(skip_serializing_if = "Option::is_none")]
     page_image: Option<String>,
     pieces: Vec<PieceView>,
@@ -66,7 +66,10 @@ pub(crate) fn read_page(config: &Config, args: ReadPageArgs) -> Result<PageView,
             .and_then(|piece| piece.printed_page_number.clone()),
         page_image: on_page
             .first()
-            .map(|piece| piece.page_image.display().to_string()),
-        pieces: on_page.into_iter().map(PieceView::from).collect(),
+            .and_then(|piece| rag_core::content_url(&piece.page_image, &config.content_folder)),
+        pieces: on_page
+            .into_iter()
+            .map(|piece| PieceView::from_piece(piece, &config.content_folder))
+            .collect(),
     })
 }

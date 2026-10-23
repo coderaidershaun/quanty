@@ -29,13 +29,13 @@ pub(super) struct PieceView {
     language: Option<String>,
     /// The piece as saved: Markdown, LaTeX for a formula, or the code as printed for code.
     content: String,
-    /// The path of the picture of a figure, on the disk of the machine the server runs on.
+    /// The picture URL relative to the app base, contained beneath content/.
     #[serde(skip_serializing_if = "Option::is_none")]
     picture: Option<String>,
 }
 
-impl From<&ChapterPiece> for PieceView {
-    fn from(piece: &ChapterPiece) -> PieceView {
+impl PieceView {
+    pub(super) fn from_piece(piece: &ChapterPiece, content: &std::path::Path) -> PieceView {
         PieceView {
             number: piece.id.number,
             kind: piece.detail.kind_name().to_owned(),
@@ -52,7 +52,7 @@ impl From<&ChapterPiece> for PieceView {
             picture: piece
                 .figure_image
                 .as_ref()
-                .map(|picture| picture.path.display().to_string()),
+                .and_then(|picture| rag_core::content_url(&picture.path, content)),
         }
     }
 }
@@ -60,11 +60,11 @@ impl From<&ChapterPiece> for PieceView {
 impl PieceView {
     /// An item of a chapter as one piece: the first piece, with the content and the language of
     /// the whole item, which is longer than the first piece for a listing that page breaks cut.
-    pub(super) fn of_item(item: &ChapterItem<'_>) -> PieceView {
+    pub(super) fn of_item(item: &ChapterItem<'_>, content: &std::path::Path) -> PieceView {
         PieceView {
             content: item.content(),
             language: item.language().map(str::to_owned),
-            ..PieceView::from(item.first)
+            ..PieceView::from_piece(item.first, content)
         }
     }
 }

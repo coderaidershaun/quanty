@@ -58,14 +58,14 @@ struct ContentsItem {
     piece: PieceView,
 }
 
-impl From<&ChapterItem<'_>> for ContentsItem {
-    fn from(item: &ChapterItem<'_>) -> ContentsItem {
+impl ContentsItem {
+    fn from_item(item: &ChapterItem<'_>, content: &std::path::Path) -> ContentsItem {
         ContentsItem {
             page: item.first.id.page,
             printed_page: item.first.printed_page_number.clone(),
             last_page: item.last_page(),
             last_printed_page: item.last_printed_page().map(str::to_owned),
-            piece: PieceView::of_item(item),
+            piece: PieceView::of_item(item, content),
         }
     }
 }
@@ -125,7 +125,7 @@ pub(crate) fn chapter_contents(
     let items = all
         .iter()
         .filter(|item| kind.is_none_or(|kind| is_of_kind(item, kind)))
-        .map(ContentsItem::from)
+        .map(|item| ContentsItem::from_item(item, &config.content_folder))
         .collect();
     Ok(ContentsView {
         document: DocumentHeader::of(&entry),

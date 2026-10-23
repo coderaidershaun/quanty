@@ -4216,6 +4216,7 @@ dependencies = [
  "base64 0.23.1",
  "choices",
  "dotenvy",
+ "percent-encoding",
  "qdrant-client",
  "reqwest",
  "serde",

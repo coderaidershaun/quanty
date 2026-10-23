@@ -93,6 +93,7 @@ try {
     const beforeAsk = frames.length;
     await page.mouse.click(300, 90);
     await page.keyboard.type('Explain Black-Scholes');
+    await painted(page);
     await page.mouse.click(1195, 90);
     await waitFor(() => frames.slice(beforeAsk).some(frame => JSON.parse(String(frame)).payload?.Answer?.result?.Ok),
       'the fixture must answer a browser question');

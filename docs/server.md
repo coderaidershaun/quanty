@@ -251,18 +251,24 @@ Build the browser with `cd crates/web-ui && trunk build --release`, then build
 and beneath a host's `/apps/{id}/` mount; assets, API calls, sockets and pictures
 resolve beneath the visible app base. The mount URL must end in `/`.
 
-For a free, self-contained Jet check, use a fresh home with no credentials:
+The default listen address is `127.0.0.1:7878`. For a free, self-contained Jet
+check alongside an existing instance, use a separate port and a fresh home with
+no inherited credentials:
 
 ```sh
-mkdir -p /tmp/quanty-jet-fixture
-target/debug/quanty --home /tmp/quanty-jet-fixture --listen 127.0.0.1:8080 \
+QUANTY_TEST_HOME=$(mktemp -d /tmp/quanty-jet-fixture.XXXXXX)
+env -i PATH="$PATH" target/debug/quanty --home "$QUANTY_TEST_HOME" --listen 127.0.0.1:18878 \
   --fixture black-scholes --trusted-integration
 ```
 
-Register port `8080` in Jet. `jet-app.json` declares the relative UI and MCP
-endpoints. The fixture exposes only `fixture_page`, a local sample with a
-contained picture URL; it never constructs a store or model client. Normal
-fixture mode continues to leave MCP absent. To connect a real library, omit
+Register port `18878` in Jet. Leave any existing `7878` instance running.
+`jet-app.json` declares the relative UI and MCP endpoints. The fixture exposes `fixture_page`, a local sample with a
+contained picture URL, and `search`, which takes a required `question` string
+and returns the same numbered figure for every question. Its `results` include
+`number`, `document`, `document_id`, `page`, `kind`, `text`, `picture` and `label`
+for source cards and citations. Both tools are free and never construct a store
+or model client. This fixture `search` is separate from the normal paid search.
+Normal fixture mode continues to leave MCP absent. To connect a real library, omit
 `--fixture` and select its home; metadata discovery is free, but its ordinary
 paid tools remain paid.
 

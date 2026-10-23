@@ -325,8 +325,33 @@ async fn trusted_fixture_exposes_descriptor_and_free_tools() {
     );
     let running = ().serve(transport).await.unwrap();
     let tools = running.list_all_tools().await.unwrap();
-    assert_eq!(tools.len(), 1);
-    assert_eq!(tools[0].name, "fixture_page");
+    let mut names: Vec<_> = tools.iter().map(|tool| tool.name.as_ref()).collect();
+    names.sort_unstable();
+    assert_eq!(names, ["fixture_page", "search"]);
+    let search = tools.iter().find(|tool| tool.name == "search").unwrap();
+    assert_eq!(search.input_schema["required"], json!(["question"]));
+    assert_eq!(
+        search.input_schema["properties"]["question"]["type"],
+        "string"
+    );
+    let found = running
+        .call_tool(tool_call(
+            "search",
+            json!({"question":"Show the sample figure"}),
+        ))
+        .await
+        .unwrap();
+    assert_ne!(found.is_error, Some(true));
+    assert_eq!(
+        found.structured_content.unwrap(),
+        json!({"results":[{
+            "number":1, "document":"Black–Scholes fixture",
+            "document_id":"black-scholes-fixture", "page":1, "kind":"figure",
+            "text":"A free sample for checking the connection between an app and its host.",
+            "picture":"content/option-volatility-and-pricing/chapter-1/page-num-1/page.png",
+            "label":"Black–Scholes sample page"
+        }]})
+    );
     let result = running
         .call_tool(rmcp::model::CallToolRequestParams::new("fixture_page"))
         .await

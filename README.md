@@ -48,16 +48,22 @@ Run these commands from the root of this repository. The UI runs in your browser
    cargo run --release -p server -- --fixture black-scholes --open
    ```
 
+   Or if already built, just run with:
+
+   ```bash
+   cargo run --release -p server -- --open
+   ```
+
    Stop the server with Ctrl-C before continuing.
 
 2. **Install the tools for your own library.**
 
-   | You need | What it is for |
-   | --- | --- |
-   | Rust with `cargo` (the build uses 1.97.1) | Builds the server and browser UI |
-   | Docker Desktop, with `docker compose` | Runs Qdrant for vectors and FalkorDB for the graph |
-   | [Poppler](https://poppler.freedesktop.org/) (`brew install poppler`) | Reads PDFs during conversion |
-   | The `codex` or `claude` CLI, signed in | Reads pages, finds concepts and writes answers using the selected agent's subscription |
+   | You need                                                             | What it is for                                                                         |
+   | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+   | Rust with `cargo` (the build uses 1.97.1)                            | Builds the server and browser UI                                                       |
+   | Docker Desktop, with `docker compose`                                | Runs Qdrant for vectors and FalkorDB for the graph                                     |
+   | [Poppler](https://poppler.freedesktop.org/) (`brew install poppler`) | Reads PDFs during conversion                                                           |
+   | The `codex` or `claude` CLI, signed in                               | Reads pages, finds concepts and writes answers using the selected agent's subscription |
 
 3. **Set up the databases.** Start Docker Desktop, then run:
 
@@ -81,10 +87,10 @@ Run these commands from the root of this repository. The UI runs in your browser
    unset ANTHROPIC_API_KEY
    ```
 
-   | Key | What it is for |
-   | --- | --- |
-   | `EMBEDDING_GEMINI_API_KEY` | Gemini embeddings for pages and questions |
-   | `CONVERTER_JEV_API_KEY` | Jev's check for math during PDF conversion |
+   | Key                        | What it is for                             |
+   | -------------------------- | ------------------------------------------ |
+   | `EMBEDDING_GEMINI_API_KEY` | Gemini embeddings for pages and questions  |
+   | `CONVERTER_JEV_API_KEY`    | Jev's check for math during PDF conversion |
 
    > [!IMPORTANT]
    > Keep `ANTHROPIC_API_KEY` unset in both the shell and `.env`. When Claude is selected, quanty refuses to call it with that key set, so the work uses your subscription. Codex requires a ChatGPT subscription login.

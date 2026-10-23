@@ -1,5 +1,5 @@
 //! Checks the flows that cross two parts of the app, on the whole app: selection, follow-up,
-//! source, failures, ingest, datasets, the library, the model and database choices, the footer's
+//! source, failures, ingest, datasets, the library, model choices, the footer's
 //! balances, and that no control leads to a part that is not built.
 
 mod balances;

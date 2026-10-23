@@ -268,7 +268,7 @@ This is the manual short form of [Run quanty on an Ubuntu server, no Docker](doc
    read -rsp 'Claude setup-token value (optional): ' CLAUDE_CODE_OAUTH_TOKEN; echo
    unset ANTHROPIC_API_KEY
    sudo tee /srv/quanty/.env >/dev/null <<EOF
-   QUANTY_LISTEN=127.0.0.1:8080
+   QUANTY_LISTEN=127.0.0.1:7878
    QUANTY_PASSWORD=$QUANTY_PASSWORD
    QUANTY_MCP_TOKEN=$QUANTY_MCP_TOKEN
    QUANTY_SESSION_KEY=$QUANTY_SESSION_KEY
@@ -299,14 +299,14 @@ This is the manual short form of [Run quanty on an Ubuntu server, no Docker](doc
 
    Read the generated password and MCP token privately in the editor and save them. Keep `QUANTY_SESSION_KEY` through upgrades so sessions survive restarts. Saved model choices supersede the `LLM_*` defaults. The [reference](docs/reference.md) explains each setting and server flag.
 
-7. **Install and start the quanty unit.** The supplied unit runs as `quanty`, reads `/srv/quanty/.env`, supplies the model tools' `PATH`, and binds to `127.0.0.1:8080`.
+7. **Install and start the quanty unit.** The supplied unit runs as `quanty`, reads `/srv/quanty/.env`, supplies the model tools' `PATH`, and binds to `127.0.0.1:7878`.
 
    ```bash
    QUANTY_SOURCE=/srv/quanty/src
    sudo install -m 0644 "$QUANTY_SOURCE/deploy/quanty.service" /etc/systemd/system/quanty.service
    sudo systemctl daemon-reload
    sudo systemctl enable --now quanty
-   curl --fail http://127.0.0.1:8080/healthz
+   curl --fail http://127.0.0.1:7878/healthz
    ```
 
    Expect `ok`. This checks the HTTP process; the app's health display checks the stores and model tools.
@@ -326,7 +326,7 @@ This is the manual short form of [Run quanty on an Ubuntu server, no Docker](doc
        request_body {
            max_size 1GB
        }
-       reverse_proxy 127.0.0.1:8080
+       reverse_proxy 127.0.0.1:7878
        encode zstd gzip
    }
    EOF

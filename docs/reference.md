@@ -618,7 +618,7 @@ Build `crates/web-ui` with `trunk build --release` before building `cargo build 
 
 | Setting | Meaning | Default |
 | --- | --- | --- |
-| `QUANTY_LISTEN` | Server bind address | `127.0.0.1:8080` |
+| `QUANTY_LISTEN` | Server bind address | `127.0.0.1:7878` |
 | `QUANTY_PASSWORD` | Shared browser password; required for a non-loopback bind; no login on loopback when absent | none |
 | `QUANTY_MCP_TOKEN` | Bearer token for remote MCP; without it `/mcp` returns 404 | none |
 | `QUANTY_SESSION_KEY` | 64 hex characters signing the cookie; retain it to preserve sessions after restart | random on each start |

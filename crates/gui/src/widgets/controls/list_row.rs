@@ -117,6 +117,7 @@ impl egui::Widget for ListRow<'_> {
     fn ui(self, ui: &mut egui::Ui) -> Response {
         let side = vec2(ui.available_width(), size::CONTROL_SM);
         let (rect, response) = ui.allocate_exact_size(side, Sense::click());
+        crate::widgets::interactive_cursor(ui, &response);
         response.widget_info(|| {
             WidgetInfo::selected(
                 WidgetType::Button,

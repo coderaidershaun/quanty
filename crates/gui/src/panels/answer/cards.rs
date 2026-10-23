@@ -52,6 +52,7 @@ pub(super) fn figure(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultIt
         Some(image) => {
             let room = egui::vec2(ui.available_width(), FIGURE_HEIGHT);
             let picture = images::show(ui, pane.cx.media, image, &row.kind_label, room);
+            crate::widgets::interactive_cursor(ui, &picture);
             centred_caption(ui, pane, item, row);
             Some(picture)
         }
@@ -134,9 +135,8 @@ fn block<R>(
             egui::StrokeKind::Outside,
         );
     }
-    let response = scope
-        .response
-        .on_hover_cursor(egui::CursorIcon::PointingHand);
+    crate::widgets::interactive_cursor(ui, &scope.response);
+    let response = scope.response;
     egui::InnerResponse::new(scope.inner, response)
 }
 

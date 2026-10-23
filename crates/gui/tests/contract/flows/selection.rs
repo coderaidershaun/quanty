@@ -299,3 +299,33 @@ fn both_phases_of_an_ask_can_be_used_before_the_answer_is_written() {
         has(harness, Role::Button, "Ask")
     });
 }
+
+#[test]
+fn interactive_controls_report_browser_pointer() {
+    let mut harness = testkit::app("idle", DEFAULT_WINDOW);
+    testkit::settle(&mut harness);
+    for (role, label, cursor) in [
+        (Role::Tab, "Ingest", egui::CursorIcon::PointingHand),
+        (Role::Button, "Ask", egui::CursorIcon::Default),
+    ] {
+        let point = node(&harness, role, label).rect().center();
+        harness.hover_at(point);
+        harness.run_ok();
+        assert_eq!(
+            harness.output().platform_output.cursor_icon,
+            cursor,
+            "{label}"
+        );
+    }
+    click(&mut harness, Role::Tab, "Ingest");
+    for (role, label) in [(Role::ComboBox, "Media"), (Role::Button, "Choose a PDF")] {
+        let point = node(&harness, role, label).rect().center();
+        harness.hover_at(point);
+        harness.run_ok();
+        assert_eq!(
+            harness.output().platform_output.cursor_icon,
+            egui::CursorIcon::PointingHand,
+            "{label}"
+        );
+    }
+}

@@ -32,6 +32,7 @@ fn show_questions<'a>(ui: &mut egui::Ui, questions: &'a [String]) -> Option<&'a 
 fn question_row(ui: &mut egui::Ui, question: &str, has_row_above: bool) -> egui::Response {
     let side = egui::vec2(ui.available_width(), size::CHIP);
     let (rect, response) = ui.allocate_exact_size(side, Sense::click());
+    crate::widgets::interactive_cursor(ui, &response);
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), question));
     let is_hovered = response.hovered();
     let ink = if is_hovered {

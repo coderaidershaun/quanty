@@ -1,4 +1,4 @@
-//! Checks that the rules the desktop app keeps a copy of still agree with the crates that own them,
+//! Checks that the rules the browser app keeps a copy of still agree with the crates that own them,
 //! which the contract and the panels may not name.
 
 use contract::{self, Answer, ModelTokens, Usage};

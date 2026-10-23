@@ -1,8 +1,4 @@
-//! Checks the two rules that keep the desktop app apart from the stores: only the live backend
-//! and `main` name a backend crate, and only `main` builds the settings.
-//!
-//! These are fitness tests in a weak sense: an import or a settings call that breaks a rule
-//! compiles and works, and only shows when a fixture or a test reaches a real store.
+//! The UI stays usable in a browser by keeping native dependencies out of its source.
 
 use std::fs;
 use std::path::{Path, PathBuf};

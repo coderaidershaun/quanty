@@ -17,6 +17,8 @@ const START: &str = "Start build";
 const COST: &str =
     "Paid work: the selected model writes the rewrites and the answers; a dry run is free.";
 const START_OFF_WITHOUT_NAME: &str = "Type a name for the dataset first.";
+const START_OFF_WHILE_RUNNING: &str =
+    "Background work is running on the server. Wait for it to end, then reload this page.";
 const STARTING: &str = "Starting the build";
 const KEEP_OPEN: &str = "This build continues on the server if you close the tab. If it stops, start the same build again: answers already written are not paid for twice.";
 const FAILED: &str = "The build failed";
@@ -40,6 +42,8 @@ fn startable(draft: &DatasetRequest, shared: &Shared) -> Result<DatasetRequest, 
     let request = form::request_of(draft).ok_or(START_OFF_WITHOUT_NAME)?;
     if shared.can_start_dataset_build() {
         Ok(request)
+    } else if !shared.health.facts.running.is_empty() {
+        Err(START_OFF_WHILE_RUNNING)
     } else {
         Err(START_OFF_WHILE_DELETING)
     }

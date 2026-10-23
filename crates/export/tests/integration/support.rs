@@ -12,7 +12,7 @@ pub fn sample_picture() -> PathBuf {
     )
 }
 
-/// An answer with one block of every kind and two sources, as the desktop app builds it.
+/// An answer with one block of every kind and two sources, as the browser app builds it.
 pub fn answer_like() -> Document {
     Document {
         title: "Black–Scholes formula and its assumptions".to_owned(),

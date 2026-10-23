@@ -2,12 +2,12 @@
 
 <p align="center">
   <b>A multimodal RAG over the PDFs of quant finance books and papers.</b><br>
-  A desktop app for people, an MCP server for agents, and a command line, all in Rust.
+  A web app for people, an MCP server for agents, and a command line, all in Rust.
 </p>
 
 <p align="center">
-  <a href="#quickstart-run-the-app">Run the app</a> ·
-  <a href="#quickstart-the-database-on-an-ubuntu-server">Database on a server</a> ·
+  <a href="#quickstart-run-it-on-your-mac">Run it on your Mac</a> ·
+  <a href="#quickstart-serve-it-from-an-ubuntu-server">Serve it from Ubuntu</a> ·
   <a href="docs/guide.md">Guide</a> ·
   <a href="docs/troubleshooting.md">Troubleshooting</a> ·
   <a href="docs/mcp.md">MCP server</a> ·
@@ -15,9 +15,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/img/ask-screen.png" width="880" alt="The Ask screen of the quanty desktop app: a question, its answer with citations, the source panel, the concept graph, the retrieval path and follow-up questions">
+  <img src="docs/img/ask-screen.png" width="880" alt="The Ask screen of quanty: a question, its answer with citations, the source panel, the concept graph, the retrieval path and follow-up questions">
   <br>
-  <sub>The desktop app on its built-in <code>black-scholes</code> fixture: sample data, no store, no model, no cost.</sub>
+  <sub>The app in the browser on its built-in <code>black-scholes</code> fixture: sample data, no store, no model, no cost. The screenshot awaits an update by the owner.</sub>
 </p>
 
 ## Why quanty
@@ -35,177 +35,322 @@ A person can ask it "what is the correct math for a multivariate Hawkes process 
 
 Whether the goal is maximising Sharpe ratio, increasing trade volume or reducing risk, quanty is a stepping stone between the robust modelling quant finance requires and the accelerating progress of QIS.
 
-## Quickstart: run the app
+## Quickstart: run it on your Mac
 
-The shortest path to the desktop app on a laptop. Run every command in the quanty folder, the root of this repository.
+Run these commands from the root of this repository. The UI runs in your browser; the Rust server runs on your Mac.
 
-**Try it first, with nothing set up.** With Rust installed and nothing else (no keys, no Docker), this opens the app shown above on its built-in sample data. `--fixture list` names the other scenes.
-
-```bash
-cargo run --release -p gui
-cargo run --release -p gui -- --fixture black-scholes # with example
-```
-
-**Then set it up for real.**
-
-1. **Install the tools.**
-
-   | You need                                                             | What it is for                                                                               |
-   | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-   | Rust (stable, with `cargo`)                                          | Builds every program                                                                         |
-   | Docker, with `docker compose`                                        | Runs the two stores: Qdrant (vectors) and FalkorDB (the graph)                               |
-   | [Poppler](https://poppler.freedesktop.org/) (`brew install poppler`) | Reads a PDF when it is converted                                                             |
-   | The `codex` CLI, signed in (or `claude`)                             | Reads pages, finds concepts and writes answers, on the subscription of each agent you choose |
-
-2. **Start the stores.** Start Docker Desktop first, then:
+1. **Try it first, with nothing set up.** With Rust installed, this opens the built-in sample library without keys, Docker or model calls. `--fixture list` names the other scenes.
 
    ```bash
-   docker compose up -d    # Qdrant on ports 6333 and 6334, FalkorDB on 6379, data under data/
-   docker compose ps       # both quanty-qdrant-1 and quanty-falkordb-1 say running
+   cargo install --locked trunk
+   rustup target add wasm32-unknown-unknown
+   cd crates/web-ui && trunk build --release && cd ../..
+   cargo run --release -p server -- --fixture black-scholes --open
    ```
 
-   These two stores are the database called **Local**. To use stores on a server instead, see [the server quickstart](#quickstart-the-database-on-an-ubuntu-server).
+   Stop the server with Ctrl-C before continuing.
 
-3. **Add the keys.** Copy the example and put your two keys in place of `PLEASE_PROVIDE` and `ENTER`. Then make sure `ANTHROPIC_API_KEY` is not set.
+2. **Install the tools for your own library.**
+
+   | You need | What it is for |
+   | --- | --- |
+   | Rust with `cargo` (the build uses 1.97.1) | Builds the server and browser UI |
+   | Docker Desktop, with `docker compose` | Runs Qdrant for vectors and FalkorDB for the graph |
+   | [Poppler](https://poppler.freedesktop.org/) (`brew install poppler`) | Reads PDFs during conversion |
+   | The `codex` or `claude` CLI, signed in | Reads pages, finds concepts and writes answers using the selected agent's subscription |
+
+3. **Set up the databases.** Start Docker Desktop, then run:
+
+   ```bash
+   docker compose up -d
+   docker compose ps
+   ```
+
+   Both stores should be running. Quanty uses Qdrant on `6334` and FalkorDB on `6379`; the Compose file also exposes Qdrant's HTTP port `6333` and FalkorDB's browser on `3000`. Persistent store files are under `data/`.
+
+   To start fresh, this command **deletes the local library**, including converted content:
+
+   ```bash
+   docker compose down && rm -rf data/qdrant data/falkordb content
+   ```
+
+4. **Add the keys.** Copy the example, then edit `.env` and replace `PLEASE_PROVIDE` and `ENTER` with your keys.
 
    ```bash
    cp .env.example .env
    unset ANTHROPIC_API_KEY
    ```
 
-   | Key                        | What it is for                                                                      |
-   | -------------------------- | ----------------------------------------------------------------------------------- |
-   | `EMBEDDING_GEMINI_API_KEY` | Gemini embeddings: it embeds every page and every question                          |
-   | `CONVERTER_JEV_API_KEY`    | The Jev API, which is asked whether a page holds math: only when a PDF is converted |
+   | Key | What it is for |
+   | --- | --- |
+   | `EMBEDDING_GEMINI_API_KEY` | Gemini embeddings for pages and questions |
+   | `CONVERTER_JEV_API_KEY` | Jev's check for math during PDF conversion |
 
    > [!IMPORTANT]
-   > `ANTHROPIC_API_KEY` must not be set, in the shell or in `.env`. When Claude is selected and it is set, quanty asks `claude` nothing, so that the work is billed to the subscription and not to the API.
+   > Keep `ANTHROPIC_API_KEY` unset in both the shell and `.env`. When Claude is selected, quanty refuses to call it with that key set, so the work uses your subscription. Codex requires a ChatGPT subscription login.
 
-4. **Check the services.** `health` prints one line each for Qdrant, FalkorDB and the agent of the Ingest choice: `ok`, or `FAILED` with what is wrong. It does not check the Gemini or Jev keys. When the Ingest choice is Claude, it refuses `ANTHROPIC_API_KEY`; Codex requires a ChatGPT subscription login.
+5. **Check the services.** This checks Qdrant, FalkorDB and the selected Ingest agent. It does not validate Gemini or Jev keys.
 
    ```bash
    cargo run --release -p rag-ingestion --bin rag-ingest -- health
    ```
 
-5. **Open the app.**
+6. **Open your library.**
 
    ```bash
-   cargo run --release -p gui
+   cargo run --release -p server -- --open
    ```
 
-   The first time, the window opens on a sheet that asks which database to use, and nothing loads yet. Choose **Local**, which is the two Docker stores from step 2, and press **Use**. After that the window opens on **Ask**. When a store, a key or `claude` is not ready, the part of the window that needs it says which one and what to do.
+   The browser opens on **Ask**, with the catalogue from your one library. The footer shows the connection to the server. With the example's loopback address and an empty `QUANTY_PASSWORD`, there is no login. Keep a password set when serving through a public HTTPS host.
 
-To add your first PDF, follow [Add your first PDF](docs/guide.md#add-your-first-pdf) in the guide.
+7. **Add your first PDF.** Open **Ingest**, choose a PDF to upload, run its check, then start ingestion. Follow [Add your first PDF](docs/guide.md#add-your-first-pdf) for the choices and costs. **Share** downloads answers through your browser.
 
-## Quickstart: the database on an Ubuntu server
+## Quickstart: serve it from an Ubuntu server
 
-Keep the two stores, Qdrant and FalkorDB, on an Ubuntu server, so that every machine and every agent uses one library. No quanty program runs on the server. Your machines reach the stores through an SSH tunnel, and the converted pages through a mounted folder. This is a short version of [docs/server.md](docs/server.md). Replace `me@server` with your SSH login.
+Use a dedicated **Ubuntu 24.04 LTS x86_64** host. The pinned FalkorDB module requires libraries absent from Ubuntu 22.04; other releases and architectures have not been verified. Quanty, Qdrant and Redis run on this host, and people and agents share one library. The stores stay on loopback; Caddy serves HTTPS on ports 80 and 443.
 
-**On the server**
+This is the manual short form of [Run quanty on an Ubuntu server, no Docker](docs/server.md), which also covers the installer, backups, moving a library and unit failures. The versions and download commands were checked against vendor sources on 22 October 2026; these instructions have not been executed on Ubuntu. Run the blocks in order in the same Bash shell over SSH, so the generated secret variables remain available. Replace `quanty.example.com` with your hostname. Version variables are at the top of the blocks that install versioned tools; Redis and Caddy use their official stable apt packages.
 
-1. **Install Docker Engine and its Compose plugin.** These are the steps of [Docker's page for Ubuntu](https://docs.docker.com/engine/install/ubuntu/), for Ubuntu 22.04, 24.04 and 26.04.
+1. **Create the user and folders.** The service account's home is `/srv/quanty`; keep its model sign-ins there.
 
    ```bash
-   sudo apt update
-   sudo apt install ca-certificates curl
-   sudo install -m 0755 -d /etc/apt/keyrings
-   sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-   sudo chmod a+r /etc/apt/keyrings/docker.asc
+   QUANTY_USER=quanty
+   QUANTY_ROOT=/srv/quanty
+   sudo apt-get update
+   sudo apt-get install -y ca-certificates curl gpg lsb-release openssl git nano
+   sudo useradd --system --user-group --create-home --home-dir "$QUANTY_ROOT" --shell /bin/bash "$QUANTY_USER"
+   sudo install -d -o "$QUANTY_USER" -g "$QUANTY_USER" -m 0750 \
+     "$QUANTY_ROOT" "$QUANTY_ROOT/content" "$QUANTY_ROOT/data" \
+     "$QUANTY_ROOT/data/qdrant" "$QUANTY_ROOT/data/uploads" "$QUANTY_ROOT/data/exports"
+   sudo install -d -m 0755 /etc/quanty
+   ```
 
-   sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
-   Types: deb
-   URIs: https://download.docker.com/linux/ubuntu
-   Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
-   Components: stable
-   Architectures: $(dpkg --print-architecture)
-   Signed-By: /etc/apt/keyrings/docker.asc
+2. **Set up the databases: Qdrant.** Download the release, generate both database secrets, and write the config and unit. Both HTTP `6333` and gRPC `6334` bind to loopback and require the API key. Quanty uses gRPC; the check below uses HTTP.
+
+   ```bash
+   QDRANT_VERSION=1.20.0
+   QDRANT_API_KEY=$(openssl rand -hex 32)
+   FALKORDB_PASSWORD=$(openssl rand -hex 32)
+   curl -fL "https://github.com/qdrant/qdrant/releases/download/v${QDRANT_VERSION}/qdrant-x86_64-unknown-linux-gnu.tar.gz" -o /tmp/qdrant.tar.gz
+   tar -xzf /tmp/qdrant.tar.gz -C /tmp
+   sudo install -m 0755 /tmp/qdrant /usr/local/bin/qdrant
+   sudo install -m 0600 -o quanty -g quanty /dev/null /srv/quanty/.env
+   printf 'QDRANT_API_KEY=%s\nFALKORDB_PASSWORD=%s\n' "$QDRANT_API_KEY" "$FALKORDB_PASSWORD" | sudo tee /srv/quanty/.env >/dev/null
+   sudo chown quanty:quanty /srv/quanty/.env
+   sudo chmod 0600 /srv/quanty/.env
+   sudo tee /etc/quanty/qdrant-config.yaml >/dev/null <<'EOF'
+   storage:
+     storage_path: /srv/quanty/data/qdrant
+     snapshots_path: /srv/quanty/data/qdrant/snapshots
+   service:
+     host: 127.0.0.1
+     http_port: 6333
+     grpc_port: 6334
+   telemetry_disabled: true
    EOF
-
-   sudo apt update
-   sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-   sudo docker run hello-world
-   ```
-
-   To run `docker` without `sudo`, add yourself to the `docker` group, which the install created, then log out and in ([Docker's page](https://docs.docker.com/engine/install/linux-postinstall/)). The steps below assume you did.
-
-   ```bash
-   sudo usermod -aG docker $USER
-   ```
-
-2. **Make the folder, the key and the password.** `/srv/quanty` is the root of the library. The second command writes the key and the password to a file that only you can read. Keep a copy in your password manager, because the app asks for both.
-
-   ```bash
-   sudo mkdir -p /srv/quanty && sudo chown "$USER" /srv/quanty
-   cd /srv/quanty
-   mkdir content
-   printf 'QDRANT_API_KEY=%s\nFALKORDB_PASSWORD=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > .env
-   chmod 600 .env
-   ```
-
-3. **Write the Compose file.** Both ports bind to the loopback address of the server, and Qdrant and FalkorDB each need their key or password.
-
-   ```bash
-   cat > docker-compose.yaml <<'EOF'
-   services:
-     qdrant:
-       image: qdrant/qdrant
-       ports: ["127.0.0.1:6334:6334"]
-       environment:
-         - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY}
-       volumes: ["./data/qdrant:/qdrant/storage"]
-     falkordb:
-       image: falkordb/falkordb
-       ports: ["127.0.0.1:6379:6379"]
-       environment:
-         - REDIS_ARGS=--requirepass ${FALKORDB_PASSWORD}
-         - REDISCLI_AUTH=${FALKORDB_PASSWORD}
-       volumes: ["./data/falkordb:/var/lib/falkordb/data"]
+   sudo tee /etc/systemd/system/qdrant.service >/dev/null <<'EOF'
+   [Unit]
+   Description=Qdrant for Quanty
+   After=network-online.target
+   Wants=network-online.target
+   [Service]
+   User=quanty
+   Group=quanty
+   WorkingDirectory=/srv/quanty
+   EnvironmentFile=/srv/quanty/.env
+   ExecStartPre=/usr/bin/test -n "${QDRANT_API_KEY}"
+   ExecStart=/usr/bin/env QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY} /usr/local/bin/qdrant --config-path /etc/quanty/qdrant-config.yaml
+   Restart=on-failure
+   UMask=0077
+   [Install]
+   WantedBy=multi-user.target
    EOF
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now qdrant
+   curl --fail -H "api-key: $QDRANT_API_KEY" http://127.0.0.1:6333/collections
    ```
 
-4. **Start the stores and check them.**
+   Expect JSON with the collections; a fresh library has none. Systemd maps the key from `.env` to Qdrant's actual environment setting; YAML does not expand it.
+
+3. **Set up the databases: Redis 8 and FalkorDB.** Install Redis from its own apt repository and the checked FalkorDB module. Redis's password is rendered into its config; the writable-path override and traversal permissions let its service reach the data folder.
 
    ```bash
-   docker compose up -d
-   docker compose ps                              # both say running
-   docker compose exec falkordb redis-cli PING    # PONG: the password works
+   FALKORDB_VERSION=6.0.3
+   REDIS_MIN_MAJOR=8
+   curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+   sudo chmod 0644 /usr/share/keyrings/redis-archive-keyring.gpg
+   echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
+   sudo apt-get update
+   sudo apt-get install -y redis libgomp1 acl
+   redis_major=$(redis-server --version | sed -n 's/.*v=\([0-9]*\).*/\1/p')
+   test "$redis_major" -ge "$REDIS_MIN_MAJOR" || { echo 'Redis 8 or newer is required.' >&2; exit 1; }
+   curl -fL "https://github.com/FalkorDB/FalkorDB/releases/download/v${FALKORDB_VERSION}/falkordb-x64.so" -o /tmp/falkordb-x64.so
+   curl -fL "https://github.com/FalkorDB/FalkorDB/releases/download/v${FALKORDB_VERSION}/falkordb-x64.so.sha256" -o /tmp/falkordb-x64.so.sha256
+   (cd /tmp && sha256sum -c falkordb-x64.so.sha256)
+   sudo install -D -m 0755 /tmp/falkordb-x64.so /opt/falkordb/falkordb.so
+   sudo install -d -m 0750 -o redis -g redis /srv/quanty/data/falkordb /etc/redis/quanty
+   sudo setfacl -m u:redis:--x /srv/quanty /srv/quanty/data
+   sudo tee /etc/redis/quanty/falkordb.conf >/dev/null <<EOF
+   loadmodule /opt/falkordb/falkordb.so
+   requirepass "$FALKORDB_PASSWORD"
+   bind 127.0.0.1
+   protected-mode yes
+   dir /srv/quanty/data/falkordb
+   EOF
+   sudo chown root:redis /etc/redis/quanty/falkordb.conf
+   sudo chmod 0640 /etc/redis/quanty/falkordb.conf
+   echo 'include /etc/redis/quanty/falkordb.conf' | sudo tee -a /etc/redis/redis.conf >/dev/null
+   sudo install -d -m 0755 /etc/systemd/system/redis-server.service.d
+   printf '[Service]\nReadWritePaths=/srv/quanty/data/falkordb\n' | sudo tee /etc/systemd/system/redis-server.service.d/quanty.conf >/dev/null
+   sudo systemctl daemon-reload
+   sudo systemctl enable redis-server
+   sudo systemctl restart redis-server
+   redis-cli -a "$FALKORDB_PASSWORD" PING
+   redis-cli -a "$FALKORDB_PASSWORD" MODULE LIST
    ```
 
-**On each machine that uses the library**
+   Expect `PONG` and a module named `graph`.
 
-5. **Mount the content folder** at the same path on every machine, and before you start quanty. On a Mac, `sshfs` needs macFUSE too. On Ubuntu, install it with `sudo apt install sshfs`.
+4. **Install Poppler, Node and the two model CLIs, then sign in.** Complete Codex's device sign-in in your browser. Claude's command prints a subscription token; keep it for the `.env` step. These sign-ins belong to `quanty`.
 
    ```bash
-   sudo mkdir -p /Volumes/quanty-content && sudo chown "$USER" /Volumes/quanty-content
-   sshfs me@server:/srv/quanty/content /Volumes/quanty-content -o reconnect
+   NODE_VERSION=24.22.1
+   CODEX_VERSION=0.163.0
+   CLAUDE_VERSION=2.1.308
+   sudo apt-get install -y poppler-utils xz-utils
+   curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" -o "/tmp/node-v${NODE_VERSION}-linux-x64.tar.xz"
+   curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt" -o /tmp/SHASUMS256.txt
+   (cd /tmp && grep " node-v${NODE_VERSION}-linux-x64.tar.xz$" SHASUMS256.txt | sha256sum -c -)
+   sudo install -d -m 0755 /opt/node
+   sudo tar -xJf "/tmp/node-v${NODE_VERSION}-linux-x64.tar.xz" -C /opt/node --strip-components=1
+   sudo -iu quanty env PATH=/opt/node/bin:/usr/local/bin:/usr/bin:/bin \
+     npm install --global --prefix /srv/quanty/.npm-global "@openai/codex@$CODEX_VERSION" "@anthropic-ai/claude-code@$CLAUDE_VERSION"
+   sudo -iu quanty env PATH=/srv/quanty/.npm-global/bin:/opt/node/bin:/usr/local/bin:/usr/bin:/bin codex login --device-auth
+   sudo -iu quanty env PATH=/srv/quanty/.npm-global/bin:/opt/node/bin:/usr/local/bin:/usr/bin:/bin codex login status
+   sudo -iu quanty env PATH=/srv/quanty/.npm-global/bin:/opt/node/bin:/usr/local/bin:/usr/bin:/bin claude setup-token
    ```
 
-6. **Open the tunnel** in a terminal of its own. It prints nothing and stays open. Local ports 16334 and 16379 leave the usual 6334 and 6379 free for the Docker stores of your own machine.
+5. **Install Rust and Trunk, clone quanty, and build.** Build the UI before the server, which embeds the bundle. Repeat both builds whenever the UI changes.
 
    ```bash
-   ssh -N -L 16334:127.0.0.1:6334 -L 16379:127.0.0.1:6379 me@server
+   RUST_VERSION=1.97.1
+   TRUNK_VERSION=0.22.0
+   sudo apt-get install -y build-essential pkg-config libssl-dev
+   sudo -iu quanty env RUST_VERSION="$RUST_VERSION" TRUNK_VERSION="$TRUNK_VERSION" bash <<'BUILD'
+   set -eu
+   export PATH="/srv/quanty/.cargo/bin:/srv/quanty/.npm-global/bin:/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain "$RUST_VERSION" --profile minimal
+   rustup target add wasm32-unknown-unknown
+   cargo install --locked trunk --version "$TRUNK_VERSION"
+   git clone https://github.com/coderaidershaun/quanty.git /srv/quanty/src
+   cd /srv/quanty/src/crates/web-ui
+   trunk build --release
+   cd ../..
+   cargo build --release -p server
+   BUILD
+   sudo install -m 0755 /srv/quanty/src/target/release/quanty /usr/local/bin/quanty
    ```
 
-7. **Add the database in the app.** Start quanty, click the entry at the right end of the footer, choose **New…**, fill in the seven fields, and press **Use**. The footer then reads **Database: Server · connected**.
+6. **Write `.env` with every setting.** Keep a copy of the generated secrets in your password manager. Enter the Gemini and Jev keys, then Claude's subscription token if you will use Claude; leave that last input empty for Codex only. `ANTHROPIC_API_KEY` must stay unset. The one `.env` names the one library.
 
-   | Field                 | What to put in it                                         |
-   | --------------------- | --------------------------------------------------------- |
-   | **Name**              | Any name, such as `Server`                                |
-   | **Qdrant URL**        | `http://127.0.0.1:16334`                                  |
-   | **Qdrant API key**    | `QDRANT_API_KEY` from `/srv/quanty/.env` on the server    |
-   | **FalkorDB URL**      | `falkor://127.0.0.1:16379`                                |
-   | **FalkorDB password** | `FALKORDB_PASSWORD` from `/srv/quanty/.env` on the server |
-   | **Graph**             | `quanty`                                                  |
-   | **Content folder**    | `/Volumes/quanty-content`                                 |
+   ```bash
+   QUANTY_PASSWORD=$(openssl rand -hex 32)
+   QUANTY_MCP_TOKEN=$(openssl rand -hex 32)
+   QUANTY_SESSION_KEY=$(openssl rand -hex 32)
+   read -rsp 'Gemini API key: ' EMBEDDING_GEMINI_API_KEY; echo
+   read -rsp 'Jev API key: ' CONVERTER_JEV_API_KEY; echo
+   read -rsp 'Claude setup-token value (optional): ' CLAUDE_CODE_OAUTH_TOKEN; echo
+   unset ANTHROPIC_API_KEY
+   sudo tee /srv/quanty/.env >/dev/null <<EOF
+   QUANTY_LISTEN=127.0.0.1:8080
+   QUANTY_PASSWORD=$QUANTY_PASSWORD
+   QUANTY_MCP_TOKEN=$QUANTY_MCP_TOKEN
+   QUANTY_SESSION_KEY=$QUANTY_SESSION_KEY
+   QUANTY_UPLOAD_LIMIT_MB=1024
+   QDRANT_URL=http://127.0.0.1:6334
+   QDRANT_API_KEY=$QDRANT_API_KEY
+   FALKORDB_URL=falkor://127.0.0.1:6379
+   FALKORDB_PASSWORD=$FALKORDB_PASSWORD
+   FALKORDB_GRAPH=quanty
+   QDRANT_ITEMS_COLLECTION=items
+   QDRANT_CONCEPTS_COLLECTION=concepts
+   CONTENT_DIR=/srv/quanty/content
+   CONCEPT_CACHE_DIR=/srv/quanty/data/concept-cache
+   CONCEPT_DECISION_LOG=/srv/quanty/data/concept-decisions.jsonl
+   DATASET_DIR=/srv/quanty/datasets
+   DATASET_CACHE_DIR=/srv/quanty/data/dataset-cache
+   EMBEDDING_GEMINI_API_KEY=$EMBEDDING_GEMINI_API_KEY
+   CONVERTER_JEV_API_KEY=$CONVERTER_JEV_API_KEY
+   LLM_PROVIDER=codex
+   LLM_MODEL=gpt-6.1-sol
+   LLM_THINKING=medium
+   CLAUDE_CODE_OAUTH_TOKEN=$CLAUDE_CODE_OAUTH_TOKEN
+   EOF
+   sudo chown quanty:quanty /srv/quanty/.env
+   sudo chmod 0600 /srv/quanty/.env
+   sudo -u quanty nano /srv/quanty/.env
+   ```
 
-[docs/server.md](docs/server.md) goes on with the other way to share the content folder (SMB), backups, moving a library to a new server, and a private network instead of a tunnel.
+   Read the generated password and MCP token privately in the editor and save them. Keep `QUANTY_SESSION_KEY` through upgrades so sessions survive restarts. Saved model choices supersede the `LLM_*` defaults. The [reference](docs/reference.md) explains each setting and server flag.
+
+7. **Install and start the quanty unit.** The supplied unit runs as `quanty`, reads `/srv/quanty/.env`, supplies the model tools' `PATH`, and binds to `127.0.0.1:8080`.
+
+   ```bash
+   QUANTY_SOURCE=/srv/quanty/src
+   sudo install -m 0644 "$QUANTY_SOURCE/deploy/quanty.service" /etc/systemd/system/quanty.service
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now quanty
+   curl --fail http://127.0.0.1:8080/healthz
+   ```
+
+   Expect `ok`. This checks the HTTP process; the app's health display checks the stores and model tools.
+
+8. **Set DNS and install Caddy for HTTPS.** Create your hostname's DNS A record pointing at this server, and an AAAA record only if IPv6 works. Allow inbound ports 80 and 443. Use your real hostname below; keep `QUANTY_PASSWORD` set behind Caddy.
+
+   ```bash
+   QUANTY_DOMAIN=quanty.example.com
+   sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
+   curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+   curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+   sudo chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg /etc/apt/sources.list.d/caddy-stable.list
+   sudo apt-get update
+   sudo apt-get install -y caddy
+   sudo tee /etc/caddy/Caddyfile >/dev/null <<EOF
+   $QUANTY_DOMAIN {
+       request_body {
+           max_size 1GB
+       }
+       reverse_proxy 127.0.0.1:8080
+       encode zstd gzip
+   }
+   EOF
+   sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+   sudo systemctl enable --now caddy
+   sudo systemctl reload caddy
+   ```
+
+9. **Open the app and sign in.** On your Mac, open the hostname from the preceding step and enter the `QUANTY_PASSWORD` you saved. The signed HttpOnly session cookie lasts 30 days.
+
+   ```bash
+   QUANTY_DOMAIN=quanty.example.com
+   open "https://$QUANTY_DOMAIN"
+   ```
+
+10. **Add the MCP endpoint to Claude Code.** In a Bash shell on the machine where you use Claude Code, enter the server's MCP token. This endpoint uses a bearer token independently of the browser login. See the [MCP guide](docs/mcp.md#10-add-it-to-claude-code) for the project config and stdio option.
+
+    ```bash
+    QUANTY_DOMAIN=quanty.example.com
+    read -rsp 'Quanty MCP token: ' QUANTY_MCP_TOKEN; echo
+    claude mcp add --transport http quanty "https://$QUANTY_DOMAIN/mcp" --header "Authorization: Bearer $QUANTY_MCP_TOKEN"
+    unset QUANTY_MCP_TOKEN
+    ```
 
 ## Documentation
 
-- [docs/guide.md](docs/guide.md): choose a model and a database, where a library lives, add your first PDF, the desktop app, the command line, costs, start fresh and artifact descriptions.
-- [docs/server.md](docs/server.md): keep the stores on a server, step by step, with SMB, backups and moving a library.
+- [docs/guide.md](docs/guide.md): choose a model, understand the library, add your first PDF, use the browser app and command line, costs, start fresh and artifact descriptions.
+- [docs/server.md](docs/server.md): run quanty on an Ubuntu server, no Docker, with HTTPS, backups and moving a library.
 - [docs/mcp.md](docs/mcp.md): the MCP server for agents, its tools and how to add it to Claude Code.
-- [docs/reference.md](docs/reference.md): every command and flag in full.
+- [docs/reference.md](docs/reference.md): every command, flag and setting in full.
 - [docs/training.md](docs/training.md): train Gemma 4 on a dataset that quanty built.
 - [docs/troubleshooting.md](docs/troubleshooting.md): messages you may see, and what to do.
 - [docs/architecture.md](docs/architecture.md): the whole system on one page, and the folders of the repository.

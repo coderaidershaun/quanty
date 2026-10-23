@@ -7,7 +7,7 @@ use rag_dataset::BuildError;
 use rag_dataset::documents::SelectionError;
 use tokio::task::JoinError;
 
-use crate::jobs::{Busy, KEPT_JOBS};
+use crate::jobs::{BackgroundJob, Busy, KEPT_JOBS};
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum DatasetToolError {
@@ -55,6 +55,11 @@ pub(crate) enum DatasetToolError {
     Busy { job_id: String },
 
     #[error(
+        "background work is running: {kind} of {name}; wait for it to end before starting this build"
+    )]
+    SharedBusy { kind: &'static str, name: String },
+
+    #[error(
         "no dataset build has the job id {job_id:?}; job ids are forgotten when the server restarts, and the server keeps only its last {KEPT_JOBS} builds, so call `build_dataset` again: a dry run is free, and the answers a model already gave are kept and not paid for twice"
     )]
     UnknownJob { job_id: String },
@@ -81,6 +86,15 @@ impl From<Busy> for DatasetToolError {
     fn from(busy: Busy) -> DatasetToolError {
         DatasetToolError::Busy {
             job_id: busy.running_job.to_string(),
+        }
+    }
+}
+
+impl From<BackgroundJob> for DatasetToolError {
+    fn from(job: BackgroundJob) -> Self {
+        Self::SharedBusy {
+            kind: job.kind.label(),
+            name: job.name,
         }
     }
 }

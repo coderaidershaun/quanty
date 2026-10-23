@@ -373,7 +373,7 @@ impl UnnamedPdf<'_> {
 /// [`PdfError::Graph`] and [`PdfError::Store`] when a store cannot say what it holds.
 // SMELL: only the stores are asked, so a document whose converted folder was removed after the
 // ingest still counts as ingested, and the pictures its items name are gone. It stays because the
-// free check of the desktop app reads the same answer, and converting it again would be paid.
+// free check of the browser app reads the same answer, and converting it again would be paid.
 pub async fn items_of_ingested_document(
     document: DocId,
     stores: &Stores,

@@ -30,7 +30,7 @@ pub use chapter::{ChapterLock, try_lock_chapter};
 pub use checks::{PieceRef, ReplyFault};
 pub use image::{ConvertedImage, convert_image, convert_image_with};
 pub use page::PageError;
-pub use poppler::PopplerError;
+pub use poppler::{PopplerError, check_poppler};
 pub use summary::{
     CallTally, ConversionSummary, ModelCalls, OutOfSequence, PageProgress, PageToCheck,
     PieceCounts, RouteCounts,

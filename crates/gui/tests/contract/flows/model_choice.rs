@@ -70,4 +70,31 @@ fn each_tab_shows_and_changes_its_own_model() {
         "the save failure is clipped: {text:?} outside {clip:?}"
     );
     testkit::save_png(&mut harness, "model-choice-save-failed");
+
+    for model in ["gpt-6.1-sol", "sonnet"] {
+        let home = tempfile::tempdir().unwrap();
+        let fake = backend::fake::Fake::scene("idle", home.path())
+            .unwrap()
+            .instant();
+        let mut facts = contract::StartupFacts {
+            anthropic_api_key_set: true,
+            ..Default::default()
+        };
+        facts.model_choices.ingest.select(model);
+        let mut harness = testkit::app_on(fake, facts, Vec::new(), DEFAULT_WINDOW);
+        testkit::settle(&mut harness);
+        let health = &super::shared(&harness).health;
+        assert!(health.pending.is_none());
+        let state = health.of(contract::Service::Claude);
+        if model == "sonnet" {
+            assert!(
+                matches!(state, contract::ServiceState::Down(failure) if failure.kind == contract::FailureKind::ClaudeApiKeySet)
+            );
+        } else {
+            assert!(
+                matches!(state, contract::ServiceState::Up { .. }),
+                "{state:?}"
+            );
+        }
+    }
 }

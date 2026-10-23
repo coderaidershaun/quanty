@@ -84,7 +84,7 @@ impl<S: Services> QuantyServer<S> {
 
     /// Lists the concepts that one document discusses, as the ingest found them, the most
     /// mentioned first, each with a one-line definition. Give `page` for the concepts of one page
-    /// only, as the desktop app shows beside a page. It reads FalkorDB and costs nothing.
+    /// only, as the browser app shows beside a page. It reads FalkorDB and costs nothing.
     #[tool(annotations(read_only_hint = true))]
     async fn chapter_concepts(
         &self,

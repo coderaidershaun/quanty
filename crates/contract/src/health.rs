@@ -181,4 +181,5 @@ pub struct RunningJob {
 pub enum JobKind {
     Ingest,
     Dataset,
+    Insights,
 }

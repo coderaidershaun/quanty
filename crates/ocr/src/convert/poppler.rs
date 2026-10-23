@@ -10,6 +10,7 @@ use super::usable_box::UsableBox;
 use crate::content::PageBox;
 
 const TOOL_TIMEOUT: Duration = Duration::from_secs(60);
+const READINESS_TIMEOUT: Duration = Duration::from_secs(5);
 /// The resolution of `page.png`.
 const IMAGE_DPI: u32 = 150;
 /// The resolution a figure is drawn at. The scans' own layers are 160 and 320 pixels per inch, so
@@ -22,6 +23,15 @@ const MODEL_IMAGE_LONG_SIDE: &str = "1568";
 
 #[derive(thiserror::Error, Debug)]
 pub enum PopplerError {
+    #[error("{tool} did not report its version within {} seconds", READINESS_TIMEOUT.as_secs())]
+    ReadinessTimedOut { tool: &'static str },
+
+    #[error("{tool} could not report its version ({status})")]
+    ReadinessFailed {
+        tool: &'static str,
+        status: ExitStatus,
+    },
+
     #[error("could not start {tool}; install Poppler (for example `brew install poppler`)")]
     Start {
         tool: &'static str,
@@ -45,6 +55,28 @@ pub enum PopplerError {
 
     #[error("pdftotext printed no page size for {}", file.display())]
     NoPageSize { file: PathBuf },
+}
+
+/// Checks the installed tools without converting a PDF or creating files.
+///
+/// # Errors
+/// Returns the tool that cannot start, report its version, or finish within five seconds.
+pub async fn check_poppler() -> Result<(), PopplerError> {
+    for tool in ["pdfinfo", "pdfseparate", "pdftotext", "pdftoppm"] {
+        let mut command = child_process(tool);
+        command.arg("-v").stdin(Stdio::null()).kill_on_drop(true);
+        let output = tokio::time::timeout(READINESS_TIMEOUT, command.output())
+            .await
+            .map_err(|_| PopplerError::ReadinessTimedOut { tool })?
+            .map_err(|source| PopplerError::Start { tool, source })?;
+        if !output.status.success() {
+            return Err(PopplerError::ReadinessFailed {
+                tool,
+                status: output.status,
+            });
+        }
+    }
+    Ok(())
 }
 
 /// A relative path that starts with `-` would be read as an option, so a relative path gets `./`

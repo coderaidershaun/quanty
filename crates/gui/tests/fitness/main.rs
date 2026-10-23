@@ -1,4 +1,4 @@
-//! Rules that must hold however the desktop app changes.
+//! Rules that must hold however the browser app changes.
 #![recursion_limit = "256"]
 
 mod boundaries;

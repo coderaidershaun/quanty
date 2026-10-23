@@ -612,7 +612,7 @@ Build `crates/web-ui` with `trunk build --release` before building `cargo build 
 | --- | --- |
 | `--listen ADDR` | Overrides `QUANTY_LISTEN` |
 | `--home FOLDER` | Folder containing `.env`, `content/` and `data/`; default is the current folder |
-| `--fixture SCENE` | Built-in fake backend, no stores or models |
+| `--fixture SCENE` | Built-in fake backend, no stores or models; `/mcp` is unavailable |
 | `--fixture list` | List fixture scenes |
 | `--open` | Open the server address in the browser |
 
@@ -639,7 +639,7 @@ Settings come from the environment, then the home folder's `.env`, then defaults
 | `GET /`, `GET /index.html` | App bundle after login; HTML has `Cache-Control: no-store`; hashed JS/wasm assets are immutable |
 | `GET /login`, `POST /login` | Shared password page and sign-in; five failures within a minute cause a one-minute 429 |
 | `POST /logout` | Clear the session cookie |
-| `GET /api/facts` | Fixture, key readiness, model choices and currently running ingest/dataset jobs |
+| `GET /api/facts` | Fixture, key readiness, model choices and the currently running ingest, dataset or insights job |
 | `GET /api/ws` | Authenticated WebSocket; JSON `Command` in, `Frame` out |
 | `POST /api/upload` | PDF body, `Content-Type: application/pdf`, percent-encoded `X-File-Name`; returns `{ "upload": "<uuid>", "file_name": "…", "bytes": N }` |
 | `GET /api/download/{id}/{file}` | Download one export as an attachment, then delete it |
@@ -651,7 +651,7 @@ Except login, health and separately authorized MCP, routes require the session c
 
 The WebSocket sends one JSON command per text frame. A result is `{ "frame": "event", "payload": <Event> }`; completion is `{ "frame": "finished", "payload": <request id> }`. Request ids are scoped to a connection. On a disconnect the footer says **Reconnecting**; retry delays are 1, 2, 4, 8, then 15 seconds, and every 15 seconds thereafter. Commands issued while disconnected fail with "not connected to the server". A restored connection checks health and refreshes the catalogue.
 
-One ingest or dataset build runs at a time across all browser tabs. Closing a tab leaves that paid work on the server. A reloaded tab reports the active job and disables another start, without reattaching to its progress. Uploaded PDFs are staged under `data/uploads`, then retained under `content/_uploads` when ingestion starts. Unused upload folders older than seven days and export folders older than one day are cleared at server start. All paths are server paths; dataset outputs remain on the server.
+One ingest, dataset build or insights job runs at a time across browser tabs and the embedded MCP endpoint. Closing a tab leaves that paid work on the server. A reloaded tab reports the active job and disables another start, without reattaching to its progress. The separate `quanty-mcp` stdio process keeps its existing one-job-per-kind rule and does not share admission with HTTP. Uploaded PDFs are staged under `data/uploads`, then retained under `content/_uploads` when ingestion starts. Unused upload folders older than seven days and export folders older than one day are cleared at server start. All paths are server paths; dataset outputs remain on the server.
 
 The app has four tabs: **Ask**, **Library**, **Ingest** and **Datasets**. Ask is one screen of six panels:
 
@@ -683,7 +683,7 @@ Source in Context and Concept Graph each have **Maximise**, the corner brackets 
 
 Two other buttons put a view back and leave the panels where they are. **Reset view**, the round arrow beside Maximise in Concept Graph, undoes a drag or a zoom of the picture. **Fit to width**, the two-way arrow at the right end of the zoom bar under the page, puts the zoom back to 100%.
 
-It needs what `rag-query --answer` needs: Qdrant and FalkorDB, `EMBEDDING_GEMINI_API_KEY`, and `claude` signed in with `ANTHROPIC_API_KEY` not set. An ask makes one embedding call and one Sonnet call. In the mode **Results only** it makes the embedding call alone. When a service is not ready, the part of the window that needed it says which one and what to do.
+It needs what `rag-query --answer` needs: Qdrant and FalkorDB, `EMBEDDING_GEMINI_API_KEY`, and the selected Ask agent (`codex` or `claude`) signed in. When Ask uses Claude, `ANTHROPIC_API_KEY` must not be set. An ask makes one embedding call and one call to the selected Ask model. In the mode **Results only** it makes the embedding call alone. When a service is not ready, the part of the window that needed it says which one and what to do.
 
 Once the answer has landed, the row of tabs of the Answer panel says what the ask used, left of **Share**, such as `12k tokens, about $0.03`. In the mode **Results only** it says what the search used, such as `12 tokens, under $0.01`. In a window too narrow for it beside the tabs, it is left out.
 

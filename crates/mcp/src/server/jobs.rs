@@ -22,9 +22,10 @@ impl<S: Services> QuantyServer<S> {
     /// already ingested costs nothing, unless its insights are not saved yet: then the agent
     /// writes those alone. A book's chapter must be named `chapter-<number>-<name>.pdf`; a part
     /// of a book that is not a chapter, such as its index, takes `document_title` and can have
-    /// any file name; a paper or other PDF can have any name. One ingest runs at a time in this
-    /// server, and the same PDF must not be sent through a second server, or beside
-    /// `rag-ingest pdf`, at the same time. Sending the same PDF again goes on from where a
+    /// any file name; a paper or other PDF can have any name. Unified HTTP permits only one
+    /// background ingest, insights job or dataset build across the app and MCP. Stdio permits
+    /// one job of each kind at a time. The same PDF must not be sent through a second server,
+    /// or beside `rag-ingest pdf`, at the same time. Sending the same PDF again goes on from where a
     /// stopped run ended.
     #[tool(annotations(
         read_only_hint = false,
@@ -56,8 +57,8 @@ impl<S: Services> QuantyServer<S> {
     /// would be written, asks nothing and costs nothing: run one first. Give exactly one of
     /// `document_id`, `media` and `all: true`. A document whose insights are saved is never asked
     /// about again, and a part of a book that is not a chapter gets none. The call answers once
-    /// the work has begun, with a `job_id` for `insights_status`. One such job runs at a time in
-    /// this server; an ingest or a dataset build can run beside it.
+    /// the work has begun, with a `job_id` for `insights_status`. Unified HTTP permits only one
+    /// background job across the app and MCP. Stdio permits one job of each kind at a time.
     #[tool(annotations(
         read_only_hint = false,
         destructive_hint = false,
@@ -89,8 +90,9 @@ impl<S: Services> QuantyServer<S> {
     /// which spends its subscription usage and can take hours. A dry run exports, checks and
     /// plans, asks no model and costs nothing, and its summary says what the full build would
     /// ask: run one first. The call answers when the build has begun, with a `job_id` for
-    /// `dataset_status`. One build runs at a time in this server; an ingest can run beside it. A
-    /// build with the name of an earlier one replaces that dataset's files, and the answers a
+    /// `dataset_status`. Unified HTTP permits only one background job across the app and MCP.
+    /// Stdio permits one job of each kind at a time. A build with the name of an earlier one
+    /// replaces that dataset's files, and the answers a
     /// model already gave are kept and not paid for twice.
     #[tool(annotations(
         read_only_hint = false,

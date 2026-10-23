@@ -1,8 +1,9 @@
 //! Paid work belongs to the server so closing its browser cannot abandon it.
 
 use backend::{Handler, Runtime};
-use contract::{Command, Failure, Frame, JobKind, RequestId, RunningJob};
-use std::sync::{Arc, Mutex, OnceLock};
+use contract::{Command, Failure, Frame, RequestId, RunningJob};
+use mcp::{BackgroundJobs, BackgroundReservation, JobKind};
+use std::sync::{Arc, Mutex};
 use tokio::sync::{Notify, mpsc};
 use uuid::Uuid;
 
@@ -25,52 +26,59 @@ struct Active {
     id: Uuid,
     owner: Uuid,
     request: RequestId,
-    job: RunningJob,
     cancel: mpsc::UnboundedSender<()>,
 }
 
-type Slot = Arc<Mutex<Option<Active>>>;
-static GLOBAL: OnceLock<Slot> = OnceLock::new();
-
 #[derive(Clone)]
 pub(crate) struct Guard {
-    slot: Slot,
+    jobs: BackgroundJobs,
+    active: Arc<Mutex<Option<Active>>>,
 }
 
-impl Default for Guard {
-    fn default() -> Self {
+impl Guard {
+    pub(crate) fn new(jobs: BackgroundJobs) -> Self {
         Self {
-            slot: GLOBAL.get_or_init(|| Arc::new(Mutex::new(None))).clone(),
+            jobs,
+            active: Arc::new(Mutex::new(None)),
         }
     }
 }
 
-struct Reservation {
+struct OwnedReservation {
     id: Uuid,
-    slot: Slot,
+    active: Arc<Mutex<Option<Active>>>,
+    _admission: BackgroundReservation,
 }
-impl Drop for Reservation {
+impl Drop for OwnedReservation {
     fn drop(&mut self) {
-        let mut slot = self.slot.lock().unwrap_or_else(|e| e.into_inner());
-        if slot.as_ref().is_some_and(|active| active.id == self.id) {
-            *slot = None;
+        let mut active = self.active.lock().unwrap_or_else(|e| e.into_inner());
+        if active.as_ref().is_some_and(|job| job.id == self.id) {
+            *active = None;
         }
+        drop(active);
     }
 }
 
 impl Guard {
     pub(crate) fn running(&self) -> Vec<RunningJob> {
-        self.slot
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .as_ref()
-            .map(|active| vec![active.job.clone()])
+        self.jobs
+            .running()
+            .map(|job| {
+                vec![RunningJob {
+                    kind: match job.kind {
+                        JobKind::Ingest => contract::JobKind::Ingest,
+                        JobKind::Dataset => contract::JobKind::Dataset,
+                        JobKind::Insights => contract::JobKind::Insights,
+                    },
+                    name: job.name,
+                }]
+            })
             .unwrap_or_default()
     }
 
     pub(crate) fn cancel(&self, owner: &Owner, request: RequestId) -> bool {
-        let slot = self.slot.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(active) = slot
+        let active = self.active.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(active) = active
             .as_ref()
             .filter(|active| active.owner == owner.id && active.request == request)
         {
@@ -88,40 +96,35 @@ impl Guard {
         command: Command,
         handler: Arc<H>,
     ) -> Result<(), Failure> {
-        let job = match &command {
-            Command::Ingest { ingest, .. } => RunningJob {
-                kind: JobKind::Ingest,
-                name: ingest.file_name.clone(),
-            },
-            Command::BuildDataset { build, .. } => RunningJob {
-                kind: JobKind::Dataset,
-                name: build.name.clone(),
-            },
+        let (kind, name) = match &command {
+            Command::Ingest { ingest, .. } => (JobKind::Ingest, ingest.file_name.clone()),
+            Command::BuildDataset { build, .. } => (JobKind::Dataset, build.name.clone()),
             _ => unreachable!("only paid commands take the job slot"),
         };
         let request = command.request();
         let id = Uuid::new_v4();
         let (cancel, mut cancelled) = mpsc::unbounded_channel();
+        let admission = self.jobs.reserve(kind, name).map_err(|running| {
+            Failure::internal("an ingest is running").with_hint(format!(
+                "Background work is already running: {} of {}. Wait for it to end, then reload this page.",
+                running.kind.label(),
+                running.name
+            ))
+        })?;
         {
-            let mut slot = self.slot.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(active) = slot.as_ref() {
-                return Err(Failure::internal("an ingest is running").with_hint(format!(
-                    "An ingest of {} is already running from another window. Wait for it to end.",
-                    active.job.name
-                )));
-            }
-            *slot = Some(Active {
+            let mut active = self.active.lock().unwrap_or_else(|e| e.into_inner());
+            *active = Some(Active {
                 id,
                 owner: owner.id,
                 request,
-                job,
                 cancel,
             });
         }
         let frames = owner.frames;
-        let reservation = Reservation {
+        let reservation = OwnedReservation {
             id,
-            slot: self.slot.clone(),
+            active: self.active.clone(),
+            _admission: admission,
         };
         tokio::spawn(async move {
             let wake = Arc::new(Notify::new());

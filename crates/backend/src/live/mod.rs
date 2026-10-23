@@ -8,6 +8,7 @@ mod convert;
 mod datasets;
 mod dispatch;
 mod failure;
+mod health;
 pub mod ingest;
 mod library;
 pub mod query;

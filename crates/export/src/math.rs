@@ -17,9 +17,8 @@ use ratex_types::math_style::MathStyle;
 const EM_PX: u16 = 96;
 /// The size a formula is tried at once more when the first picture would be too large.
 const SMALLER_EM_PX: u16 = 48;
-// SMELL: the desktop app typesets the formulas of its window in white ink with these same limits
-// and layout options. They are repeated here so that the window's code stays as it is, and a
-// change to one must be made in the other.
+// SMELL: the browser app repeats these formula limits and layout options for white ink.
+// A change to either copy must be made in both.
 const MAX_LATEX_BYTES: usize = 4096;
 const MAX_PICTURE_SIDE: u64 = 8192;
 const SOFT_HYPHEN: char = '\u{ad}';

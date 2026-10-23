@@ -222,7 +222,7 @@ fn capitalise(word: &str) -> String {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct Document {
     pub id: DocId,
-    /// The title the document is listed by. A chapter has its stored title, such as "<book>,
+    /// The title the document is listed by. A chapter has its stored title, such as "`<book>`,
     /// chapter 3: Greeks". A document with no chapter has its stored title without the media's
     /// title and the comma after it, so a part of a book reads "Index". The stores and the ask
     /// results keep the whole stored title.

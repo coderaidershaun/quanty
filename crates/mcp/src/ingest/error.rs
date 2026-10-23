@@ -9,7 +9,7 @@ use rag_core::{EmbedError, EmptyTag, StoreError, UnknownCategory};
 use rag_ingestion::{NamePdfError, PdfError, RelabelError};
 use tokio::task::JoinError;
 
-use crate::jobs::{Busy, KEPT_JOBS};
+use crate::jobs::{BackgroundJob, Busy, KEPT_JOBS};
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum PdfIngestError {
@@ -103,6 +103,11 @@ pub(crate) enum PdfIngestError {
     Busy { job_id: String },
 
     #[error(
+        "background work is running: {kind} of {name}; wait for it to end before sending this PDF"
+    )]
+    SharedBusy { kind: &'static str, name: String },
+
+    #[error(
         "no ingest job has the id {job_id:?}; job ids are forgotten when the server restarts, and the server keeps only its last {KEPT_JOBS} jobs, so send the PDF again: a PDF that is ingested is not ingested twice"
     )]
     UnknownJob { job_id: String },
@@ -155,6 +160,15 @@ impl From<Busy> for PdfIngestError {
     fn from(busy: Busy) -> PdfIngestError {
         PdfIngestError::Busy {
             job_id: busy.running_job.to_string(),
+        }
+    }
+}
+
+impl From<BackgroundJob> for PdfIngestError {
+    fn from(job: BackgroundJob) -> Self {
+        Self::SharedBusy {
+            kind: job.kind.label(),
+            name: job.name,
         }
     }
 }

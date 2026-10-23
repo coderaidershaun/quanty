@@ -17,7 +17,7 @@ use serde::Deserialize;
 use tokio::task::JoinError;
 
 use crate::args::non_blank;
-use crate::jobs::{Jobs, StopState};
+use crate::jobs::{BackgroundJobs, BackgroundReservation, JobKind, Jobs, StopState};
 use crate::library::{LibraryError, parse_document_id};
 use crate::services::Services;
 pub(crate) use error::InsightsToolError;
@@ -87,14 +87,20 @@ pub(crate) struct Insights<S> {
     config: Config,
     services: Arc<S>,
     jobs: Jobs<InsightsReport>,
+    background_jobs: Option<BackgroundJobs>,
 }
 
 impl<S: Services> Insights<S> {
-    pub(crate) fn new(config: Config, services: Arc<S>) -> Insights<S> {
+    pub(crate) fn new(
+        config: Config,
+        services: Arc<S>,
+        background_jobs: Option<BackgroundJobs>,
+    ) -> Insights<S> {
         Insights {
             config,
             services,
             jobs: Jobs::default(),
+            background_jobs,
         }
     }
 
@@ -111,6 +117,18 @@ impl<S: Services> Insights<S> {
         args: WriteInsightsArgs,
         error_text: fn(InsightsToolError) -> String,
     ) -> Result<InsightsReport, InsightsToolError> {
+        let reservation: Option<BackgroundReservation> = self
+            .background_jobs
+            .as_ref()
+            .map(|jobs| {
+                let name = args
+                    .document_id
+                    .clone()
+                    .or_else(|| args.media.clone())
+                    .unwrap_or_else(|| "all documents".to_owned());
+                jobs.reserve(JobKind::Insights, name)
+            })
+            .transpose()?;
         let chosen = args.chosen()?;
         let dry_run = args.dry_run == Some(true);
         let graph = FalkorGraph::connect(&self.config).await?;
@@ -139,6 +157,7 @@ impl<S: Services> Insights<S> {
                 Ok(()) => report.finish(),
                 Err(panicked) => report.fail(error_text(InsightsToolError::Stopped(panicked))),
             },
+            reservation,
         );
         let mut watcher = started.watcher;
         let report = watcher

@@ -1,5 +1,5 @@
 //! The insights, takeaways and cheat sheet of one document as a document that goes in a file, so
-//! the desktop app and the MCP server write the same file from the same values.
+//! the browser app and the MCP server write the same file from the same values.
 
 use crate::{Block, Document};
 

@@ -128,7 +128,7 @@ pub fn author_list<S: AsRef<str>>(texts: impl IntoIterator<Item = S>) -> Vec<Str
 
 /// Two titles of media, or two names of authors, are the same whatever their capitals and the
 /// space at their ends.
-// SMELL: the desktop app keeps its own copy of this rule, and its contract may not name this
+// SMELL: the browser app keeps its own copy of this rule, and its contract may not name this
 // crate, so a change to one must be made in both.
 pub fn is_same_name(one: &str, other: &str) -> bool {
     one.trim().to_lowercase() == other.trim().to_lowercase()

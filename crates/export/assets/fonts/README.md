@@ -1,7 +1,7 @@
 # Fonts
 
 The files here are built into the `export` crate with `include_bytes!`. A PDF is printed with them,
-and the desktop app draws its reading text with the same files, so the program holds one copy.
+and the browser app draws its reading text with the same files, so the program holds one copy.
 Each is pinned by the commit of its source and by its SHA-256. A change of either is a deliberate
 update, not a drive-by.
 

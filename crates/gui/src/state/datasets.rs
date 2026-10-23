@@ -38,7 +38,7 @@ impl DatasetJob {
 
 impl Shared {
     /// A build reads the converted documents that a delete removes, so none starts while a delete
-    /// is on its way. An ingest may run beside it.
+    /// is on its way.
     pub fn can_start_dataset_build(&self) -> bool {
         !self.datasets.is_running()
             && !self.library.is_deleting()

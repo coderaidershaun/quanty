@@ -31,8 +31,8 @@ impl Health {
             facts,
             ..Health::default()
         };
-        // SMELL: Startup health assumes Claude even when Codex is selected; model changes do not refresh it.
-        if health.facts.anthropic_api_key_set {
+        // SMELL: Model changes do not refresh the Ingest agent health.
+        if health.has_conflicting_agent_key() {
             health.states.insert(
                 Service::Claude,
                 ServiceState::Down(Failure::new(
@@ -69,12 +69,15 @@ impl Health {
         }
     }
 
-    /// While `ANTHROPIC_API_KEY` is set, nothing changes the state of Claude.
     fn set(&mut self, service: Service, state: ServiceState) {
-        if service == Service::Claude && self.facts.anthropic_api_key_set {
+        if service == Service::Claude && self.has_conflicting_agent_key() {
             return;
         }
         self.states.insert(service, state);
+    }
+
+    fn has_conflicting_agent_key(&self) -> bool {
+        self.facts.anthropic_api_key_set && self.facts.model_choices.ingest.provider == "claude"
     }
 
     fn is_checking(&self) -> bool {

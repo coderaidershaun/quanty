@@ -4,7 +4,7 @@
 
 use std::collections::VecDeque;
 use std::future::Future;
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -37,6 +37,79 @@ pub(crate) struct Busy {
     pub(crate) running_job: Uuid,
 }
 
+/// The background work occupying the one slot of an HTTP server.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BackgroundJob {
+    pub kind: JobKind,
+    pub name: String,
+    id: Uuid,
+}
+
+/// Admission shared by the browser and the embedded MCP server.
+#[derive(Clone, Default)]
+pub struct BackgroundJobs(Arc<Mutex<Option<BackgroundJob>>>);
+
+impl BackgroundJobs {
+    /// A new slot for one HTTP server.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The process slot used by browser routers that share a process.
+    pub fn global() -> Self {
+        static GLOBAL: OnceLock<BackgroundJobs> = OnceLock::new();
+        GLOBAL.get_or_init(Self::new).clone()
+    }
+
+    /// The job still doing work, including work whose caller disconnected.
+    pub fn running(&self) -> Option<BackgroundJob> {
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Holds admission until the returned reservation is dropped.
+    ///
+    /// # Errors
+    /// Returns the running job when the slot is occupied.
+    pub fn reserve(
+        &self,
+        kind: JobKind,
+        name: impl Into<String>,
+    ) -> Result<BackgroundReservation, BackgroundJob> {
+        let mut slot = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(running) = slot.as_ref() {
+            return Err(running.clone());
+        }
+        let id = Uuid::new_v4();
+        *slot = Some(BackgroundJob {
+            kind,
+            name: name.into(),
+            id,
+        });
+        Ok(BackgroundReservation {
+            jobs: self.clone(),
+            id,
+        })
+    }
+}
+
+/// Ownership of one admitted background job.
+pub struct BackgroundReservation {
+    jobs: BackgroundJobs,
+    id: Uuid,
+}
+
+impl Drop for BackgroundReservation {
+    fn drop(&mut self) {
+        let mut slot = self.jobs.0.lock().unwrap_or_else(PoisonError::into_inner);
+        if slot.as_ref().is_some_and(|running| running.id == self.id) {
+            *slot = None;
+        }
+    }
+}
+
 /// What an agent gives `stop_job`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct StopJobArgs {
@@ -47,7 +120,7 @@ pub(crate) struct StopJobArgs {
 /// The kind of work a job does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum JobKind {
+pub enum JobKind {
     /// A job that `ingest_pdf` started.
     Ingest,
     /// A job that `write_insights` started.
@@ -57,6 +130,15 @@ pub(crate) enum JobKind {
 }
 
 impl JobKind {
+    /// The short name shown for a running job.
+    pub fn label(self) -> &'static str {
+        match self {
+            JobKind::Ingest => "ingest",
+            JobKind::Insights => "insights",
+            JobKind::Dataset => "dataset build",
+        }
+    }
+
     /// The tool that tells how a job of this kind goes or how it ended.
     fn status_tool(self) -> &'static str {
         match self {
@@ -186,6 +268,7 @@ impl<R: JobReport> Jobs<R> {
         report: watch::Sender<R>,
         work: impl Future<Output = Result<T, E>> + Send + 'static,
         end: impl FnOnce(&mut R, Result<T, E>) + Send + 'static,
+        reservation: Option<BackgroundReservation>,
     ) where
         T: Send + 'static,
         E: From<JoinError> + Send + 'static,
@@ -204,12 +287,13 @@ impl<R: JobReport> Jobs<R> {
                     report.send_modify(|report| end(report, ended));
                 }
             }
+            drop(reservation);
         });
     }
 
     /// Aborts the job with this id when it is running, and answers once its report says it is not.
-    /// `None` when no job has the id. Aborting is what the desktop app's Stop does: the work ends
-    /// at its next wait, and every process it started goes with it. A job that ended by itself
+    /// `None` when no job has the id. Aborting ends the work at its next wait, and every process
+    /// it started goes with it. A job that ended by itself
     /// just before the abort could reach it answers `Ended`, as its report says.
     pub(crate) async fn stop(&self, job_id: &str) -> Option<StopState> {
         let wanted = Uuid::parse_str(job_id.trim()).ok()?;
@@ -240,4 +324,177 @@ impl<R: JobReport> Jobs<R> {
 fn is_running<R: JobReport>(watcher: &watch::Receiver<R>) -> bool {
     // `has_changed` fails only when every writer of the report is gone.
     watcher.borrow().is_running() && watcher.has_changed().is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::future::pending;
+    use std::time::Duration;
+    use tokio::sync::oneshot;
+
+    #[derive(Clone)]
+    struct Report {
+        running: bool,
+        stopped: bool,
+        admission: BackgroundJobs,
+    }
+
+    impl JobReport for Report {
+        fn is_running(&self) -> bool {
+            self.running
+        }
+        fn stopped(&mut self) {
+            assert!(
+                self.admission.running().is_some(),
+                "admission ended before the stopped report"
+            );
+            self.running = false;
+            self.stopped = true;
+        }
+        fn is_stopped(&self) -> bool {
+            self.stopped
+        }
+    }
+
+    fn report(admission: BackgroundJobs) -> Report {
+        Report {
+            running: true,
+            stopped: false,
+            admission,
+        }
+    }
+
+    async fn released(jobs: &BackgroundJobs) {
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while jobs.running().is_some() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+    }
+
+    async fn settled(watcher: &mut watch::Receiver<Report>, admission: &BackgroundJobs) {
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            watcher.wait_for(|report| !report.running),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        released(admission).await;
+    }
+
+    struct DropProbe(BackgroundJobs);
+
+    impl Drop for DropProbe {
+        fn drop(&mut self) {
+            assert!(
+                self.0.running().is_some(),
+                "admission ended before the work was dropped"
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn background_work_holds_admission_until_it_is_settled() {
+        let admission = BackgroundJobs::new();
+        let jobs = Jobs::<Report>::default();
+        let second_kind = Jobs::<Report>::default();
+        let first = jobs.start(|_| report(BackgroundJobs::new())).unwrap();
+        let second = second_kind
+            .start(|_| report(BackgroundJobs::new()))
+            .unwrap();
+        assert_ne!(
+            first.id, second.id,
+            "standalone lists admit different kinds together"
+        );
+        drop(first);
+        drop(second);
+
+        let reservation = admission.reserve(JobKind::Ingest, "normal").unwrap();
+        let started = jobs.start(|_| report(admission.clone())).unwrap();
+        let mut watcher = started.watcher.clone();
+        let (release, held) = oneshot::channel();
+        let settling = admission.clone();
+        jobs.spawn(
+            started.id,
+            started.report.clone(),
+            async move {
+                held.await.unwrap();
+                Ok::<(), JoinError>(())
+            },
+            move |report, _| {
+                assert!(
+                    settling.running().is_some(),
+                    "admission ended before the final report"
+                );
+                report.running = false;
+            },
+            Some(reservation),
+        );
+        drop(started);
+        assert_eq!(admission.running().unwrap().name, "normal");
+        assert!(admission.reserve(JobKind::Dataset, "next").is_err());
+        release.send(()).unwrap();
+        settled(&mut watcher, &admission).await;
+
+        let reservation = admission.reserve(JobKind::Insights, "panic").unwrap();
+        let started = jobs.start(|_| report(admission.clone())).unwrap();
+        let mut watcher = started.watcher.clone();
+        let (release, held) = oneshot::channel();
+        let settling = admission.clone();
+        jobs.spawn::<(), JoinError>(
+            started.id,
+            started.report.clone(),
+            async move {
+                held.await.unwrap();
+                panic!("controlled work panic")
+            },
+            move |report, result| {
+                assert!(
+                    settling.running().is_some(),
+                    "admission ended before the failed report"
+                );
+                assert!(result.is_err());
+                report.running = false;
+            },
+            Some(reservation),
+        );
+        drop(started);
+        assert_eq!(admission.running().unwrap().kind, JobKind::Insights);
+        release.send(()).unwrap();
+        settled(&mut watcher, &admission).await;
+
+        let reservation = admission.reserve(JobKind::Dataset, "stopped").unwrap();
+        let started = jobs.start(|_| report(admission.clone())).unwrap();
+        let job_id = started.id.to_string();
+        let (entered, reached) = oneshot::channel();
+        let probe = DropProbe(admission.clone());
+        jobs.spawn(
+            started.id,
+            started.report.clone(),
+            async move {
+                let _probe = probe;
+                entered.send(()).unwrap();
+                pending::<Result<(), JoinError>>().await
+            },
+            |report, _| report.running = false,
+            Some(reservation),
+        );
+        drop(started);
+        tokio::time::timeout(Duration::from_secs(5), reached)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(admission.running().unwrap().name, "stopped");
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(5), jobs.stop(&job_id))
+                .await
+                .unwrap(),
+            Some(StopState::Stopped)
+        );
+        released(&admission).await;
+    }
 }

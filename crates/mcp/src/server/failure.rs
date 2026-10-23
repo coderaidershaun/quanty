@@ -163,6 +163,7 @@ impl ToolError {
                 | DatasetToolError::UnknownHoldout { .. }
                 | DatasetToolError::NothingToExport
                 | DatasetToolError::Busy { .. }
+                | DatasetToolError::SharedBusy { .. }
                 | DatasetToolError::UnknownJob { .. }
                 | DatasetToolError::Lost
                 | DatasetToolError::Failed(_)
@@ -185,6 +186,7 @@ fn is_service_failure_of_insights(error: &InsightsToolError) -> bool {
         InsightsToolError::Unreadable(_)
         | InsightsToolError::Choice
         | InsightsToolError::Busy { .. }
+        | InsightsToolError::SharedBusy { .. }
         | InsightsToolError::UnknownJob { .. }
         | InsightsToolError::Lost
         | InsightsToolError::Failed(_)

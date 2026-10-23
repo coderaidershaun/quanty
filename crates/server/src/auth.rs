@@ -109,7 +109,7 @@ impl Auth {
     }
 }
 
-pub(crate) fn matches_secret(given: &str, expected: &str) -> bool {
+fn matches_secret(given: &str, expected: &str) -> bool {
     bool::from(Sha256::digest(given.as_bytes()).ct_eq(&Sha256::digest(expected.as_bytes())))
 }
 fn now() -> u64 {

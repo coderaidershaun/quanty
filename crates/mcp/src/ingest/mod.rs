@@ -13,7 +13,7 @@ use rag_core::Config;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::jobs::{Jobs, StopState};
+use crate::jobs::{BackgroundJobs, BackgroundReservation, JobKind, Jobs, StopState};
 use crate::services::Services;
 pub(crate) use error::PdfIngestError;
 pub(crate) use pdf::base64_len;
@@ -79,15 +79,22 @@ pub(crate) struct Ingest<S> {
     services: Arc<S>,
     max_pdf_bytes: u64,
     jobs: Jobs<IngestReport>,
+    background_jobs: Option<BackgroundJobs>,
 }
 
 impl<S: Services> Ingest<S> {
-    pub(crate) fn new(config: Config, services: Arc<S>, max_pdf_bytes: u64) -> Ingest<S> {
+    pub(crate) fn new(
+        config: Config,
+        services: Arc<S>,
+        max_pdf_bytes: u64,
+        background_jobs: Option<BackgroundJobs>,
+    ) -> Ingest<S> {
         Ingest {
             config,
             services,
             max_pdf_bytes,
             jobs: Jobs::default(),
+            background_jobs,
         }
     }
 
@@ -103,6 +110,24 @@ impl<S: Services> Ingest<S> {
         args: IngestPdfArgs,
         error_text: fn(PdfIngestError) -> String,
     ) -> Result<IngestReport, PdfIngestError> {
+        let reservation: Option<BackgroundReservation> = self
+            .background_jobs
+            .as_ref()
+            .map(|jobs| {
+                let name = args
+                    .file_name
+                    .clone()
+                    .or_else(|| {
+                        args.path.as_ref().and_then(|path| {
+                            std::path::Path::new(path)
+                                .file_name()
+                                .map(|name| name.to_string_lossy().into_owned())
+                        })
+                    })
+                    .unwrap_or_else(|| args.media.clone());
+                jobs.reserve(JobKind::Ingest, name)
+            })
+            .transpose()?;
         let config = self.config.clone();
         let max_pdf_bytes = self.max_pdf_bytes;
         // The check decodes a PDF that was sent as base64, which can be megabytes of text, so it
@@ -130,6 +155,7 @@ impl<S: Services> Ingest<S> {
                 Ok(outcome) => report.finish(&outcome),
                 Err(error) => report.fail(format!("{} {GO_ON}", error_text(error))),
             },
+            reservation,
         );
         let mut watcher = started.watcher;
         let report = watcher

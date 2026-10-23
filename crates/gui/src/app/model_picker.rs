@@ -10,12 +10,12 @@ pub(super) struct ModelPicker {
     choices: WorkChoices,
 }
 impl ModelPicker {
-    pub fn new(facts: &StartupFacts) -> Self {
+    pub(super) fn new(facts: &StartupFacts) -> Self {
         Self {
             choices: facts.model_choices.clone(),
         }
     }
-    pub fn draw(
+    pub(super) fn draw(
         &mut self,
         ui: &mut egui::Ui,
         bar: egui::Rect,

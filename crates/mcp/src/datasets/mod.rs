@@ -14,7 +14,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::args::non_blank;
-use crate::jobs::{Jobs, StopState};
+use crate::jobs::{BackgroundJobs, BackgroundReservation, JobKind, Jobs, StopState};
 use crate::services::Services;
 pub(crate) use error::DatasetToolError;
 pub(crate) use report::DatasetReport;
@@ -113,14 +113,20 @@ pub(crate) struct Datasets<S> {
     config: Config,
     services: Arc<S>,
     jobs: Jobs<DatasetReport>,
+    background_jobs: Option<BackgroundJobs>,
 }
 
 impl<S: Services> Datasets<S> {
-    pub(crate) fn new(config: Config, services: Arc<S>) -> Datasets<S> {
+    pub(crate) fn new(
+        config: Config,
+        services: Arc<S>,
+        background_jobs: Option<BackgroundJobs>,
+    ) -> Datasets<S> {
         Datasets {
             config,
             services,
             jobs: Jobs::default(),
+            background_jobs,
         }
     }
 
@@ -136,6 +142,11 @@ impl<S: Services> Datasets<S> {
         args: BuildDatasetArgs,
         error_text: fn(DatasetToolError) -> String,
     ) -> Result<DatasetReport, DatasetToolError> {
+        let reservation: Option<BackgroundReservation> = self
+            .background_jobs
+            .as_ref()
+            .map(|jobs| jobs.reserve(JobKind::Dataset, args.name.clone()))
+            .transpose()?;
         let options = args.options(&self.config)?;
         let graph = FalkorGraph::connect(&self.config).await?;
         let llm = self.services.llm(WorkKind::Datasets);
@@ -162,6 +173,7 @@ impl<S: Services> Datasets<S> {
                 Ok(built) => report.finish(&built),
                 Err(error) => report.fail(error_text(error)),
             },
+            reservation,
         );
         let mut watcher = started.watcher;
         let report = watcher

@@ -7,7 +7,7 @@ use backend::{
     live::{LiveContext, RealServices},
 };
 use clap::Parser;
-use mcp::{PaidServices, QuantyServer};
+use mcp::{BackgroundJobs, PaidServices, QuantyServer};
 use rag_core::Config;
 use server::{Settings, launch};
 use std::{net::SocketAddr, path::PathBuf};
@@ -70,20 +70,21 @@ fn main() -> anyhow::Result<()> {
     runtime.block_on(async move {
         match args.fixture {
             Some(scene) => {
+                let background_jobs = BackgroundJobs::new();
                 let fake = Fake::scene(&scene, &home).context("could not start the fixture")?;
                 let samples =
                     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../samples/content");
-                let config = Config::from_sources(|_| None, None)
-                    .context("could not load fixture defaults")?;
                 let options = server::ServerOptions {
                     settings,
                     content: samples,
                     fixture: Some(scene),
-                    mcp: mcp::http_service(QuantyServer::new(config, PaidServices::default())),
+                    mcp: axum::Router::new(),
+                    background_jobs,
                 };
                 serve(fake, options, args.open).await
             }
             None => {
+                let background_jobs = BackgroundJobs::new();
                 let config = Config::load().context("could not read the library settings")?;
                 let content = config.content_folder.clone();
                 let live =
@@ -92,7 +93,12 @@ fn main() -> anyhow::Result<()> {
                     settings,
                     content,
                     fixture: None,
-                    mcp: mcp::http_service(QuantyServer::new(config, PaidServices::default())),
+                    mcp: mcp::http_service(QuantyServer::with_background_jobs(
+                        config,
+                        PaidServices::default(),
+                        background_jobs.clone(),
+                    )),
+                    background_jobs,
                 };
                 serve(live, options, args.open).await
             }

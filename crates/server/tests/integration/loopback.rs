@@ -34,6 +34,7 @@ async fn listen_flags_override_environment_and_home_settings_and_loopback_needs_
     let mut child = Command::new(env!("CARGO_BIN_EXE_quanty"))
         .env_clear()
         .env("QUANTY_LISTEN", "0.0.0.0:56789")
+        .env("QUANTY_MCP_TOKEN", "fixture-token")
         .arg("--home")
         .arg(home.path())
         .args(["--fixture", "black-scholes", "--listen", "127.0.0.1:0"])
@@ -70,7 +71,70 @@ async fn listen_flags_override_environment_and_home_settings_and_loopback_needs_
             .status(),
         200
     );
+    assert_eq!(
+        client
+            .post(format!("{url}/mcp"))
+            .bearer_auth("fixture-token")
+            .header("accept", "application/json, text/event-stream")
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "fixture-isolation", "version": "1"}
+                }
+            }))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
     assert!(home.path().join("data/uploads").exists());
+    child.kill().await.unwrap();
+    child.wait().await.unwrap();
+    std::fs::write(
+        home.path().join(".env"),
+        "QUANTY_PASSWORD=fixture-password\n",
+    )
+    .unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_quanty"))
+        .env_clear()
+        .env("QUANTY_MCP_TOKEN", "fixture-token")
+        .arg("--home")
+        .arg(home.path())
+        .args(["--fixture", "black-scholes", "--listen", "127.0.0.1:0"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let line = tokio::time::timeout(Duration::from_secs(20), lines.next_line())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let url = line.strip_prefix("quanty is listening on ").unwrap();
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap();
+    for method in [
+        reqwest::Method::GET,
+        reqwest::Method::POST,
+        reqwest::Method::DELETE,
+    ] {
+        for token in [None, Some("wrong-token"), Some("fixture-token")] {
+            let mut request = client.request(method.clone(), format!("{url}/mcp"));
+            if let Some(token) = token {
+                request = request.bearer_auth(token);
+            }
+            assert_eq!(request.send().await.unwrap().status(), 404);
+        }
+    }
     child.kill().await.unwrap();
     child.wait().await.unwrap();
     let listing = Command::new(env!("CARGO_BIN_EXE_quanty"))

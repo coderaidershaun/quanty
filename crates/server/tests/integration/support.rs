@@ -3,6 +3,12 @@
 use backend::fake::Fake;
 use contract::{Command, Frame};
 use futures_util::{SinkExt, StreamExt};
+use mcp::Services;
+use ocr::{ChapterJob, ConversionSummary, ConvertError};
+use rag_core::{
+    AgentCli, Config, EmbedError, GeminiEmbedder, ModelSettings, SettingsError, WorkKind,
+};
+use rag_ingestion::KeyStates;
 use server::{Settings, router};
 use std::{path::PathBuf, time::Duration};
 use tokio_tungstenite::{
@@ -12,11 +18,40 @@ use tokio_tungstenite::{
 
 pub type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
+pub struct NoPaidServices;
+
+impl Services for NoPaidServices {
+    type Embedder = GeminiEmbedder;
+    type Llm = AgentCli;
+
+    fn embedder(&self, _: &Config) -> Result<Self::Embedder, EmbedError> {
+        panic!("test must not create an embedder")
+    }
+
+    fn llm(&self, _: WorkKind) -> Self::Llm {
+        panic!("test must not create a model client")
+    }
+
+    async fn convert(&self, _: &ChapterJob, _: &Config) -> Result<ConversionSummary, ConvertError> {
+        panic!("test must not convert a PDF")
+    }
+
+    async fn check_keys(&self, _: &Config) -> KeyStates {
+        panic!("test must not check provider keys")
+    }
+
+    fn model_choice(&self, _: WorkKind) -> Result<ModelSettings, SettingsError> {
+        panic!("test must not load a model choice")
+    }
+}
+
 pub struct TestServer {
     pub home: tempfile::TempDir,
     pub address: std::net::SocketAddr,
     settings: Settings,
     content: PathBuf,
+    background_jobs: mcp::BackgroundJobs,
+    mcp_config: Config,
     task: tokio::task::JoinHandle<()>,
 }
 
@@ -63,7 +98,13 @@ impl TestServer {
         self.settings.session_key = Settings::from_sources(self.home.path(), |_| None)
             .unwrap()
             .session_key;
-        let (address, task) = start(&self.settings, &self.content).await;
+        let (address, task) = start(
+            &self.settings,
+            &self.content,
+            self.background_jobs.clone(),
+            self.mcp_config.clone(),
+        )
+        .await;
         self.address = address;
         self.task = task;
     }
@@ -82,18 +123,55 @@ pub async fn configured(
     password: Option<&str>,
     configure: impl FnOnce(&mut Settings, &mut PathBuf),
 ) -> TestServer {
+    configured_with_mcp(password, configure, mcp::BackgroundJobs::global(), None).await
+}
+
+pub fn closed_mcp_config(home: &std::path::Path) -> Config {
+    Config {
+        qdrant_url: "http://127.0.0.1:1".to_owned(),
+        qdrant_api_key: None,
+        falkordb_url: "falkor://127.0.0.1:1".to_owned(),
+        falkordb_password: None,
+        falkordb_graph: format!("guard-{}", uuid::Uuid::new_v4()),
+        items_collection: "guard-items".to_owned(),
+        concepts_collection: "guard-concepts".to_owned(),
+        concept_cache_folder: home.join("concept-cache"),
+        concept_decision_log: home.join("concept-decisions.jsonl"),
+        content_folder: home.join("content"),
+        dataset_folder: home.join("datasets"),
+        dataset_cache_folder: home.join("dataset-cache"),
+        gemini_api_key: None,
+        jev_api_key: None,
+    }
+}
+
+pub async fn configured_with_mcp(
+    password: Option<&str>,
+    configure: impl FnOnce(&mut Settings, &mut PathBuf),
+    background_jobs: mcp::BackgroundJobs,
+    mcp_config: Option<Config>,
+) -> TestServer {
     let home = tempfile::tempdir().unwrap();
+    let mcp_config = mcp_config.unwrap_or_else(|| closed_mcp_config(home.path()));
     let mut content = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../samples/content");
     let mut settings = Settings::from_sources(home.path(), |_| None).unwrap();
     settings.password = password.map(str::to_owned);
     settings.mcp_token = Some("token".into());
     configure(&mut settings, &mut content);
-    let (address, task) = start(&settings, &content).await;
+    let (address, task) = start(
+        &settings,
+        &content,
+        background_jobs.clone(),
+        mcp_config.clone(),
+    )
+    .await;
     TestServer {
         home,
         address,
         settings,
         content,
+        background_jobs,
+        mcp_config,
         task,
     }
 }
@@ -101,15 +179,18 @@ pub async fn configured(
 async fn start(
     settings: &Settings,
     content: &std::path::Path,
+    background_jobs: mcp::BackgroundJobs,
+    mcp_config: Config,
 ) -> (std::net::SocketAddr, tokio::task::JoinHandle<()>) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let mut settings = settings.clone();
     settings.listen = address;
     let fake = Fake::scene("black-scholes", &settings.home).unwrap();
-    let mcp = mcp::http_service(mcp::QuantyServer::new(
-        rag_core::Config::from_sources(|_| None, None).unwrap(),
-        mcp::PaidServices::default(),
+    let mcp = mcp::http_service(mcp::QuantyServer::with_background_jobs(
+        mcp_config,
+        NoPaidServices,
+        background_jobs.clone(),
     ));
     let app = router(
         fake,
@@ -118,6 +199,7 @@ async fn start(
             content: content.to_path_buf(),
             fixture: Some("black-scholes".into()),
             mcp,
+            background_jobs,
         },
     )
     .unwrap();

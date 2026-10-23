@@ -17,8 +17,8 @@ pub use content::{
 };
 pub use convert::{
     ChapterJob, ChapterLock, ConversionSummary, ConvertError, ConvertedImage, PageError,
-    PageProgress, PopplerError, convert_chapter, convert_chapter_with_jev_key, convert_image,
-    pdf_page_count, sha256_hex, try_lock_chapter,
+    PageProgress, PopplerError, check_poppler, convert_chapter, convert_chapter_with_jev_key,
+    convert_image, pdf_page_count, sha256_hex, try_lock_chapter,
 };
 pub use items::ChapterItem;
 pub use reader::{

@@ -30,10 +30,18 @@ pub(super) fn show(
     draft: &Result<IngestRequest, Missing>,
 ) {
     for job in &cx.shared.health.facts.running {
-        ui.label(TextRole::Small.rich(format!(
-            "An ingest is running on the server: {}. Wait for it to end.",
-            job.name
-        )));
+        let message = match job.kind {
+            contract::JobKind::Ingest => format!(
+                "An ingest is running on the server: {}. Wait for it to end.",
+                job.name
+            ),
+            contract::JobKind::Dataset | contract::JobKind::Insights => format!(
+                "Background work is running on the server: {}. Wait for it to end.",
+                job.name
+            ),
+        };
+        ui.label(TextRole::Small.rich(message));
+        ui.label(TextRole::Small.rich("Reload this page after it ends to enable another start."));
     }
     match &cx.shared.ingest {
         // A draft that is complete is checked in this frame, so it needs no words.

@@ -40,6 +40,8 @@ uuid.workspace = true
 [dev-dependencies]
 export.workspace = true
 futures-util = { workspace = true, features = ["sink"] }
+ocr.workspace = true
+rag-ingestion.workspace = true
 reqwest.workspace = true
 rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest"] }
 tempfile.workspace = true

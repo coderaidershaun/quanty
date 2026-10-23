@@ -6,7 +6,7 @@ use ocr::ContentError;
 use rag_core::LlmError;
 use tokio::task::JoinError;
 
-use crate::jobs::{Busy, KEPT_JOBS};
+use crate::jobs::{BackgroundJob, Busy, KEPT_JOBS};
 use crate::library::LibraryError;
 
 #[derive(thiserror::Error, Debug)]
@@ -41,6 +41,11 @@ pub(crate) enum InsightsToolError {
     Busy { job_id: String },
 
     #[error(
+        "background work is running: {kind} of {name}; wait for it to end before writing insights"
+    )]
+    SharedBusy { kind: &'static str, name: String },
+
+    #[error(
         "no insights job has the id {job_id:?}; job ids are forgotten when the server restarts, and the server keeps only its last {KEPT_JOBS} jobs, so call `write_insights` again: insights that are saved are not asked for twice"
     )]
     UnknownJob { job_id: String },
@@ -64,6 +69,15 @@ impl From<Busy> for InsightsToolError {
     fn from(busy: Busy) -> InsightsToolError {
         InsightsToolError::Busy {
             job_id: busy.running_job.to_string(),
+        }
+    }
+}
+
+impl From<BackgroundJob> for InsightsToolError {
+    fn from(job: BackgroundJob) -> Self {
+        Self::SharedBusy {
+            kind: job.kind.label(),
+            name: job.name,
         }
     }
 }

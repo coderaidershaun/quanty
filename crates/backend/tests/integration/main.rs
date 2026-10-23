@@ -1,4 +1,4 @@
-//! Tests of the desktop app against the real outside world: the stores, the disk and the
+//! Tests of the browser app against the real outside world: the stores, the disk and the
 //! pictures.
 #![recursion_limit = "256"]
 

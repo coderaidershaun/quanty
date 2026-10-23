@@ -209,7 +209,7 @@ sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 sudo systemctl reload caddy
 ```
 
-Open `https://quanty.example.com` and enter `QUANTY_PASSWORD`. The HttpOnly session cookie lasts 30 days. Five wrong passwords within a minute cause a one-minute 429 response. `POST /logout` clears the cookie. Keep a password set behind Caddy: a password-free loopback server trusts every request Caddy forwards.
+Open `https://quanty.example.com` and enter `QUANTY_PASSWORD`. The HttpOnly session cookie lasts 30 days. Five wrong passwords within a minute cause a one-minute 429 response. `POST /logout` clears the cookie. Keep a password set behind Caddy: a password-free loopback server rejects the public hostname that Caddy forwards.
 
 To connect Claude Code, use [the MCP guide](mcp.md#10-add-it-to-claude-code):
 

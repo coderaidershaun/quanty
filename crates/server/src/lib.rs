@@ -13,11 +13,12 @@ use axum::{
     Json, Router,
     extract::DefaultBodyLimit,
     middleware,
-    routing::{get, post},
+    routing::{any, get, post},
 };
 use backend::Handler;
 use contract::StartupFacts;
 pub use launch::{Settings, SettingsError};
+use mcp::BackgroundJobs;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 #[derive(Debug, thiserror::Error)]
@@ -34,6 +35,7 @@ pub struct ServerOptions {
     pub content: PathBuf,
     pub fixture: Option<String>,
     pub mcp: Router,
+    pub background_jobs: BackgroundJobs,
 }
 
 /// Serves a live or fixture backend through the same authenticated routes.
@@ -46,6 +48,7 @@ pub fn router<H: Handler>(handler: H, options: ServerOptions) -> Result<Router, 
         content,
         fixture,
         mcp,
+        background_jobs,
     } = options;
     settings.validate()?;
     uploads::clean_old_folders(
@@ -59,7 +62,7 @@ pub fn router<H: Handler>(handler: H, options: ServerOptions) -> Result<Router, 
     )
     .map_err(RouterError::Cleanup)?;
     let auth = auth::Auth::new(settings.clone());
-    let guard = jobs::Guard::default();
+    let guard = jobs::Guard::new(background_jobs);
     let facts_guard = guard.clone();
     let home = settings.home.clone();
     let sockets = ws::SocketState {
@@ -110,7 +113,11 @@ pub fn router<H: Handler>(handler: H, options: ServerOptions) -> Result<Router, 
         .route("/logout", post(auth::logout).with_state(auth.clone()))
         .fallback(bundle::serve)
         .layer(middleware::from_fn_with_state(auth.clone(), auth::protect));
-    let mcp = mcp.layer(middleware::from_fn_with_state(auth.clone(), auth::bearer));
+    let mcp = if mcp.has_routes() {
+        mcp.layer(middleware::from_fn_with_state(auth.clone(), auth::bearer))
+    } else {
+        Router::new().route("/mcp", any(|| async { axum::http::StatusCode::NOT_FOUND }))
+    };
     Ok(protected
         .merge(mcp)
         .route(

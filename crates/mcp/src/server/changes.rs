@@ -50,7 +50,7 @@ impl<S: Services> QuantyServer<S> {
     }
 
     /// Writes the saved insights, takeaways and cheat sheet of one document to a file that stands
-    /// alone, the same file the desktop app exports: a PDF with typeset formulas, a Markdown file,
+    /// alone, the same file the browser app exports: a PDF with typeset formulas, a Markdown file,
     /// or an HTML page. It writes to `path` on the machine the server runs on, and never replaces
     /// a file unless `overwrite` is true. It costs nothing. A document with no saved insights gets
     /// them from `write_insights` first.

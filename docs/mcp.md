@@ -33,6 +33,8 @@ cd /srv/quanty
 
 The client starts that process. Standard output carries only MCP; logs go to standard error. `quanty-mcp` provides stdio only. Local stdio uses its process account and library settings, without the HTTP bearer token.
 
+The unified HTTP server admits one background ingest, insights job or dataset build at a time across MCP and browser tabs. `/api/facts` shows its kind and name while it runs. A separate `quanty-mcp` stdio process keeps one job of each kind at a time; it does not share admission with the HTTP server or other processes. Searches, reads and status calls remain available while a background job runs.
+
 ## 3. The tools
 
 Eighteen tools. A tool that costs money says so in its description, and so does this table.
@@ -255,7 +257,7 @@ The call does not wait for the whole ingest, which takes minutes. It answers onc
 
 Good to know:
 
-- One ingest runs at a time in a server. A second `ingest_pdf` while one runs is refused, and the refusal names the running `job_id`. This holds inside one server only: do not send the same PDF through two servers, or beside `rag-ingest pdf`, at the same time.
+- Over unified HTTP, one background job runs at a time across MCP and browser tabs; a running ingest, insights job or dataset build refuses another start. Over stdio, one ingest runs at a time, and the refusal names its `job_id`. Do not send the same PDF through two processes, or beside `rag-ingest pdf`, at the same time.
 - The graph is read before the PDF is named, because a stored media's category says how the PDF is named. So a store that is down shows before a file name that breaks the rule for a book, as a tool error whose text names the store, says to call `health`, and says to send the same PDF again.
 - A store that is down, a missing Gemini key, and a PDF that is already ingested with its insights saved, or that gets none, show in the answer of `ingest_pdf` itself. A PDF that is already ingested without its insights is answered as `running` with the stage `writing_insights`, and its end is read with `ingest_status`. A missing Jev key, `ANTHROPIC_API_KEY` being set, Poppler not installed, and a file that starts with `%PDF-` but is not a PDF are found only after the paid work has begun. So they show in `ingest_status` as `failed`, or, when they are found at once, in the answer of `ingest_pdf` as a tool error with the same text.
 - A PDF that was ingested before insights were written has no `insights.json`. Sending it again writes that file and nothing else, unless it is a part of a book that is not a chapter, which gets none. To write the files of many stored chapters at once, without sending their PDFs, call `write_insights` (part 6) or run `rag-ingest insights --all`.
@@ -299,7 +301,7 @@ The build writes these files in the folder `<DATASET_DIR>/<name>` (`DATASET_DIR`
 
 Good to know:
 
-- One build runs at a time in a server. A second `build_dataset` while one runs is refused, and the refusal names the running `job_id`. An ingest and a build can run together. This holds inside one server only: a second server, or `rag-dataset build`, is not stopped from building the same dataset at the same time.
+- Over unified HTTP, one background job runs at a time across MCP and browser tabs. A second start is refused while an ingest, insights job or dataset build runs. Over stdio, one build runs at a time and an ingest or insights job may run beside it. Other processes, including `rag-dataset build`, do not share this admission.
 - A build with the name of an earlier one removes the files that the earlier build wrote, once it knows it can run, and then writes its own. Give a new `name` to keep the earlier dataset.
 - `run_code` is on by default. It runs Python that the model wrote, on the machine the server runs on, to check an answer. `run_code: false` turns that off, and such answers are then checked by the judge alone.
 - The graph is connected first, and the model's sign-in is checked before the job starts, unless `dry_run` is `true`: a dry run needs no model. So a graph that is down, or a model that is not signed in, shows in the answer of `build_dataset` as a tool error that ends with: call the `health` tool.
@@ -339,9 +341,9 @@ Give exactly one of `document_id`, `media` and `all: true`. A document whose ins
 
 Good to know:
 
-- One insights job runs at a time in a server. A second `write_insights` while one runs is refused, and the refusal names the running `job_id`. An ingest and a dataset build can run beside it. This holds inside one server only.
+- Over unified HTTP, an insights job excludes other background work in MCP and browser tabs. Over stdio, one insights job runs at a time and an ingest or dataset build may run beside it. Other processes do not share this admission.
 - The graph is connected first and the documents are chosen before anything is asked. A choice that is not valid, a document or media that is not stored, and a graph that is down show in the answer of `write_insights` as a tool error. Unless `dry_run` is `true`, the sign-in of the agent of the Ingest choice is checked once, which costs nothing, so an agent that is not signed in fails the call before the first document. A job with nothing to write never starts the agent.
-- An `ingest_pdf` of the same chapter at the same moment may ask for its insights too. That costs twice at worst: the file is written whole, so the last one stays.
+- A separate process that ingests the same chapter at the same moment may ask for its insights too. Keep that process idle until the HTTP or stdio job ends.
 - Jobs live in the memory of the server. Over stdio a running job stops when the client closes the server, and a restarted server forgets its job ids. The server keeps only its last 100 insights jobs. Call `write_insights` again: insights that are saved are not asked for twice.
 
 ## 7. Stopping a job
@@ -354,7 +356,7 @@ Good to know:
 
 Gives `job_id`, `kind` (`ingest`, `insights` or `dataset`), `state` and `status_tool` (the tool that says how the job ended). `state` is `stopped` when the job was running and is stopped now, and `ended` when it had ended already: it is left as it is, and its status tool has how it ended.
 
-What was paid for is kept, so the same work started again goes on from there: converted pages and kept answers of an ingest, the answers a model already gave in a dataset build, and the insights that are saved. The status tool of a stopped job gives `state: "stopped"` and an `error` that says what to call again. This is what the Stop button of the browser app does. A new job of the same kind can start at once.
+What was paid for is kept, so the same work started again goes on from there: converted pages and kept answers of an ingest, the answers a model already gave in a dataset build, and the insights that are saved. The status tool of a stopped job gives `state: "stopped"` and an `error` that says what to call again. This is what the Stop button of the browser app does. A new job can start after the stopped work has ended.
 
 ## 8. What is not a tool
 

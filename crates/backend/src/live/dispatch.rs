@@ -3,9 +3,9 @@
 
 use super::context::{LiveContext, Services};
 use super::source::PageTarget;
-use super::{balances, chapter, datasets, ingest, library, query, source};
+use super::{balances, chapter, datasets, health, ingest, library, query, source};
 use crate::{Handler, Reply, exporting};
-use contract::{Command, Event, RequestId, unknown_health};
+use contract::{Command, Event};
 
 impl<S: Services> Handler for LiveContext<S> {
     async fn serve(&self, command: Command, reply: Reply) {
@@ -83,7 +83,7 @@ impl<S: Services> Handler for LiveContext<S> {
             Command::BuildDataset { request, build } => {
                 datasets::build(self, request, &build, &reply).await;
             }
-            Command::CheckHealth { request } => check_health(request, &reply),
+            Command::CheckHealth { request } => health::check(self, request, &reply).await,
             Command::LoadChapterInsights {
                 request,
                 doc,
@@ -92,18 +92,5 @@ impl<S: Services> Handler for LiveContext<S> {
             Command::Cancel(_) => {}
             Command::ReadBalances { request } => balances::read(self, request, &reply).await,
         }
-    }
-}
-
-/// Not built yet. It says "not known" and not "down": while the app believes a store is down it
-/// checks again after every search that works, and a check that always said "down" would keep it
-/// checking for ever.
-fn check_health(request: RequestId, reply: &Reply) {
-    send_all(reply, unknown_health(request));
-}
-
-fn send_all(reply: &Reply, events: impl IntoIterator<Item = Event>) {
-    for event in events {
-        reply.send(event);
     }
 }

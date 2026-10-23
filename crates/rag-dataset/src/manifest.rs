@@ -172,7 +172,7 @@ impl Manifest {
             }
         }
         // SMELL: the report counts the examples under the plain strings "think" and "direct", with
-        // no constant for either, so a typo here still compiles and counts nothing. The desktop app
+        // no constant for either, so a typo here still compiles and counts nothing. The browser app
         // reads them the same way.
         let by_reasoning = |name: &str| report.sft.by_reasoning.get(name).copied().unwrap_or(0);
         let sha256 = dataset_version(&files);

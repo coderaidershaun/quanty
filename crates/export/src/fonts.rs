@@ -1,4 +1,4 @@
-//! The font files a document is printed with. The desktop app draws its reading text with the
+//! The font files a document is printed with. The browser app draws its reading text with the
 //! same files, so a printed page and the window read alike.
 
 pub const LITERATA: &[u8] = include_bytes!("../assets/fonts/Literata[opsz,wght].ttf");

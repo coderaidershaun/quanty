@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use contract::{
     AskDraft, Failure, FailureKind, Filters, Intent, ItemKind, Loadable, NodeId, NodeKind,
-    PieceKind, ResultItem, StartupFacts,
+    PieceKind, ResultItem, Service, ServiceState, StartupFacts,
 };
 use eframe::egui;
 use egui::accesskit::Role;
@@ -283,6 +283,25 @@ fn the_app_opens_with_both_stores_down_and_says_what_to_start() {
     let facts = facts(&cx.config());
     let mut harness = testkit::app_on(cx, facts, Vec::new(), DEFAULT_WINDOW);
     testkit::settle_within(&mut harness, Duration::from_secs(10));
+
+    for recheck in [false, true] {
+        if recheck {
+            harness.state_mut().push(Intent::RecheckHealth);
+            testkit::settle_within(&mut harness, Duration::from_secs(10));
+        }
+        let health = &harness.state().shared().health;
+        assert!(health.pending.is_none(), "the health check must finish");
+        for (service, kind) in [
+            (Service::Qdrant, FailureKind::QdrantDown),
+            (Service::FalkorDb, FailureKind::FalkorDbDown),
+        ] {
+            assert!(
+                matches!(health.of(service), ServiceState::Down(failure) if failure.kind == kind),
+                "{service:?}: {:?}",
+                health.of(service)
+            );
+        }
+    }
 
     let catalogue = &harness.state().shared().library.catalogue;
     let failure = catalogue

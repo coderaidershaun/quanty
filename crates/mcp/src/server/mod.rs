@@ -16,6 +16,7 @@ use rmcp::{ServerHandler, tool_handler};
 use crate::datasets::Datasets;
 use crate::ingest::{Ingest, base64_len};
 use crate::insights::Insights;
+use crate::jobs::BackgroundJobs;
 use crate::services::Services;
 
 /// The size a PDF may have unless the caller sets another limit: 50 MiB.
@@ -58,10 +59,33 @@ impl<S: Services> QuantyServer<S> {
 
     /// Like [`QuantyServer::new`], with a PDF of at most `max_pdf_bytes` bytes.
     pub fn with_max_pdf_bytes(config: Config, services: S, max_pdf_bytes: u64) -> QuantyServer<S> {
+        Self::build(config, services, max_pdf_bytes, None)
+    }
+
+    /// Shares one background-work slot with the browser of the same HTTP server.
+    pub fn with_background_jobs(
+        config: Config,
+        services: S,
+        jobs: BackgroundJobs,
+    ) -> QuantyServer<S> {
+        Self::build(config, services, DEFAULT_MAX_PDF_BYTES, Some(jobs))
+    }
+
+    fn build(
+        config: Config,
+        services: S,
+        max_pdf_bytes: u64,
+        jobs: Option<BackgroundJobs>,
+    ) -> QuantyServer<S> {
         let services = Arc::new(services);
-        let ingest = Ingest::new(config.clone(), Arc::clone(&services), max_pdf_bytes);
-        let insights = Insights::new(config.clone(), Arc::clone(&services));
-        let datasets = Datasets::new(config.clone(), Arc::clone(&services));
+        let ingest = Ingest::new(
+            config.clone(),
+            Arc::clone(&services),
+            max_pdf_bytes,
+            jobs.clone(),
+        );
+        let insights = Insights::new(config.clone(), Arc::clone(&services), jobs.clone());
+        let datasets = Datasets::new(config.clone(), Arc::clone(&services), jobs);
         QuantyServer {
             shared: Arc::new(Shared {
                 config,

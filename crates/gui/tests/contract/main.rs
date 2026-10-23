@@ -1,4 +1,4 @@
-//! Tests of how the parts of the desktop app work together.
+//! Tests of how the parts of the browser app work together.
 #![recursion_limit = "256"]
 
 mod answer_code;

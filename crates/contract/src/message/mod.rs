@@ -101,7 +101,6 @@ pub enum Intent {
     PdfPicked(crate::UploadedPdf),
     CheckIngest(IngestRequest),
     StartIngest,
-    CancelIngest,
     ClearIngest,
     StartDatasetBuild(DatasetRequest),
     ClearDatasetBuild,

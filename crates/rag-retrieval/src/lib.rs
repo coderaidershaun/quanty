@@ -4,7 +4,7 @@
 mod answer;
 mod search;
 
-pub use answer::{ANSWER_MODEL, Answer, AnswerError, Claim, Source, answer};
+pub use answer::{Answer, AnswerError, Claim, Source, answer};
 pub use search::{
     MAX_RESULTS_PER_DOCUMENT, RESULTS_PER_QUERY, Reason, Retriever, SearchError, SearchHit,
     SearchResults, SearchTrace, TracedSearch,

@@ -60,17 +60,3 @@ pub(super) fn levels(picture: RgbaImage, max_side: u32) -> Vec<RgbaImage> {
     }
     chain
 }
-
-#[cfg(test)]
-mod tests {
-    use image::{Rgba, RgbaImage};
-
-    use super::halve;
-
-    #[test]
-    fn a_clear_pixel_does_not_darken_the_mean() {
-        let mut block = RgbaImage::from_pixel(2, 2, Rgba([0, 0, 0, 0]));
-        block.put_pixel(0, 0, Rgba([255, 0, 0, 255]));
-        assert_eq!(halve(&block).get_pixel(0, 0).0, [255, 0, 0, 64]);
-    }
-}

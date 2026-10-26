@@ -1,17 +1,18 @@
-//! Checks what an agent can read of the library: the documents that are stored, and the pieces of
-//! one page of a converted chapter.
+//! Checks what an agent can read of the library: the pieces and items of a converted chapter, the
+//! documents that are stored with their concepts, and the words of a spent credit.
 
-use rag_core::DocId;
+use rag_core::{DocId, EmbedError};
 use rag_ingestion::chapter_items;
 use serde_json::json;
 
 use crate::support::{
-    AUTHOR, ClosedPorts, Library, call, connect, error_text, sample_chapter_folder,
-    sample_content_folder, sample_document_id, sample_notes_document_id, structured,
+    AUTHOR, Client, ClosedPorts, Library, StandInServices, call, connect, error_text,
+    sample_chapter_folder, sample_content_folder, sample_document_id, sample_notes_document_id,
+    structured,
 };
 
 #[tokio::test(flavor = "multi_thread")]
-async fn read_page_gives_the_pieces_of_a_page_in_reading_order() {
+async fn read_page_and_chapter_contents_give_a_chapter_as_it_was_converted() {
     let ports = ClosedPorts::new().with_content_folder(&sample_content_folder());
     let client = connect(ports.server()).await;
     let document_id = sample_document_id().to_string();
@@ -113,12 +114,7 @@ async fn read_page_gives_the_pieces_of_a_page_in_reading_order() {
     let captioned = &structured(&result)["pieces"][0];
     assert_eq!(captioned["label"], "Figure 13-16");
     assert_eq!(captioned["caption"], "Dividend sensitivity.");
-}
 
-#[tokio::test(flavor = "multi_thread")]
-async fn read_page_gives_a_code_listing_as_printed_with_its_language() {
-    let ports = ClosedPorts::new().with_content_folder(&sample_content_folder());
-    let client = connect(ports.server()).await;
     let chapter =
         ocr::ChapterIndex::read(&sample_content_folder().join("quanty-sample-notes/chapter-2"))
             .expect("the notes chapter should have a chapter.json");
@@ -146,12 +142,7 @@ async fn read_page_gives_a_code_listing_as_printed_with_its_language() {
         pieces[9].get("language").is_none(),
         "a piece that is not code has no language"
     );
-}
 
-#[tokio::test(flavor = "multi_thread")]
-async fn chapter_contents_lists_every_item_of_a_chapter_by_kind() {
-    let ports = ClosedPorts::new().with_content_folder(&sample_content_folder());
-    let client = connect(ports.server()).await;
     let notes = sample_notes_document_id(2).to_string();
 
     let result = call(&client, "chapter_contents", json!({ "document_id": notes })).await;
@@ -262,89 +253,17 @@ async fn chapter_contents_lists_every_item_of_a_chapter_by_kind() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored library::"]
-async fn chapter_concepts_gives_the_concepts_of_a_chapter_and_of_a_page() {
-    let library = Library::ingested_with_concepts("mcp-concepts").await;
+async fn the_stored_library_is_listed_its_concepts_are_read_and_a_spent_credit_is_named() {
+    let library = Library::ingested_with_concepts("mcp-library").await;
     let client = connect(library.server()).await;
-    let sample = sample_document_id().to_string();
-    let chapter = ocr::read_chapter(&sample_chapter_folder()).expect("the sample chapter reads");
-    let straddle_page = chapter_items(&chapter)
-        .into_iter()
-        .find(|item| item.input.text.contains("straddle"))
-        .expect("a sample item mentions a straddle")
-        .payload
-        .page;
-    let long_straddle = json!([{
-        "name": "Long straddle",
-        "definition": "A bet that the price moves a lot, either way.",
-    }]);
 
-    let whole = call(
-        &client,
-        "chapter_concepts",
-        json!({ "document_id": sample }),
-    )
-    .await;
-
-    assert_eq!(
-        structured(&whole),
-        &json!({
-            "document_id": sample,
-            "title": "Option Volatility and Pricing, chapter 1: Sample Pages",
-            "concepts": long_straddle,
-        })
-    );
-
-    let on_page = call(
-        &client,
-        "chapter_concepts",
-        json!({ "document_id": sample, "page": straddle_page }),
-    )
-    .await;
-
-    let on_page = structured(&on_page);
-    assert_eq!(on_page["page"], straddle_page);
-    assert_eq!(on_page["concepts"], long_straddle);
-    let other_page = call(
-        &client,
-        "chapter_concepts",
-        json!({ "document_id": sample, "page": straddle_page - 1 }),
-    )
-    .await;
-    assert_eq!(structured(&other_page)["concepts"], json!([]));
-    let notes = call(
-        &client,
-        "chapter_concepts",
-        json!({ "document_id": sample_notes_document_id(1).to_string() }),
-    )
-    .await;
-    assert_eq!(structured(&notes)["concepts"], json!([]));
-
-    let zero = call(
-        &client,
-        "chapter_concepts",
-        json!({ "document_id": sample, "page": 0 }),
-    )
-    .await;
-    assert!(error_text(&zero).contains("pages count from 1"));
-    let unknown = DocId::from_source_sha256("a pdf that was never stored").to_string();
-    let missing = call(
-        &client,
-        "chapter_concepts",
-        json!({ "document_id": unknown }),
-    )
-    .await;
-    let text = error_text(&missing);
-    assert!(text.contains(&unknown), "{text}");
-    assert!(text.contains("`list_documents`"), "{text}");
+    list_documents_shows_each_stored_document_with_its_labels_and_chapter(&client).await;
+    chapter_concepts_gives_the_concepts_of_a_chapter_and_of_a_page(&client).await;
+    a_spent_credit_is_named_with_its_billing_page(&library).await;
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored library::"]
-async fn list_documents_shows_each_stored_document_with_its_labels_and_chapter() {
-    let library = Library::ingested("mcp-documents").await;
-    let client = connect(library.server()).await;
-
-    let result = call(&client, "list_documents", json!({})).await;
+async fn list_documents_shows_each_stored_document_with_its_labels_and_chapter(client: &Client) {
+    let result = call(client, "list_documents", json!({})).await;
 
     let documents = structured(&result)["documents"].as_array().unwrap();
     let titles: Vec<&str> = documents
@@ -385,4 +304,106 @@ async fn list_documents_shows_each_stored_document_with_its_labels_and_chapter()
     assert_eq!(documents[1]["pages"], 3);
     assert_eq!(documents[2]["chapter_number"], 2);
     assert_eq!(documents[2]["chapter_name"], "Black Scholes In Depth");
+}
+
+async fn chapter_concepts_gives_the_concepts_of_a_chapter_and_of_a_page(client: &Client) {
+    let sample = sample_document_id().to_string();
+    let chapter = ocr::read_chapter(&sample_chapter_folder()).expect("the sample chapter reads");
+    let straddle_page = chapter_items(&chapter)
+        .into_iter()
+        .find(|item| item.input.text.contains("straddle"))
+        .expect("a sample item mentions a straddle")
+        .payload
+        .page;
+    let long_straddle = json!([{
+        "name": "Long straddle",
+        "definition": "A bet that the price moves a lot, either way.",
+    }]);
+
+    let whole = call(client, "chapter_concepts", json!({ "document_id": sample })).await;
+
+    assert_eq!(
+        structured(&whole),
+        &json!({
+            "document_id": sample,
+            "title": "Option Volatility and Pricing, chapter 1: Sample Pages",
+            "concepts": long_straddle,
+        })
+    );
+
+    let on_page = call(
+        client,
+        "chapter_concepts",
+        json!({ "document_id": sample, "page": straddle_page }),
+    )
+    .await;
+
+    let on_page = structured(&on_page);
+    assert_eq!(on_page["page"], straddle_page);
+    assert_eq!(on_page["concepts"], long_straddle);
+    let other_page = call(
+        client,
+        "chapter_concepts",
+        json!({ "document_id": sample, "page": straddle_page - 1 }),
+    )
+    .await;
+    assert_eq!(structured(&other_page)["concepts"], json!([]));
+    let notes = call(
+        client,
+        "chapter_concepts",
+        json!({ "document_id": sample_notes_document_id(1).to_string() }),
+    )
+    .await;
+    assert_eq!(structured(&notes)["concepts"], json!([]));
+
+    let zero = call(
+        client,
+        "chapter_concepts",
+        json!({ "document_id": sample, "page": 0 }),
+    )
+    .await;
+    assert!(error_text(&zero).contains("pages count from 1"));
+    let unknown = DocId::from_source_sha256("a pdf that was never stored").to_string();
+    let missing = call(
+        client,
+        "chapter_concepts",
+        json!({ "document_id": unknown }),
+    )
+    .await;
+    let text = error_text(&missing);
+    assert!(text.contains(&unknown), "{text}");
+    assert!(text.contains("`list_documents`"), "{text}");
+}
+
+async fn a_spent_credit_is_named_with_its_billing_page(library: &Library) {
+    let rejected = |status: u16, body: &'static str| {
+        let services = StandInServices::new().with_failing_embedder(move || EmbedError::Rejected {
+            status,
+            body: body.to_owned(),
+        });
+        library.server_over(&sample_content_folder(), services)
+    };
+    let client = connect(rejected(402, "Your prepayment credits are depleted")).await;
+
+    let search = call(&client, "search", json!({ "question": "what is delta?" })).await;
+
+    let text = error_text(&search);
+    assert!(
+        text.contains(
+            " Your Google Gemini prepaid credit is used up: add credit at https://aistudio.google.com/billing, then try again. Call the `health` tool"
+        ),
+        "{text}"
+    );
+    assert!(
+        text.ends_with("Call the `health` tool to see which service is not ready."),
+        "{text}"
+    );
+
+    let client = connect(rejected(500, "the service is busy")).await;
+
+    let search = call(&client, "search", json!({ "question": "what is delta?" })).await;
+
+    let text = error_text(&search);
+    assert!(text.contains("500"), "{text}");
+    assert!(!text.contains("prepaid credit"), "{text}");
 }

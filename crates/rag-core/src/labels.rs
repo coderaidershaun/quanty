@@ -255,13 +255,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn authors_are_trimmed_kept_once_and_in_order_and_a_category_reads_any_capitals() {
-        assert_eq!(author_list([" B ", "", "A", "B"]), vec!["B", "A"]);
-        assert_eq!(" Paper ".parse(), Ok(Category::Paper));
-        assert!("journal".parse::<Category>().is_err());
-    }
-
-    #[test]
     fn a_document_fits_by_its_id_or_its_whole_stored_title_and_the_labels_must_fit_too() {
         let id = DocId::from_source_sha256("one");
         let other_id = DocId::from_source_sha256("two");

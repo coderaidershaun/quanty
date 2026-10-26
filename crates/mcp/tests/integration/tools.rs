@@ -236,7 +236,7 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn health_names_each_service_that_is_not_ready() {
+async fn health_names_each_service_that_is_not_ready_and_says_why_a_key_cannot_be_used() {
     let ports = ClosedPorts::new();
     let client = connect(ports.server()).await;
 
@@ -284,11 +284,7 @@ async fn health_names_each_service_that_is_not_ready() {
             model("datasets", json!(["build_dataset"])),
         ])
     );
-}
 
-#[tokio::test(flavor = "multi_thread")]
-async fn health_says_why_a_key_cannot_be_used() {
-    let ports = ClosedPorts::new();
     let asked = async |gemini: KeyState, jev: KeyState| {
         let services = StandInServices::new().with_key_states(KeyStates { gemini, jev });
         let client = connect(QuantyServer::new(ports.config.clone(), services)).await;

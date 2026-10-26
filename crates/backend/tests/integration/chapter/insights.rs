@@ -1,17 +1,15 @@
 //! Checks that the live backend reads the saved insights of a chapter from disk with no store and
-//! no model, and that the fake backend reads the same file the same way.
+//! no model.
 
 use std::path::{Path, PathBuf};
 
 use backend::Handler;
-use backend::fake::Fake;
 use contract::{ChapterInsights, Command, DocId, Event, Failure, FailureKind, Insight, RequestId};
 use uuid::Uuid;
 
 use crate::support::{IN_DEPTH, closed, copy_folder, document_of, sample_chapter, served};
 
 const REQUEST: RequestId = RequestId(7);
-const NO_CONTENT_FOLDER: &str = "/no/such/content/folder";
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_live_backend_reads_the_saved_insights_with_the_stores_down() {
@@ -61,40 +59,8 @@ async fn the_live_backend_reads_the_saved_insights_with_the_stores_down() {
     assert_eq!(unknown.kind, FailureKind::SourceMissing);
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn the_fake_reads_the_sample_insights_as_the_live_backend_does() {
-    let home = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let fake = Fake::scene("idle", home)
-        .expect("the scene should start")
-        .instant();
-    let events = served(&fake, Command::LoadCatalogue { request: REQUEST }).await;
-    let [
-        Event::Catalogue {
-            result: Ok(catalogue),
-            ..
-        },
-        ..,
-    ] = events.as_slice()
-    else {
-        panic!("expected the catalogue of the samples first: {events:#?}");
-    };
-    let cx = closed(Path::new(NO_CONTENT_FOLDER));
-
-    let mut saved = 0;
-    let with_folders = catalogue
-        .documents()
-        .filter_map(|document| Some((document, document.folder.clone()?)));
-    for (document, folder) in with_folders {
-        let faked = insights_of(&fake, document.id, Some(folder.clone())).await;
-        let live = insights_of(&cx, document_of(&folder), Some(folder)).await;
-        assert_eq!(faked, live, "{}", document.title);
-        saved += usize::from(matches!(live, Ok(Some(_))));
-    }
-    assert!(saved > 0, "one sample chapter carries insights");
-}
-
 /// The answer to one `LoadChapterInsights`, which is the only event it sends.
-async fn insights_of(
+pub(super) async fn insights_of(
     backend: &impl Handler,
     doc: DocId,
     folder: Option<PathBuf>,

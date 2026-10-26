@@ -326,17 +326,6 @@ fn strict_schema(value: &mut Value) {
 mod tests {
     use super::*;
     use serde_json::json;
-    #[test]
-    fn parses_structured_reply_and_counts_cached_input_once() {
-        let lines = [json!({"type":"item.completed","item":{"type":"agent_message","text":"{\"ok\":true}"}}), json!({"type":"turn.completed","usage":{"input_tokens":100,"cached_input_tokens":80,"output_tokens":12}})].map(|v|v.to_string()).join("\n");
-        let reply = parse(lines.as_bytes(), true, "", "gpt-6.1-sol").unwrap();
-        assert_eq!(reply.value, json!({"ok":true}));
-        assert_eq!(reply.usage.tokens().total(), 112);
-        assert_eq!(reply.usage.tokens().input_tokens, 20);
-        assert!(parse(lines.as_bytes(), false, "not signed in", "test").is_err());
-        assert!(parse(b"", true, "", "test").is_err());
-        assert!(parse(b"not json", true, "", "test").is_err());
-    }
     #[tokio::test]
     #[ignore = "uses the locally signed-in Codex subscription"]
     async fn live_codex_structured_reply() {

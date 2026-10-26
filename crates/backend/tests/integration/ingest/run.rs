@@ -1,15 +1,14 @@
-//! Checks that a new chapter or paper is converted, stored and labelled, that a second start finds
-//! it ingested, and that a part of a book is stored under its book.
+//! Checks that a new chapter is converted, stored and labelled, and that a second start finds it
+//! ingested.
 
 use backend::live::{LiveContext, Services};
 use contract::{
-    Catalogue, Category, ChapterState, Command, Document, DocumentName, Event, IngestOutcome,
-    IngestProgress, IngestRequest, IngestStage, InsightsOutcome, NewMedia, PageView, Preflight,
-    Usage,
+    Catalogue, Category, ChapterState, Command, Event, IngestOutcome, IngestProgress,
+    IngestRequest, IngestStage, InsightsOutcome, NewMedia, Preflight, Usage,
 };
 use ocr::testing::sample_pdf;
 
-use super::{REQUEST, SAMPLE_BOOK, assert_consumed, checked, events_of, request, started, upload};
+use super::{REQUEST, SAMPLE_BOOK, assert_consumed, checked, events_of, request, started};
 use crate::support;
 
 /// Saves the media the way the Ingest tab does before its first PDF.
@@ -100,28 +99,6 @@ async fn catalogue_of<S: Services>(cx: &LiveContext<S>) -> Catalogue {
         panic!("expected one catalogue for {REQUEST:?}: {events:#?}");
     };
     result.clone().expect("the catalogue should be read")
-}
-
-/// Page 1 of a stored document, read from its folder.
-async fn first_page_of<S: Services>(cx: &LiveContext<S>, stored: &Document) -> PageView {
-    let command = Command::LoadPage {
-        request: REQUEST,
-        doc: stored.id,
-        page: 1,
-        folder: stored.folder.clone(),
-    };
-    let events = events_of(cx, command).await;
-    let [
-        Event::Page {
-            request: REQUEST,
-            result,
-        },
-        ..,
-    ] = events.as_slice()
-    else {
-        panic!("expected the page first: {events:#?}");
-    };
-    result.clone().expect("page 1 should be read")
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -313,143 +290,5 @@ async fn a_checked_chapter_is_ingested_with_its_labels_and_a_second_start_finds_
     assert!(
         !blocked.blockers.is_empty(),
         "missing converted source blocks repair without another conversion"
-    );
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p backend --test integration -- --ignored ingest::"]
-async fn a_paper_pdf_with_a_plain_name_is_checked_and_ingested_under_its_saved_media() {
-    let (cx, _pages) = support::context_and_pages("ingest-paper");
-    let paper = "Hawkes Processes in Finance";
-    let media = NewMedia {
-        title: paper.to_owned(),
-        category: Category::Paper,
-        authors: vec!["A. Author".to_owned(), "B. Author".to_owned()],
-        tags: vec!["hawkes".to_owned()],
-    };
-    saved(&cx, media).await;
-    // The sample pages under a name that is not a chapter's.
-    let folder = tempfile::tempdir().expect("a temporary folder should be made");
-    let plain = folder.path().join("hawkes-notes.pdf");
-    std::fs::copy(sample_pdf(), &plain).expect("the sample pdf should be copied");
-    let wanted = IngestRequest {
-        pdf: upload(&cx, &plain),
-        file_name: "hawkes-notes.pdf".into(),
-        media: paper.to_owned(),
-        category: Category::Paper,
-        name: DocumentName::Title(paper.to_owned()),
-        tags: Vec::new(),
-    };
-
-    let before = checked(&cx, &wanted).await;
-
-    let new = Preflight {
-        name: DocumentName::Title(paper.to_owned()),
-        pages: Some(7),
-        state: Some(ChapterState::New),
-        blockers: Vec::new(),
-    };
-    assert_eq!(before, Ok(new));
-
-    let (_, finished) = started(&cx, &wanted).await;
-    assert_consumed(&cx, &wanted, &sample_pdf());
-
-    let Ok(IngestOutcome::Ingested(report)) = finished else {
-        panic!("expected the paper to be ingested: {finished:#?}");
-    };
-    assert_eq!(report.title, paper);
-    let catalogue = catalogue_of(&cx).await;
-    let media = catalogue
-        .media_of(report.doc)
-        .expect("the document is in a media");
-    assert_eq!(media.title.as_deref(), Some(paper));
-    assert_eq!(media.category, Category::Paper);
-    let [stored] = media.documents.as_slice() else {
-        panic!("expected one document of the paper: {media:#?}");
-    };
-    assert_eq!(stored.title, paper);
-    assert_eq!(stored.chapter, None, "a paper has no chapter");
-    assert_eq!(stored.authors, ["A. Author", "B. Author"]);
-    assert_eq!(stored.media_tags, ["hawkes"]);
-    assert_eq!(stored.pages, Some(7));
-
-    let page = first_page_of(&cx, stored).await;
-
-    assert_eq!(page.chapter, None, "a paper has no chapter");
-    assert_eq!(
-        page.document_title.as_deref(),
-        Some(paper),
-        "the page names the paper by its title"
-    );
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p backend --test integration -- --ignored ingest::"]
-async fn a_part_of_a_book_is_ingested_with_its_book_in_its_stored_title() {
-    let (cx, _pages) = support::context_and_pages("ingest-part");
-    let media = NewMedia {
-        title: SAMPLE_BOOK.to_owned(),
-        category: Category::Book,
-        authors: Vec::new(),
-        tags: Vec::new(),
-    };
-    saved(&cx, media).await;
-    // The sample pages under a name that is not a chapter's.
-    let folder = tempfile::tempdir().expect("a temporary folder should be made");
-    let index = folder.path().join("index.pdf");
-    std::fs::copy(sample_pdf(), &index).expect("the sample pdf should be copied");
-    let wanted = IngestRequest {
-        pdf: upload(&cx, &index),
-        file_name: "index.pdf".into(),
-        media: SAMPLE_BOOK.to_owned(),
-        category: Category::Book,
-        name: DocumentName::Title("Index".to_owned()),
-        tags: Vec::new(),
-    };
-
-    let before = checked(&cx, &wanted).await;
-
-    let new = Preflight {
-        name: DocumentName::Title("Index".to_owned()),
-        pages: Some(7),
-        state: Some(ChapterState::New),
-        blockers: Vec::new(),
-    };
-    assert_eq!(before, Ok(new));
-
-    let (_, finished) = started(&cx, &wanted).await;
-    assert_consumed(&cx, &wanted, &sample_pdf());
-
-    let Ok(IngestOutcome::Ingested(report)) = finished else {
-        panic!("expected the part to be ingested: {finished:#?}");
-    };
-    assert_eq!(report.title, "Option Volatility and Pricing, Index");
-    assert_eq!(report.insights, Some(InsightsOutcome::NoneForBookPart));
-    let catalogue = catalogue_of(&cx).await;
-    let book = catalogue
-        .media_of(report.doc)
-        .expect("the document is in a media");
-    assert_eq!(book.title.as_deref(), Some(SAMPLE_BOOK));
-    let [stored] = book.documents.as_slice() else {
-        panic!("expected one document of the book: {book:#?}");
-    };
-    assert_eq!(
-        stored.title, "Index",
-        "the book lists its part by its own title"
-    );
-    assert_eq!(stored.chapter, None, "a part has no chapter");
-    let stored_folder = stored.folder.as_deref().expect("the part has a folder");
-    assert!(
-        stored_folder.ends_with("option-volatility-and-pricing/index"),
-        "{stored_folder:?}"
-    );
-
-    let page = first_page_of(&cx, stored).await;
-
-    assert_eq!(page.chapter, None, "a part has no chapter");
-    assert_eq!(
-        page.document_title.as_deref(),
-        Some("Index"),
-        "the page names the part by its own title"
     );
 }

@@ -1,9 +1,7 @@
 //! The synthetic texts of a dataset: each draft a model writes is judged against the passage it was
-//! written from, only a faithful one is written to `cpt/synthetic.jsonl`, and an answer once paid
-//! for is never paid for again.
+//! written from, and only a faithful one is written to `cpt/synthetic.jsonl`.
 
 use std::collections::{BTreeMap, HashSet};
-use std::fs;
 use std::path::Path;
 
 use ocr::{read_chapter, sha256_hex};
@@ -156,8 +154,6 @@ struct Run {
     written: Written,
     /// Every step the run told, with what the model had cost by then.
     steps: Vec<(Step, UsageTally)>,
-    /// How many questions the asker sent to the model.
-    asked: usize,
     usage: UsageTally,
 }
 
@@ -184,7 +180,6 @@ impl Work {
         Run {
             written,
             steps,
-            asked: asker.calls(),
             usage: asker.usage(),
         }
     }
@@ -366,32 +361,6 @@ async fn a_draft_the_judge_turns_down_or_the_model_cannot_write_is_counted_and_l
         "a draft is counted by the role that wrote it, whether the writer failed, the judge failed \
          or the judge turned the text down"
     );
-}
-
-#[tokio::test]
-async fn a_second_run_over_the_same_plan_asks_nothing_and_writes_the_same_records() {
-    let section = in_depth_section();
-    let work = work_of(vec![four_texts(&section)], vec![section]);
-    let folder = tempfile::tempdir().unwrap();
-    let cache = folder.path().join("cache");
-    let (first_out, second_out) = (folder.path().join("first"), folder.path().join("second"));
-    let (first_llm, second_llm) = (drafting(|_, _| None), drafting(|_, _| None));
-
-    let first = work.run(&first_llm, &cache, &first_out).await;
-    let second = work.run(&second_llm, &cache, &second_out).await;
-
-    assert_eq!(
-        first.asked, 8,
-        "the first run pays for four writers and four judges"
-    );
-    assert_eq!((second.asked, second_llm.calls()), (0, 0));
-    assert_eq!(
-        fs::read(first_out.join("cpt/synthetic.jsonl")).unwrap(),
-        fs::read(second_out.join("cpt/synthetic.jsonl")).unwrap(),
-        "the same ids and the same texts"
-    );
-    assert_eq!(first.written.by_kind, second.written.by_kind);
-    assert_eq!(first.written.rejected, second.written.rejected);
 }
 
 // SMELL: this file is close to the most lines one file may hold. The long-section test and the

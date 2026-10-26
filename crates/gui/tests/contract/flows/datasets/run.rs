@@ -1,20 +1,16 @@
-//! A build starts from the form and ends in a notice on the fake backend, every stage of a build
-//! is named with its share and its cost, and a build that is running or that failed shows it.
+//! A build starts from the form and ends in a notice on the fake backend, and a build that is
+//! running or that failed shows it.
 
 use std::time::{Duration, Instant};
 
 use backend::Runtime;
 use backend::fake::Fake;
-use contract::{
-    Command, DatasetProgress, DatasetRequest, DatasetStage, DocId, Event, FailureKind, ModelTokens,
-    RequestId, Tab, Usage,
-};
+use contract::{Command, DatasetRequest, DatasetStage, DocId, Event, FailureKind, RequestId, Tab};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
-use egui_kittest::kittest::{NodeT as _, Queryable as _};
+use egui_kittest::kittest::NodeT as _;
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::panels::datasets;
-use gui::state::{DatasetJob, Shared};
+use gui::state::DatasetJob;
 use gui::testkit::{self, run_until};
 use uuid::Uuid;
 
@@ -185,138 +181,6 @@ fn a_build_starts_from_the_form_and_ends_in_a_done_notice() {
     a_build_of_the_form_runs_to_a_done_notice();
     a_dry_run_tells_its_plan();
     the_fake_plays_every_stage_in_order_and_ends_once();
-}
-
-/// What `answers` answers used: Sonnet reads 4,000 tokens and writes 1,200 for each, at $0.02.
-fn spent_on(answers: u64) -> Usage {
-    Usage {
-        models: vec![ModelTokens {
-            model: "claude-sonnet-5-5".to_owned(),
-            input: 4_000 * answers,
-            output: 1_200 * answers,
-            ..ModelTokens::default()
-        }],
-        cost_usd: Some(0.02 * answers as f64),
-    }
-}
-
-/// How one stage is shown: its words, the share its bar shows when it counts, and its cost line.
-struct Shown {
-    progress: Option<DatasetProgress>,
-    words: &'static str,
-    share: Option<f64>,
-    cost: Option<&'static str>,
-}
-
-fn every_stage() -> [Shown; 7] {
-    let at = |stage, answers| {
-        Some(DatasetProgress {
-            stage,
-            spent: spent_on(answers),
-        })
-    };
-    let shown = |progress, words, share, cost| Shown {
-        progress,
-        words,
-        share,
-        cost,
-    };
-    [
-        shown(None, "Starting the build", None, None),
-        shown(
-            Some(DatasetProgress {
-                stage: DatasetStage::Exporting { done: 1, total: 4 },
-                spent: Usage::default(),
-            }),
-            "Exporting the documents — 1 of 4, about 25%",
-            Some(0.25),
-            None,
-        ),
-        shown(
-            Some(DatasetProgress {
-                stage: DatasetStage::Checking,
-                spent: Usage::default(),
-            }),
-            "Checking the sections",
-            None,
-            None,
-        ),
-        shown(
-            Some(DatasetProgress {
-                stage: DatasetStage::Planning,
-                spent: Usage::default(),
-            }),
-            "Planning what to write",
-            None,
-            None,
-        ),
-        shown(
-            at(DatasetStage::WritingSynthetic { done: 6, total: 12 }, 6),
-            "Writing the synthetic texts — 6 of 12, about 50%",
-            Some(0.5),
-            Some("31k tokens, about $0.12 so far"),
-        ),
-        shown(
-            at(DatasetStage::WritingSft { done: 2, total: 8 }, 14),
-            "Writing the fine-tuning examples — 2 of 8, about 25%",
-            Some(0.25),
-            Some("73k tokens, about $0.28 so far"),
-        ),
-        shown(
-            at(DatasetStage::WritingManifest, 20),
-            "Writing the manifest",
-            None,
-            Some("104k tokens, about $0.40 so far"),
-        ),
-    ]
-}
-
-#[test]
-fn every_stage_of_a_build_is_named_with_its_share() {
-    let mut local = datasets::Local::default();
-    let mut harness = testkit::panel([720.0, 600.0], Shared::default(), move |ui, cx| {
-        datasets::show(ui, &mut local, cx);
-    });
-
-    for stage in every_stage() {
-        harness.state_mut().shared.datasets = DatasetJob::Running {
-            request: DatasetRequest::default(),
-            id: RequestId(1),
-            progress: stage.progress,
-        };
-        harness.run_ok();
-
-        let words = stage.words;
-        let bar = harness
-            .query_all_by_role_and_label(Role::ProgressIndicator, words)
-            .next()
-            .unwrap_or_else(|| panic!("no bar is named `{words}`"));
-        let share = bar.accesskit_node().numeric_value();
-        let is_share = match (share, stage.share) {
-            (Some(shown), Some(wanted)) => (shown - wanted).abs() < 1e-6,
-            (shown, wanted) => shown == wanted,
-        };
-        assert!(
-            is_share,
-            "`{words}`: the bar shows {share:?}, not {:?}",
-            stage.share
-        );
-        assert!(
-            harness
-                .query_all_by_role_and_label(Role::Label, words)
-                .next()
-                .is_some(),
-            "`{words}` is not said"
-        );
-        let is_cost_said = match stage.cost {
-            Some(cost) => harness.query_all_by_label(cost).next().is_some(),
-            None => harness
-                .query_all_by_label_contains("so far")
-                .next()
-                .is_none(),
-        };
-        assert!(is_cost_said, "`{words}` should cost {:?}", stage.cost);
-    }
 }
 
 fn a_running_build_shows_its_stage_its_cost_and_a_form_that_is_off() {

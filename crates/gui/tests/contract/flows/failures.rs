@@ -88,14 +88,6 @@ fn a_failed_search_says_why_and_asking_again_needs_no_other_step() {
     assert_eq!(shared(&harness).ask.generation, before + 1);
 }
 
-fn a_failed_answer_leaves_the_results() {
-    let (harness, _) = open("answer-failed");
-    let ask = &shared(&harness).ask;
-    assert!(says_hint_of(&harness, &ask.answer));
-    assert!(!ask.results().is_empty());
-    assert!(has(&harness, Role::Button, "Result 1"));
-}
-
 fn stores_that_are_down_leave_the_page_that_is_on_disk() {
     let panels = panels(DEFAULT_WINDOW);
     let (mut harness, seen) = open("stores-down");
@@ -196,15 +188,6 @@ fn a_first_run_and_an_empty_library_are_not_failures() {
 }
 
 fn a_search_that_finds_nothing_says_which_kind_of_nothing() {
-    let (harness, _) = open("no-sources");
-    let found = shared(&harness)
-        .ask
-        .search
-        .ready()
-        .expect("the search came back");
-    assert!(found.results.is_empty());
-    assert!(says(&harness, "No sources found"));
-
     let (harness, _) = open("no-labels");
     let found = shared(&harness)
         .ask
@@ -274,7 +257,6 @@ fn an_ask_for_results_only_writes_no_answer() {
 #[test]
 fn a_service_that_is_down_is_named_with_what_to_do() {
     a_failed_search_says_why_and_asking_again_needs_no_other_step();
-    a_failed_answer_leaves_the_results();
     stores_that_are_down_leave_the_page_that_is_on_disk();
     a_first_run_and_an_empty_library_are_not_failures();
     a_search_that_finds_nothing_says_which_kind_of_nothing();

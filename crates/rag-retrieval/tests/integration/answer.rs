@@ -337,41 +337,28 @@ async fn an_answer_gives_the_number_of_each_source_a_title_headings_and_follow_u
 }
 
 #[tokio::test]
-async fn a_line_break_between_the_math_marks_is_the_lost_backslash_of_a_command() {
-    let llm = replying(json!([
-        {
+async fn the_math_marks_a_model_writes_are_mended() {
+    let cases = [
+        (
             // Do not write `\\nu` or `\\nabla` below. Each `\n` is a real line break, which is
             // what JSON gives when the model writes the command with one backslash.
-            "text": "The vega \\( \nu \\) and the slope \\(\nabla V\\) are named.\nNothing else is.",
-            "sources": [1],
-        },
-    ]));
+            "The vega \\( \nu \\) and the slope \\(\nabla V\\) are named.\nNothing else is.",
+            "The vega \\( \\nu \\) and the slope \\(\\nabla V\\) are named.\nNothing else is.",
+            "a line break before a letter is put back between the marks, and one outside them is kept",
+        ),
+        (
+            "The producer calls \\( push_market_tick \\), and \\( d_1 \\) and \\( \\sigma_{ij} \\) stay math.",
+            "The producer calls `push_market_tick`, and \\( d_1 \\) and \\( \\sigma_{ij} \\) stay math.",
+            "a math span that can only be a name from code becomes code, and a symbol stays math",
+        ),
+    ];
+    for (text, mended, rule) in cases {
+        let llm = replying(json!([{ "text": text, "sources": [1] }]));
 
-    let written = answer(&llm, QUESTION, &found_items()).await.unwrap();
+        let written = answer(&llm, QUESTION, &found_items()).await.unwrap();
 
-    assert_eq!(
-        written.claims[0].text,
-        "The vega \\( \\nu \\) and the slope \\(\\nabla V\\) are named.\nNothing else is.",
-        "a line break before a letter is put back between the marks, and one outside them is kept"
-    );
-}
-
-#[tokio::test]
-async fn a_name_from_code_written_as_math_is_given_as_code() {
-    let llm = replying(json!([
-        {
-            "text": "The producer calls \\( push_market_tick \\), and \\( d_1 \\) and \\( \\sigma_{ij} \\) stay math.",
-            "sources": [1],
-        },
-    ]));
-
-    let written = answer(&llm, QUESTION, &found_items()).await.unwrap();
-
-    assert_eq!(
-        written.claims[0].text,
-        "The producer calls `push_market_tick`, and \\( d_1 \\) and \\( \\sigma_{ij} \\) stay math.",
-        "a math span that can only be a name from code becomes code, and a symbol stays math"
-    );
+        assert_eq!(written.claims[0].text, mended, "{rule}");
+    }
 }
 
 #[test]

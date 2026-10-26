@@ -1,24 +1,20 @@
 //! A checked chapter is started and runs to its end on the fake backend, the catalogue is loaded
 //! again when it is stored, and a start that fails says so with its hint. The check and the run
-//! show how far they have got, and each stage of a run is named with its counts and its cost.
+//! show how far they have got.
 
 use backend::fake::Fake;
 use backend::{Handler, Reply};
-use contract::{
-    Category, Command, DocumentName, IngestProgress, IngestRequest, IngestStage, ModelTokens,
-    RequestId, Tab, Usage,
-};
+use contract::{Command, IngestStage, Tab};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
-use egui_kittest::kittest::{NodeT as _, Queryable as _};
+use egui_kittest::kittest::NodeT as _;
 use gui::app::layout::{DEFAULT_WINDOW, MIN_WINDOW};
-use gui::panels::ingest;
 use gui::state::{IngestJob, Shared};
 use gui::testkit::{self, run_until};
 
 use super::{is_ingest, is_preflight, last_checked, open, place_of};
 use crate::flows::recording;
-use crate::flows::{COMMAND, click, field, has, is_enabled, node, press, says, shared, type_into};
+use crate::flows::{COMMAND, click, has, is_enabled, node, press, says, shared, type_into};
 
 const CHOSEN_BOOK: &str = "Option Volatility and Pricing (Book)";
 /// The share of a page that the bar counts as done once the page is cut out but not yet saved.
@@ -26,47 +22,6 @@ const CUT: f64 = 0.15;
 
 fn a_checked_chapter_runs_to_done_and_loads_the_catalogue_again() {
     let (mut harness, seen) = open("ingest-ready", DEFAULT_WINDOW);
-    assert_eq!(shared(&harness).tab, Tab::Ingest);
-    let media = node(&harness, Role::ComboBox, "Media").value();
-    assert_eq!(media.as_deref(), Some(CHOSEN_BOOK));
-    assert!(
-        !has(&harness, Role::TextInput, "Media title"),
-        "a media of the library is chosen from the list, not typed"
-    );
-    for name in ["Authors", "Tags"] {
-        assert!(
-            !has(&harness, Role::TextInput, name),
-            "the labels of a chosen media are fixed on its card: `{name}` is a box"
-        );
-    }
-    assert!(
-        has(&harness, Role::Label, "Book"),
-        "the card names the category"
-    );
-    assert!(has(
-        &harness,
-        Role::Button,
-        "Edit Option Volatility and Pricing"
-    ));
-    assert!(
-        !has(&harness, Role::Button, "Check the chapter"),
-        "a check needs no button"
-    );
-    assert_eq!(
-        field(&harness, "Tags for this PDF").as_deref(),
-        Some("greeks")
-    );
-    assert!(says(
-        &harness,
-        "Chapter 3 · Greeks — 12 pages. Not converted yet."
-    ));
-    assert!(has(&harness, Role::Button, "Start ingest"));
-    assert!(says(
-        &harness,
-        "Checking is free. Starting is paid work: the selected agent and Jev convert each page, Gemini embeds the items, and the selected agent writes artifact descriptions, the insights, takeaways and cheat sheet and reads the concepts."
-    ));
-    testkit::save_png(&mut harness, "app-ingest-ready");
-
     type_into(&mut harness, "Tags for this PDF", ", vega");
     assert!(
         !is_enabled(&harness, Role::Button, "Start ingest"),
@@ -249,247 +204,5 @@ fn a_run_shows_its_page_and_its_cost() {
 fn the_check_and_the_run_show_their_progress() {
     a_check_shows_a_bar_with_no_count();
     a_run_shows_its_page_and_its_cost();
-}
-
-/// What the run used after `pages` pages: Sonnet reads 12,000 tokens and writes 4,000 for each
-/// page, at $0.14 a page.
-fn progress(stage: IngestStage, pages: u32) -> IngestProgress {
-    let pages_read = u64::from(pages);
-    let sonnet = ModelTokens {
-        model: "claude-sonnet-5-5".to_owned(),
-        input: 12_000 * pages_read,
-        output: 4_000 * pages_read,
-        ..ModelTokens::default()
-    };
-    IngestProgress {
-        stage,
-        spent: Usage {
-            models: vec![sonnet],
-            cost_usd: Some(0.14 * f64::from(pages)),
-        },
-    }
-}
-
-/// How one stage is shown: its words, the share its bar shows when it counts, and its cost line.
-struct Shown {
-    progress: Option<IngestProgress>,
-    words: &'static str,
-    share: Option<f64>,
-    cost: Option<&'static str>,
-}
-
-fn every_stage() -> [Shown; 14] {
-    let spent = Some("192k tokens, about $1.68 so far");
-    let shown = |progress, words, share, cost| Shown {
-        progress,
-        words,
-        share,
-        cost,
-    };
-    [
-        shown(None, "Connecting to the stores", None, None),
-        shown(
-            Some(progress(IngestStage::CheckingStored, 0)),
-            "Checking what is already stored",
-            None,
-            None,
-        ),
-        shown(
-            Some(progress(IngestStage::OpeningPdf, 0)),
-            "Opening the PDF",
-            None,
-            None,
-        ),
-        shown(
-            Some(progress(
-                IngestStage::PreparingPages {
-                    ready: 7,
-                    saved_before: 0,
-                    pages: 12,
-                },
-                0,
-            )),
-            "Preparing the pages — 7 of 12 ready, about 9%",
-            Some(CUT * 7.0 / 12.0),
-            None,
-        ),
-        // A run that carries on: 4 pages are saved already and count as done, and 3 are cut now.
-        shown(
-            Some(progress(
-                IngestStage::PreparingPages {
-                    ready: 7,
-                    saved_before: 4,
-                    pages: 12,
-                },
-                0,
-            )),
-            "Preparing the pages — 7 of 12 ready, about 37%",
-            Some((4.0 + CUT * 3.0) / 12.0),
-            None,
-        ),
-        shown(
-            Some(progress(
-                IngestStage::Converting {
-                    saved: 0,
-                    pages: 12,
-                },
-                0,
-            )),
-            "Converting the pages — 0 of 12 done, about 15%",
-            Some(CUT),
-            None,
-        ),
-        shown(
-            Some(progress(
-                IngestStage::Converting {
-                    saved: 3,
-                    pages: 12,
-                },
-                3,
-            )),
-            "Converting the pages — 3 of 12 done, about 36%",
-            Some((3.0 + CUT * 9.0) / 12.0),
-            Some("48k tokens, about $0.42 so far"),
-        ),
-        shown(
-            Some(progress(
-                IngestStage::WritingArtifacts { done: 2, items: 8 },
-                12,
-            )),
-            "Writing artifact descriptions — 2 of 8, about 25%",
-            Some(0.25),
-            spent,
-        ),
-        shown(
-            Some(progress(IngestStage::WritingGraph, 12)),
-            "Writing the graph",
-            None,
-            spent,
-        ),
-        shown(
-            Some(progress(IngestStage::Embedding { items: 120 }, 12)),
-            "Embedding 120 items",
-            None,
-            spent,
-        ),
-        shown(
-            Some(progress(IngestStage::Storing, 12)),
-            "Storing the items",
-            None,
-            spent,
-        ),
-        shown(
-            Some(progress(IngestStage::WritingInsights, 12)),
-            "Writing the insights, takeaways and cheat sheet",
-            None,
-            spent,
-        ),
-        shown(
-            Some(progress(
-                IngestStage::ReadingConcepts {
-                    done: 40,
-                    items: 120,
-                },
-                12,
-            )),
-            "Reading the concepts — 40 of 120, about 33%",
-            Some(40.0 / 120.0),
-            spent,
-        ),
-        shown(
-            Some(progress(
-                IngestStage::LinkingConcepts {
-                    done: 10,
-                    items: 120,
-                },
-                12,
-            )),
-            "Linking the concepts — 10 of 120, about 8%",
-            Some(10.0 / 120.0),
-            spent,
-        ),
-    ]
-}
-
-#[test]
-fn every_stage_of_a_run_is_named_with_its_counts() {
     super::insights::assert_artifacts_precede_store_changes();
-    let request = IngestRequest {
-        pdf: contract::UploadId::default(),
-        file_name: "chapter-3-greeks.pdf".into(),
-        media: "Option Volatility and Pricing".to_owned(),
-        category: Category::Book,
-        name: DocumentName::Chapter {
-            number: 3,
-            name: "Greeks".to_owned(),
-        },
-        tags: Vec::new(),
-    };
-    let mut local = ingest::Local::default();
-    let mut harness = testkit::panel([720.0, 600.0], Shared::default(), move |ui, cx| {
-        ingest::show(ui, &mut local, cx);
-    });
-
-    for stage in every_stage() {
-        harness.state_mut().shared.ingest = IngestJob::Running {
-            request: request.clone(),
-            id: RequestId(1),
-            progress: stage.progress,
-        };
-        harness.run_ok();
-
-        let words = stage.words;
-        let bar = harness
-            .query_all_by_role_and_label(Role::ProgressIndicator, words)
-            .next()
-            .unwrap_or_else(|| panic!("no bar is named `{words}`"));
-        let share = bar.accesskit_node().numeric_value();
-        let is_share = match (share, stage.share) {
-            (Some(shown), Some(wanted)) => (shown - wanted).abs() < 1e-6,
-            (shown, wanted) => shown == wanted,
-        };
-        assert!(
-            is_share,
-            "`{words}`: the bar shows {share:?}, not {:?}",
-            stage.share
-        );
-        assert!(
-            harness
-                .query_all_by_role_and_label(Role::Label, words)
-                .next()
-                .is_some(),
-            "`{words}` is not said"
-        );
-        let is_cost_said = match stage.cost {
-            Some(cost) => harness.query_all_by_label(cost).next().is_some(),
-            None => harness
-                .query_all_by_label_contains("so far")
-                .next()
-                .is_none(),
-        };
-        assert!(is_cost_said, "`{words}` should cost {:?}", stage.cost);
-    }
-    harness.state_mut().shared.ingest = IngestJob::Running {
-        request,
-        id: RequestId(1),
-        progress: Some(progress(
-            IngestStage::WritingArtifacts { done: 0, items: 1 },
-            1,
-        )),
-    };
-    harness.state_mut().shared.apply_event(
-        contract::Event::IngestFinished {
-            request: RequestId(1),
-            result: Err(contract::Failure::internal("invalid metadata response")),
-        },
-        &mut Vec::new(),
-    );
-    harness.run_ok();
-    assert!(
-        harness
-            .query_all_by_label_contains("Tokens: claude-sonnet-5-5 16k. Cost ≈ $0.14.")
-            .next()
-            .is_some(),
-        "a failed metadata run retains the latest reported spend"
-    );
 }

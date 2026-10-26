@@ -76,12 +76,8 @@ pub struct Library {
 pub const AUTHOR: &str = "Sheldon Natenberg";
 
 impl Library {
-    pub async fn ingested(test_name: &str) -> Library {
-        Library::ingested_finding(test_name, |_| json!({ "concepts": [], "relations": [] })).await
-    }
-
-    /// The same library, with the concept "Long straddle" found in every item that mentions a
-    /// straddle, which only page 5 of the sample chapter does.
+    /// The concept "Long straddle" is found in every item that mentions a straddle, which only page
+    /// 5 of the sample chapter does.
     pub async fn ingested_with_concepts(test_name: &str) -> Library {
         Library::ingested_finding(test_name, |text| {
             let concepts = if text.contains("straddle") {

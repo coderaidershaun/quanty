@@ -1,4 +1,4 @@
-//! The one ingest the person can have at a time: checked, started, watched, stopped, finished.
+//! The one ingest the person can have at a time: checked, started, watched, finished.
 
 use super::shared::{Shared, push_cancel};
 use contract::{
@@ -27,12 +27,6 @@ pub enum IngestJob {
         id: RequestId,
         progress: Option<IngestProgress>,
     },
-    /// Cancel was asked for. The job ends at its next safe point.
-    Stopping {
-        request: IngestRequest,
-        id: RequestId,
-        progress: Option<IngestProgress>,
-    },
     Finished {
         request: IngestRequest,
         /// Latest cumulative spend, retained even when the required stage fails.
@@ -43,7 +37,7 @@ pub enum IngestJob {
 
 impl IngestJob {
     pub fn is_running(&self) -> bool {
-        matches!(self, IngestJob::Running { .. } | IngestJob::Stopping { .. })
+        matches!(self, IngestJob::Running { .. })
     }
 
     pub(super) fn is_working(&self) -> bool {
@@ -98,24 +92,6 @@ impl Shared {
         }));
     }
 
-    pub(super) fn cancel_ingest(&mut self, effects: &mut Vec<Effect>) {
-        self.ingest = match std::mem::take(&mut self.ingest) {
-            IngestJob::Running {
-                request,
-                id,
-                progress,
-            } => {
-                push_cancel(effects, id);
-                IngestJob::Stopping {
-                    request,
-                    id,
-                    progress,
-                }
-            }
-            other => other,
-        };
-    }
-
     pub(super) fn clear_ingest(&mut self, effects: &mut Vec<Effect>) {
         if self.ingest.is_running() {
             return;
@@ -149,9 +125,7 @@ impl Shared {
 
     pub(super) fn progress_arrived(&mut self, request: RequestId, newest: IngestProgress) {
         match &mut self.ingest {
-            IngestJob::Running { id, progress, .. } | IngestJob::Stopping { id, progress, .. }
-                if *id == request =>
-            {
+            IngestJob::Running { id, progress, .. } if *id == request => {
                 *progress = Some(newest);
             }
             _ => {}
@@ -165,15 +139,12 @@ impl Shared {
         effects: &mut Vec<Effect>,
     ) {
         match &self.ingest {
-            IngestJob::Running { id, .. } | IngestJob::Stopping { id, .. } if *id == request => {}
+            IngestJob::Running { id, .. } if *id == request => {}
             _ => return,
         }
-        let (IngestJob::Running {
+        let IngestJob::Running {
             request, progress, ..
-        }
-        | IngestJob::Stopping {
-            request, progress, ..
-        }) = std::mem::take(&mut self.ingest)
+        } = std::mem::take(&mut self.ingest)
         else {
             return;
         };

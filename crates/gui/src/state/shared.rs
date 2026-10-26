@@ -104,7 +104,6 @@ impl Shared {
             }
             Intent::CheckIngest(request) => self.check_ingest(request, effects),
             Intent::StartIngest => self.start_ingest(effects),
-            Intent::CancelIngest => self.cancel_ingest(effects),
             Intent::ClearIngest => self.clear_ingest(effects),
             Intent::StartDatasetBuild(request) => self.start_dataset_build(request, effects),
             Intent::ClearDatasetBuild => self.clear_dataset_build(),

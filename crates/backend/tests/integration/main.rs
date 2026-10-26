@@ -2,15 +2,14 @@
 //! pictures.
 #![recursion_limit = "256"]
 
-mod app;
 mod balances;
 mod chapter;
 mod copied_rules;
-mod datasets;
 mod exporting;
 mod ingest;
 mod key_checks;
 mod library;
 mod media;
 mod query;
+mod stores_down;
 mod support;

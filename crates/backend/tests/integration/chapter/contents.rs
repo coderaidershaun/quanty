@@ -1,20 +1,17 @@
-//! Checks that the live backend reads every item of a saved chapter from disk and the concepts of
-//! the document from the graph, and that the fake backend lists what the live reader lists.
+//! Checks that the live backend reads every item of a saved chapter from disk, with its saved
+//! metadata when the metadata still matches the chapter.
 
 use std::path::Path;
 
 use backend::Handler;
-use backend::fake::Fake;
 use contract::{
     ChapterContents, Command, DocId, Event, Failure, FailureKind, PageConcept, PieceKind, RequestId,
 };
-use graph::{ConceptNode, DocumentNode, ItemNode, Mention};
 use ocr::content::{FORMAT_VERSION, PageIndex, PieceEntry, page_folder_name};
 use ocr::{ChapterIndex, PieceDetail};
-use rag_core::{ConceptId, DocumentLabels, ItemId, ItemKind};
 use uuid::Uuid;
 
-use crate::support::{self, IN_DEPTH, closed, copy_folder, sample_chapter, served};
+use crate::support::{IN_DEPTH, closed, copy_folder, sample_chapter, served};
 
 const REQUEST: RequestId = RequestId(7);
 const NO_CONTENT_FOLDER: &str = "/no/such/content/folder";
@@ -149,181 +146,6 @@ async fn the_items_of_a_chapter_load_from_its_folder_while_the_stores_are_down()
     assert!(failure.detail.contains(&unknown.0.to_string()));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn the_fake_backend_lists_the_contents_of_every_sample_as_the_live_reader_does() {
-    let home = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let fake = Fake::scene("idle", home)
-        .expect("the scene should start")
-        .instant();
-    let events = served(&fake, Command::LoadCatalogue { request: REQUEST }).await;
-    let [
-        Event::Catalogue {
-            result: Ok(catalogue),
-            ..
-        },
-        ..,
-    ] = events.as_slice()
-    else {
-        panic!("expected the catalogue of the samples first: {events:#?}");
-    };
-    let cx = closed(&gui::testkit::samples_folder());
-
-    let mut compared = 0;
-    // The paper of the samples has no folder, so neither reader has items of it.
-    let with_folders = catalogue
-        .documents()
-        .filter(|document| document.folder.is_some());
-    for document in with_folders {
-        let folder = document.folder.as_deref();
-        let (faked, _concepts) = loaded(&fake, document.id, folder).await;
-        let (live, _concepts) = loaded(&cx, document.id, folder).await;
-        let chapter = ocr::read_chapter(folder.unwrap()).unwrap();
-        let saved = ocr::content::ChapterArtifacts::read(folder.unwrap())
-            .unwrap()
-            .unwrap();
-        assert!(
-            saved.matches_source(&chapter.artifact_source()),
-            "expected {:?}, saved {:?}",
-            chapter.artifact_source(),
-            saved.source
-        );
-        assert!(
-            live.as_ref()
-                .unwrap()
-                .items
-                .iter()
-                .all(|item| item.metadata.is_some())
-        );
-        assert_eq!(
-            faked.expect("the fake should list the contents"),
-            live.expect("the live reader should list the contents"),
-            "{}",
-            document.title
-        );
-        compared += 1;
-    }
-    assert_eq!(compared, 3, "three chapters");
-    let copied = tempfile::tempdir().unwrap();
-    copy_folder(&home.join("../../samples"), &copied.path().join("samples"));
-    let fake = Fake::scene("idle", copied.path()).unwrap().instant();
-    let document = catalogue
-        .documents()
-        .find(|doc| doc.folder.is_some())
-        .unwrap();
-    let folder = copied.path().join("samples/content").join(
-        document
-            .folder
-            .as_ref()
-            .unwrap()
-            .canonicalize()
-            .unwrap()
-            .strip_prefix(home.join("../../samples/content").canonicalize().unwrap())
-            .unwrap(),
-    );
-    let mut saved = ocr::content::ChapterArtifacts::read(&folder)
-        .unwrap()
-        .unwrap();
-    for (title, description, valid) in [
-        (
-            "__builtin_prefetch",
-            "Uses std::vector<std::vector<int>>, __VA_ARGS__ and #include <vector>.",
-            true,
-        ),
-        (
-            "#include <vector>",
-            "Uses int **p, *ptr, a[i](x), $100 and prices < 120 > 0.",
-            true,
-        ),
-        ("A **bold** title", "Keeps source text.", false),
-        ("Plain title", "Uses `wrapped` text.", false),
-    ] {
-        saved.entries[0].text.title = title.to_owned();
-        saved.entries[0].text.description = description.to_owned();
-        saved.write(&folder).unwrap();
-        let (faked, _) = loaded(&fake, document.id, Some(&folder)).await;
-        let (live, _) = loaded(&cx, document.id, Some(&folder)).await;
-        let faked = faked.unwrap();
-        assert_eq!(
-            faked
-                .items
-                .iter()
-                .map(|item| &item.metadata)
-                .collect::<Vec<_>>(),
-            live.unwrap()
-                .items
-                .iter()
-                .map(|item| &item.metadata)
-                .collect::<Vec<_>>()
-        );
-        assert_eq!(faked.items[0].metadata.is_some(), valid);
-    }
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p backend --test integration -- --ignored contents::"]
-async fn the_concepts_of_a_document_come_from_the_graph_most_mentioned_first() {
-    let cx = support::context("contents-concepts");
-    let stores = cx.stores().await.expect("the stores should open");
-    let graph = &stores.graph;
-    let document = rag_core::DocId::from_source_sha256("contents-concepts-document");
-    let item = |kind, position, page| ItemNode {
-        id: ItemId::new(document, kind, position),
-        kind,
-        page,
-        printed_page: None,
-    };
-    let items = [
-        item(ItemKind::Chunk, 0, 2),
-        item(ItemKind::Formula, 1, 2),
-        item(ItemKind::Chunk, 2, 3),
-    ];
-    let [first, second, third] = &items;
-    let concept = |name: &str| ConceptNode {
-        id: ConceptId::random(),
-        name: name.to_owned(),
-        normalised_name: name.to_lowercase(),
-        definition: format!("{name} in one line"),
-    };
-    // Volatility comes last by name, so a list in the order of the names would put it last.
-    let volatility = concept("Volatility");
-    let arbitrage = concept("Arbitrage");
-    let straddle = concept("Straddle");
-    let node = DocumentNode {
-        id: document,
-        title: "A Document".to_owned(),
-        labels: DocumentLabels::default(),
-    };
-    graph.upsert_document(&node).await.unwrap();
-    graph.upsert_items(document, &items).await.unwrap();
-    for stored in [&volatility, &arbitrage, &straddle] {
-        graph.upsert_concept(stored).await.unwrap();
-    }
-    let mentions = [
-        (first, &volatility),
-        (second, &arbitrage),
-        (third, &volatility),
-        (third, &straddle),
-    ]
-    .map(|(item, concept)| Mention {
-        item: item.id,
-        concept: concept.id,
-        wording: concept.name.clone(),
-    });
-    graph.add_mentions(&mentions).await.unwrap();
-
-    let (items, concepts) = loaded(&cx, DocId(document.0), None).await;
-
-    let failure = items.expect_err("no chapter is saved for this document");
-    assert_eq!(failure.kind, FailureKind::SourceMissing);
-    let listed = |concept: &ConceptNode| PageConcept {
-        id: contract::ConceptId(concept.id.0),
-        name: concept.name.clone(),
-        definition: concept.definition.clone(),
-    };
-    let expected = [listed(&volatility), listed(&arbitrage), listed(&straddle)];
-    assert_eq!(concepts.expect("the concepts should be read"), expected);
-}
-
 /// Adds a fourth page with one code piece to a copy of a three page chapter, so the listing at the
 /// end of page 3 goes on over the page break.
 fn add_page_with_code(chapter: &Path, code: &str) {
@@ -356,7 +178,7 @@ fn add_page_with_code(chapter: &Path, code: &str) {
 }
 
 /// The items, then the concepts, each for `REQUEST`, as the window takes them.
-async fn loaded(
+pub(super) async fn loaded(
     backend: &impl Handler,
     doc: DocId,
     folder: Option<&Path>,

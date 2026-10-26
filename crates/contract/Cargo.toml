@@ -8,6 +8,3 @@ choices.workspace = true
 export.workspace = true
 serde.workspace = true
 uuid.workspace = true
-
-[dev-dependencies]
-serde_json.workspace = true

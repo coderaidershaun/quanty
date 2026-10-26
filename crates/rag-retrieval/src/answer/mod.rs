@@ -13,10 +13,6 @@ pub use reply::{Answer, Claim, Source};
 const SYSTEM_PROMPT: &str = include_str!("prompts/answer.md");
 const SCHEMA: &str = include_str!("prompts/answer.schema.json");
 
-// The prompt was written against this model, but an answer is written by the model of the Ask
-// choice.
-pub const ANSWER_MODEL: &str = "claude-sonnet-5-5";
-
 #[derive(thiserror::Error, Debug)]
 pub enum AnswerError {
     #[error("could not get an answer from the model")]

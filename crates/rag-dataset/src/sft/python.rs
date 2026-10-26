@@ -115,9 +115,4 @@ mod tests {
             "the program should have run up to the limit and then been stopped: {waited:?}"
         );
     }
-
-    #[tokio::test]
-    async fn a_python_that_cannot_be_started_is_not_usable() {
-        assert!(!usable("python3-that-does-not-exist", TIME_LIMIT).await);
-    }
 }

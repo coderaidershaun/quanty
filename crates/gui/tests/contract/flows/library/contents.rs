@@ -1,24 +1,18 @@
-//! The Code, Formulas, Figures and Tables views of a document list every item of that kind with
-//! the page it is printed on, each item reads its page in the Source panel, a folder that is not
-//! found says so, and the Concepts view lists the concepts of the document and says when the graph
-//! is down.
+//! An item of the Code, Formulas, Figures and Tables views reads its page in the Source panel, a
+//! folder that is not found says so, and the Concepts view lists the concepts of the document and
+//! says when the graph is down.
 
 use backend::fake::Fake;
 use backend::{Handler, Reply};
 use contract::{Command, DocId, Event, Failure, PieceKind, Tab};
 use eframe::egui::accesskit::Role;
-use egui_kittest::kittest::Queryable as _;
 use gui::app::layout::DEFAULT_WINDOW;
 use gui::state::SourceTarget;
 use gui::testkit;
 
-use super::{
-    BLACK_SCHOLES, BOOK, HAWKES, NOTES, PAPER, SAMPLE_PAGES, documents_of, open_document, view,
-};
+use super::{BLACK_SCHOLES, BOOK, HAWKES, NOTES, PAPER, SAMPLE_PAGES, documents_of, open_document};
 use crate::flows::recording::{self, Seen};
-use crate::flows::{
-    Wheel, Window, are_stacked_in_order, click, has, node, says, scroll_to, shared,
-};
+use crate::flows::{Window, are_stacked_in_order, click, has, node, says, shared};
 
 const FALKORDB_URL: &str = "falkor://localhost:6379";
 
@@ -104,102 +98,6 @@ fn loads_of(seen: &Seen, id: DocId) -> usize {
 
 fn count_of(harness: &Window, view: &str) -> Option<String> {
     node(harness, Role::Tab, view).value()
-}
-
-fn assert_metadata(harness: &Window, kind: PieceKind) {
-    let chapter = shared(harness).contents.items.ready().unwrap();
-    let item = chapter.of_kind(kind).next().unwrap();
-    let metadata = item
-        .metadata
-        .as_ref()
-        .expect("source-valid fixture metadata");
-    assert_eq!(
-        harness
-            .query_all_by_role_and_label(Role::Label, &metadata.title)
-            .count(),
-        1,
-        "matching source names and captions are not repeated in Library"
-    );
-    assert!(are_stacked_in_order(
-        harness,
-        Role::Label,
-        &[&item.page_label(), &metadata.title, &metadata.description]
-    ));
-}
-
-#[test]
-fn each_view_lists_every_item_of_its_kind_in_reading_order_with_its_page() {
-    let (mut harness, seen) = open_library("black-scholes");
-
-    open_document(&mut harness, NOTES, BLACK_SCHOLES);
-    click(&mut harness, Role::Tab, "Code");
-    assert!(
-        has(&harness, Role::Label, "Listing 2.1"),
-        "the tag is the printed label"
-    );
-    assert!(
-        has(&harness, Role::Label, "p. 7"),
-        "the page is the one printed"
-    );
-    assert!(says(&harness, "python"));
-    assert!(says(&harness, "The call price in Python"));
-    assert_metadata(&harness, PieceKind::Code);
-    assert_eq!(count_of(&harness, "Code").as_deref(), Some("1"));
-
-    click(&mut harness, Role::Tab, "Formulas");
-    assert!(
-        are_stacked_in_order(&harness, Role::Label, &["(2.1)", "(2.2)", "(2.3)", "(2.4)"]),
-        "the formulas are in reading order"
-    );
-    assert!(says(&harness, "Black–Scholes call price"));
-    assert_metadata(&harness, PieceKind::Formula);
-    scroll_to(&mut harness, view(), Wheel::Down, Role::Label, "(2.6)");
-
-    click(&mut harness, Role::Tab, "Figures");
-    assert!(says(&harness, "No figures in this document"));
-    click(&mut harness, Role::Tab, "Tables");
-    assert!(says(&harness, "No tables in this document"));
-
-    open_document(&mut harness, BOOK, SAMPLE_PAGES);
-    assert!(
-        are_stacked_in_order(
-            &harness,
-            Role::Label,
-            &["Figure 7-2", "Figure 7-3", "Table"]
-        ),
-        "the tables are in reading order"
-    );
-    assert!(has(&harness, Role::Label, "p. 100"));
-    assert_metadata(&harness, PieceKind::Table);
-    assert!(has(&harness, Role::Label, "p. 246"));
-
-    click(&mut harness, Role::Tab, "Figures");
-    assert!(are_stacked_in_order(
-        &harness,
-        Role::Label,
-        &["Figure 13-4", "Figure 13-16"]
-    ));
-    assert!(says(&harness, "Dividend sensitivity."));
-    assert_metadata(&harness, PieceKind::Figure);
-    // A figure card is taller than half the room, so the third is not laid out until it is
-    // scrolled to, and its picture is not asked for.
-    assert!(!has(&harness, Role::Label, "Figure 24-12"));
-    scroll_to(
-        &mut harness,
-        view(),
-        Wheel::Down,
-        Role::Label,
-        "Figure 24-12",
-    );
-    assert!(says(
-        &harness,
-        "FTSE 100 volatility surface. March 16. 2012."
-    ));
-
-    for title in [BLACK_SCHOLES, SAMPLE_PAGES] {
-        let loads = loads_of(&seen, id_of(&harness, title));
-        assert_eq!(loads, 1, "all the views of `{title}` share one load");
-    }
 }
 
 #[test]

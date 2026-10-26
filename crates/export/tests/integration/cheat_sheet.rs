@@ -1,11 +1,12 @@
-//! A document that no answer is behind, written in every format.
+//! Documents that no answer is behind, a cheat sheet and the insights of a chapter, written in
+//! every format.
 
 use export::{Format, insights_document, write};
 
 use crate::support;
 
 #[test]
-fn a_cheat_sheet_with_no_answer_is_written_in_every_format() {
+fn a_cheat_sheet_and_the_insights_of_a_chapter_are_written_in_every_format() {
     let folder = tempfile::tempdir().expect("a temporary folder");
     let sheet = support::cheat_sheet();
 
@@ -58,11 +59,7 @@ fn a_cheat_sheet_with_no_answer_is_written_in_every_format() {
         support::pdf_pictures(&pdf_path).len() >= 6,
         "one picture for each formula"
     );
-}
 
-#[test]
-fn the_insights_of_a_chapter_are_written_in_every_format() {
-    let folder = tempfile::tempdir().expect("a temporary folder");
     let sheet = support::insights_sheet();
     let document = insights_document(&sheet);
 

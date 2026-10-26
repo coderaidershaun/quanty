@@ -8,6 +8,7 @@ use rag_dataset::generate::role::Role;
 use rag_ingestion::testing::StandInLlm;
 use serde::Deserialize;
 use serde_json::json;
+use tempfile::TempDir;
 
 const SHORTEN: Role = Role {
     id: "shorten",
@@ -36,9 +37,19 @@ fn timed_out() -> LlmError {
     LlmError::TimedOut { seconds: 120 }
 }
 
+/// Every question goes to the same folder of kept answers: each asks with an input of its own, so
+/// no answer that one part keeps is read by another.
 #[tokio::test]
-async fn a_second_identical_ask_is_answered_from_the_cache() {
+async fn the_asker_keeps_answers_asks_again_once_stops_for_good_and_asks_four_at_once() {
     let folder = tempfile::tempdir().unwrap();
+
+    a_second_identical_ask_is_answered_from_the_cache(&folder).await;
+    a_failed_question_is_asked_once_more(&folder).await;
+    a_question_that_no_question_could_pass_stops_the_run(&folder).await;
+    ask_each_asks_at_most_four_at_once_in_order(&folder).await;
+}
+
+async fn a_second_identical_ask_is_answered_from_the_cache(folder: &TempDir) {
     let llm = shortening();
     let asker = Asker::new(&llm, folder.path()).unwrap();
 
@@ -102,10 +113,7 @@ async fn a_second_identical_ask_is_answered_from_the_cache() {
     );
 }
 
-#[tokio::test]
-async fn a_failed_question_is_asked_once_more() {
-    let folder = tempfile::tempdir().unwrap();
-
+async fn a_failed_question_is_asked_once_more(folder: &TempDir) {
     let flaky = StandInLlm::replying(|_, earlier| match earlier {
         0 => Err(timed_out()),
         _ => Ok(json!({ "text": "second time" })),
@@ -150,10 +158,7 @@ async fn a_failed_question_is_asked_once_more() {
     );
 }
 
-#[tokio::test]
-async fn a_question_that_no_question_could_pass_stops_the_run() {
-    let folder = tempfile::tempdir().unwrap();
-
+async fn a_question_that_no_question_could_pass_stops_the_run(folder: &TempDir) {
     let at_limit = StandInLlm::replying(|_, _| {
         Err(LlmError::UsageLimit {
             message: "resets at 5pm".to_owned(),
@@ -177,9 +182,7 @@ async fn a_question_that_no_question_could_pass_stops_the_run() {
     assert_eq!(signed_out.calls(), 1);
 }
 
-#[tokio::test]
-async fn ask_each_asks_at_most_four_at_once_in_order() {
-    let folder = tempfile::tempdir().unwrap();
+async fn ask_each_asks_at_most_four_at_once_in_order(folder: &TempDir) {
     let llm = shortening();
     let asker = Asker::new(&llm, folder.path()).unwrap();
     let inputs: Vec<String> = (1..=10).map(|number| format!("text {number}")).collect();

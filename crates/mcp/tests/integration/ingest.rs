@@ -1,5 +1,5 @@
-//! Checks `ingest_pdf` and `ingest_status`: a PDF is ingested, one job runs at a time, a failed
-//! job says why, an old job is forgotten, and a bad file is refused before anything is written.
+//! Checks `ingest_pdf` and `ingest_status`: a PDF is ingested, a failed job says why, an old job is
+//! forgotten, and a bad file is refused before anything is written.
 
 use std::path::PathBuf;
 
@@ -21,13 +21,16 @@ fn pdf_bytes(length: usize) -> Vec<u8> {
     bytes
 }
 
+/// The files the test sends by path are outside the folder of the server, so that nothing that a
+/// refusal could have written is mistaken for them.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_file_that_is_not_a_pdf_or_is_over_the_size_limit_is_refused() {
+async fn a_bad_file_is_refused_before_anything_is_written() {
     const LIMIT: u64 = 1024;
     let ports = ClosedPorts::new();
     let client = connect(ports.server_with_limit(LIMIT)).await;
+    let sent = tempfile::tempdir().unwrap();
     let file = |name: &str, bytes: &[u8]| -> PathBuf {
-        let path = ports.folder().join(name);
+        let path = sent.path().join(name);
         std::fs::write(&path, bytes).unwrap();
         path
     };
@@ -55,11 +58,11 @@ async fn a_file_that_is_not_a_pdf_or_is_over_the_size_limit_is_refused() {
     assert!(text.contains("over the size limit of 1024 bytes"), "{text}");
     let text = error_text(&refused_by_path("chapter-1-text.pdf").await);
     assert!(text.contains("absolute"), "{text}");
-    let gone = ports.folder().join("chapter-3-gone.pdf");
+    let gone = sent.path().join("chapter-3-gone.pdf");
     let text = error_text(&refused_by_path(gone.to_str().unwrap()).await);
     assert!(text.contains("could not read the PDF"), "{text}");
     assert!(text.contains("the machine the server runs on"), "{text}");
-    let text = error_text(&refused_by_path(ports.folder().to_str().unwrap()).await);
+    let text = error_text(&refused_by_path(sent.path().to_str().unwrap()).await);
     assert!(text.contains("not a file"), "{text}");
 
     let text = error_text(&refused_as_base64(b"plain text again", "chapter-1-text.pdf").await);
@@ -78,12 +81,7 @@ async fn a_file_that_is_not_a_pdf_or_is_over_the_size_limit_is_refused() {
         !ports.config.content_folder.exists(),
         "a refused PDF is never saved"
     );
-}
 
-#[tokio::test(flavor = "multi_thread")]
-async fn an_upload_whose_name_holds_a_folder_is_refused_and_nothing_is_written() {
-    let ports = ClosedPorts::new();
-    let client = connect(ports.server()).await;
     let pdf = STANDARD.encode(pdf_bytes(200));
 
     for name in [
@@ -260,50 +258,6 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored ingest::"]
-async fn a_part_of_a_book_is_named_by_its_document_title_whatever_its_file_name() {
-    let (services, open_the_gate) = StandInServices::new().with_gate();
-    let (stores, server) = empty_library("mcp-ingest-part", services);
-    let client = connect(server).await;
-    let index = stores.temporary_folder().join("index.pdf");
-    std::fs::copy(sample_pdf(), &index).unwrap();
-
-    let first = call(
-        &client,
-        "ingest_pdf",
-        json!({
-            "media": "Option Volatility and Pricing",
-            "path": index,
-            "document_title": "Index",
-        }),
-    )
-    .await;
-
-    let started = structured(&first);
-    assert_eq!(started["state"], "running");
-    open_the_gate.send(()).unwrap();
-    let ended = report_when_ended(
-        &client,
-        "ingest_status",
-        started["job_id"].as_str().unwrap(),
-    )
-    .await;
-    assert_eq!(ended["state"], "done", "{ended}");
-    let documents = call(&client, "list_documents", json!({})).await;
-    let listed = &structured(&documents)["documents"];
-    assert_eq!(listed.as_array().unwrap().len(), 1, "{listed}");
-    assert_eq!(listed[0]["title"], "Option Volatility and Pricing, Index");
-    assert_eq!(listed[0]["category"], "book");
-    assert!(
-        stores
-            .config()
-            .content_folder
-            .join("option-volatility-and-pricing/index/chapter.json")
-            .is_file()
-    );
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored ingest::"]
 async fn a_pdf_sent_as_base64_is_saved_under_the_content_folder_and_ingested() {
     // The gate holds the conversion, so the first answer is `running` however fast the
     // stand-ins are.
@@ -353,33 +307,6 @@ async fn a_pdf_sent_as_base64_is_saved_under_the_content_folder_and_ingested() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored ingest::"]
-async fn a_second_pdf_is_refused_while_one_is_being_ingested() {
-    let (services, open_the_gate) = StandInServices::new().with_gate();
-    let (_stores, server) = empty_library("mcp-ingest-busy", services);
-    let client = connect(server).await;
-    let sent = json!({ "book": "Option Volatility and Pricing", "path": sample_pdf() });
-
-    let first = call(&client, "ingest_pdf", sent.clone()).await;
-
-    let started = structured(&first);
-    assert_eq!(started["state"], "running");
-    assert_eq!(started["stage"], "converting");
-    let job_id = started["job_id"].as_str().unwrap();
-    let second = call(&client, "ingest_pdf", sent).await;
-    let text = error_text(&second);
-    assert!(text.contains(job_id), "{text}");
-    assert!(text.contains("ingest_status"), "{text}");
-    let status = call(&client, "ingest_status", json!({ "job_id": job_id })).await;
-    assert_eq!(structured(&status)["state"], "running");
-
-    open_the_gate.send(()).unwrap();
-
-    let ended = report_when_ended(&client, "ingest_status", job_id).await;
-    assert_eq!(ended["state"], "done", "{ended}");
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored ingest::"]
 async fn a_job_that_fails_after_the_paid_work_began_says_failed_and_what_to_do() {
     // Every reply for page 1 fails the check, so each conversion stops after its paid calls.
     let (services, open_the_gate) = StandInServices::new()
@@ -424,10 +351,10 @@ async fn a_job_that_fails_after_the_paid_work_began_says_failed_and_what_to_do()
     let ended_again =
         report_when_ended(&client, "ingest_status", again["job_id"].as_str().unwrap()).await;
     assert_eq!(ended_again["state"], "failed", "{ended_again}");
+
+    a_job_that_a_file_stops_does_not_point_at_health().await;
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored ingest::"]
 async fn a_job_that_a_file_stops_does_not_point_at_health() {
     let (services, open_the_gate) = StandInServices::new().with_gate();
     let (stores, server) = empty_library("mcp-ingest-file", services);

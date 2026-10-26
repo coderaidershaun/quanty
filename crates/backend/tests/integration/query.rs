@@ -1,21 +1,19 @@
-//! Checks that an ask on the live backend finds the stored items and writes the answer, and that a
-//! category filter keeps only the items of that category.
+//! Checks that an ask on the live backend finds the stored items and writes the answer, and that an
+//! ask over stores with nothing in them asks no model.
 
 use backend::Reply;
 use backend::live::{LiveContext, query};
 use contract::{
-    AnswerBlock, AskDraft, AskMode, Category, ConceptId, DocId, EdgeKind, Event, Filters,
-    GraphEdge, GraphNode, ItemId, ItemKind, NodeId, NodeKind, Reason, RequestId, ResultItem,
+    AnswerBlock, AskDraft, AskMode, ConceptId, DocId, EdgeKind, Event, Filters, GraphEdge,
+    GraphNode, ItemId, ItemKind, NodeId, NodeKind, Reason, RequestId, ResultItem,
 };
-use rag_core::{Config, MediaLabels};
+use rag_core::Config;
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores};
-use rag_ingestion::{ChapterFolder, ingest_chapter};
 use rag_retrieval::RESULTS_PER_QUERY;
 use serde_json::json;
 
 use crate::support::{
-    Folders, IN_DEPTH, INTUITION, QUESTION, SAMPLE_PAGES, StandInServices, context_over,
-    context_with, fill, sample_chapter,
+    Folders, IN_DEPTH, INTUITION, QUESTION, StandInServices, context_over, context_with, fill,
 };
 
 const REQUEST: RequestId = RequestId(7);
@@ -178,10 +176,10 @@ async fn an_ask_sends_the_results_with_their_trace_then_the_graph_then_the_answe
     assert!(asked[0].input.contains(QUESTION));
     assert!(asked[0].input.contains(&picks.formula.payload.text));
     assert!(asked[0].input.contains(&picks.table.payload.text));
+
+    an_ask_with_nothing_stored_sends_an_empty_search_and_asks_no_model().await;
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p backend --test integration -- --ignored query::"]
 async fn an_ask_with_nothing_stored_sends_an_empty_search_and_asks_no_model() {
     let answering = StandInLlm::finding_nothing();
     let stores = ThrowawayStores::new("query-empty");
@@ -228,75 +226,6 @@ async fn an_ask_with_nothing_stored_sends_an_empty_search_and_asks_no_model() {
         panic!("expected a failed search alone, with id 7: {events:#?}");
     };
     assert_eq!(answering.calls(), 0);
-}
-
-/// The two chapters are of two different media, because a document takes the category of its
-/// media, and a media that is stored already keeps the labels it has.
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p backend --test integration -- --ignored query::"]
-async fn a_category_filter_finds_only_the_items_of_that_category() {
-    let stores = ThrowawayStores::new("query-category");
-    let connected = stores.connect().await;
-    let models =
-        stores.models_with_embedder(StandInEmbedder::default(), StandInLlm::finding_nothing());
-    let store = async |chapter: &str, new_media: &MediaLabels| {
-        let folder = ChapterFolder {
-            folder: &sample_chapter(chapter),
-            new_media,
-        };
-        let summary = ingest_chapter(folder, &models, &connected).await;
-        DocId((summary.expect("a sample chapter should be ingested").doc_id).0)
-    };
-    let book = store(IN_DEPTH, &MediaLabels::default()).await;
-    let paper_labels = MediaLabels {
-        category: rag_core::Category::Paper,
-        ..MediaLabels::default()
-    };
-    let paper = store(SAMPLE_PAGES, &paper_labels).await;
-    let cx = context_with(
-        stores,
-        &StandInLlm::finding_nothing(),
-        StandInEmbedder::default,
-    );
-
-    let of_category = |category| Filters {
-        category: Some(category),
-        ..Filters::default()
-    };
-    let of_the_paper = Filters {
-        document: Some(paper),
-        ..Filters::default()
-    };
-    for (filters, doc) in [
-        (of_category(Category::Paper), paper),
-        (of_category(Category::Book), book),
-        (of_the_paper, paper),
-    ] {
-        let draft = AskDraft {
-            question: QUESTION.to_owned(),
-            mode: AskMode::ResultsOnly,
-            filters: filters.clone(),
-        };
-
-        let events = ask(&cx, &draft).await;
-
-        let Some(Event::Search {
-            result: Ok(search), ..
-        }) = events.first()
-        else {
-            panic!("expected the search first: {events:#?}");
-        };
-        assert!(
-            !search.results.is_empty(),
-            "the {filters:?} filter finds items"
-        );
-        assert!(
-            search.results.iter().all(|result| result.doc == doc),
-            "the {filters:?} filter keeps only the items of {doc:?}: {:#?}",
-            search.results
-        );
-        assert_eq!(search.trace.documents_searched, Some(1));
-    }
 }
 
 fn paragraph(text: &str, cites: &[usize]) -> AnswerBlock {

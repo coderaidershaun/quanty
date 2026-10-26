@@ -319,9 +319,17 @@ fn assert_records_carry_the_concepts_of_the_plan(plan: &GenerationPlan, out: &Pa
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-dataset --test integration -- --ignored plan::"]
-async fn rare_concepts_get_more_texts_and_questions_and_only_training_items_seed_relations() {
-    let library = Library::new("plan-rarity").await;
+async fn the_plan_reads_the_rarity_of_each_concept_from_the_graph_and_caps_the_commonest_first() {
+    let library = Library::new("plan").await;
 
+    rare_concepts_get_more_texts_and_questions_and_only_training_items_seed_relations(&library)
+        .await;
+    the_caps_keep_the_rarest_sections_whole(&library).await;
+}
+
+async fn rare_concepts_get_more_texts_and_questions_and_only_training_items_seed_relations(
+    library: &Library,
+) {
     let plan = library.plan_of_a_build(&library.options()).await;
 
     assert!(plan.graph_read);
@@ -378,10 +386,7 @@ async fn rare_concepts_get_more_texts_and_questions_and_only_training_items_seed
     assert_records_carry_the_concepts_of_the_plan(&plan, &library.options().out);
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-dataset --test integration -- --ignored plan::"]
-async fn the_caps_keep_the_rarest_sections_whole() {
-    let library = Library::new("plan-caps").await;
+async fn the_caps_keep_the_rarest_sections_whole(library: &Library) {
     let mut options = library.options();
     options.max_sft = 7;
     options.max_synthetic = Some(10);

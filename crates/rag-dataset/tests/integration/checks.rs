@@ -201,89 +201,6 @@ fn record_with<'a>(records: &'a [Value], word: &str) -> &'a Value {
     found[0]
 }
 
-#[tokio::test]
-async fn a_section_on_a_page_that_matches_too_little_of_its_text_layer_is_rejected() {
-    let work = tempfile::tempdir().unwrap();
-    let content = work.path().join("content");
-    write_checked_chapter(&content);
-    let out = work.path().join("out");
-
-    let report = build_with(&dry_run_over(&content, &out)).await;
-
-    let rejected = support::read_jsonl(&out.join("cpt/rejected.jsonl"));
-    let low = record_with(&rejected, "LOW abc");
-    assert_eq!(low["rejected"], "page_score");
-    assert_eq!(low["quality"]["page_score"], 0.8);
-    assert_eq!(report.rejected["page_score"], 1);
-    let raw = support::read_jsonl(&out.join("cpt/raw.jsonl"));
-    assert!(
-        raw.iter()
-            .all(|record| !record["text"].as_str().unwrap().contains("LOW abc")),
-        "a rejected section is not in the dataset"
-    );
-    assert_eq!(
-        record_with(&raw, "LISTING abc")["quality"]["page_score"],
-        Value::Null,
-        "a page written by hand has no score"
-    );
-}
-
-#[tokio::test]
-async fn a_section_whose_formula_does_not_parse_is_rejected_unless_unrendered_ones_are_kept() {
-    let work = tempfile::tempdir().unwrap();
-    let content = work.path().join("content");
-    write_checked_chapter(&content);
-
-    let strict_out = work.path().join("strict");
-    let strict = build_with(&dry_run_over(&content, &strict_out)).await;
-
-    let rejected = support::read_jsonl(&strict_out.join("cpt/rejected.jsonl"));
-    let bad = record_with(&rejected, "FORMULA abc");
-    assert_eq!(bad["rejected"], "latex");
-    assert_eq!(bad["quality"]["latex_renders"], false);
-    assert_eq!(strict.rejected["latex"], 1);
-
-    let lenient_out = work.path().join("lenient");
-    let mut lenient_options = dry_run_over(&content, &lenient_out);
-    lenient_options.keep_unrendered = true;
-    let lenient = build_with(&lenient_options).await;
-
-    let raw = support::read_jsonl(&lenient_out.join("cpt/raw.jsonl"));
-    assert_eq!(
-        record_with(&raw, "FORMULA abc")["quality"]["latex_renders"],
-        false,
-        "the section is kept, and says that its formula does not render"
-    );
-    assert!(!lenient.rejected.contains_key("latex"));
-    assert_eq!(
-        record_with(&raw, "LISTING abc")["quality"]["latex_renders"],
-        Value::Null,
-        "a dollar sign in a listing is not math, and a section with no math says nothing"
-    );
-}
-
-#[tokio::test]
-async fn a_python_listing_that_does_not_compile_is_recorded_and_kept() {
-    let work = tempfile::tempdir().unwrap();
-    let content = work.path().join("content");
-    write_checked_chapter(&content);
-    let out = work.path().join("out");
-
-    build_with(&dry_run_over(&content, &out)).await;
-
-    let raw = support::read_jsonl(&out.join("cpt/raw.jsonl"));
-    assert_eq!(
-        record_with(&raw, "LISTING abc")["quality"]["code_parses"],
-        false,
-        "a listing that does not compile is no reason to keep the section out"
-    );
-    assert_eq!(
-        record_with(&raw, "CUT abc")["quality"]["code_parses"],
-        Value::Null,
-        "a section with no Python listing says nothing"
-    );
-}
-
 /// The text of a record after its heading line and the blank line that follows it.
 fn text_after_heading_line(record: &Value) -> &str {
     record["text"]
@@ -328,7 +245,7 @@ fn write_copy_chapter(content: &Path) {
 }
 
 #[tokio::test]
-async fn the_second_copy_of_a_section_is_rejected_as_a_duplicate_of_the_first() {
+async fn a_dry_run_checks_every_section_of_a_chapter_written_by_hand() {
     let work = tempfile::tempdir().unwrap();
     let content = work.path().join("content");
     write_checked_chapter(&content);
@@ -338,9 +255,83 @@ async fn the_second_copy_of_a_section_is_rejected_as_a_duplicate_of_the_first() 
     let report = build_with(&dry_run_over(&content, &out)).await;
 
     let raw = support::read_jsonl(&out.join("cpt/raw.jsonl"));
-    let first = record_with(&raw, "COPY abc");
-    let first_section_id = first["id"].as_str().unwrap().strip_suffix(":raw").unwrap();
     let rejected = support::read_jsonl(&out.join("cpt/rejected.jsonl"));
+    a_section_on_a_page_that_matches_too_little_of_its_text_layer_is_rejected(
+        &report, &raw, &rejected,
+    );
+    a_python_listing_that_does_not_compile_is_recorded_and_kept(&raw);
+    the_second_copy_of_a_section_is_rejected_as_a_duplicate_of_the_first(
+        &report, &raw, &rejected, &out,
+    );
+    a_word_that_a_page_break_cut_at_a_hyphen_is_joined_again(&raw);
+    a_letter_written_with_a_separate_accent_comes_out_as_one_character(&raw);
+
+    let bad = record_with(&rejected, "FORMULA abc");
+    assert_eq!(bad["rejected"], "latex");
+    assert_eq!(bad["quality"]["latex_renders"], false);
+    assert_eq!(report.rejected["latex"], 1);
+    let lenient_out = work.path().join("lenient");
+    let mut lenient_options = dry_run_over(&content, &lenient_out);
+    lenient_options.keep_unrendered = true;
+
+    let lenient = build_with(&lenient_options).await;
+
+    let raw = support::read_jsonl(&lenient_out.join("cpt/raw.jsonl"));
+    assert_eq!(
+        record_with(&raw, "FORMULA abc")["quality"]["latex_renders"],
+        false,
+        "the section is kept, and says that its formula does not render"
+    );
+    assert!(!lenient.rejected.contains_key("latex"));
+    assert_eq!(
+        record_with(&raw, "LISTING abc")["quality"]["latex_renders"],
+        Value::Null,
+        "a dollar sign in a listing is not math, and a section with no math says nothing"
+    );
+}
+
+fn a_section_on_a_page_that_matches_too_little_of_its_text_layer_is_rejected(
+    report: &Report,
+    raw: &[Value],
+    rejected: &[Value],
+) {
+    let low = record_with(rejected, "LOW abc");
+    assert_eq!(low["rejected"], "page_score");
+    assert_eq!(low["quality"]["page_score"], 0.8);
+    assert_eq!(report.rejected["page_score"], 1);
+    assert!(
+        raw.iter()
+            .all(|record| !record["text"].as_str().unwrap().contains("LOW abc")),
+        "a rejected section is not in the dataset"
+    );
+    assert_eq!(
+        record_with(raw, "LISTING abc")["quality"]["page_score"],
+        Value::Null,
+        "a page written by hand has no score"
+    );
+}
+
+fn a_python_listing_that_does_not_compile_is_recorded_and_kept(raw: &[Value]) {
+    assert_eq!(
+        record_with(raw, "LISTING abc")["quality"]["code_parses"],
+        false,
+        "a listing that does not compile is no reason to keep the section out"
+    );
+    assert_eq!(
+        record_with(raw, "CUT abc")["quality"]["code_parses"],
+        Value::Null,
+        "a section with no Python listing says nothing"
+    );
+}
+
+fn the_second_copy_of_a_section_is_rejected_as_a_duplicate_of_the_first(
+    report: &Report,
+    raw: &[Value],
+    rejected: &[Value],
+    out: &Path,
+) {
+    let first = record_with(raw, "COPY abc");
+    let first_section_id = first["id"].as_str().unwrap().strip_suffix(":raw").unwrap();
     let copies: Vec<&Value> = rejected
         .iter()
         .filter(|record| record["text"].as_str().unwrap().contains("COPY abc"))
@@ -377,17 +368,8 @@ async fn the_second_copy_of_a_section_is_rejected_as_a_duplicate_of_the_first() 
     assert_eq!(manifest["rejected"]["sections"]["duplicate_of"], 2);
 }
 
-#[tokio::test]
-async fn a_word_that_a_page_break_cut_at_a_hyphen_is_joined_again() {
-    let work = tempfile::tempdir().unwrap();
-    let content = work.path().join("content");
-    write_checked_chapter(&content);
-    let out = work.path().join("out");
-
-    build_with(&dry_run_over(&content, &out)).await;
-
-    let raw = support::read_jsonl(&out.join("cpt/raw.jsonl"));
-    let text = record_with(&raw, "CUT abc")["text"].as_str().unwrap();
+fn a_word_that_a_page_break_cut_at_a_hyphen_is_joined_again(raw: &[Value]) {
+    let text = record_with(raw, "CUT abc")["text"].as_str().unwrap();
     assert!(
         text.contains("abc the derivative of the price"),
         "the two halves of the word are joined with the hyphen gone"
@@ -395,17 +377,8 @@ async fn a_word_that_a_page_break_cut_at_a_hyphen_is_joined_again() {
     assert!(!text.contains("deriva-"));
 }
 
-#[tokio::test]
-async fn a_letter_written_with_a_separate_accent_comes_out_as_one_character() {
-    let work = tempfile::tempdir().unwrap();
-    let content = work.path().join("content");
-    write_checked_chapter(&content);
-    let out = work.path().join("out");
-
-    build_with(&dry_run_over(&content, &out)).await;
-
-    let raw = support::read_jsonl(&out.join("cpt/raw.jsonl"));
-    let text = record_with(&raw, "CUT abc")["text"].as_str().unwrap();
+fn a_letter_written_with_a_separate_accent_comes_out_as_one_character(raw: &[Value]) {
+    let text = record_with(raw, "CUT abc")["text"].as_str().unwrap();
     assert!(
         text.contains("# Cut Word at the Caf\u{e9}\n"),
         "the heading is composed"

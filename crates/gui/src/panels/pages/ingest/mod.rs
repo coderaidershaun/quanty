@@ -268,7 +268,6 @@ fn request_of(job: &IngestJob) -> Option<&IngestRequest> {
         | IngestJob::Checked { request, .. }
         | IngestJob::CheckFailed { request, .. }
         | IngestJob::Running { request, .. }
-        | IngestJob::Stopping { request, .. }
         | IngestJob::Finished { request, .. } => Some(request),
     }
 }

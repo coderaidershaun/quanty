@@ -14,20 +14,10 @@ const TAGGING_TIMEOUT: Duration = Duration::from_secs(120);
 
 const SYSTEM_PROMPT: &str = "You categorise a single page from a PDF book. Read the page you are given, then report which kinds of content are visibly present on it. Mark a category true only when that content appears on the page itself, and mark every other category false.";
 
-/// Asks Claude which kinds of content are on a single-page PDF.
-///
-/// This runs the `claude` command line tool, which must be installed and logged in.
+/// Asks Claude which kinds of content are on a single-page PDF, and reports what the call used.
 ///
 /// The file must hold exactly one page. A longer PDF is read whole and categorised without
 /// complaint, so the answer would describe several pages at once.
-///
-/// It does not retry, and it refuses to run when `ANTHROPIC_API_KEY` is set, because `claude`
-/// would then bill the API instead of the subscription.
-pub async fn categorise_page(pdf_page: &Path) -> Result<PageCategories, ClaudeError> {
-    Ok(categorise_page_with_usage(pdf_page).await?.value)
-}
-
-/// Like [`categorise_page`], and also reports what the call used.
 pub(super) async fn categorise_page_with_usage(
     pdf_page: &Path,
 ) -> Result<Answer<PageCategories>, ClaudeError> {

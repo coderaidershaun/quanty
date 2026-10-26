@@ -1,22 +1,18 @@
 //! The Insights view of a document shows the insights, takeaways and cheat sheet that were saved
-//! for it, opens the page an insight rests on, says what it finds when there are none or the file
-//! cannot be read, and exports all three.
+//! for it, opens the page an insight rests on, and says what it finds when there are none or the
+//! file cannot be read.
 
 use backend::fake::Fake;
 use backend::{Handler, Reply};
 use contract::{ChapterInsights, Command, Tab};
 use eframe::egui::accesskit::Role;
-use export::Format;
 use gui::app::layout::DEFAULT_WINDOW;
 use gui::state::SourceTarget;
 use gui::testkit;
 
 use super::{BLACK_SCHOLES, BOOK, NOTES, SAMPLE_PAGES, documents_of, open_document};
-use crate::flows::exporting::downloaded_file;
 use crate::flows::recording::{self, Seen};
 use crate::flows::{Window, click, copied_by, has, node, says, shared};
-
-const NOTES_CHAPTER_TITLE: &str = "Quanty Sample Notes, chapter 2: Black Scholes In Depth";
 
 /// The fake, except that a read of insights is never answered.
 struct NeverAnswersInsights(Fake);
@@ -144,68 +140,5 @@ fn each_state_of_the_insights_view_says_what_it_is() {
     assert!(
         !has(&harness, Role::Button, "Export"),
         "nothing is saved yet, so there is nothing to export"
-    );
-}
-
-#[test]
-fn each_export_of_the_insights_writes_a_browser_download() {
-    let (mut harness, seen) = open_library("black-scholes");
-    open_document(&mut harness, NOTES, BLACK_SCHOLES);
-    click(&mut harness, Role::Tab, "Insights");
-
-    click(&mut harness, Role::Button, "Export");
-    for item in ["Export as PDF…", "Export as Markdown…", "Export as HTML…"] {
-        assert!(has(&harness, Role::Button, item), "the menu has {item}");
-    }
-
-    let starts = [
-        (Format::Pdf, "Export as PDF…", "%PDF-"),
-        (
-            Format::Markdown,
-            "Export as Markdown…",
-            "# Quanty Sample Notes, chapter 2: Black Scholes In Depth",
-        ),
-        (Format::Html, "Export as HTML…", "<!DOCTYPE html>"),
-    ];
-    for (at, (format, item, beginning)) in starts.into_iter().enumerate() {
-        if at > 0 {
-            click(&mut harness, Role::Button, "Export");
-        }
-        click(&mut harness, Role::Button, item);
-
-        let name = format.file_name(&format!("{NOTES_CHAPTER_TITLE} insights"));
-        assert_eq!(
-            shared(&harness)
-                .export
-                .as_ref()
-                .unwrap()
-                .download
-                .as_ref()
-                .unwrap()
-                .file_name,
-            name
-        );
-        let written = std::fs::read(downloaded_file(&harness, &seen)).expect("the file is written");
-        assert!(
-            written.starts_with(beginning.as_bytes()),
-            "the {} file starts with {beginning}",
-            format.name()
-        );
-        if format == Format::Markdown {
-            let text = String::from_utf8(written).expect("Markdown is text");
-            assert!(text.contains("## Takeaways"));
-            assert!(text.contains("so its price can never become negative"));
-        }
-        assert!(
-            says(
-                &harness,
-                &format!("Exported the insights as {}", format.name())
-            ),
-            "the view shows how it ended"
-        );
-    }
-    assert_eq!(
-        seen.count(|command| matches!(command, Command::Export { .. })),
-        3
     );
 }

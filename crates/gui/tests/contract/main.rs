@@ -1,7 +1,6 @@
 //! Tests of how the parts of the browser app work together.
 #![recursion_limit = "256"]
 
-mod answer_code;
 mod answer_export;
 mod flows;
 mod look;

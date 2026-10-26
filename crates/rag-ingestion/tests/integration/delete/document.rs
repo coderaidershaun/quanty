@@ -15,17 +15,36 @@ use super::{
     copy_sample_chapter, give_an_upload_copy, ids_of, items_of, point_ids, printed_lines,
     run_delete_document, stderr_text, stdout_lines, write_upload,
 };
+use rag_ingestion::Stores;
+
 use crate::support::{
     self, StandInImageServices, StandInLlm, ThrowawayStores, assert_document_stored,
 };
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored delete::"]
-async fn delete_document_removes_one_document_from_both_stores_and_leaves_the_other_whole() {
+async fn a_delete_of_a_document_takes_what_is_left_of_it_and_nothing_else() {
     let throwaway = ThrowawayStores::new("delete");
+    let stores = throwaway.connect().await;
+
+    delete_document_removes_one_document_from_both_stores_and_leaves_the_other_whole(
+        &throwaway, &stores,
+    )
+    .await;
+    a_second_delete_removes_a_folder_that_is_all_that_is_left_and_a_third_is_refused(
+        &throwaway, &stores,
+    )
+    .await;
+    a_document_that_is_being_converted_is_not_deleted(&throwaway, &stores).await;
+    a_picture_that_stands_alone_is_deleted_with_its_folder(&throwaway, &stores).await;
+}
+
+async fn delete_document_removes_one_document_from_both_stores_and_leaves_the_other_whole(
+    throwaway: &ThrowawayStores,
+    stores: &Stores,
+) {
     let content = throwaway.config().content_folder.clone();
     let collection = throwaway.config().items_collection.clone();
-    let stores = throwaway.connect().await;
     // The chapters are copied into the content folder of the throwaway stores: the delete removes
     // folders, and it must never reach the samples. A gets an upload copy that is its PDF, which
     // changes its id, so this comes before the ingest. B gets a file of the same kind that is not
@@ -61,10 +80,10 @@ async fn delete_document_removes_one_document_from_both_stores_and_leaves_the_ot
         nodes: b + 1 + 3 + 1,
         edges: b + (b - 1) + 2 * b + 2,
     };
-    let first = ingest_chapter(support::chapter_at(&chapter_a), &models, &stores)
+    let first = ingest_chapter(support::chapter_at(&chapter_a), &models, stores)
         .await
         .unwrap();
-    let second = ingest_chapter(support::chapter_at(&chapter_b), &models, &stores)
+    let second = ingest_chapter(support::chapter_at(&chapter_b), &models, stores)
         .await
         .unwrap();
     assert_ne!(first.doc_id, second.doc_id);
@@ -74,7 +93,7 @@ async fn delete_document_removes_one_document_from_both_stores_and_leaves_the_ot
     assert_eq!(before.mentions.len() as u64, 2 * a + 2 * b);
     assert_eq!(before.relations.len(), 2);
 
-    let output = run_delete_document(&throwaway, &first.doc_id.to_string());
+    let output = run_delete_document(throwaway, &first.doc_id.to_string());
     assert!(output.status.success(), "{}", stderr_text(&output));
     assert_eq!(
         stdout_lines(&output),
@@ -94,7 +113,7 @@ async fn delete_document_removes_one_document_from_both_stores_and_leaves_the_ot
     assert!(stored_document(&stores.graph, first.doc_id).await.is_none());
     assert_document_stored(&stores.graph, &items_b).await;
     assert_eq!(size(&stores.graph).await, size_with_b_and_concepts);
-    assert_eq!(point_ids(&throwaway).await, ids_of(&items_b));
+    assert_eq!(point_ids(throwaway).await, ids_of(&items_b));
     let after = stored_concept_graph(&stores.graph).await;
     assert_eq!(
         after.concepts, before.concepts,
@@ -119,7 +138,7 @@ async fn delete_document_removes_one_document_from_both_stores_and_leaves_the_ot
     let removed = stores.items.delete_document(second.doc_id).await.unwrap();
     assert_eq!(removed, b);
     assert_eq!(size(&stores.graph).await, size_with_b_and_concepts);
-    let output = run_delete_document(&throwaway, &second.doc_id.to_string());
+    let output = run_delete_document(throwaway, &second.doc_id.to_string());
     assert!(output.status.success(), "{}", stderr_text(&output));
     assert_eq!(
         stdout_lines(&output),
@@ -155,26 +174,25 @@ async fn delete_document_removes_one_document_from_both_stores_and_leaves_the_ot
     assert_eq!(left.concepts, before.concepts);
     assert!(left.mentions.is_empty());
     assert_eq!(left.relations, before.relations);
-    assert!(point_ids(&throwaway).await.is_empty());
+    assert!(point_ids(throwaway).await.is_empty());
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored delete::"]
-async fn a_second_delete_removes_a_folder_that_is_all_that_is_left_and_a_third_is_refused() {
-    let throwaway = ThrowawayStores::new("delete-folder-left");
+async fn a_second_delete_removes_a_folder_that_is_all_that_is_left_and_a_third_is_refused(
+    throwaway: &ThrowawayStores,
+    stores: &Stores,
+) {
     let content = throwaway.config().content_folder.clone();
     let collection = throwaway.config().items_collection.clone();
-    let stores = throwaway.connect().await;
     let chapter = copy_sample_chapter(&support::intuition_chapter(), &content);
     let models = throwaway.models(StandInLlm::finding_nothing());
-    let ingested = ingest_chapter(support::chapter_at(&chapter), &models, &stores)
+    let ingested = ingest_chapter(support::chapter_at(&chapter), &models, stores)
         .await
         .unwrap();
     // A delete that stopped after the points and the nodes left only the folder.
     stores.items.delete_document(ingested.doc_id).await.unwrap();
     stores.graph.delete_document(ingested.doc_id).await.unwrap();
 
-    let summary = delete_document(ingested.doc_id, &content, &stores)
+    let summary = delete_document(ingested.doc_id, &content, stores)
         .await
         .unwrap();
     assert_eq!(
@@ -190,7 +208,7 @@ async fn a_second_delete_removes_a_folder_that_is_all_that_is_left_and_a_third_i
     );
     assert!(!chapter.exists());
 
-    let refused = delete_document(ingested.doc_id, &content, &stores)
+    let refused = delete_document(ingested.doc_id, &content, stores)
         .await
         .expect_err("nothing of the document is left");
     assert!(
@@ -199,16 +217,15 @@ async fn a_second_delete_removes_a_folder_that_is_all_that_is_left_and_a_third_i
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored delete::"]
-async fn a_document_that_is_being_converted_is_not_deleted() {
-    let throwaway = ThrowawayStores::new("delete-converting");
+async fn a_document_that_is_being_converted_is_not_deleted(
+    throwaway: &ThrowawayStores,
+    stores: &Stores,
+) {
     let content = throwaway.config().content_folder.clone();
-    let stores = throwaway.connect().await;
     let chapter = copy_sample_chapter(&support::intuition_chapter(), &content);
     let items = items_of(&chapter);
     let models = throwaway.models(StandInLlm::finding_nothing());
-    let ingested = ingest_chapter(support::chapter_at(&chapter), &models, &stores)
+    let ingested = ingest_chapter(support::chapter_at(&chapter), &models, stores)
         .await
         .unwrap();
 
@@ -216,7 +233,7 @@ async fn a_document_that_is_being_converted_is_not_deleted() {
     let conversion = try_lock_chapter(&chapter)
         .unwrap()
         .expect("no run holds the chapter");
-    let refused = delete_document(ingested.doc_id, &content, &stores)
+    let refused = delete_document(ingested.doc_id, &content, stores)
         .await
         .expect_err("the chapter is being converted");
     assert!(
@@ -224,24 +241,23 @@ async fn a_document_that_is_being_converted_is_not_deleted() {
         "{refused:?}"
     );
     assert_document_stored(&stores.graph, &items).await;
-    assert_eq!(point_ids(&throwaway).await, ids_of(&items));
+    assert_eq!(point_ids(throwaway).await, ids_of(&items));
     assert!(chapter.is_dir());
 
     drop(conversion);
-    let summary = delete_document(ingested.doc_id, &content, &stores)
+    let summary = delete_document(ingested.doc_id, &content, stores)
         .await
         .unwrap();
     assert_eq!(summary.folders_removed, vec![chapter.clone()]);
     assert!(!chapter.exists());
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p rag-ingestion --test integration -- --ignored delete::"]
-async fn a_picture_that_stands_alone_is_deleted_with_its_folder() {
-    let throwaway = ThrowawayStores::new("delete-picture");
+async fn a_picture_that_stands_alone_is_deleted_with_its_folder(
+    throwaway: &ThrowawayStores,
+    stores: &Stores,
+) {
     let content = throwaway.config().content_folder.clone();
     let collection = throwaway.config().items_collection.clone();
-    let stores = throwaway.connect().await;
     let image = convert_image_with(
         &support::sample_picture(),
         &content,
@@ -254,13 +270,13 @@ async fn a_picture_that_stands_alone_is_deleted_with_its_folder() {
         image: &image,
         note: None,
     };
-    let ingested = ingest_image(&lone, &models, &stores).await.unwrap();
+    let ingested = ingest_image(&lone, &models, stores).await.unwrap();
     let folder = content
         .join("images")
         .join(&image.index.source_sha256[..16]);
     assert!(folder.join("image.json").is_file());
 
-    let summary = delete_document(ingested.doc_id, &content, &stores)
+    let summary = delete_document(ingested.doc_id, &content, stores)
         .await
         .unwrap();
     assert_eq!(
@@ -280,5 +296,5 @@ async fn a_picture_that_stands_alone_is_deleted_with_its_folder() {
             .await
             .is_none()
     );
-    assert!(point_ids(&throwaway).await.is_empty());
+    assert!(point_ids(throwaway).await.is_empty());
 }

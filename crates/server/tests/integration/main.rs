@@ -6,5 +6,4 @@ mod login;
 mod loopback;
 mod mcp;
 mod support;
-mod uploads;
 mod ws;

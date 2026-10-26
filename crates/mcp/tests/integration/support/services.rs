@@ -22,7 +22,6 @@ pub struct StandInServices {
     pages: StubServices,
     gate: Option<Mutex<mpsc::UnboundedReceiver<()>>>,
     ready_gate: Option<Arc<GateSide>>,
-    question_gate: Option<Arc<Mutex<mpsc::UnboundedReceiver<()>>>>,
 }
 
 impl StandInServices {
@@ -34,7 +33,6 @@ impl StandInServices {
             pages: StubServices::new(Scenario::SampleChapter),
             gate: None,
             ready_gate: None,
-            question_gate: None,
         }
     }
 
@@ -102,19 +100,6 @@ impl StandInServices {
         )
     }
 
-    /// The same services, and the sender that lets one question to the model go on for each `()`
-    /// it sends. Until then that question waits, so a job that asks stays in the middle of it.
-    pub fn with_question_gate(self) -> (StandInServices, mpsc::UnboundedSender<()>) {
-        let (open, gate) = mpsc::unbounded_channel();
-        (
-            StandInServices {
-                question_gate: Some(Arc::new(Mutex::new(gate))),
-                ..self
-            },
-            open,
-        )
-    }
-
     /// A clone of `llm` keeps what the server asks of it.
     pub fn with_llm(mut self, llm: StandInLlm) -> StandInServices {
         self.llm = llm;
@@ -142,7 +127,6 @@ struct GateSide {
 pub struct GatedLlm {
     llm: StandInLlm,
     gate: Option<Arc<GateSide>>,
-    question_gate: Option<Arc<Mutex<mpsc::UnboundedReceiver<()>>>>,
 }
 
 impl Llm for GatedLlm {
@@ -164,10 +148,6 @@ impl Llm for GatedLlm {
     }
 
     async fn ask(&self, question: Question<'_>) -> Result<LlmReply, LlmError> {
-        if let Some(gate) = &self.question_gate {
-            // A dropped sender opens the gate too, so a test that fails does not hang.
-            gate.lock().await.recv().await;
-        }
         self.llm.ask(question).await
     }
 }
@@ -208,7 +188,6 @@ impl Services for StandInServices {
         GatedLlm {
             llm: self.llm.clone(),
             gate: self.ready_gate.clone(),
-            question_gate: self.question_gate.clone(),
         }
     }
 

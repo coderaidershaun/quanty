@@ -14,7 +14,6 @@ use ocr::{ChapterIndex, ChapterJob, ConversionSummary, ConvertError, PageProgres
 use rag_core::{ApiKey, Config, EmbedError, ItemKind, MediaLabels, WorkKind};
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores, first_axis, vector_at};
 use rag_ingestion::{ChapterFolder, Item, Models, chapter_items, ingest_chapter};
-use serde_json::json;
 
 use crate::key_checks::{Check, KeyChecks};
 
@@ -161,30 +160,6 @@ pub fn started_again(first: &LiveContext<StandInServices>) -> LiveContext<StandI
         pages: Arc::new(StubServices::new(Scenario::SampleChapter)),
     };
     LiveContext::new(config, services).with_home(first.home().to_path_buf())
-}
-
-/// A context with stand-in pages whose stores nothing listens on, and the stub pages, so a test
-/// can show that no page was converted.
-pub fn closed_with_stub_pages(
-    content_folder: &Path,
-) -> (LiveContext<StandInsOnClosedPorts>, Arc<StubServices>) {
-    let config = Config {
-        content_folder: content_folder.to_path_buf(),
-        ..closed_ports_config()
-    };
-    let pages = Arc::new(StubServices::new(Scenario::SampleChapter));
-    let services = StandInsOnClosedPorts {
-        pages: Arc::clone(&pages),
-    };
-    (
-        LiveContext::new(config, services).with_home(
-            content_folder
-                .parent()
-                .expect("temporary content has a parent")
-                .to_path_buf(),
-        ),
-        pages,
-    )
 }
 
 /// A config whose Qdrant and FalkorDB addresses nothing listens on, so a store is always down.
@@ -408,31 +383,18 @@ pub async fn fill(name: &str, answering: &StandInLlm, folders: Folders) -> World
         .await
         .expect("the folder should be stored");
 
+    // Ingestion keeps the canonical path of a chapter folder, so a picture is inside the content
+    // folder only when the folder that the settings name is canonical too.
+    let config = Config {
+        content_folder: std::fs::canonicalize(&stores.config().content_folder)
+            .expect("the content folder should exist"),
+        ..stores.config().clone()
+    };
     let placing = picks.clone();
     World {
-        cx: context_with(stores, answering, move || placing.embedder()),
+        cx: context_over(config, stores, answering, move || placing.embedder()),
         picks,
         black_scholes,
         lemma,
     }
-}
-
-/// The answer model cites the formula, the table and the figure in its first claim, so the three
-/// chips are on the first screen of the answer.
-pub async fn seeded(test_name: &str) -> LiveContext<StandInServices> {
-    let answering = StandInLlm::replying(|_, _| {
-        Ok(json!({
-            "title": "How a call is priced",
-            "claims": [
-                { "heading": "", "text": "A call is priced by the formula.", "sources": [1, 2, 4] },
-                { "heading": "Key assumptions", "text": "The price assumes a table.", "sources": [2] },
-            ],
-            "follow_ups": ["What is a put?"],
-        }))
-    });
-    let folders = Folders {
-        stored: SAMPLE_PAGES,
-        copied: IN_DEPTH,
-    };
-    fill(test_name, &answering, folders).await.cx
 }

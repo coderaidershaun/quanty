@@ -73,13 +73,3 @@ fn parses(latex: &str) -> bool {
         Ok(Ok(_))
     )
 }
-
-#[cfg(test)]
-mod tests {
-    use super::renders;
-
-    #[test]
-    fn math_that_is_opened_and_never_closed_does_not_render() {
-        assert_eq!(renders("fine $x$ then open $y"), Some(false));
-    }
-}

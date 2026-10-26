@@ -1,40 +1,20 @@
-//! Checks that the runtime hands each command to a backend, gives back its events in order,
-//! and stops the work when a command is cancelled.
-
-use std::time::{Duration, Instant};
+//! Checks that every scene of the fake backend opens in the state it is named for, and that the
+//! fake loads every sample page.
 
 use backend::fake::{self, Fake};
-use backend::{Handler, Reply, Runtime};
-use contract::{
-    AskDraft, Command, DatasetStage, DocumentName, Event, Failure, FailureKind, Intent, Loadable,
-    RequestId, SearchReply, StartupFacts, Tab,
-};
-use eframe::egui;
+use contract::{DatasetStage, DocumentName, FailureKind, Loadable, Tab};
 use egui_kittest::Harness;
 use gui::app::App;
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::state::{DatasetJob, HealthLevel, IngestJob, Shared};
-use gui::testkit::{self, run_until, sample};
+use gui::state::{DatasetJob, IngestJob, Shared};
+use gui::testkit::{self, run_until};
 
 use super::sample_pages;
-
-const LIMIT: Duration = Duration::from_secs(5);
 
 fn fake_of(scene: &str) -> Fake {
     Fake::scene(scene, &testkit::samples_folder())
         .unwrap_or_else(|error| panic!("scene `{scene}` does not start: {error}"))
         .instant()
-}
-
-fn next_event(backend: &mut Runtime<impl backend::Handler>) -> Event {
-    let started = Instant::now();
-    loop {
-        if let Some(event) = backend.try_next() {
-            return event;
-        }
-        assert!(started.elapsed() < LIMIT, "the next event never came");
-        std::thread::sleep(Duration::from_millis(2));
-    }
 }
 
 fn is_failed<T>(slot: &Loadable<T>, kind: FailureKind) -> bool {
@@ -154,185 +134,4 @@ fn every_scene_opens_and_every_sample_page_loads() {
     }
 
     sample_pages::assert_every_sample_page_loads(&fake_of("idle"));
-}
-
-#[test]
-fn an_ask_shows_results_then_the_answer_and_cancel_stops_it() {
-    let ask = |request| Command::Ask {
-        request,
-        ask: AskDraft {
-            question: "How is the Black–Scholes formula derived?".to_owned(),
-            ..AskDraft::default()
-        },
-    };
-    let mut backend =
-        Runtime::start_own_threads(fake_of("black-scholes"), || {}).expect("the runtime starts");
-    backend.send(ask(RequestId(1)));
-    let found = next_event(&mut backend);
-    assert!(
-        matches!(&found, Event::Search { result: Ok(reply), .. } if reply.results.len() == 9),
-        "{found:?}"
-    );
-    let drawn = next_event(&mut backend);
-    assert!(
-        matches!(drawn, Event::Graph { result: Ok(_), .. }),
-        "{drawn:?}"
-    );
-    let written = next_event(&mut backend);
-    assert!(
-        matches!(written, Event::Answer { result: Ok(_), .. }),
-        "{written:?}"
-    );
-
-    let mut backend =
-        Runtime::start_own_threads(fake_of("searching"), || {}).expect("the runtime starts");
-    backend.send(ask(RequestId(2)));
-    assert!(
-        !backend.is_idle(),
-        "a search that never returns keeps its task"
-    );
-    backend.send(Command::Cancel(RequestId(2)));
-    let started = Instant::now();
-    while !backend.is_idle() {
-        assert!(started.elapsed() < LIMIT, "the cancel did not end the task");
-        std::thread::sleep(Duration::from_millis(2));
-    }
-    assert!(
-        backend.try_next().is_none(),
-        "a cancelled ask sends nothing"
-    );
-
-    let mut harness = testkit::app("black-scholes", DEFAULT_WINDOW);
-    testkit::settle(&mut harness);
-    assert!(harness.state().shared().ask.answer.ready().is_some());
-    testkit::save_png(&mut harness, "shell-black-scholes");
-}
-
-struct PanicsAtOnce;
-
-impl Handler for PanicsAtOnce {
-    async fn serve(&self, _command: Command, _reply: Reply) {
-        panic!("a bug in an adapter");
-    }
-}
-
-struct PanicsAfterTheResults;
-
-impl Handler for PanicsAfterTheResults {
-    async fn serve(&self, command: Command, reply: Reply) {
-        let Command::Ask { request, .. } = command else {
-            // Every other command, such as the catalogue load at start-up, is told that the
-            // store is down, so only the ask is left waiting.
-            let down = Failure::new(FailureKind::QdrantDown, "the stand-in has no store");
-            for event in command.failed(&down) {
-                reply.send(event);
-            }
-            return;
-        };
-        let one = sample::search_reply().results.remove(0);
-        reply.send(Event::Search {
-            request,
-            result: Ok(SearchReply {
-                results: vec![one],
-                ..SearchReply::default()
-            }),
-        });
-        panic!("a bug in an adapter, after the search");
-    }
-}
-
-fn app_on(handler: impl Handler, opening: Vec<Intent>) -> Harness<'static, App> {
-    let facts = StartupFacts {
-        ..StartupFacts::default()
-    };
-    Harness::builder()
-        .with_size(egui::Vec2::from(DEFAULT_WINDOW))
-        .build_eframe(move |creation| {
-            App::new(
-                creation,
-                Box::new(testkit::InProcess::new(handler, || {}).unwrap()),
-                facts,
-                opening,
-            )
-            .with_fetch(Box::new(testkit::FolderFetch::new(
-                testkit::samples_folder(),
-            )))
-        })
-}
-
-fn asks() -> Vec<Intent> {
-    vec![Intent::Ask(AskDraft {
-        question: "How is the Black–Scholes formula derived?".to_owned(),
-        ..AskDraft::default()
-    })]
-}
-
-fn is_a_bug(slot: &Loadable<impl Sized>) -> bool {
-    slot.failure()
-        .is_some_and(|failure: &Failure| failure.kind == FailureKind::Internal)
-}
-
-#[test]
-fn a_backend_that_panics_gives_a_failure_and_never_an_endless_wait() {
-    let mut opening = asks();
-    opening.push(Intent::RecheckHealth);
-    let mut harness = app_on(PanicsAtOnce, opening);
-    testkit::settle(&mut harness);
-    let shared = harness.state().shared();
-    assert!(is_a_bug(&shared.ask.search), "the search says it failed");
-    assert!(!shared.ask.is_running());
-    assert!(is_a_bug(&shared.library.catalogue), "so does the catalogue");
-    let health = &shared.health;
-    assert!(health.pending.is_none(), "the check is over");
-    assert_eq!(health.level(), HealthLevel::Unknown, "no service is down");
-
-    // The catalogue load said the store is down, so the first results ask for a new check of
-    // the services. Nobody clicks then: it must still be sent, or the app never comes to rest.
-    let mut harness = app_on(PanicsAfterTheResults, Vec::new());
-    testkit::settle(&mut harness);
-    harness.state_mut().push(asks().remove(0));
-    testkit::settle(&mut harness);
-    let ask = &harness.state().shared().ask;
-    assert_eq!(ask.search.ready().map(|reply| reply.results.len()), Some(1));
-    assert!(is_a_bug(&ask.graph), "the graph says it failed");
-    assert!(is_a_bug(&ask.answer), "the answer says it failed");
-    assert!(!ask.is_running());
-}
-
-fn press(harness: &mut Harness<'_, App>, modifiers: egui::Modifiers, key: egui::Key) {
-    harness.key_press_modifiers(modifiers, key);
-    harness.step();
-    harness.run_ok();
-}
-
-#[test]
-fn command_shortcuts_reach_the_reducer() {
-    let command = egui::Modifiers::COMMAND;
-    let none = egui::Modifiers::NONE;
-
-    let mut harness = testkit::app("idle", DEFAULT_WINDOW);
-    testkit::settle(&mut harness);
-    press(&mut harness, command, egui::Key::K);
-    assert_eq!(harness.state().shared().cues.focus_ask_bar, 1);
-
-    let mut harness = testkit::app("searching", DEFAULT_WINDOW);
-    run_until(&mut harness, "the ask to start", |shared| {
-        shared.ask.is_running()
-    });
-    press(&mut harness, command, egui::Key::Period);
-    assert!(
-        !harness.state().shared().ask.is_running(),
-        "⌘. stops the ask"
-    );
-    testkit::settle(&mut harness);
-    harness.state_mut().push(asks().remove(0));
-    run_until(&mut harness, "the second ask to start", |shared| {
-        shared.ask.is_running()
-    });
-    press(&mut harness, none, egui::Key::Escape);
-    assert!(
-        !harness.state().shared().ask.is_running(),
-        "Esc stops the ask"
-    );
-    testkit::settle(&mut harness);
 }

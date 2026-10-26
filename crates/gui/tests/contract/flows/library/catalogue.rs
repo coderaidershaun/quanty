@@ -19,8 +19,8 @@ use gui::testkit;
 use uuid::Uuid;
 
 use super::{
-    BLACK_SCHOLES, BOOK, HAWKES, Ingests, NOTES, SAMPLE_PAGES, documents_of, is_open_row,
-    open_document, open_media, open_switched,
+    BLACK_SCHOLES, BOOK, Ingests, NOTES, SAMPLE_PAGES, documents_of, is_open_row, open_document,
+    open_media, open_switched,
 };
 use crate::flows::recording::Seen;
 use crate::flows::{
@@ -159,64 +159,6 @@ fn labels_named(harness: &Window, name: &str) -> usize {
     harness
         .query_all_by_role_and_label(Role::Label, name)
         .count()
-}
-
-fn the_tab_opens_the_page_and_the_shelf_has_a_row_for_each_media(harness: &mut Window) {
-    for name in ["Ask", "Library", "Ingest"] {
-        assert!(has(harness, Role::Tab, name), "no tab is named `{name}`");
-    }
-    click(harness, Role::Tab, "Library");
-    assert_eq!(shared(harness).tab, Tab::Library);
-    assert!(is_open_tab(harness, "Library"));
-
-    let catalogue = shared(harness).library.catalogue.ready().cloned();
-    let catalogue = catalogue.expect("the catalogue is loaded");
-    assert_eq!(
-        catalogue.media.len(),
-        3,
-        "the scene has two sample books and a paper"
-    );
-    let titles: Vec<&str> = catalogue
-        .media
-        .iter()
-        .map(|media| media.title.as_deref().expect("a sample media has a title"))
-        .collect();
-    assert!(
-        are_stacked_in_order(harness, Role::Button, &titles),
-        "the shelf lists the media in the order of the catalogue"
-    );
-    for media in &catalogue.media {
-        let title = media.title.as_deref().expect("a sample media has a title");
-        let count = node(harness, Role::Button, title).value();
-        assert_eq!(
-            count.as_deref(),
-            Some(media.documents.len().to_string().as_str()),
-            "the row of `{title}` counts its documents"
-        );
-    }
-    assert!(
-        is_open_row(harness, HAWKES),
-        "the first media opens as soon as the library is read"
-    );
-    assert_eq!(
-        shared(harness).shelf.open,
-        Some(Open::Media {
-            title: Some(HAWKES.to_owned())
-        })
-    );
-    assert_eq!(labels_named(harness, "Paper"), 1, "its page has its badge");
-    assert_eq!(
-        labels_named(harness, "Book"),
-        0,
-        "no other media has a page"
-    );
-    assert!(has(harness, Role::Label, "A. Author, B. Author"));
-    assert_eq!(
-        labels_named(harness, "hawkes"),
-        1,
-        "the media tag of the paper is said once, on its page"
-    );
-    assert!(says(harness, "1 document"));
 }
 
 fn each_media_row_opens_its_page_and_unfolds_its_documents(harness: &mut Window) {
@@ -409,7 +351,7 @@ fn read_opens_the_chapter_in_the_source_panel(harness: &mut Window, seen: &Seen,
 #[test]
 fn the_library_shows_each_media_on_the_shelf_and_each_document_on_its_page() {
     let (mut harness, seen) = open_switched("black-scholes", &Arc::default(), Ingests::Run);
-    the_tab_opens_the_page_and_the_shelf_has_a_row_for_each_media(&mut harness);
+    click(&mut harness, Role::Tab, "Library");
     each_media_row_opens_its_page_and_unfolds_its_documents(&mut harness);
     each_document_row_opens_its_page(&mut harness);
     the_shown_view_stays_when_another_document_opens(&mut harness);

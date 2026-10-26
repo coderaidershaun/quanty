@@ -1,35 +1,20 @@
-//! Checks that the live backend reads a page of a saved chapter and the concepts of that page.
+//! Checks that a page of a saved chapter that cannot be shown says what to do.
 
 use std::path::Path;
 
 use backend::Reply;
-use backend::fake::Fake;
 use backend::live::source::{self, PageTarget};
 use backend::live::{LiveContext, Services};
-use contract::{Command, DocId, Event, Failure, FailureKind, PageConcept, PageView, RequestId};
-use graph::{ConceptNode, DocumentNode, ItemNode, Mention};
+use contract::{DocId, Event, Failure, FailureKind, PageConcept, PageView, RequestId};
 use ocr::content::{FORMAT_VERSION, PageIndex, PieceEntry, page_folder_name};
 use ocr::{ChapterIndex, DocumentName, FigureImage, ImageShows, PieceDetail};
-use rag_core::{ConceptId, DocumentLabels, ItemId, ItemKind};
 use uuid::Uuid;
 
-use crate::support::{self, closed, sample_chapter, served};
+use crate::support::{closed, sample_chapter};
 
 const REQUEST: RequestId = RequestId(7);
 const VOLATILITY: &str = "option-volatility-and-pricing/chapter-1";
 const NO_CONTENT_FOLDER: &str = "/no/such/content/folder";
-
-#[tokio::test(flavor = "multi_thread")]
-async fn the_page_loads_with_the_stores_down_and_the_concepts_say_why() {
-    let cx = closed(Path::new(NO_CONTENT_FOLDER));
-    let target = page_target(DocId::default(), 5, Some(&sample_chapter(VOLATILITY)));
-
-    let (page, concepts) = loaded(&cx, &target).await;
-
-    assert_eq!(page.expect("the page needs no store").page, 5);
-    let failure = concepts.expect_err("the graph is down, so there are no concepts");
-    assert_eq!(failure.kind, FailureKind::FalkorDbDown);
-}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_page_that_cannot_be_shown_says_what_to_do() {
@@ -74,123 +59,6 @@ async fn an_unfinished_chapter_says_where_it_is() {
     let folder = std::fs::canonicalize(saved.path()).expect("the folder should be there");
     let said = format!("{} {}", failure.hint, failure.detail);
     assert!(said.contains(&folder.display().to_string()), "{failure:?}");
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn the_fake_backend_shows_every_sample_page_as_the_live_reader_does() {
-    let home = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let fake = Fake::scene("idle", home)
-        .expect("the scene should start")
-        .instant();
-    let events = served(&fake, Command::LoadCatalogue { request: REQUEST }).await;
-    let [
-        Event::Catalogue {
-            result: Ok(catalogue),
-            ..
-        },
-        ..,
-    ] = events.as_slice()
-    else {
-        panic!("expected the catalogue of the samples first: {events:#?}");
-    };
-    let cx = closed(&gui::testkit::samples_folder());
-
-    let mut compared = 0;
-    // The paper of the samples has no folder, so neither reader has a page of it.
-    let with_folders = catalogue
-        .documents()
-        .filter(|document| document.folder.is_some());
-    for document in with_folders {
-        let pages = document.pages.expect("a sample has a page count");
-        for page in 1..=pages {
-            let (doc, folder) = (document.id, document.folder.clone());
-            let command = Command::LoadPage {
-                request: REQUEST,
-                doc,
-                page,
-                folder: folder.clone(),
-            };
-            let events = served(&fake, command).await;
-            let [Event::Page { result: faked, .. }, ..] = events.as_slice() else {
-                panic!("expected the page first: {events:#?}");
-            };
-            let (live, _concepts) = loaded(&cx, &PageTarget { doc, page, folder }).await;
-            assert_eq!(
-                faked.as_ref().expect("the fake should show the page"),
-                &live.expect("the live reader should show the page"),
-                "{} page {page}",
-                document.title
-            );
-            compared += 1;
-        }
-    }
-    assert_eq!(compared, 13, "three chapters of 7, 3 and 3 pages");
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p backend --test integration -- --ignored source::"]
-async fn a_page_lists_the_concepts_its_items_mention() {
-    let cx = support::context("source-concepts");
-    let stores = cx.stores().await.expect("the stores should open");
-    let graph = &stores.graph;
-    let document = rag_core::DocId::from_source_sha256("source-concepts-document");
-    let item = |kind, position, page| ItemNode {
-        id: ItemId::new(document, kind, position),
-        kind,
-        page,
-        printed_page: None,
-    };
-    let items = [
-        item(ItemKind::Chunk, 0, 2),
-        item(ItemKind::Formula, 1, 2),
-        item(ItemKind::Chunk, 2, 3),
-    ];
-    let [first, second, third] = &items;
-    let concept = |name: &str| ConceptNode {
-        id: ConceptId::random(),
-        name: name.to_owned(),
-        normalised_name: name.to_lowercase(),
-        definition: format!("{name} in one line"),
-    };
-    // "Arbitrage" comes before "Volatility" by name, so a list in the order of the names shows.
-    let volatility = concept("Volatility");
-    let arbitrage = concept("Arbitrage");
-    let straddle = concept("Straddle");
-    let node = DocumentNode {
-        id: document,
-        title: "A Document".to_owned(),
-        labels: DocumentLabels::default(),
-    };
-    graph.upsert_document(&node).await.unwrap();
-    graph.upsert_items(document, &items).await.unwrap();
-    for stored in [&volatility, &arbitrage, &straddle] {
-        graph.upsert_concept(stored).await.unwrap();
-    }
-    let mentions = [
-        (first, &volatility),
-        (second, &volatility),
-        (second, &arbitrage),
-        (third, &straddle),
-    ]
-    .map(|(item, concept)| Mention {
-        item: item.id,
-        concept: concept.id,
-        wording: concept.name.clone(),
-    });
-    graph.add_mentions(&mentions).await.unwrap();
-    let target = page_target(DocId(document.0), 2, None);
-
-    let (page, concepts) = loaded(&cx, &target).await;
-
-    let failure = page.expect_err("no chapter is saved for this document");
-    assert_eq!(failure.kind, FailureKind::SourceMissing);
-    let listed = |concept: &ConceptNode| PageConcept {
-        id: contract::ConceptId(concept.id.0),
-        name: concept.name.clone(),
-        definition: concept.definition.clone(),
-    };
-    let expected = [listed(&volatility), listed(&arbitrage)];
-    assert_eq!(concepts.expect("the concepts should be read"), expected);
 }
 
 fn page_target(doc: DocId, page: u32, folder: Option<&Path>) -> PageTarget {

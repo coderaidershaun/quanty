@@ -94,7 +94,7 @@ pub(super) fn show(
             ui.add_space(space::MD);
             try_again(ui, draft, cx.intents);
         }
-        IngestJob::Running { progress, .. } | IngestJob::Stopping { progress, .. } => {
+        IngestJob::Running { progress, .. } => {
             running(ui, progress.as_ref());
         }
         IngestJob::Finished {

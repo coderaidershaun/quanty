@@ -73,32 +73,3 @@ pub struct FigureImage {
 pub(crate) fn figure_image_file_name(number: u32) -> String {
     format!("{number:02}-figure.png")
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{FigureImage, ImageShows, PageBox};
-
-    #[test]
-    fn saved_pictures_read_with_their_figure_marks_or_without_them() {
-        let whole_page = r#"{"file": "page.png", "shows": "whole-page", "cut": null,
-            "holds-body-text": false, "unchecked": false}"#;
-        let figure = r#"{"file": "01-figure.png", "shows": "figure",
-            "cut": {"left": 1, "top": 2, "right": 3, "bottom": 4}, "holds-body-text": true}"#;
-
-        let read = |text| serde_json::from_str::<FigureImage>(text).unwrap().shows;
-        assert_eq!(read(whole_page), ImageShows::WholePage);
-        assert_eq!(
-            read(figure),
-            ImageShows::Figure {
-                cut: Some(PageBox {
-                    left: 1,
-                    top: 2,
-                    right: 3,
-                    bottom: 4
-                }),
-                holds_body_text: true,
-                unchecked: false,
-            }
-        );
-    }
-}

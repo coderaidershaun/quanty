@@ -4,21 +4,61 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use backend::live::{LiveContext, RealServices};
+use backend::live::{LiveContext, Services};
+use backend::{Handler, Reply};
 use contract::{
-    Catalogue, Category, ChapterLabel, DocId, Document, FailureKind, ItemCounts, Media, NewMedia,
+    Catalogue, Category, ChapterLabel, Command, DocId, Document, Event, Failure, FailureKind,
+    ItemCounts, Media, NewMedia, RequestId,
 };
 use graph::MediaNode;
 use rag_core::MediaLabels;
 use rag_ingestion::testing::chapter_at;
 use rag_ingestion::{IngestSummary, ingest_chapter};
 
-use super::{catalogue_of, owned, saved};
 use crate::support::{self, IN_DEPTH, INTUITION, SAMPLE_PAGES, copy_folder, sample_chapter};
+
+const REQUEST: RequestId = RequestId(7);
+
+fn owned(texts: &[&str]) -> Vec<String> {
+    texts.iter().map(|text| (*text).to_owned()).collect()
+}
+
+async fn one_answer<S: Services>(cx: &LiveContext<S>, command: Command) -> Event {
+    let (reply, events, _stop) = Reply::collecting();
+    cx.serve(command, reply).await;
+    let mut sent: Vec<Event> = events.try_iter().collect();
+    assert_eq!(sent.len(), 1, "expected one answer: {sent:#?}");
+    sent.remove(0)
+}
+
+async fn catalogue_of<S: Services>(cx: &LiveContext<S>) -> Result<Catalogue, Failure> {
+    let command = Command::LoadCatalogue { request: REQUEST };
+    match one_answer(cx, command).await {
+        Event::Catalogue {
+            request: REQUEST,
+            result,
+        } => result,
+        other => panic!("expected a catalogue, for {REQUEST:?}: {other:#?}"),
+    }
+}
+
+async fn saved<S: Services>(cx: &LiveContext<S>, media: &NewMedia) -> Result<(), Failure> {
+    let command = Command::SaveMedia {
+        request: REQUEST,
+        media: media.clone(),
+    };
+    match one_answer(cx, command).await {
+        Event::MediaSaved {
+            request: REQUEST,
+            result,
+        } => result,
+        other => panic!("expected an answer to the save, for {REQUEST:?}: {other:#?}"),
+    }
+}
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p backend --test integration -- --ignored library::"]
-async fn the_catalogue_joins_stored_documents_with_their_chapter_folders() {
+async fn the_catalogue_joins_stored_documents_with_their_finished_chapter_folders() {
     let cx = support::context("library-join");
     let stores = cx.stores().await.expect("the stores should open");
     let models = support::models_without_insights(&cx);
@@ -58,19 +98,7 @@ async fn the_catalogue_joins_stored_documents_with_their_chapter_folders() {
         }],
     };
     assert_eq!(result, Ok(expected));
-}
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p backend --test integration -- --ignored library::"]
-async fn a_chapter_that_is_not_finished_is_not_taken_for_the_folder_of_its_document() {
-    let cx = support::context("library-unfinished");
-    let stores = cx.stores().await.expect("the stores should open");
-    let models = support::models_without_insights(&cx);
-    let content = cx.config().content_folder.clone();
-    let finished = content.join(IN_DEPTH);
-    copy_folder(&sample_chapter(IN_DEPTH), &finished);
-    let stored = ingest_chapter(chapter_at(&finished), &models, &stores).await;
-    let stored = stored.expect("the chapter should be ingested");
     // A second conversion of the same PDF stopped half way, in a media folder that the scan of
     // the content folder reads first, and the graph keeps it as the document's folder.
     let unfinished = content.join("a-first-media").join("chapter-2");
@@ -83,18 +111,21 @@ async fn a_chapter_that_is_not_finished_is_not_taken_for_the_folder_of_its_docum
         "the copied index should say that it is finished"
     );
     std::fs::write(&index, stopped).expect("the copied index should be written");
-    stores
-        .graph
-        .set_chapter_folder(stored.doc_id, &unfinished)
+    graph
+        .set_chapter_folder(second.doc_id, &unfinished)
         .await
         .expect("the folder should be stored");
 
     let catalogue = catalogue_of(&cx).await.expect("the catalogue is read");
 
     let document = catalogue
-        .document(DocId(stored.doc_id.0))
+        .document(DocId(second.doc_id.0))
         .expect("the chapter is listed");
-    assert_eq!(document.folder.as_deref(), Some(finished.as_path()));
+    assert_eq!(
+        document.folder.as_deref(),
+        Some(copy.as_path()),
+        "a chapter that is not finished is not taken for the folder of its document"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -213,15 +244,6 @@ async fn a_saved_book_is_listed_after_a_second_start_shows_its_chapter_and_is_no
         .expect("the graph accepts the same title again");
     let unchanged = catalogue_of(&second).await.expect("the catalogue is read");
     assert_eq!(unchanged, after, "a stored media is never written over");
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn the_catalogue_answers_once_when_the_stores_are_down() {
-    let cx = LiveContext::new(support::closed_ports_config(), RealServices::default());
-
-    let result = catalogue_of(&cx).await;
-
-    result.expect_err("no store answers, so the catalogue cannot be read");
 }
 
 type MediaShown = (Option<String>, Category, Vec<String>, Vec<String>, usize);

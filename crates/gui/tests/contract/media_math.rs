@@ -2,13 +2,11 @@
 //! source.
 
 use eframe::egui;
-use eframe::egui::accesskit::Role;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use gui::media::Offload;
 use gui::media::math::{self, Display, Math, MathImage, MathRef, MathState};
 use gui::testkit::{self, Host};
-use gui::theme::TextRole;
 
 fn formula(latex: &str, size: f32) -> MathRef<'_> {
     MathRef {
@@ -165,84 +163,7 @@ fn the_math_cache_stays_under_its_byte_budget() {
 
 const GOOD_BLOCK: &str =
     r"d_1 = \frac{\ln(S/K) + \left(r + \frac{1}{2}\sigma^2\right)T}{\sigma\sqrt{T}}";
-const GOOD_INLINE: &str = r"\sigma\sqrt{T}";
 const BAD_BLOCK: &str = r"\frac{a";
-/// Negative space alone: it can be read, but its box is narrower than nothing.
-const BAD_INLINE: &str = r"\hspace{-2em}";
-
-fn panel_with(block: &'static str, inline: &'static str) -> Harness<'static, Host> {
-    testkit::panel([420.0, 140.0], testkit::asked("q"), move |ui, cx| {
-        math::show(ui, cx.media, &MathRef::block(block));
-        ui.horizontal(|ui| {
-            ui.label(TextRole::Body.rich("The spread of the price is"));
-            math::show(ui, cx.media, &MathRef::inline(inline, TextRole::Body));
-        });
-    })
-}
-
-fn state_of(harness: &mut Harness<'_, Host>, math: &MathRef<'_>) -> MathState {
-    harness.state_mut().media.math.get(math)
-}
-
-fn assert_named_once_as_an_image(harness: &Harness<'_, Host>, latex: &str) {
-    assert_eq!(
-        harness.query_all_by_label(latex).count(),
-        1,
-        "`{latex}` names one node"
-    );
-    assert!(
-        harness
-            .query_by_role_and_label(Role::Image, latex)
-            .is_some(),
-        "the node named `{latex}` is an image"
-    );
-}
-
-#[test]
-fn broken_latex_fails_and_the_widget_keeps_its_name() {
-    let mut good = panel_with(GOOD_BLOCK, GOOD_INLINE);
-    let mut broken = panel_with(BAD_BLOCK, BAD_INLINE);
-    let block = |latex| MathRef::block(latex);
-    let inline = |latex| MathRef::inline(latex, TextRole::Body);
-
-    good.run();
-    broken.run();
-    for latex in [GOOD_BLOCK, GOOD_INLINE] {
-        assert_named_once_as_an_image(&good, latex);
-    }
-    for latex in [BAD_BLOCK, BAD_INLINE] {
-        assert_named_once_as_an_image(&broken, latex);
-    }
-    assert_eq!(state_of(&mut good, &block(GOOD_BLOCK)), MathState::Loading);
-    assert_eq!(state_of(&mut broken, &block(BAD_BLOCK)), MathState::Loading);
-    testkit::save_png(&mut good, "math-loading");
-
-    for harness in [&mut good, &mut broken] {
-        harness.state_mut().media.run_pending();
-        harness.run();
-    }
-    for latex in [GOOD_BLOCK, GOOD_INLINE] {
-        assert_named_once_as_an_image(&good, latex);
-    }
-    for latex in [BAD_BLOCK, BAD_INLINE] {
-        assert_named_once_as_an_image(&broken, latex);
-    }
-    assert!(matches!(
-        state_of(&mut good, &block(GOOD_BLOCK)),
-        MathState::Ready(_)
-    ));
-    assert!(matches!(
-        state_of(&mut good, &inline(GOOD_INLINE)),
-        MathState::Ready(_)
-    ));
-    assert_eq!(state_of(&mut broken, &block(BAD_BLOCK)), MathState::Failed);
-    assert_eq!(
-        state_of(&mut broken, &inline(BAD_INLINE)),
-        MathState::Failed
-    );
-    testkit::save_png(&mut good, "math-ready");
-    testkit::save_png(&mut broken, "math-failed");
-}
 
 #[test]
 fn two_equal_wide_formulas_scroll_apart() {

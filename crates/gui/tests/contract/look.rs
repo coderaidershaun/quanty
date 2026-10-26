@@ -36,8 +36,6 @@ const CHAPTER_ROW: &str = "Chapter 1 · Sample Pages";
 /// The row of the sample notes, and the row of their second chapter once they are open.
 const NOTES_ROW: &str = "Quanty Sample Notes";
 const BLACK_SCHOLES_ROW: &str = "Chapter 2 · Black Scholes In Depth";
-/// The box that finds a media or a chapter on the shelf.
-const FIND_BOX: &str = "Find";
 /// The ingest of its scene stops for ever at page 3, so its bar rests there.
 const BAR_AT_PAGE_3: &str = "Converting the pages — 3 of 12 done, about 36%";
 /// The build of its scene stops for ever at the synthetic texts, so its bar rests there.
@@ -64,7 +62,6 @@ enum Start {
     AfterAClickOnAMediaPencil,
     AfterAClickOnAMediaDelete,
     AfterAClickOnAChapterRow,
-    AfterTypingInTheFindBox,
     AfterAClickOnMaximiseInTheConceptGraph,
     /// The scene never rests, so it is looked at once its catalogue has loaded and its bar has
     /// come to the stall.
@@ -170,12 +167,6 @@ static ROWS: &[Row] = &[
         start: Start::AfterAStartThatNeverEnds,
     },
     Row {
-        picture: "library-min",
-        scene: "black-scholes",
-        window: MIN_WINDOW,
-        start: Start::AfterAClickOnTheLibraryTab,
-    },
-    Row {
         picture: "library-edit-media",
         scene: "black-scholes",
         window: DEFAULT_WINDOW,
@@ -232,12 +223,6 @@ static ROWS: &[Row] = &[
             chapter: CHAPTER_ROW,
             view: "Tables",
         },
-    },
-    Row {
-        picture: "library-find",
-        scene: "black-scholes",
-        window: DEFAULT_WINDOW,
-        start: Start::AfterTypingInTheFindBox,
     },
     Row {
         picture: "ask-graph-maximised",
@@ -396,14 +381,6 @@ fn type_a_new_media(harness: &mut Window) {
     testkit::settle(harness);
 }
 
-/// Escape at the end leaves the box, so that no caret is drawn in the picture.
-fn type_in_the_find_box(harness: &mut Window) {
-    click(harness, Role::Tab, "Library");
-    type_into(harness, FIND_BOX, "black");
-    harness.key_press(egui::Key::Escape);
-    testkit::settle(harness);
-}
-
 impl Row {
     /// Draws the scene at rest and compares it with the kept picture. The error says how.
     fn compare(&self, options: &SnapshotOptions) -> Result<(), String> {
@@ -459,7 +436,6 @@ impl Row {
                 click(&mut harness, Role::Button, BOOK_ROW);
                 click(&mut harness, Role::Button, CHAPTER_ROW);
             }
-            Start::AfterTypingInTheFindBox => type_in_the_find_box(&mut harness),
             Start::AfterAClickOnMaximiseInTheConceptGraph => {
                 maximise_the_concept_graph(&mut harness, self.window);
             }

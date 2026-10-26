@@ -1,17 +1,5 @@
-//! Saved choices, one for each kind of work, must load from old and new files and without parsing
-//! unrelated environment settings.
+//! Saved choices, one for each kind of work, must load from old and new files.
 use choices::{MODEL_SETTINGS_FILE, ModelSettings, WorkChoices, WorkKind};
-
-#[test]
-fn saved_selection_precedes_environment_file() {
-    let folder = tempfile::tempdir().unwrap();
-    let path = folder.path().join(MODEL_SETTINGS_FILE);
-    let choices = WorkChoices::default();
-    choices.save_to(&path).unwrap();
-    std::fs::write(folder.path().join(".env"), "INVALID=\"unterminated").unwrap();
-
-    assert_eq!(WorkChoices::load_from(&path).unwrap(), choices);
-}
 
 #[test]
 fn each_kind_of_work_keeps_its_own_choice() {

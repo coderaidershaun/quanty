@@ -1,5 +1,5 @@
-//! Checks the dataset tools over throwaway stores and the committed sample chapters: a dry run to
-//! the end, a second build while one runs, and a build that cannot start.
+//! Checks the dataset tools over throwaway stores and the committed sample chapters: a second build
+//! while one runs, a build that cannot start, and a dry run to the end with its report.
 
 use std::time::Duration;
 
@@ -10,7 +10,7 @@ use serde_json::json;
 use tokio::time::timeout;
 
 use crate::support::{
-    Library, ReadyGate, StandInServices, call, connect, error_text, report_when_ended,
+    ReadyGate, StandInServices, call, connect, error_text, report_when_ended,
     sample_content_folder, structured,
 };
 
@@ -34,43 +34,6 @@ async fn next_sign_in_check(gate: &mut ReadyGate) {
         .await
         .expect("a sign-in check should come to the gate")
         .expect("the gate should stay open for the checks");
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored datasets::"]
-async fn a_dry_run_build_ends_done_with_its_folder_summary_and_spend() {
-    let library = Library::ingested("mcp-dataset-dry-run").await;
-    let client = connect(library.server()).await;
-    let asked_before = library.llm.calls();
-
-    let started = call(
-        &client,
-        "build_dataset",
-        json!({ "name": "t", "dry_run": true }),
-    )
-    .await;
-
-    let first = structured(&started);
-    assert!(
-        matches!(first["state"].as_str(), Some("running" | "done")),
-        "{first}"
-    );
-    let ended =
-        report_when_ended(&client, "dataset_status", first["job_id"].as_str().unwrap()).await;
-    assert_eq!(ended["state"], "done", "{ended}");
-    let folder = library.stores.config().dataset_folder.join("t");
-    assert_eq!(ended["folder"], folder.display().to_string());
-    assert!(folder.join("cpt/raw.jsonl").is_file());
-    assert!(folder.join("manifest.json").is_file());
-    let summary = ended["summary"].as_str().unwrap();
-    assert!(summary.contains("dry run"), "{summary}");
-    assert!(ended["usage"].is_array(), "{ended}");
-    assert!(ended.get("cost_usd").is_some(), "{ended}");
-    assert!(
-        ended.get("stage").is_none() && ended.get("error").is_none(),
-        "{ended}"
-    );
-    assert_eq!(library.llm.calls(), asked_before, "a dry run asks no model");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -125,7 +88,7 @@ async fn a_second_build_is_refused_while_one_runs_and_names_the_running_job() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored datasets::"]
-async fn a_build_that_cannot_start_is_a_tool_error_that_says_what_to_do() {
+async fn a_build_that_cannot_start_says_what_to_do_and_a_dry_run_reports_its_folder() {
     let stores = ThrowawayStores::new("mcp-dataset-refused");
     let client = connect(server_over_samples(&stores, StandInServices::new())).await;
 
@@ -175,4 +138,16 @@ async fn a_build_that_cannot_start_is_a_tool_error_that_says_what_to_do() {
     )
     .await;
     assert_eq!(ended["state"], "done", "a dry run needs no model: {ended}");
+    let folder = stores.config().dataset_folder.join("t");
+    assert_eq!(ended["folder"], folder.display().to_string());
+    assert!(folder.join("cpt/raw.jsonl").is_file());
+    assert!(folder.join("manifest.json").is_file());
+    let summary = ended["summary"].as_str().unwrap();
+    assert!(summary.contains("dry run"), "{summary}");
+    assert!(ended["usage"].is_array(), "{ended}");
+    assert!(ended.get("cost_usd").is_some(), "{ended}");
+    assert!(
+        ended.get("stage").is_none() && ended.get("error").is_none(),
+        "{ended}"
+    );
 }

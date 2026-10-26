@@ -1,7 +1,6 @@
 //! Checks that the live backend checks and runs an ingest of a PDF of a saved media. The helpers
 //! here send one command and read the events that come back.
 
-mod blocked;
 mod run;
 
 use backend::live::{LiveContext, Services};
@@ -15,7 +14,7 @@ use ocr::testing::sample_pdf;
 const REQUEST: RequestId = RequestId(7);
 const SAMPLE_BOOK: &str = "Option Volatility and Pricing";
 
-fn request<S: Services>(cx: &LiveContext<S>) -> IngestRequest {
+pub(crate) fn request<S: Services>(cx: &LiveContext<S>) -> IngestRequest {
     IngestRequest {
         pdf: upload(cx, &sample_pdf()),
         file_name: sample_pdf()
@@ -100,7 +99,7 @@ fn upload<S: Services>(cx: &LiveContext<S>, pdf: &std::path::Path) -> UploadId {
     upload
 }
 
-fn assert_consumed<S: Services>(
+pub(crate) fn assert_consumed<S: Services>(
     cx: &LiveContext<S>,
     ingest: &IngestRequest,
     source: &std::path::Path,

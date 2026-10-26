@@ -20,8 +20,21 @@ fn sections_at(content_folder: &Path, chapter_folder: &Path) -> Vec<Section> {
 }
 
 #[test]
-fn a_book_section_renders_its_heading_line_math_formula_label_figure_note_and_provenance() {
-    let sections = sections_at(&support::sample_content(), &support::sample_chapter());
+fn the_sample_chapters_are_cut_into_stable_sections_that_render_as_they_were_printed() {
+    sections_are_stable_and_carry_the_items_of_their_chapter();
+    let content = support::sample_content();
+    a_book_section_renders_its_heading_line_math_formula_label_figure_note_and_provenance(
+        &sections_at(&content, &support::sample_chapter()),
+    );
+    a_code_listing_renders_as_a_fenced_block_with_its_indentation(&sections_at(
+        &content,
+        &support::in_depth_chapter(),
+    ));
+}
+
+fn a_book_section_renders_its_heading_line_math_formula_label_figure_note_and_provenance(
+    sections: &[Section],
+) {
     let section = &sections[0];
     let text = &section.markdown;
 
@@ -98,9 +111,7 @@ fn a_book_section_renders_its_heading_line_math_formula_label_figure_note_and_pr
     assert!(section.provenance.model_written_tokens > 0);
 }
 
-#[test]
-fn a_code_listing_renders_as_a_fenced_block_with_its_indentation() {
-    let sections = sections_at(&support::sample_content(), &support::in_depth_chapter());
+fn a_code_listing_renders_as_a_fenced_block_with_its_indentation(sections: &[Section]) {
     let listing =
         fs::read_to_string(support::in_depth_chapter().join("page-num-3/11-code.txt")).unwrap();
     let listing = listing.strip_suffix('\n').unwrap();
@@ -122,7 +133,6 @@ fn a_code_listing_renders_as_a_fenced_block_with_its_indentation() {
     );
 }
 
-#[test]
 fn sections_are_stable_and_carry_the_items_of_their_chapter() {
     let content = support::sample_content();
     let expected_ids = [

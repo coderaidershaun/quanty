@@ -296,10 +296,24 @@ impl Shared {
     }
 
     /// Whether `Intent::Back` would change anything.
-    // SMELL: this repeats the rules of `back` without running them, so a change to one of the two
-    // must change the other, the Library's step included. One decision that both read would fix it.
     pub fn can_go_back(&self) -> bool {
-        self.tab != Tab::Ask || self.maximised.is_some() || self.ask_view != AskView::Answer
+        self.back_step().is_some()
+    }
+
+    /// Whether `Intent::Back` would only return the Ask tab to its Answer. A window that shows
+    /// the Answer beside the other views sees no change from it.
+    pub(crate) fn goes_back_to_the_answer(&self) -> bool {
+        self.back_step() == Some(BackStep::ShowAnswer)
+    }
+
+    fn back_step(&self) -> Option<BackStep> {
+        match self.tab {
+            Tab::Ask if self.maximised.is_some() => Some(BackStep::Restore),
+            Tab::Ask if self.ask_view != AskView::Answer => Some(BackStep::ShowAnswer),
+            Tab::Ask => None,
+            Tab::Library => Some(BackStep::UpTheShelf),
+            Tab::Ingest | Tab::Datasets => Some(BackStep::OpenAsk),
+        }
     }
 
     /// Any view other than the Answer also becomes the side view.
@@ -323,15 +337,16 @@ impl Shared {
     /// Ask tab returns to its Answer, the Library goes up one level, any other tab returns to the
     /// Ask tab.
     fn back(&mut self, effects: &mut Vec<Effect>) {
-        match self.tab {
-            Tab::Ask if self.maximised.is_some() => self.maximised = None,
-            Tab::Ask => self.ask_view = AskView::Answer,
-            Tab::Library => {
+        match self.back_step() {
+            Some(BackStep::Restore) => self.maximised = None,
+            Some(BackStep::ShowAnswer) => self.ask_view = AskView::Answer,
+            Some(BackStep::UpTheShelf) => {
                 if !self.back_on_shelf(effects) {
                     self.open_tab(Tab::Ask);
                 }
             }
-            Tab::Ingest | Tab::Datasets => self.open_tab(Tab::Ask),
+            Some(BackStep::OpenAsk) => self.open_tab(Tab::Ask),
+            None => {}
         }
     }
 
@@ -343,6 +358,15 @@ impl Shared {
             self.maximised = None;
         }
     }
+}
+
+/// The step that `Intent::Back` takes, the first rule that applies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BackStep {
+    Restore,
+    ShowAnswer,
+    UpTheShelf,
+    OpenAsk,
 }
 
 pub(super) fn push_cancel(effects: &mut Vec<Effect>, request: RequestId) {

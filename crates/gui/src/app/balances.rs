@@ -1,6 +1,7 @@
-//! The left of the footer: what is known of each paid account, and a link to the page that shows
-//! its credit. No provider gives a balance for an API key, so no entry shows an amount. It draws
-//! static text with no spinner, so a window at rest asks for no repaint.
+//! What the footer shows of each paid account, and a link to the page that shows its credit: one
+//! line for each in a wide window, a slim row of short names in a smaller one, and the full lines
+//! that the row opens. No provider gives a balance for an API key, so no entry shows an amount.
+//! It draws static text with no spinner, so a window at rest asks for no repaint.
 
 use eframe::egui;
 
@@ -32,29 +33,97 @@ fn entry(ui: &mut egui::Ui, provider: Provider, rect: egui::Rect, cx: &mut Panel
     ui.scope_builder(builder, |ui| {
         ui.spacing_mut().item_spacing.x = space::SM;
         dot(ui, tone(shown));
-        let label = format!("{}: {}", name(provider), state(shown));
-        if ui
-            .add(Button::ghost(&label).size(ControlSize::Small))
-            .clicked()
-        {
-            cx.intents.push(Intent::ReadBalances);
-        }
+        state_button(ui, provider, shown, ControlSize::Small, cx);
         ui.scope(|ui| {
             ui.set_max_width((ui.available_width() - LINK_ROOM).max(0.0));
             ui.add(egui::Label::new(TextRole::Small.rich(hint(provider, shown))).truncate());
         });
-        let (link, opens) = match provider {
-            Provider::Google => ("Billing", "Open the Google billing page"),
-            Provider::Jev => ("Console", "Open the Jev console"),
-        };
-        let button = Button::ghost(link)
-            .icon(Icon::OPEN)
-            .size(ControlSize::Small)
-            .accessible_name(opens);
-        if ui.add(button).clicked() {
-            cx.intents.push(Intent::OpenBillingPage(provider));
+        link_button(ui, provider, ControlSize::Small, cx);
+    });
+}
+
+/// One dot and one short name for each account, in a row that sends nothing. Returns whether the
+/// person tapped either account.
+pub(super) fn slim(ui: &mut egui::Ui, cx: &PanelCx<'_>) -> bool {
+    let mut is_tapped = false;
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.x = space::LG;
+        for provider in Provider::ALL {
+            let shown = cx.shared.balances.shown(provider);
+            ui.scope(|ui| {
+                ui.spacing_mut().item_spacing.x = space::SM;
+                dot(ui, tone(shown));
+                let full_name = account_label(provider, shown);
+                let button = Button::ghost(short_name(provider))
+                    .size(ControlSize::Small)
+                    .accessible_name(&full_name);
+                is_tapped |= ui.add(button).clicked();
+            });
         }
     });
+    is_tapped
+}
+
+/// The full lines of both accounts, for a room that is too narrow for them to stand on one row:
+/// what they hold wraps, and the hint is never cut short.
+pub(super) fn lines(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
+    ui.scope(|ui| {
+        // A wrapped row centres each item on the height the row has when the item is added, so
+        // the dot needs the height of the buttons from the start.
+        ui.spacing_mut().interact_size.y = ControlSize::Medium.height();
+        ui.spacing_mut().item_spacing.x = space::SM;
+        for provider in Provider::ALL {
+            let shown = cx.shared.balances.shown(provider);
+            ui.horizontal_wrapped(|ui| {
+                dot(ui, tone(shown));
+                state_button(ui, provider, shown, ControlSize::Medium, cx);
+                link_button(ui, provider, ControlSize::Medium, cx);
+            });
+            let words = hint(provider, shown);
+            if !words.is_empty() {
+                ui.add(egui::Label::new(TextRole::Small.rich(words)).wrap());
+            }
+        }
+    });
+}
+
+fn state_button(
+    ui: &mut egui::Ui,
+    provider: Provider,
+    shown: Option<Balance>,
+    size: ControlSize,
+    cx: &mut PanelCx<'_>,
+) {
+    let label = account_label(provider, shown);
+    if ui.add(Button::ghost(&label).size(size)).clicked() {
+        cx.intents.push(Intent::ReadBalances);
+    }
+}
+
+fn link_button(ui: &mut egui::Ui, provider: Provider, size: ControlSize, cx: &mut PanelCx<'_>) {
+    let (link, opens) = match provider {
+        Provider::Google => ("Billing", "Open the Google billing page"),
+        Provider::Jev => ("Console", "Open the Jev console"),
+    };
+    let button = Button::ghost(link)
+        .icon(Icon::OPEN)
+        .size(size)
+        .accessible_name(opens);
+    if ui.add(button).clicked() {
+        cx.intents.push(Intent::OpenBillingPage(provider));
+    }
+}
+
+fn account_label(provider: Provider, shown: Option<Balance>) -> String {
+    format!("{}: {}", name(provider), state(shown))
+}
+
+/// The slim row of a narrow window has room only for a short name.
+fn short_name(provider: Provider) -> &'static str {
+    match provider {
+        Provider::Google => "Gemini",
+        Provider::Jev => "Jev",
+    }
 }
 
 fn name(provider: Provider) -> &'static str {

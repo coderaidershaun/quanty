@@ -6,9 +6,9 @@ use web_time::Instant;
 
 use eframe::egui;
 
-use super::layout::{self, AskRegion, ShellRects};
+use super::layout::{self, AskRegion, Form, ShellRects};
 use super::region::region;
-use super::{ask_nav, balances, shortcuts, top_bar};
+use super::{ask_nav, footer, shortcuts, top_bar};
 use crate::media::Media;
 use crate::panels::{
     Locals, PanelCx, answer, ask_bar, concept_graph, datasets, follow_up, ingest, library,
@@ -38,6 +38,9 @@ pub struct App {
     effects: Vec<Effect>,
     file_picker: FilePicker,
     model_picker: super::model_picker::ModelPicker,
+    /// The form of the window when it was last drawn. It is wide until the first frame, and no
+    /// input comes before that frame.
+    form: Form,
 }
 
 impl App {
@@ -72,6 +75,7 @@ impl App {
             effects: Vec::new(),
             file_picker: Box::new(|_| {}),
             model_picker,
+            form: Form::Wide,
         }
     }
 
@@ -97,12 +101,23 @@ impl App {
         self.backend.is_idle() && self.shared.is_at_rest() && self.media.is_idle()
     }
 
+    /// Whether a Back would change what the window shows. Only a compact window shows one view of
+    /// the Ask tab at a time; a wider one keeps the Answer beside the others, so a Back that only
+    /// returns to the Answer changes nothing there.
+    pub fn can_go_back(&self) -> bool {
+        self.shared.can_go_back()
+            && (self.form == Form::Compact || !self.shared.goes_back_to_the_answer())
+    }
+
     /// An event from the backend can ask for something too, so this runs once even when no
     /// intent is queued.
     fn apply(&mut self, ctx: &egui::Context) {
         loop {
             let mut intents = std::mem::take(&mut self.intents);
             for intent in intents.drain(..) {
+                if matches!(intent, Intent::Back) && !self.can_go_back() {
+                    continue;
+                }
                 self.shared.apply_intent(intent, &mut self.effects);
             }
             self.intents = intents;
@@ -136,46 +151,31 @@ impl App {
             return;
         }
         let rects = layout::shell(window);
+        self.form = rects.form;
         let mut cx = PanelCx {
             shared: &self.shared,
             media: &mut self.media,
             intents: &mut self.intents,
         };
+        let places = top_bar::places(rects.top_bar, rects.form);
         egui::Panel::top("top_bar")
             .exact_size(rects.top_bar.height())
             .show_separator_line(false)
             .frame(egui::Frame::NONE)
             .show(ui, |ui| {
-                top_bar::draw(ui, rects.top_bar, &mut cx);
+                top_bar::draw(ui, &places, &mut cx);
                 self.model_picker.draw(
                     ui,
-                    rects.top_bar,
+                    places.models,
                     self.backend.is_idle_but_for_balance_reads(),
-                    cx.shared,
-                    cx.intents,
+                    &mut cx,
                 );
             });
         egui::CentralPanel::no_frame().show(ui, |ui| {
             ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
             draw_tab(ui, &rects, &mut self.locals, &mut cx);
             region(ui, "footer", rects.footer, |ui| {
-                let footer = rects.footer;
-                let painter = ui.painter();
-                let line = theme::hairline(painter, color::HAIRLINE);
-                painter.hline(footer.x_range(), footer.top() + line.width / 2.0, line);
-                let parts = layout::footer(footer);
-                balances::show(ui, parts.accounts, &mut cx);
-                let text = match self.backend.connection() {
-                    contract::Connection::Connected => "Connected".to_owned(),
-                    contract::Connection::Reconnecting { attempt } => {
-                        format!("Reconnecting · attempt {attempt}")
-                    }
-                    contract::Connection::Lost => "Connection lost".to_owned(),
-                };
-                ui.put(
-                    parts.connection,
-                    egui::Label::new(crate::theme::TextRole::Small.rich(text)),
-                );
+                footer::draw(ui, &rects, self.backend.connection(), &mut cx);
             });
         });
     }

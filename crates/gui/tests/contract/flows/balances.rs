@@ -12,22 +12,28 @@ use contract::{
 };
 use eframe::egui;
 use eframe::egui::accesskit::Role;
+use eframe::egui::{Pos2, Rect, Vec2};
 use egui_kittest::Node;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
-use gui::app::layout::DEFAULT_WINDOW;
+use gui::app::layout::{DEFAULT_WINDOW, PHONE_WINDOW};
 use gui::state::Shared;
 use gui::testkit::{self, run_until};
 
 use super::recording::{self, Seen};
-use super::{Window, click, is_enabled, node_in, panels, shared};
+use super::{Window, click, click_in, is_enabled, node_in, panels, shared};
 
 const GOOGLE_PAGE: &str = "https://aistudio.google.com/billing";
 const JEV_PAGE: &str = "https://console.typesafe.ai/";
 const LIMIT: Duration = Duration::from_secs(5);
 
-/// The nodes of that role whose name holds `words`, in the footer.
-fn in_footer<'a>(harness: &'a Window, role: Role, words: &'a str) -> Vec<Node<'a>> {
-    let footer = panels(DEFAULT_WINDOW).footer;
+/// The nodes of that role whose name holds `words`, in the footer of a window of that size.
+fn in_footer<'a>(
+    harness: &'a Window,
+    role: Role,
+    words: &'a str,
+    window: [f32; 2],
+) -> Vec<Node<'a>> {
+    let footer = panels(window).footer;
     harness
         .query_all_by_label_contains(words)
         .filter(|node| {
@@ -36,8 +42,8 @@ fn in_footer<'a>(harness: &'a Window, role: Role, words: &'a str) -> Vec<Node<'a
         .collect()
 }
 
-fn says_in_footer(harness: &Window, words: &str) -> bool {
-    let footer = panels(DEFAULT_WINDOW).footer;
+fn says_in_footer(harness: &Window, words: &str, window: [f32; 2]) -> bool {
+    let footer = panels(window).footer;
     harness
         .query_all_by_label_contains(words)
         .any(|node| footer.contains(node.rect().center()))
@@ -49,7 +55,7 @@ fn assert_both_entries_say(harness: &Window, state: &str, scene: &str) {
         ("Google Gemini:", "Open the Google billing page"),
         ("Jev:", "Open the Jev console"),
     ] {
-        let entries = in_footer(harness, Role::Button, entry);
+        let entries = in_footer(harness, Role::Button, entry, DEFAULT_WINDOW);
         assert_eq!(
             entries.len(),
             1,
@@ -135,6 +141,65 @@ fn each_link_opens_the_page_of_its_provider() {
     }
 }
 
+/// On a phone each account is a dot and a short name, the connection stands beside them, and none
+/// of the three overlaps another. A tap on an account opens the full lines with the billing links.
+fn a_phone_footer_is_one_row_that_opens_the_full_lines() {
+    let (mut harness, _) = recording::open("idle", PHONE_WINDOW);
+    testkit::settle(&mut harness);
+    let footer = panels(PHONE_WINDOW).footer;
+    let screen = Rect::from_min_size(Pos2::ZERO, Vec2::from(PHONE_WINDOW));
+    for tab in Tab::ALL {
+        harness.state_mut().push(Intent::OpenTab(tab));
+        testkit::settle(&mut harness);
+        let mut parts = Vec::new();
+        for entry in ["Google Gemini:", "Jev:"] {
+            let found = in_footer(&harness, Role::Button, entry, PHONE_WINDOW);
+            assert_eq!(found.len(), 1, "{tab:?}: {} `{entry}`", found.len());
+            let name = found[0].accesskit_node().label().unwrap_or_default();
+            assert!(name.contains("balance not offered"), "{tab:?}: `{name}`");
+            parts.push((entry, found[0].rect()));
+        }
+        let connection = in_footer(&harness, Role::Label, "Connected", PHONE_WINDOW);
+        assert_eq!(connection.len(), 1, "{tab:?}: the connection is not shown");
+        parts.push(("Connected", connection[0].rect()));
+
+        for (name, rect) in &parts {
+            assert!(
+                footer.contains_rect(*rect) && screen.contains_rect(*rect),
+                "{tab:?}: `{name}` {rect:?} is outside the footer {footer:?}"
+            );
+        }
+        for (index, (name, rect)) in parts.iter().enumerate() {
+            for (other_name, other) in &parts[index + 1..] {
+                let overlap = rect.intersect(*other);
+                assert!(
+                    overlap.width() <= 0.0 || overlap.height() <= 0.0,
+                    "{tab:?}: `{name}` {rect:?} overlaps `{other_name}` {other:?}"
+                );
+            }
+        }
+    }
+
+    click_in(
+        &mut harness,
+        Role::Button,
+        "Google Gemini: balance not offered",
+        footer,
+    );
+    testkit::save_png(&mut harness, "phone-footer-open");
+    for (link, page) in [
+        ("Open the Google billing page", GOOGLE_PAGE),
+        ("Open the Jev console", JEV_PAGE),
+    ] {
+        let urls = opened_by(&mut harness, |harness| {
+            node_in(harness, Role::Button, link, screen)
+                .unwrap_or_else(|| panic!("no `{link}` is on screen"))
+                .click();
+        });
+        assert_eq!(urls, [page], "{link}");
+    }
+}
+
 fn start_a_build(harness: &mut Window) {
     let build = DatasetRequest {
         name: "notes-v2".to_owned(),
@@ -204,7 +269,7 @@ fn a_key_that_is_missing_names_its_setting() {
         "start quanty again",
     ] {
         assert!(
-            says_in_footer(&harness, words),
+            says_in_footer(&harness, words, DEFAULT_WINDOW),
             "the footer lacks `{words}`"
         );
     }
@@ -213,14 +278,22 @@ fn a_key_that_is_missing_names_its_setting() {
 fn a_read_that_failed_says_so_and_blocks_nothing() {
     let (mut harness, _) = recording::open("balances-unread", DEFAULT_WINDOW);
     testkit::settle(&mut harness);
-    let google = in_footer(&harness, Role::Button, "Google Gemini:");
+    let google = in_footer(&harness, Role::Button, "Google Gemini:", DEFAULT_WINDOW);
     let name = google[0].accesskit_node().label().unwrap_or_default();
     assert!(name.contains("could not read"), "{name}");
-    assert!(says_in_footer(&harness, "Click to try again"));
-    let jev = in_footer(&harness, Role::Button, "Jev:");
+    assert!(says_in_footer(
+        &harness,
+        "Click to try again",
+        DEFAULT_WINDOW
+    ));
+    let jev = in_footer(&harness, Role::Button, "Jev:", DEFAULT_WINDOW);
     let name = jev[0].accesskit_node().label().unwrap_or_default();
     assert!(name.contains("key refused"), "{name}");
-    assert!(says_in_footer(&harness, "start quanty again"));
+    assert!(says_in_footer(
+        &harness,
+        "start quanty again",
+        DEFAULT_WINDOW
+    ));
 
     harness.state_mut().push(question());
     testkit::settle(&mut harness);
@@ -264,11 +337,11 @@ fn a_read_that_never_ends_blocks_nothing() {
 fn spent_credit_is_shown_until_a_job_that_needs_the_provider_works() {
     let (mut harness, _) = recording::open("out-of-credit", DEFAULT_WINDOW);
     testkit::settle(&mut harness);
-    let google = in_footer(&harness, Role::Button, "Google Gemini:");
+    let google = in_footer(&harness, Role::Button, "Google Gemini:", DEFAULT_WINDOW);
     let name = google[0].accesskit_node().label().unwrap_or_default();
     assert!(name.contains("out of credit"), "{name}");
-    assert!(says_in_footer(&harness, "clears this"));
-    let jev = in_footer(&harness, Role::Button, "Jev:");
+    assert!(says_in_footer(&harness, "clears this", DEFAULT_WINDOW));
+    let jev = in_footer(&harness, Role::Button, "Jev:", DEFAULT_WINDOW);
     let name = jev[0].accesskit_node().label().unwrap_or_default();
     assert!(name.contains("balance not offered"), "{name}");
     let hint = FailureKind::EmbeddingOutOfCredit.hint();
@@ -289,7 +362,7 @@ fn spent_credit_is_shown_until_a_job_that_needs_the_provider_works() {
     testkit::settle(&mut harness);
     harness.state_mut().push(Intent::StartIngest);
     testkit::settle(&mut harness);
-    let jev = in_footer(&harness, Role::Button, "Jev:");
+    let jev = in_footer(&harness, Role::Button, "Jev:", DEFAULT_WINDOW);
     let name = jev[0].accesskit_node().label().unwrap_or_default();
     assert!(name.contains("out of credit"), "{name}");
     let hint = FailureKind::ConverterOutOfCredit.hint();
@@ -380,6 +453,7 @@ fn the_note_of_spent_credit_comes_from_a_reply_and_goes_with_a_reply_that_worked
 fn the_footer_shows_each_account_and_reads_it_only_when_asked() {
     every_tab_has_one_entry_for_each_account();
     each_link_opens_the_page_of_its_provider();
+    a_phone_footer_is_one_row_that_opens_the_full_lines();
     balances_are_read_at_start_after_a_paid_job_and_on_a_click_only();
     a_key_that_is_missing_names_its_setting();
     a_read_that_failed_says_so_and_blocks_nothing();

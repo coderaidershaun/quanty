@@ -5,7 +5,7 @@ use eframe::egui;
 
 use crate::panels::labels::NO_MEDIA;
 use crate::state::Shared;
-use crate::widgets::Dropdown;
+use crate::widgets::{ControlSize, Dropdown};
 use contract::{ChapterLabel, DocId, DocumentName, Loadable, PageView};
 
 const CHOOSE_MEDIA: &str = "Choose a media";
@@ -148,10 +148,11 @@ pub(super) struct Picker<'a> {
 }
 
 impl Picker<'_> {
-    pub(super) fn show(&self, ui: &mut egui::Ui, width: f32) -> Option<DocId> {
+    pub(super) fn show(&self, ui: &mut egui::Ui, width: f32, size: ControlSize) -> Option<DocId> {
         let shown = ui.add_enabled_ui(self.is_enabled, |ui| {
             Dropdown::new(self.label, self.options, width)
                 .id_salt(self.salt)
+                .size(size)
                 .selected(self.selected)
                 .placeholder(self.placeholder)
                 .show(ui)

@@ -319,6 +319,7 @@ pub struct Stepper<'a> {
     text: &'a str,
     previous: (&'a str, bool),
     next: (&'a str, bool),
+    size: ControlSize,
 }
 
 impl<'a> Stepper<'a> {
@@ -328,7 +329,15 @@ impl<'a> Stepper<'a> {
             text,
             previous: ("Previous", true),
             next: ("Next", true),
+            size: STEPPER_SIZE,
         }
+    }
+
+    /// The height of the stepper and the width of each button. A stepper that a finger presses
+    /// is `ControlSize::Medium`.
+    pub fn size(mut self, size: ControlSize) -> Self {
+        self.size = size;
+        self
     }
 
     /// `label` is the accessible name of the button that goes back.
@@ -351,7 +360,7 @@ impl<'a> Stepper<'a> {
             .corner_radius(radius::SM)
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
-                let side = STEPPER_SIZE.height();
+                let side = self.size.height();
                 let text_width = TextRole::Body.galley(ui, self.text, color::TEXT).size().x;
                 let middle = egui::vec2(text_width.max(STEPPER_TEXT_WIDTH), side);
                 let whole = egui::vec2(side + middle.x + side, side);
@@ -372,7 +381,7 @@ impl<'a> Stepper<'a> {
     fn show_parts(&self, ui: &mut egui::Ui, middle: egui::Vec2) -> Option<Step> {
         let mut step = None;
         let (label, is_enabled) = self.previous;
-        let button = Button::icon_only(Icon::CARET_LEFT, label).size(STEPPER_SIZE);
+        let button = Button::icon_only(Icon::CARET_LEFT, label).size(self.size);
         if ui.add_enabled(is_enabled, button).clicked() {
             step = Some(Step::Previous);
         }
@@ -387,7 +396,7 @@ impl<'a> Stepper<'a> {
             },
         );
         let (label, is_enabled) = self.next;
-        let button = Button::icon_only(Icon::CARET_RIGHT, label).size(STEPPER_SIZE);
+        let button = Button::icon_only(Icon::CARET_RIGHT, label).size(self.size);
         if ui.add_enabled(is_enabled, button).clicked() {
             step = Some(Step::Next);
         }

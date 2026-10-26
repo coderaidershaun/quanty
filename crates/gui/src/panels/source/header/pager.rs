@@ -5,7 +5,7 @@ use eframe::egui;
 
 use crate::state::SourceNav;
 use crate::theme::{TextRole, color};
-use crate::widgets::{Step, Stepper};
+use crate::widgets::{ControlSize, Step, Stepper};
 use contract::DocId;
 
 const UNKNOWN: &str = "–";
@@ -30,11 +30,16 @@ impl PagerText {
     /// It is laid out from its left in a room as wide as it was when it was last drawn, so it
     /// ends at the right edge of its row. When its width changes, the frame is laid out once
     /// more before it is shown.
-    pub(super) fn show(&mut self, ui: &mut egui::Ui, nav: &SourceNav) -> Option<i32> {
+    pub(super) fn show(
+        &mut self,
+        ui: &mut egui::Ui,
+        nav: &SourceNav,
+        size: ControlSize,
+    ) -> Option<i32> {
         let room = egui::vec2(self.width.min(ui.available_width()), ui.available_height());
         let from_the_left = egui::Layout::left_to_right(egui::Align::Center);
         let pager = self.view(nav);
-        let shown = ui.allocate_ui_with_layout(room, from_the_left, |ui| pager.draw(ui));
+        let shown = ui.allocate_ui_with_layout(room, from_the_left, |ui| pager.draw(ui, size));
         let drawn = shown.response.rect.width();
         if (drawn - self.width).abs() > WIDTH_SLACK {
             self.width = drawn;
@@ -92,8 +97,9 @@ struct Pager<'a> {
 }
 
 impl Pager<'_> {
-    fn draw(&self, ui: &mut egui::Ui) -> Option<i32> {
+    fn draw(&self, ui: &mut egui::Ui, size: ControlSize) -> Option<i32> {
         let step = Stepper::new(self.stepper)
+            .size(size)
             .previous("Previous page", self.can_go_back)
             .next("Next page", self.can_go_on)
             .show(ui);

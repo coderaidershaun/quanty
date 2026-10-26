@@ -3,6 +3,7 @@
 
 use eframe::egui;
 
+use super::PanelWidth;
 use crate::media::Media;
 use crate::state::SourceNav;
 use crate::theme::{Icon, Tone, size, space};
@@ -105,6 +106,7 @@ pub(super) struct TabCx<'a> {
     pub reveal: &'a mut Option<u32>,
     /// Another document gives another number, so its lists start at the top.
     pub generation: u64,
+    pub width: PanelWidth,
     pub media: &'a mut Media,
     pub intents: &'a mut Vec<Intent>,
 }
@@ -148,25 +150,36 @@ pub(super) fn tab_list(nav: &SourceNav, index: &PieceIndex) -> [Tab<'static>; 6]
 }
 
 /// Draws the strip and returns the tab the person chose, never the active one. A warning about
-/// the concepts stands just after the last tab, which is Concepts, and shows its text on hover.
+/// the concepts stands just after the last tab, which is Concepts, and shows its text on hover. In
+/// a narrow panel the strip leaves room at the end of its row for the warning.
 pub(super) fn strip(
     ui: &mut egui::Ui,
     tabs: &[Tab<'_>],
     active: SourceTab,
     concepts_warning: Option<&str>,
+    width: PanelWidth,
 ) -> Option<SourceTab> {
-    // SMELL: the warning is placed by the size of the whole strip, so it counts on Concepts being
-    // the last tab and on the strip's row being only as wide as its tabs. If the strip ever fills
-    // its row, the warning lands at the far right. The tab strip should let a tab carry a warning.
-    let drawn = ui.scope(|ui| TabStrip::new(tabs, active.place()).compact().show(ui));
+    // SMELL: the warning is placed after the whole strip, so it counts on Concepts being the last
+    // tab. In a roomy panel, large counts that fill the row put the warning past the panel's
+    // edge. The tab strip should let a tab carry a warning.
+    let show_strip = |ui: &mut egui::Ui| TabStrip::new(tabs, active.place()).compact().show(ui);
+    let drawn = match (concepts_warning, width) {
+        (Some(_), PanelWidth::Narrow) => {
+            let row = ui.available_rect_before_wrap();
+            let room = egui::Rect::from_min_max(
+                row.min,
+                egui::pos2(row.right() - space::XS - size::GLYPH, row.bottom()),
+            );
+            ui.scope_builder(egui::UiBuilder::new().max_rect(room), show_strip)
+        }
+        _ => ui.scope(show_strip),
+    };
     if let Some(warning) = concepts_warning {
         warn_after(ui, drawn.response.rect, warning);
     }
     SourceTab::ALL.get(drawn.inner?).copied()
 }
 
-// SMELL: the warning is a painted glyph with no name of its own, so a screen reader does not
-// announce it. A person who uses one learns that the concepts failed only on the Concepts tab.
 fn warn_after(ui: &mut egui::Ui, strip: egui::Rect, warning: &str) {
     let glyph = egui::Rect::from_center_size(
         egui::pos2(
@@ -177,6 +190,7 @@ fn warn_after(ui: &mut egui::Ui, strip: egui::Rect, warning: &str) {
     );
     let ink = Tone::Danger.swatch().text;
     Icon::WARNING.paint(ui.painter(), glyph.center(), size::GLYPH, ink);
-    ui.interact(glyph, ui.id().with("concepts failed"), egui::Sense::hover())
-        .on_hover_text(warning);
+    let hover = ui.interact(glyph, ui.id().with("concepts failed"), egui::Sense::hover());
+    hover.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, warning));
+    hover.on_hover_text(warning);
 }

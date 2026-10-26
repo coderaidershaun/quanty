@@ -9,6 +9,7 @@ use krilla::image::Image;
 use super::faces::{Faces, Typeface};
 use super::pages::{Chunk, INK_SECONDARY, INK_TEXT, Item};
 use super::read::{Span, SpanKind};
+use crate::document::one_line;
 use crate::math::{Display, Formula, Formulas};
 
 /// A formula is set a little larger than the text beside it, as it is in the window.
@@ -390,8 +391,4 @@ pub(super) fn keep_lines_together(chunks: &mut [Chunk]) {
         chunks[0].keep_with_next = 1;
         chunks[count - 2].keep_with_next = 1;
     }
-}
-
-fn one_line(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }

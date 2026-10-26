@@ -1,5 +1,6 @@
 //! What a person asks a dataset build to do, how far a build has got, and what it made.
 
+use crate::library::count;
 use crate::{DocId, Usage};
 
 #[derive(
@@ -113,31 +114,27 @@ impl DatasetReport {
     pub fn summary(&self) -> String {
         let exported = format!(
             "{}, {} for training and {} held out, {} rejected.",
-            count(self.documents, "document"),
-            count(self.sections_train, "section"),
+            count(self.documents as u64, "document"),
+            count(self.sections_train as u64, "section"),
             self.sections_heldout,
             self.rejected,
         );
         match self.planned_calls {
             Some(calls) => format!(
                 "{exported} Dry run: {} planned, none made.",
-                count(calls as usize, "model call")
+                count(u64::from(calls), "model call")
             ),
             None => format!(
                 "{exported} {} and {} ({} think, {} direct).",
-                count(self.synthetic, "synthetic text"),
-                count(self.sft_think + self.sft_direct, "fine-tuning example"),
+                count(self.synthetic as u64, "synthetic text"),
+                count(
+                    (self.sft_think + self.sft_direct) as u64,
+                    "fine-tuning example"
+                ),
                 self.sft_think,
                 self.sft_direct,
             ),
         }
-    }
-}
-
-fn count(number: usize, noun: &str) -> String {
-    match number {
-        1 => format!("1 {noun}"),
-        _ => format!("{number} {noun}s"),
     }
 }
 

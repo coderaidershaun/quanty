@@ -1,7 +1,9 @@
 //! Where everything is: a rectangle for each node, a route and a label place for each link, and
 //! the size of the whole picture. Plain numbers in, plain numbers out.
 
-use super::geometry::{Point, Rect, Route, point};
+use eframe::egui::{Pos2, Rect, pos2};
+
+use super::geometry::{Route, centred, cut_by, overlaps};
 use super::plan::Plan;
 use super::seats::{Layout, Metrics, Sizes};
 
@@ -71,25 +73,25 @@ impl Placed {
                 continue;
             }
             let rect = self.labels[index].rect;
-            let mirrored = Rect::from_centre(
-                point(
-                    2.0 * middle_of(self.routes[index]).x - rect.centre().x,
-                    rect.centre().y,
+            let mirrored = centred(
+                pos2(
+                    2.0 * middle_of(self.routes[index]).x - rect.center().x,
+                    rect.center().y,
                 ),
                 rect.size(),
             );
             let is_free = |candidate: &Rect| {
-                self.world.holds(candidate)
-                    && !self.nodes.iter().any(|node| node.overlaps(candidate))
+                self.world.contains_rect(*candidate)
+                    && !self.nodes.iter().any(|node| overlaps(node, candidate))
                     && !taken
                         .iter()
-                        .any(|other| other.inflate(LABEL_CLEARANCE).overlaps(candidate))
+                        .any(|other| overlaps(&other.expand(LABEL_CLEARANCE), candidate))
                     && !plan.links.iter().zip(&self.routes).any(|(other, route)| {
                         other.touches(0)
                             && route
                                 .pieces()
                                 .windows(2)
-                                .any(|pair| candidate.cut_by(pair[0], pair[1]))
+                                .any(|pair| cut_by(candidate, pair[0], pair[1]))
                     })
             };
             if let Some(found) = [rect, mirrored].into_iter().find(|rect| is_free(rect)) {
@@ -101,13 +103,13 @@ impl Placed {
     }
 }
 
-fn middle_of(route: Route) -> Point {
+fn middle_of(route: Route) -> Pos2 {
     let pieces = route.pieces();
     let half = pieces.len() / 2;
     if pieces.len() % 2 == 1 {
         pieces[half]
     } else {
         let (before, after) = (pieces[half - 1], pieces[half]);
-        point((before.x + after.x) / 2.0, (before.y + after.y) / 2.0)
+        pos2((before.x + after.x) / 2.0, (before.y + after.y) / 2.0)
     }
 }

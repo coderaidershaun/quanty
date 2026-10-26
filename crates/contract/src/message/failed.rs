@@ -4,102 +4,58 @@ use super::{
 };
 
 impl Command {
-    // SMELL: this file is near the 500-line limit, and each new command adds an arm here. This
-    // function and `unknown_health` are the part to move out first, into a file of what each
-    // command owes when it fails.
     /// A health check is answered with `Unknown` for every service and not with `Down`: a check
     /// that failed says nothing about the services, and `Down` would make the next good search
     /// send the check again, for ever.
     pub fn failed(&self, failure: &Failure) -> Vec<Event> {
+        macro_rules! failure_of {
+            ($event:ident, $request:expr $(, $field:ident: $value:expr)*) => {
+                Event::$event {
+                    request: *$request,
+                    $($field: $value,)*
+                    result: Err(failure.clone()),
+                }
+            };
+        }
         match self {
-            Command::SaveModelChoice { request, .. } => vec![Event::ModelChoiceSaved {
-                request: *request,
-                result: Err(failure.clone()),
-            }],
+            Command::SaveModelChoice { request, .. } => {
+                vec![failure_of!(ModelChoiceSaved, request)]
+            }
             // An ask is answered in three parts, and any of them may still be waited for.
             Command::Ask { request, .. } => vec![
-                Event::Search {
-                    request: *request,
-                    result: Err(failure.clone()),
-                },
-                Event::Graph {
-                    request: *request,
-                    result: Err(failure.clone()),
-                },
-                Event::Answer {
-                    request: *request,
-                    result: Err(failure.clone()),
-                },
+                failure_of!(Search, request),
+                failure_of!(Graph, request),
+                failure_of!(Answer, request),
             ],
-            Command::Export { request, file } => vec![Event::Exported {
-                request: *request,
-                format: file.format,
-                result: Err(failure.clone()),
-            }],
+            Command::Export { request, file } => {
+                vec![failure_of!(Exported, request, format: file.format)]
+            }
             Command::LoadPage { request, .. } => vec![
-                Event::Page {
-                    request: *request,
-                    result: Err(failure.clone()),
-                },
-                Event::PageConcepts {
-                    request: *request,
-                    result: Err(failure.clone()),
-                },
+                failure_of!(Page, request),
+                failure_of!(PageConcepts, request),
             ],
             // The concepts are owed even when the contents failed: they end the load.
             Command::LoadChapterContents { request, .. } => vec![
-                Event::ChapterContents {
-                    request: *request,
-                    result: Err(failure.clone()),
-                },
-                Event::ChapterConcepts {
-                    request: *request,
-                    result: Err(failure.clone()),
-                },
+                failure_of!(ChapterContents, request),
+                failure_of!(ChapterConcepts, request),
             ],
-            Command::LoadCatalogue { request } => vec![Event::Catalogue {
-                request: *request,
-                result: Err(failure.clone()),
-            }],
-            Command::SetDocumentTags { request, edit } => vec![Event::DocumentTagsSaved {
-                request: *request,
-                doc: edit.doc,
-                result: Err(failure.clone()),
-            }],
-            Command::DeleteDocument { request, doc } => vec![Event::DocumentDeleted {
-                request: *request,
-                doc: *doc,
-                result: Err(failure.clone()),
-            }],
-            Command::SaveMedia { request, .. } => vec![Event::MediaSaved {
-                request: *request,
-                result: Err(failure.clone()),
-            }],
-            Command::EditMedia { request, .. } => vec![Event::MediaEdited {
-                request: *request,
-                result: Err(failure.clone()),
-            }],
-            Command::DeleteMedia { request, .. } => vec![Event::MediaDeleted {
-                request: *request,
-                result: Err(failure.clone()),
-            }],
-            Command::Preflight { request, .. } => vec![Event::Preflight {
-                request: *request,
-                result: Err(failure.clone()),
-            }],
-            Command::Ingest { request, .. } => vec![Event::IngestFinished {
-                request: *request,
-                result: Err(failure.clone()),
-            }],
-            Command::BuildDataset { request, .. } => vec![Event::DatasetFinished {
-                request: *request,
-                result: Err(failure.clone()),
-            }],
+            Command::LoadCatalogue { request } => vec![failure_of!(Catalogue, request)],
+            Command::SetDocumentTags { request, edit } => {
+                vec![failure_of!(DocumentTagsSaved, request, doc: edit.doc)]
+            }
+            Command::DeleteDocument { request, doc } => {
+                vec![failure_of!(DocumentDeleted, request, doc: *doc)]
+            }
+            Command::SaveMedia { request, .. } => vec![failure_of!(MediaSaved, request)],
+            Command::EditMedia { request, .. } => vec![failure_of!(MediaEdited, request)],
+            Command::DeleteMedia { request, .. } => vec![failure_of!(MediaDeleted, request)],
+            Command::Preflight { request, .. } => vec![failure_of!(Preflight, request)],
+            Command::Ingest { request, .. } => vec![failure_of!(IngestFinished, request)],
+            Command::BuildDataset { request, .. } => vec![failure_of!(DatasetFinished, request)],
             Command::CheckHealth { request } => unknown_health(*request).collect(),
-            Command::LoadChapterInsights { request, .. } => vec![Event::ChapterInsights {
-                request: *request,
-                result: Err(failure.clone()),
-            }],
+            Command::LoadChapterInsights { request, .. } => {
+                vec![failure_of!(ChapterInsights, request)]
+            }
             Command::Cancel(_) => Vec::new(),
             // A read that broke is answered, so the footer does not wait for it for ever.
             Command::ReadBalances { request } => {

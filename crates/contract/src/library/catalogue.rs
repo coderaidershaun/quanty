@@ -27,14 +27,15 @@ impl ItemCounts {
     }
 }
 
+pub(crate) fn count(number: u64, noun: &str) -> String {
+    match number {
+        1 => format!("1 {noun}"),
+        _ => format!("{number} {noun}s"),
+    }
+}
+
 impl fmt::Display for ItemCounts {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fn count(number: u64, noun: &str) -> String {
-            match number {
-                1 => format!("1 {noun}"),
-                _ => format!("{number} {noun}s"),
-            }
-        }
         let (chunks, formulas, figures, tables) = (
             count(self.chunks, "passage"),
             count(self.formulas, "formula"),

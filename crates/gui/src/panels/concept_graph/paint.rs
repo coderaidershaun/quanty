@@ -4,7 +4,7 @@
 use eframe::egui::epaint::{PathShape, QuadraticBezierShape};
 use eframe::egui::{self, Color32, Painter, Pos2, Shape, Stroke, StrokeKind};
 
-use super::geometry::{Point, Rect, Route, point};
+use super::geometry::Route;
 use super::plan::Link;
 use super::scene::{
     ARROW, CORNER, DIM, LINK_GAP, LINK_TEXT, NodeText, PAD_LEFT, Scene, TEXT_LEFT, TextOpts,
@@ -32,18 +32,6 @@ pub(super) struct NodeState {
     pub has_focus: bool,
 }
 
-pub(super) fn to_pos(point: Point) -> Pos2 {
-    egui::pos2(point.x, point.y)
-}
-
-pub(super) fn to_point(pos: Pos2) -> Point {
-    point(pos.x, pos.y)
-}
-
-pub(super) fn to_offset(vector: egui::Vec2) -> Point {
-    point(vector.x, vector.y)
-}
-
 pub(super) fn paint(ui: &egui::Ui, drawing: &Drawing<'_>, states: &[NodeState]) {
     let lit = states
         .iter()
@@ -53,7 +41,7 @@ pub(super) fn paint(ui: &egui::Ui, drawing: &Drawing<'_>, states: &[NodeState]) 
         painter: ui.painter_at(drawing.canvas),
         drawing,
         lit,
-        canvas_centre: to_point(drawing.canvas.center()),
+        canvas_centre: drawing.canvas.center(),
     };
     pen.links();
     pen.link_labels();
@@ -67,7 +55,7 @@ struct Pen<'a> {
     drawing: &'a Drawing<'a>,
     /// The node under the pointer, or else the node with the keyboard.
     lit: Option<usize>,
-    canvas_centre: Point,
+    canvas_centre: Pos2,
 }
 
 struct NodeView<'a> {
@@ -85,13 +73,12 @@ impl Pen<'_> {
         self.drawing.view.scale()
     }
 
-    fn at(&self, point: Point) -> Pos2 {
-        to_pos(self.drawing.view.point_on_canvas(self.canvas_centre, point))
+    fn at(&self, point: Pos2) -> Pos2 {
+        self.drawing.view.point_on_canvas(self.canvas_centre, point)
     }
 
-    fn on_canvas(&self, rect: Rect) -> egui::Rect {
-        let rect = self.drawing.view.rect_on_canvas(self.canvas_centre, rect);
-        egui::Rect::from_min_max(to_pos(rect.min), to_pos(rect.max))
+    fn on_canvas(&self, rect: egui::Rect) -> egui::Rect {
+        self.drawing.view.rect_on_canvas(self.canvas_centre, rect)
     }
 
     fn is_lit_link(&self, link: &Link) -> bool {
@@ -164,7 +151,7 @@ impl Pen<'_> {
 
     /// `along` is the line the head sits on, from the point before the end to the end itself.
     /// The tip stops `LINK_GAP` short of the end.
-    fn arrowhead(&self, along: (Point, Point), colour: Color32) {
+    fn arrowhead(&self, along: (Pos2, Pos2), colour: Color32) {
         let (from, end) = along;
         let tip = self.at(toward(end, from, LINK_GAP));
         let direction = (tip - self.at(from)).normalized();
@@ -299,13 +286,13 @@ impl Pen<'_> {
 }
 
 /// The point `by` away from `from`, on the line toward `to`.
-fn toward(from: Point, to: Point, by: f32) -> Point {
+fn toward(from: Pos2, to: Pos2, by: f32) -> Pos2 {
     let (dx, dy) = (to.x - from.x, to.y - from.y);
     let length = dx.hypot(dy);
     if length == 0.0 {
         return from;
     }
-    point(from.x + dx * by / length, from.y + dy * by / length)
+    egui::pos2(from.x + dx * by / length, from.y + dy * by / length)
 }
 
 /// The route with `at_start` cut off its start and `at_end` cut off its end. Only the drawing is

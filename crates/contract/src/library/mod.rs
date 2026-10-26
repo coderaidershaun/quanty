@@ -5,9 +5,11 @@ mod catalogue;
 mod contents;
 mod insights;
 
+pub(crate) use catalogue::count;
 pub use catalogue::{
     Catalogue, Category, ChapterLabel, Document, DocumentName, DocumentTagsEdit, DocumentView,
     ItemCounts, Media, MediaEdit, NewMedia, is_same_name,
 };
+pub(crate) use contents::page_words;
 pub use contents::{ArtifactMetadata, ChapterContents, ChapterItem};
 pub use insights::{ChapterInsights, Insight};

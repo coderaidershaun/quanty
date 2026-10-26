@@ -8,8 +8,8 @@ use super::blocks::narrow_to_measure;
 use super::listing::Row;
 use super::pane::{Copied, Pane};
 use crate::media::{images, math, rich_text};
-use crate::theme::{Icon, TextRole, color, radius, size, space, stroke};
-use crate::widgets::{Button, CitationChip, ControlSize};
+use crate::theme::{Icon, TextRole, color, radius, size, space};
+use crate::widgets::{Button, CitationChip, ControlSize, focus_ring};
 use contract::ResultItem;
 
 const FORMULA_CAPTION: &str = "As printed in the source";
@@ -124,16 +124,8 @@ fn block<R>(
     scope.response.widget_info(|| {
         egui::WidgetInfo::selected(egui::WidgetType::Button, ui.is_enabled(), is_selected, name)
     });
-    // SMELL: this copies the focus ring that the widget kit draws and keeps to itself, so a
-    // change to the kit's ring must be made here too.
     if scope.response.has_focus() {
-        let ring = egui::Stroke::new(stroke::FOCUS, color::FOCUS);
-        ui.painter().rect_stroke(
-            scope.response.rect,
-            radius::SM,
-            ring,
-            egui::StrokeKind::Outside,
-        );
+        focus_ring(ui.painter(), scope.response.rect, radius::SM);
     }
     crate::widgets::interactive_cursor(ui, &scope.response);
     let response = scope.response;

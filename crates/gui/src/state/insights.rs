@@ -71,13 +71,8 @@ impl Shared {
         if is_same_document && (is_saved || self.insights.pending.is_some()) {
             return;
         }
-        let folder = catalogue
-            .and_then(|catalogue| catalogue.document(doc))
-            .and_then(|document| document.folder.clone());
-        if let Some(old) = self.insights.pending {
-            push_cancel(effects, old);
-        }
-        let request = self.issue_request();
+        let folder = self.folder_of(doc);
+        let request = self.restart(self.insights.pending, effects);
         if !(is_same_document && self.insights.saved.ready().is_some()) {
             self.insights.saved = Loadable::Loading;
         }

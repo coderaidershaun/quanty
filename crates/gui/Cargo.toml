@@ -16,10 +16,6 @@ egui_kittest = { workspace = true, optional = true }
 export.workspace = true
 image.workspace = true
 percent-encoding = { workspace = true, optional = true }
-ratex-layout.workspace = true
-ratex-parser.workspace = true
-ratex-render.workspace = true
-ratex-types.workspace = true
 tempfile = { workspace = true, optional = true }
 thiserror.workspace = true
 tracing.workspace = true

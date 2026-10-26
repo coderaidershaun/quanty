@@ -43,10 +43,7 @@ impl Shared {
         if is_same_document && !is_shown_part_failed {
             return;
         }
-        if let Some(old) = self.contents.pending {
-            push_cancel(effects, old);
-        }
-        let request = self.issue_request();
+        let request = self.restart(self.contents.pending, effects);
         self.contents.doc = Some(doc);
         self.contents.pending = Some(request);
         if !(is_same_document && self.contents.items.ready().is_some()) {
@@ -55,12 +52,7 @@ impl Shared {
         if !(is_same_document && self.contents.concepts.ready().is_some()) {
             self.contents.concepts = Loadable::Loading;
         }
-        let folder = self
-            .library
-            .catalogue
-            .ready()
-            .and_then(|catalogue| catalogue.document(doc))
-            .and_then(|document| document.folder.clone());
+        let folder = self.folder_of(doc);
         effects.push(Effect::Send(Command::LoadChapterContents {
             request,
             doc,

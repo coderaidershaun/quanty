@@ -2,8 +2,6 @@
 //! lists to and from the text a person types; the tokens and cost of a run; the words of a failure
 //! and of a start that waits for a delete; the words for no media and for copying a command.
 
-use std::borrow::Borrow;
-
 use eframe::egui;
 
 use crate::theme::{TextRole, space};
@@ -34,10 +32,6 @@ pub(super) fn list_of(text: &str) -> Vec<String> {
         .filter(|item| !item.is_empty())
         .map(str::to_owned)
         .collect()
-}
-
-pub(super) fn text_of<S: Borrow<str>>(items: &[S]) -> String {
-    items.join(", ")
 }
 
 /// A cost in words: "≈ $0.42", "under $0.01" for a cost that would round to nothing, and

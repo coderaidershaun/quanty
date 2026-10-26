@@ -16,6 +16,7 @@ pub use controls::{
 };
 pub use frames::{Card, CardResponse, PanelFrame, Surface, panel_frame, section_header, separator};
 pub use look::ControlSize;
+pub(crate) use look::focus_ring;
 pub use marks::{Badge, Chip, CitationChip, StepMarker, StepState, dot, logo};
 pub use messages::{
     Choice, Confirm, Notice, NoticeResponse, Placeholder, PlaceholderResponse, modal,

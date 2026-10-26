@@ -1,7 +1,7 @@
 //! Pan and zoom as plain numbers: which point of the picture is at the centre of the canvas, at
 //! what size, and the limits of both.
 
-use super::geometry::{Point, Rect, Size, point};
+use eframe::egui::{Pos2, Rect, Vec2, pos2};
 
 /// The smallest and the largest step of the zoom: 50 % and 200 %.
 const MIN_STEP: i8 = -4;
@@ -21,7 +21,7 @@ fn scale_of(step: i8) -> f32 {
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub(super) struct View {
     /// The point of the picture that is at the centre of the canvas.
-    pub at: Point,
+    pub at: Pos2,
     /// The zoom is counted in doublings of the size. The drawn size snaps to quarter steps, so
     /// that a long pinch asks the font for only nine sizes of each text.
     pub zoom_log: f32,
@@ -39,23 +39,23 @@ impl View {
     /// The view a new picture opens in: all of it when that is readable. Else the smallest
     /// readable size, on the middle of the picture when `centre` (the main concept) is then in
     /// sight, so that the cut is shared by both sides, and on `centre` when it is not.
-    pub(super) fn opening(world: Rect, canvas: Size, centre: Point) -> View {
+    pub(super) fn opening(world: Rect, canvas: Vec2, centre: Pos2) -> View {
         let fits = |step: i8| {
             let scale = scale_of(step);
-            world.width() * scale <= canvas.w + FIT_SLACK
-                && world.height() * scale <= canvas.h + FIT_SLACK
+            world.width() * scale <= canvas.x + FIT_SLACK
+                && world.height() * scale <= canvas.y + FIT_SLACK
         };
         match (FIT_FLOOR..=0).rev().find(|step| fits(*step)) {
             Some(step) => View {
-                at: world.centre(),
+                at: world.center(),
                 zoom_log: f32::from(step) / STEPS_PER_DOUBLING,
             },
             None => {
                 let (half_w, half_h) = (
-                    canvas.w / scale_of(FIT_FLOOR) / 2.0,
-                    canvas.h / scale_of(FIT_FLOOR) / 2.0,
+                    canvas.x / scale_of(FIT_FLOOR) / 2.0,
+                    canvas.y / scale_of(FIT_FLOOR) / 2.0,
                 );
-                let middle = world.centre();
+                let middle = world.center();
                 let centre_is_in_sight =
                     (centre.x - middle.x).abs() <= half_w && (centre.y - middle.y).abs() <= half_h;
                 View {
@@ -67,59 +67,52 @@ impl View {
         }
     }
 
-    pub(super) fn point_on_canvas(&self, canvas_centre: Point, at: Point) -> Point {
-        let scale = self.scale();
-        point(
-            canvas_centre.x + (at.x - self.at.x) * scale,
-            canvas_centre.y + (at.y - self.at.y) * scale,
-        )
+    pub(super) fn point_on_canvas(&self, canvas_centre: Pos2, at: Pos2) -> Pos2 {
+        canvas_centre + (at - self.at) * self.scale()
     }
 
-    pub(super) fn rect_on_canvas(&self, canvas_centre: Point, rect: Rect) -> Rect {
-        Rect {
-            min: self.point_on_canvas(canvas_centre, rect.min),
-            max: self.point_on_canvas(canvas_centre, rect.max),
-        }
+    pub(super) fn rect_on_canvas(&self, canvas_centre: Pos2, rect: Rect) -> Rect {
+        Rect::from_min_max(
+            self.point_on_canvas(canvas_centre, rect.min),
+            self.point_on_canvas(canvas_centre, rect.max),
+        )
     }
 
     /// Keeps the canvas over the picture. Along a side that the picture does not fill, the
     /// picture is centred.
-    pub(super) fn held(mut self, world: Rect, canvas: Size) -> View {
+    pub(super) fn held(mut self, world: Rect, canvas: Vec2) -> View {
         self.zoom_log = self.zoom_log.clamp(MIN_ZOOM, MAX_ZOOM);
         let scale = self.scale();
-        self.at = point(
-            hold(self.at.x, (world.min.x, world.max.x), canvas.w / scale),
-            hold(self.at.y, (world.min.y, world.max.y), canvas.h / scale),
+        self.at = pos2(
+            hold(self.at.x, (world.min.x, world.max.x), canvas.x / scale),
+            hold(self.at.y, (world.min.y, world.max.y), canvas.y / scale),
         );
         self
     }
 
     /// A drag by `by` points of the screen.
-    pub(super) fn panned(mut self, by: Point) -> View {
+    pub(super) fn panned(mut self, by: Vec2) -> View {
         let scale = self.scale();
-        self.at = point(self.at.x - by.x / scale, self.at.y - by.y / scale);
+        self.at -= by / scale;
         self
     }
 
     /// The point of the picture under `pointer` (measured from the canvas centre) stays where
     /// it is.
-    pub(super) fn zoomed(mut self, doublings: f32, pointer: Point) -> View {
+    pub(super) fn zoomed(mut self, doublings: f32, pointer: Vec2) -> View {
         let before = self.scale();
-        let under = point(
-            self.at.x + pointer.x / before,
-            self.at.y + pointer.y / before,
-        );
+        let under = self.at + pointer / before;
         self.zoom_log = (self.zoom_log + doublings).clamp(MIN_ZOOM, MAX_ZOOM);
         let after = self.scale();
-        self.at = point(under.x - pointer.x / after, under.y - pointer.y / after);
+        self.at = under - pointer / after;
         self
     }
 
     /// Moves as little as needed to bring `rect` of the picture onto the canvas.
-    pub(super) fn showing(mut self, rect: Rect, canvas: Size) -> View {
+    pub(super) fn showing(mut self, rect: Rect, canvas: Vec2) -> View {
         let scale = self.scale();
-        let (half_w, half_h) = (canvas.w / scale / 2.0, canvas.h / scale / 2.0);
-        self.at = point(
+        let (half_w, half_h) = (canvas.x / scale / 2.0, canvas.y / scale / 2.0);
+        self.at = pos2(
             show(self.at.x, (rect.min.x, rect.max.x), half_w),
             show(self.at.y, (rect.min.y, rect.max.y), half_h),
         );

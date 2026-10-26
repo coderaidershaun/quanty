@@ -67,7 +67,7 @@ impl Look {
 }
 
 /// The keyboard focus ring: drawn just outside `rect`, so it never changes the size of a widget.
-pub(super) fn focus_ring(painter: &egui::Painter, rect: Rect, corner_radius: f32) {
+pub(crate) fn focus_ring(painter: &egui::Painter, rect: Rect, corner_radius: f32) {
     painter.rect_stroke(
         rect,
         corner_radius,

@@ -72,13 +72,10 @@ pub(super) fn form(
     intents: &mut Vec<Intent>,
 ) -> bool {
     let edit = draft.fields.to_edit();
-    let save = if draft.step == SaveStep::Sent {
-        Save::Sent
-    } else if would_change(&edit, media) && shared.can_edit_media() {
-        Save::On
-    } else {
-        Save::Off
-    };
+    let save = Save::of(
+        draft.step == SaveStep::Sent,
+        would_change(&edit, media) && shared.can_edit_media(),
+    );
     let refusal = match draft.step {
         SaveStep::Refused => refusal_of(draft, &shared.library),
         SaveStep::Typing | SaveStep::Sent => None,

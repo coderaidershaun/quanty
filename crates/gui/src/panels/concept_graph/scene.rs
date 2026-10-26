@@ -49,7 +49,6 @@ pub(super) const LINK_GAP: f32 = 3.0;
 pub(super) const DIM: f32 = 0.3;
 /// Points of wheel scroll that double or halve the size.
 pub(super) const SCROLL_PER_DOUBLING: f32 = 240.0;
-pub(super) const HEADER_HEIGHT: f32 = size::CONTROL_SM;
 pub(super) const LEGEND_HEIGHT: f32 = TextRole::Small.line_height();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -266,6 +265,17 @@ const LEGEND_ORDER: [Kind; 5] = [
     Kind::Figure,
     Kind::Table,
 ];
+
+/// The kinds that the nodes of the graph have, in the order of the legend. The scene draws at
+/// most these, so the legend of a scene never needs more room than the legend of its graph.
+pub(super) fn legend_kinds(graph: &ConceptGraph) -> impl Iterator<Item = Kind> {
+    LEGEND_ORDER.into_iter().filter(|kind| {
+        graph
+            .nodes
+            .iter()
+            .any(|node| Kind::from(node.kind) == *kind)
+    })
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) enum Refresh {

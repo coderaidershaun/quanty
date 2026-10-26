@@ -10,9 +10,10 @@ use crate::theme::{TextRole, Tone, color, radius, space};
 const NOTE: &str = "This document has no page pictures. This is its text.";
 
 pub(super) fn show(ui: &mut egui::Ui, cx: &mut TabCx<'_>) {
-    let (area, bar) = room_for_bar(ui.available_rect_before_wrap());
+    let (area, bar) = room_for_bar(ui.available_rect_before_wrap(), cx.width);
     row::show_at(ui, bar, |ui| {
-        ui.label(TextRole::Small.rich(NOTE).color(color::TEXT_MUTED));
+        let note = TextRole::Small.rich(NOTE).color(color::TEXT_MUTED);
+        ui.add(egui::Label::new(note).truncate());
     });
     if piece::is_scrolled_by_person(ui) {
         *cx.reveal = None;

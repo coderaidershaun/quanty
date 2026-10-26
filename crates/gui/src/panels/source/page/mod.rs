@@ -7,12 +7,13 @@ mod zoom_bar;
 
 use eframe::egui;
 
+use super::PanelWidth;
 use super::row;
 use super::states::whole_area;
 use super::tabs::TabCx;
 use crate::media::Media;
 use crate::media::images::{self, ImageState, Picture};
-use crate::theme::{size, space};
+use crate::theme::space;
 use crate::widgets::Placeholder;
 use canvas::{Figure, Shown};
 use contract::{ImageRef, PagePiece, PageView, PieceKind};
@@ -30,8 +31,9 @@ pub(super) struct State {
 }
 
 impl State {
-    /// Another page starts at its top and keeps its zoom and its sideways position.
-    fn arrive(&mut self, image: &ImageRef, page: u32) {
+    /// Another page starts at its top. In a roomy panel it keeps its zoom and its sideways
+    /// position, and in a narrow one it is fitted to the width.
+    fn arrive(&mut self, image: &ImageRef, page: u32, width: PanelWidth) {
         if self
             .on_screen
             .as_ref()
@@ -39,7 +41,10 @@ impl State {
         {
             return;
         }
-        self.view.pan.y = 0.0;
+        match width {
+            PanelWidth::Narrow => self.view = View::default(),
+            PanelWidth::Roomy => self.view.pan.y = 0.0,
+        }
         self.on_screen = Some((image.clone(), page));
     }
 
@@ -68,7 +73,7 @@ pub(super) fn show(ui: &mut egui::Ui, state: &mut State, cx: &mut TabCx<'_>) {
     };
     match cx.media.images.get(image) {
         ImageState::Ready(picture) => {
-            state.arrive(image, page.page);
+            state.arrive(image, page.page, cx.width);
             let figure = figure_to_frame(cx.target_piece);
             let is_pending = *cx.reveal == cx.target_piece.map(|piece| piece.number);
             let shown = Shown {
@@ -77,7 +82,7 @@ pub(super) fn show(ui: &mut egui::Ui, state: &mut State, cx: &mut TabCx<'_>) {
                 figure,
                 should_reveal: figure.is_some() && is_pending,
             };
-            draw(ui, state, &shown);
+            draw(ui, state, &shown, cx.width);
             *cx.reveal = None;
         }
         ImageState::Loading => match state.old_picture(cx.media) {
@@ -88,7 +93,7 @@ pub(super) fn show(ui: &mut egui::Ui, state: &mut State, cx: &mut TabCx<'_>) {
                     figure: None,
                     should_reveal: false,
                 };
-                draw(ui, state, &shown);
+                draw(ui, state, &shown, cx.width);
             }
             None => {
                 whole_area(ui, Placeholder::loading("Opening the page"));
@@ -111,11 +116,11 @@ fn figure_to_frame(piece: Option<&PagePiece>) -> Option<Figure<'_>> {
     })
 }
 
-fn room_for_bar(body: egui::Rect) -> (egui::Rect, egui::Rect) {
-    let bar = egui::Rect::from_min_max(
-        egui::pos2(body.left(), body.bottom() - size::CONTROL_SM),
-        body.max,
-    );
+/// The bar is as tall as a control of the panel, or as tall as the body when that is shorter, so
+/// it never reaches above the body.
+fn room_for_bar(body: egui::Rect, width: PanelWidth) -> (egui::Rect, egui::Rect) {
+    let top = (body.bottom() - width.control_size().height()).max(body.top());
+    let bar = egui::Rect::from_min_max(egui::pos2(body.left(), top), body.max);
     let area = egui::Rect::from_min_max(
         body.min,
         egui::pos2(body.right(), (bar.top() - space::SM).max(body.top())),
@@ -124,11 +129,11 @@ fn room_for_bar(body: egui::Rect) -> (egui::Rect, egui::Rect) {
 }
 
 /// The bar is drawn first, so what it asks for shows in the frame that it is pressed in.
-fn draw(ui: &mut egui::Ui, state: &mut State, shown: &Shown<'_>) {
-    let (area, bar) = room_for_bar(ui.available_rect_before_wrap());
+fn draw(ui: &mut egui::Ui, state: &mut State, shown: &Shown<'_>, width: PanelWidth) {
+    let (area, bar) = room_for_bar(ui.available_rect_before_wrap(), width);
     let viewport = Viewport::new(area, shown.picture.size());
     let action = row::show_at(ui, bar, |ui| {
-        zoom_bar::show(ui, state.view.zoom, &mut state.percent)
+        zoom_bar::show(ui, state.view.zoom, &mut state.percent, width)
     });
     if let Some(action) = action {
         state.view = action.apply(&viewport, state.view);

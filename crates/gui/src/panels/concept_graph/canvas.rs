@@ -23,17 +23,26 @@ pub(super) struct Stage<'a> {
 pub(super) struct Canvas<'a> {
     stage: Stage<'a>,
     view: &'a mut View,
+    is_pinching: &'a mut bool,
     background: egui::Response,
 }
 
 impl<'a> Canvas<'a> {
     /// Registers the canvas below everything else.
-    pub(super) fn take_input(ui: &egui::Ui, stage: Stage<'a>, view: &'a mut View) -> Canvas<'a> {
+    pub(super) fn take_input(
+        ui: &egui::Ui,
+        stage: Stage<'a>,
+        view: &'a mut View,
+        is_pinching: &'a mut bool,
+    ) -> Canvas<'a> {
         let background = ui.interact(
             stage.canvas,
             ui.id().with("canvas"),
             Sense::CLICK | Sense::DRAG,
         );
+        if ui.input(|input| input.multi_touch().is_some()) {
+            *is_pinching = true;
+        }
         let mut next = *view;
         if background.dragged() {
             next = next.panned(background.drag_delta());
@@ -61,6 +70,7 @@ impl<'a> Canvas<'a> {
         Canvas {
             stage,
             view,
+            is_pinching,
             background,
         }
     }
@@ -87,7 +97,7 @@ impl<'a> Canvas<'a> {
             graph,
             ask,
         } = self.stage;
-        if self.background.clicked() && ask.focused_concept.is_some() {
+        if self.background.clicked() && !*self.is_pinching && ask.focused_concept.is_some() {
             intents.push(Intent::FocusConcept(None));
         }
         let drawing = Drawing {
@@ -105,6 +115,11 @@ impl<'a> Canvas<'a> {
                     ui.label(TextRole::Small.rich(detail));
                 }
             });
+        }
+        // A lifted finger clicks in the first frame with no button down, so the pinch must end
+        // only after the clicks of this frame were ignored.
+        if !ui.input(|input| input.pointer.any_down()) {
+            *self.is_pinching = false;
         }
     }
 
@@ -146,7 +161,8 @@ impl<'a> Canvas<'a> {
                     .showing(wanted, scene.canvas)
                     .held(scene.placed.world, scene.canvas);
             }
-            if response.clicked() && !(is_selected && matches!(node.id, NodeId::Concept(_))) {
+            let is_click = response.clicked() && !*self.is_pinching;
+            if is_click && !(is_selected && matches!(node.id, NodeId::Concept(_))) {
                 intents.push(match node.id {
                     NodeId::Concept(id) => Intent::FocusConcept(Some(id)),
                     NodeId::Item(number) => Intent::SelectResult(number),

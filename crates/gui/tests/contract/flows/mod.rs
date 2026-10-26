@@ -13,6 +13,7 @@ mod library;
 mod model_choice;
 mod recording;
 mod selection;
+mod small_screens;
 mod source;
 
 use eframe::egui;

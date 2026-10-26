@@ -9,7 +9,7 @@ use super::{
 use crate::media::Media;
 use crate::state::Shared;
 use crate::theme::Icon;
-use crate::widgets::{Button, Surface, panel_frame};
+use crate::widgets::{Button, ControlSize, Surface, panel_frame};
 use contract::{Intent, Panel};
 
 /// The app applies the pushed `intents` after the frame.
@@ -21,13 +21,18 @@ pub struct PanelCx<'a> {
 
 impl PanelCx<'_> {
     /// The button that gives `panel` the whole tab, or puts every panel back while it has it.
-    pub(super) fn show_maximise_toggle(&mut self, ui: &mut egui::Ui, panel: Panel) {
+    pub(super) fn show_maximise_toggle(
+        &mut self,
+        ui: &mut egui::Ui,
+        panel: Panel,
+        size: ControlSize,
+    ) {
         let (icon, name, intent) = if self.shared.maximised == Some(panel) {
             (Icon::RESTORE, "Restore", Intent::RestorePanels)
         } else {
             (Icon::MAXIMISE, "Maximise", Intent::Maximise(panel))
         };
-        if ui.add(Button::icon_only(icon, name)).clicked() {
+        if ui.add(Button::icon_only(icon, name).size(size)).clicked() {
             self.intents.push(intent);
         }
     }

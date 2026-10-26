@@ -32,6 +32,9 @@ pub struct Local {
     scene: Option<Scene>,
     /// The selected result that the view was last moved to show.
     shown_selection: Option<usize>,
+    /// Set while two fingers touch the screen, and kept until no pointer button is down. The first
+    /// finger of a pinch is also the pointer, so lifting it from a node would click that node.
+    is_pinching: bool,
 }
 
 pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
@@ -57,7 +60,7 @@ fn show_graph(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) -> boo
     let Some(graph) = ask.graph.ready().filter(|graph| plan::has_concepts(graph)) else {
         return false;
     };
-    let areas = Areas::with_legend(ui);
+    let areas = Areas::with_legend(ui, graph);
     local.refresh(ui, graph, ask, areas.canvas);
     let Some(scene) = &local.scene else {
         return false;
@@ -68,7 +71,7 @@ fn show_graph(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) -> boo
         graph,
         ask,
     };
-    let mut canvas = Canvas::take_input(ui, stage, &mut local.view);
+    let mut canvas = Canvas::take_input(ui, stage, &mut local.view, &mut local.is_pinching);
     if areas.show_header(ui, Some(canvas.picture()), cx) {
         canvas.reset_view();
     }

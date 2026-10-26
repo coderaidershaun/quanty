@@ -15,7 +15,7 @@ use gui::testkit;
 use super::recording::{self, Seen};
 use super::{Window, click, press};
 
-fn is_preflight(command: &Command) -> bool {
+pub(super) fn is_preflight(command: &Command) -> bool {
     matches!(command, Command::Preflight { .. })
 }
 

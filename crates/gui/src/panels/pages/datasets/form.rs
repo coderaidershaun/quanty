@@ -17,10 +17,14 @@ const HOLD_OUT: &str = "Hold out";
 const NONE_HELD_OUT: &str = "None held out";
 const DRY_RUN: &str = "Dry run (export, check and plan only; asks no model)";
 
-/// The three boxes are this wide, so their edges line up.
+/// The three boxes are this wide, or as wide as a narrower form, so their edges line up.
 const FIELD_WIDTH: f32 = 360.0;
 /// The captions of the steppers are given this much room, so the three steppers line up.
 const CAPTION_WIDTH: f32 = 200.0;
+/// Below this width of the form, the caption of a stepper stands over it.
+const STACK_BELOW: f32 = 480.0;
+/// What a row of the Hold out list takes besides its words: the box to tick and the margins.
+const ROW_FRAME: f32 = 40.0;
 
 /// A whole number the person steps between 0 and `max`.
 struct Counter {
@@ -143,7 +147,7 @@ pub(super) fn show(ui: &mut egui::Ui, draft: &mut DatasetRequest, choices: &Choi
     caption(ui, NAME);
     let mut is_changed = TextInput::new(NAME, &mut draft.name)
         .placeholder(NAME_PLACEHOLDER)
-        .width(FIELD_WIDTH)
+        .width(field_width(ui))
         .show(ui)
         .response
         .changed();
@@ -165,6 +169,10 @@ pub(super) fn show(ui: &mut egui::Ui, draft: &mut DatasetRequest, choices: &Choi
     is_changed
 }
 
+fn field_width(ui: &egui::Ui) -> f32 {
+    FIELD_WIDTH.min(ui.available_width())
+}
+
 /// Row 0 is "All media" and means every media. The list is off until a media gives it more rows.
 fn pick_media(ui: &mut egui::Ui, draft: &mut DatasetRequest, choices: &Choices) -> bool {
     let selected = match draft.media.as_deref() {
@@ -175,7 +183,7 @@ fn pick_media(ui: &mut egui::Ui, draft: &mut DatasetRequest, choices: &Choices) 
         // A media that is not in the list, because the library has not loaded, shows as the
         // placeholder.
         let shown = draft.media.as_deref().unwrap_or(ALL_MEDIA);
-        let chosen = Dropdown::new(MEDIA, &choices.media, FIELD_WIDTH)
+        let chosen = Dropdown::new(MEDIA, &choices.media, field_width(ui))
             .selected(selected)
             .placeholder(shown)
             .size(ControlSize::Medium)
@@ -196,18 +204,27 @@ fn pick_media(ui: &mut egui::Ui, draft: &mut DatasetRequest, choices: &Choices) 
 fn pick_held_out(ui: &mut egui::Ui, draft: &mut DatasetRequest, choices: &Choices) -> bool {
     let offered = choices.documents_of(draft.media.as_deref());
     let summary = held_out_summary(&draft.holdout, offered);
+    let box_width = field_width(ui);
+    let form_width = ui.available_width();
+    let has_long_row = widest_label_width(ui, offered) + ROW_FRAME > form_width;
     let mut is_changed = false;
     ui.add_enabled_ui(!offered.is_empty(), |ui| {
         ui.scope(|ui| {
             ui.spacing_mut().interact_size.y = ControlSize::Medium.height();
-            ui.set_max_width(FIELD_WIDTH);
+            ui.set_max_width(box_width);
             let combo = egui::ComboBox::from_id_salt("hold-out")
                 .selected_text(summary)
-                .width(FIELD_WIDTH)
+                .width(box_width)
                 .truncate()
                 .icon(paint_caret)
                 .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
                 .show_ui(ui, |ui| {
+                    // A list with a row longer than the form wraps, so that the row stays in the
+                    // window. Any other list does not: a list that wraps grows as wide as the form.
+                    if has_long_row {
+                        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+                        ui.set_max_width(form_width);
+                    }
                     for (id, label) in offered {
                         let mut is_held = draft.holdout.contains(id);
                         let response = ui.checkbox(&mut is_held, label.as_str());
@@ -236,6 +253,14 @@ fn pick_held_out(ui: &mut egui::Ui, draft: &mut DatasetRequest, choices: &Choice
     is_changed
 }
 
+fn widest_label_width(ui: &egui::Ui, offered: &[(DocId, String)]) -> f32 {
+    let body = TextRole::Body;
+    offered
+        .iter()
+        .map(|(_, label)| body.galley(ui, label, body.color()).size().x)
+        .fold(0.0, f32::max)
+}
+
 /// What the closed box says. Ids that the list does not offer yet, such as before the catalogue
 /// loads, count as held out documents without a name.
 fn held_out_summary(held: &[DocId], offered: &[(DocId, String)]) -> String {
@@ -249,10 +274,14 @@ fn held_out_summary(held: &[DocId], offered: &[(DocId, String)]) -> String {
     }
 }
 
-/// The caption in a cell of fixed width, then the stepper. True when the value changed.
+/// The caption in a cell of fixed width, then the stepper, or the stepper under its caption in a
+/// narrow form. True when the value changed.
 fn pick_count(ui: &mut egui::Ui, counter: &Counter, value: &mut u32) -> bool {
-    let step = ui
-        .horizontal(|ui| {
+    let step = if ui.available_width() < STACK_BELOW {
+        caption(ui, counter.caption);
+        stepper(ui, counter, *value)
+    } else {
+        ui.horizontal(|ui| {
             ui.allocate_ui(
                 egui::vec2(CAPTION_WIDTH, ControlSize::Small.height()),
                 |ui| {
@@ -262,16 +291,21 @@ fn pick_count(ui: &mut egui::Ui, counter: &Counter, value: &mut u32) -> bool {
                     ui.label(TextRole::Label.rich(counter.caption));
                 },
             );
-            Stepper::new(&value.to_string())
-                .previous(counter.fewer, *value > 0)
-                .next(counter.more, *value < counter.max)
-                .show(ui)
+            stepper(ui, counter, *value)
         })
-        .inner;
+        .inner
+    };
     match step {
         Some(Step::Previous) => *value = value.saturating_sub(counter.by),
         Some(Step::Next) => *value = (*value + counter.by).min(counter.max),
         None => return false,
     }
     true
+}
+
+fn stepper(ui: &mut egui::Ui, counter: &Counter, value: u32) -> Option<Step> {
+    Stepper::new(&value.to_string())
+        .previous(counter.fewer, value > 0)
+        .next(counter.more, value < counter.max)
+        .show(ui)
 }

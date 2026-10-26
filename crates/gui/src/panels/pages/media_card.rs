@@ -6,7 +6,7 @@
 use eframe::egui;
 
 use crate::panels::labels::{AUTHORS, LIST_PLACEHOLDER, TAGS, caption, list_of};
-use crate::theme::{Icon, TextRole, Tone, space};
+use crate::theme::{Icon, TextRole, Tone, size, space};
 use crate::widgets::{Badge, Button, Chip, ControlSize, Notice, TextInput};
 use contract::{Category, Failure, Media, MediaEdit, NewMedia};
 
@@ -78,23 +78,36 @@ pub(super) enum Pencil {
 }
 
 /// The first line of the card of a media: its title, its category and, at the right end, the
-/// buttons that `add_buttons` draws, the rightmost first.
+/// buttons that `add_buttons` draws, the rightmost first. The buttons keep their room, and the
+/// category goes under a title that does not leave room for it.
 pub(super) fn title_line<R>(
     ui: &mut egui::Ui,
     title: &str,
     category: Category,
     add_buttons: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
-    ui.horizontal(|ui| {
-        ui.label(TextRole::BodyStrong.rich(title));
-        ui.add(category_badge(category));
-        ui.with_layout(
-            egui::Layout::right_to_left(egui::Align::Center),
-            add_buttons,
-        )
-        .inner
-    })
-    .inner
+    let title_width = TextRole::BodyStrong
+        .galley(ui, title, TextRole::BodyStrong.color())
+        .size()
+        .x;
+    let title_and_badge_width =
+        title_width + ui.spacing().item_spacing.x + badge_width(ui, category);
+    let (_, inner) = egui::containers::Sides::new().shrink_left().show(
+        ui,
+        |ui| {
+            if title_and_badge_width <= ui.available_width() {
+                ui.label(TextRole::BodyStrong.rich(title));
+                ui.add(category_badge(category));
+            } else {
+                ui.vertical(|ui| {
+                    ui.label(TextRole::BodyStrong.rich(title));
+                    ui.add(category_badge(category));
+                });
+            }
+        },
+        add_buttons,
+    );
+    inner
 }
 
 /// The pencil of a title line. Returns true when it was pressed.
@@ -117,6 +130,18 @@ pub(super) fn category_icon(category: Category) -> Icon {
         Category::Paper => Icon::DOCUMENT,
         Category::Other => Icon::FOLDER,
     }
+}
+
+// SMELL: this repeats the rule by which the badge sizes itself, because the badge cannot be asked
+// for its width before it is drawn. When the badge changes, this must change with it, or a title
+// line decides on a wrong width.
+fn badge_width(ui: &egui::Ui, category: Category) -> f32 {
+    let words = category.label().to_uppercase();
+    let words_width = TextRole::Caps
+        .galley(ui, &words, TextRole::Caps.color())
+        .size()
+        .x;
+    size::GLYPH + space::XS + words_width
 }
 
 fn category_badge(category: Category) -> Badge<'static> {
@@ -212,7 +237,7 @@ pub(super) fn media_form(
 
 fn boxes(ui: &mut egui::Ui, fields: &mut MediaFields, purpose: Purpose) {
     caption(ui, CATEGORY);
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         for category in Category::ALL {
             let chip = Chip::plain(category.label()).selected(category == fields.category);
             if ui.add(chip).clicked() {
@@ -241,21 +266,34 @@ fn buttons(ui: &mut egui::Ui, purpose: Purpose, save: Save) -> Option<Pressed> {
         Purpose::New => NEW_NOTE,
         Purpose::Edit => EDIT_NOTE,
     };
-    ui.horizontal(|ui| {
-        let is_sent = save == Save::Sent;
-        let save_button = Button::secondary(SAVE_MEDIA).loading(is_sent);
-        let is_save_pressed = ui.add_enabled(save == Save::On, save_button).clicked();
-        let is_cancel_pressed = ui
-            .add_enabled(!is_sent, Button::secondary(CANCEL))
-            .clicked();
-        ui.add(egui::Label::new(TextRole::Small.rich(note)).truncate());
-        if is_save_pressed {
-            Some(Pressed::Save)
-        } else if is_cancel_pressed {
-            Some(Pressed::Cancel)
-        } else {
-            None
-        }
-    })
-    .inner
+    let (pressed, is_note_beside) = ui
+        .horizontal(|ui| {
+            let is_sent = save == Save::Sent;
+            let save_button = Button::secondary(SAVE_MEDIA).loading(is_sent);
+            let is_save_pressed = ui.add_enabled(save == Save::On, save_button).clicked();
+            let is_cancel_pressed = ui
+                .add_enabled(!is_sent, Button::secondary(CANCEL))
+                .clicked();
+            let note_width = TextRole::Small
+                .galley(ui, note, TextRole::Small.color())
+                .size()
+                .x;
+            let is_note_beside = note_width <= ui.available_width();
+            if is_note_beside {
+                ui.add(egui::Label::new(TextRole::Small.rich(note)).truncate());
+            }
+            let pressed = if is_save_pressed {
+                Some(Pressed::Save)
+            } else if is_cancel_pressed {
+                Some(Pressed::Cancel)
+            } else {
+                None
+            };
+            (pressed, is_note_beside)
+        })
+        .inner;
+    if !is_note_beside {
+        ui.label(TextRole::Small.rich(note));
+    }
+    pressed
 }

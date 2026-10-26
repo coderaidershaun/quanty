@@ -20,6 +20,8 @@ const CHAPTER_NAME: &str = "Chapter name";
 const TITLE: &str = "Title";
 const OWN_TAGS: &str = "Tags for this PDF";
 const NUMBER_WIDTH: f32 = 120.0;
+/// Below this width of the form, the number and the name of a chapter stand one under the other.
+const STACK_BELOW: f32 = 480.0;
 
 /// What a book's PDF is: one of its chapters, or a part such as its index or its glossary.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -179,31 +181,44 @@ fn chapter_boxes(
     typed: &mut DocumentFields,
     boxes: &mut Vec<TextInputResponse>,
 ) {
+    if ui.available_width() < STACK_BELOW {
+        caption(ui, CHAPTER_NUMBER);
+        boxes.push(number_box(ui, typed));
+        caption(ui, CHAPTER_NAME);
+        boxes.push(name_box(ui, typed));
+        return;
+    }
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
             ui.set_width(NUMBER_WIDTH);
             caption(ui, CHAPTER_NUMBER);
-            let number = TextInput::new(CHAPTER_NUMBER, &mut typed.chapter_number)
-                .id_salt("ingest_chapter_number")
-                .placeholder("For example 3")
-                .width(NUMBER_WIDTH)
-                .show(ui);
-            boxes.push(number);
+            boxes.push(number_box(ui, typed));
         });
         ui.vertical(|ui| {
             caption(ui, CHAPTER_NAME);
-            let name = TextInput::new(CHAPTER_NAME, &mut typed.chapter_name)
-                .id_salt("ingest_chapter_name")
-                .placeholder("For example Greeks")
-                .show(ui);
-            boxes.push(name);
+            boxes.push(name_box(ui, typed));
         });
     });
 }
 
+fn number_box(ui: &mut egui::Ui, typed: &mut DocumentFields) -> TextInputResponse {
+    TextInput::new(CHAPTER_NUMBER, &mut typed.chapter_number)
+        .id_salt("ingest_chapter_number")
+        .placeholder("For example 3")
+        .width(NUMBER_WIDTH)
+        .show(ui)
+}
+
+fn name_box(ui: &mut egui::Ui, typed: &mut DocumentFields) -> TextInputResponse {
+    TextInput::new(CHAPTER_NAME, &mut typed.chapter_name)
+        .id_salt("ingest_chapter_name")
+        .placeholder("For example Greeks")
+        .show(ui)
+}
+
 fn part_chips(ui: &mut egui::Ui, part: &mut BookPart) {
     caption(ui, PART_OF_THE_BOOK);
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         for (choice, label) in [(BookPart::Chapter, CHAPTER), (BookPart::Other, OTHER_PART)] {
             let chip = Chip::plain(label).selected(choice == *part);
             if ui.add(chip).clicked() {

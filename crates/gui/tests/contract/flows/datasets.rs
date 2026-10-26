@@ -29,7 +29,7 @@ fn open(scene: &str, size: [f32; 2]) -> (Window, Seen) {
 }
 
 /// The builds the app sent, in the order it sent them.
-fn sent_builds(seen: &Seen) -> Vec<DatasetRequest> {
+pub(super) fn sent_builds(seen: &Seen) -> Vec<DatasetRequest> {
     seen.all()
         .into_iter()
         .filter_map(|command| match command {
@@ -40,15 +40,15 @@ fn sent_builds(seen: &Seen) -> Vec<DatasetRequest> {
 }
 
 /// Whether a build that never ends has played up to its stall.
-fn is_at_its_stall(shared: &Shared) -> bool {
+pub(super) fn is_at_its_stall(shared: &Shared) -> bool {
     matches!(
         &shared.datasets,
         DatasetJob::Running { progress: Some(progress), .. } if progress.stage == STALL
     )
 }
 
-const DRY_RUN: &str = "Dry run (export, check and plan only; asks no model)";
-const CHAPTER_2: &str = "Chapter 2 · Black Scholes In Depth";
+pub(super) const DRY_RUN: &str = "Dry run (export, check and plan only; asks no model)";
+pub(super) const CHAPTER_2: &str = "Chapter 2 · Black Scholes In Depth";
 const LIMIT: Duration = Duration::from_secs(5);
 
 fn the_keys_and_the_strip_open_the_page() {

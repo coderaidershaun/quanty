@@ -91,16 +91,7 @@ fn kind_label(item: &ResultItem) -> String {
 }
 
 fn place(item: &ResultItem) -> String {
-    match (&item.printed_page, item.last_page, &item.last_printed_page) {
-        (Some(first), Some(_), Some(last)) => {
-            format!("{}, pp. {first}\u{2013}{last}", item.doc_title)
-        }
-        (_, Some(last_page), _) => {
-            format!("{}, pages {}\u{2013}{last_page}", item.doc_title, item.page)
-        }
-        (Some(printed), None, _) => format!("{}, p. {printed}", item.doc_title),
-        (None, None, _) => format!("{}, page {}", item.doc_title, item.page),
-    }
+    format!("{}, {}", item.doc_title, item.page_label())
 }
 
 fn reason(reason: &Reason) -> String {

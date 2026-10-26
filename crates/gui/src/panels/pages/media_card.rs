@@ -5,7 +5,7 @@
 
 use eframe::egui;
 
-use crate::panels::labels::{AUTHORS, LIST_PLACEHOLDER, TAGS, caption, list_of, text_of};
+use crate::panels::labels::{AUTHORS, LIST_PLACEHOLDER, TAGS, caption, list_of};
 use crate::theme::{Icon, TextRole, Tone, space};
 use crate::widgets::{Badge, Button, Chip, ControlSize, Notice, TextInput};
 use contract::{Category, Failure, Media, MediaEdit, NewMedia};
@@ -34,8 +34,8 @@ impl MediaFields {
         MediaFields {
             category: media.category,
             title: media.title.clone().unwrap_or_default(),
-            authors: text_of(&media.authors),
-            tags: text_of(&media.tags),
+            authors: media.authors.join(", "),
+            tags: media.tags.join(", "),
         }
     }
 
@@ -166,6 +166,18 @@ pub(super) enum Save {
     Off,
     On,
     Sent,
+}
+
+impl Save {
+    pub(super) fn of(is_sent: bool, can_save: bool) -> Save {
+        if is_sent {
+            Save::Sent
+        } else if can_save {
+            Save::On
+        } else {
+            Save::Off
+        }
+    }
 }
 
 pub(super) struct FormSetup<'a> {

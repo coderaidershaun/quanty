@@ -1,6 +1,8 @@
 //! Where each link goes and where its label stands, once every node has its place.
 
-use super::geometry::{Point, Rect, Route, Size, point};
+use eframe::egui::{Pos2, Rect, Vec2, pos2, vec2};
+
+use super::geometry::{Route, centred, cut_by};
 use super::plan::{MIDDLE, TOP};
 use super::seats::Layout;
 
@@ -68,11 +70,8 @@ impl Layout<'_> {
             .unzip()
     }
 
-    fn label_size(&self, index: usize) -> Size {
-        Size {
-            w: self.sizes.labels[index],
-            h: self.metrics.label_height,
-        }
+    fn label_size(&self, index: usize) -> Vec2 {
+        vec2(self.sizes.labels[index], self.metrics.label_height)
     }
 
     fn ends(&self, index: usize) -> Ends {
@@ -91,7 +90,7 @@ impl Layout<'_> {
     }
 
     /// Every route stays inside a band or a gap, so it never crosses a node.
-    fn route(&self, ends: &Ends, label: Size) -> (Route, Rect) {
+    fn route(&self, ends: &Ends, label: Vec2) -> (Route, Rect) {
         if ends.row_a == ends.row_b {
             return self.same_row(ends, label);
         }
@@ -106,7 +105,7 @@ impl Layout<'_> {
 
     /// Two nodes of one row: a short line when they stand side by side, else a curve through
     /// the band next to the row, which holds no node.
-    fn same_row(&self, ends: &Ends, label: Size) -> (Route, Rect) {
+    fn same_row(&self, ends: &Ends, label: Vec2) -> (Route, Rect) {
         let (left, right) = ends.left_right();
         let (rows, metrics) = (&self.rows, self.metrics);
         let inward = if ends.row_a == TOP { 1.0 } else { -1.0 };
@@ -117,26 +116,26 @@ impl Layout<'_> {
         };
         let band_centre = edge_y + inward * rows.band / 2.0;
         if ends.seats_apart == 1 {
-            let y = left.centre().y;
-            let line = Route::Line(point(left.max.x, y), point(right.min.x, y));
+            let y = left.center().y;
+            let line = Route::Line(pos2(left.max.x, y), pos2(right.min.x, y));
             let mid_x = (left.max.x + right.min.x) / 2.0;
-            let has_room = right.min.x - left.max.x >= label.w + metrics.label_pad;
+            let has_room = right.min.x - left.max.x >= label.x + metrics.label_pad;
             let label_y = if has_room {
-                y - LABEL_LIFT - label.h / 2.0
+                y - LABEL_LIFT - label.y / 2.0
             } else {
                 band_centre
             };
-            let spot = Rect::from_centre(point(mid_x, label_y), label);
+            let spot = centred(pos2(mid_x, label_y), label);
             return (running_from_a(line, ends.a_is_left()), spot);
         }
-        let from = point(left.centre().x + left.width() * ARC_FOOT, edge_y);
-        let to = point(right.centre().x - right.width() * ARC_FOOT, edge_y);
+        let from = pos2(left.center().x + left.width() * ARC_FOOT, edge_y);
+        let to = pos2(right.center().x - right.width() * ARC_FOOT, edge_y);
         let rise = (rows.band - ARC_BAND_MARGIN)
             .min(ARC_RISE + ARC_RISE_PER_POINT * (to.x - from.x))
             .max(ARC_RISE_MIN);
-        let control = point((from.x + to.x) / 2.0, edge_y + inward * 2.0 * rise);
+        let control = pos2((from.x + to.x) / 2.0, edge_y + inward * 2.0 * rise);
         let arc = Route::Arc(from, control, to);
-        let spot = Rect::from_centre(point(control.x, band_centre), label);
+        let spot = centred(pos2(control.x, band_centre), label);
         (running_from_a(arc, ends.a_is_left()), spot)
     }
 
@@ -148,10 +147,10 @@ impl Layout<'_> {
 
     /// Where a straight link leaves the upper node and reaches the lower one: each at the
     /// x of the other node's centre, kept away from the corners.
-    fn feet(&self, upper: Rect, lower: Rect) -> (Point, Point) {
+    fn feet(&self, upper: Rect, lower: Rect) -> (Pos2, Pos2) {
         let corner = self.metrics.corner;
-        let from = point(clamp_into(lower.centre().x, upper, corner), upper.max.y);
-        let to = point(clamp_into(upper.centre().x, lower, corner), lower.min.y);
+        let from = pos2(clamp_into(lower.center().x, upper, corner), upper.max.y);
+        let to = pos2(clamp_into(upper.center().x, lower, corner), lower.min.y);
         (from, to)
     }
 
@@ -166,7 +165,7 @@ impl Layout<'_> {
         let (from, to) = self.feet(upper, lower);
         if !middle
             .iter()
-            .any(|node| node.inflate(DETOUR_CLEARANCE).cut_by(from, to))
+            .any(|node| cut_by(&node.expand(DETOUR_CLEARANCE), from, to))
         {
             return running_from_a(Route::Line(from, to), ends.a_is_upper());
         }
@@ -185,7 +184,7 @@ impl Layout<'_> {
             .map(|node| node.min.x)
             .fold(f32::INFINITY, f32::min)
             - gap;
-        let detour = |gate: f32| (upper.centre().x - gate).abs() + (lower.centre().x - gate).abs();
+        let detour = |gate: f32| (upper.center().x - gate).abs() + (lower.center().x - gate).abs();
         let shorter = |gate: f32, best: f32| {
             detour(gate)
                 .total_cmp(&detour(best))
@@ -201,10 +200,10 @@ impl Layout<'_> {
         let corner = self.metrics.corner;
         let (row_top, row_bottom) = (middle[0].min.y, middle[0].max.y);
         let bent = Route::Bent([
-            point(clamp_into(gate, upper, corner), upper.max.y),
-            point(gate, row_top - DETOUR_CLEARANCE),
-            point(gate, row_bottom + DETOUR_CLEARANCE),
-            point(clamp_into(gate, lower, corner), lower.min.y),
+            pos2(clamp_into(gate, upper, corner), upper.max.y),
+            pos2(gate, row_top - DETOUR_CLEARANCE),
+            pos2(gate, row_bottom + DETOUR_CLEARANCE),
+            pos2(clamp_into(gate, lower, corner), lower.min.y),
         ]);
         running_from_a(bent, ends.a_is_upper())
     }
@@ -222,7 +221,7 @@ fn running_from_a(route: Route, is_drawn_from_a: bool) -> Route {
 fn clamp_into(x: f32, rect: Rect, corner: f32) -> f32 {
     let (low, high) = (rect.min.x + corner, rect.max.x - corner);
     if low > high {
-        rect.centre().x
+        rect.center().x
     } else {
         x.clamp(low, high)
     }
@@ -232,7 +231,7 @@ fn clamp_into(x: f32, rect: Rect, corner: f32) -> f32 {
 /// the side away from the centre line so that labels do not crowd the centre node. It stands
 /// clear of the piece over its whole height, so a link that leans far does not run through its
 /// own label.
-fn beside(route: Route, band_middle: f32, label: Size) -> Rect {
+fn beside(route: Route, band_middle: f32, label: Vec2) -> Rect {
     let pieces = route.pieces();
     let last = pieces.len() - 1;
     let (first, second) = if pieces[0].y < pieces[last].y {
@@ -250,11 +249,11 @@ fn beside(route: Route, band_middle: f32, label: Size) -> Rect {
         };
         first.x + lean * along.clamp(0.0, 1.0)
     };
-    let (top, bottom) = (band_middle - label.h / 2.0, band_middle + label.h / 2.0);
+    let (top, bottom) = (band_middle - label.y / 2.0, band_middle + label.y / 2.0);
     let left = if x_at(band_middle) < -CENTRE_LINE_ZONE {
-        x_at(top).min(x_at(bottom)) - LABEL_SIDE - label.w
+        x_at(top).min(x_at(bottom)) - LABEL_SIDE - label.x
     } else {
         x_at(top).max(x_at(bottom)) + LABEL_SIDE
     };
-    Rect::from_min_size(point(left, top), label)
+    Rect::from_min_size(pos2(left, top), label)
 }

@@ -18,6 +18,7 @@ use std::path::{Path, PathBuf};
 pub use document::{Block, Document, Format, Source};
 pub use insights::{InsightsSheet, SheetInsight, insights_document};
 pub use markdown::fence_for;
+pub use math::{TypesetError, TypesetPng, check_sides, typeset_png};
 
 /// Why a document could not be written.
 #[derive(Debug, thiserror::Error)]

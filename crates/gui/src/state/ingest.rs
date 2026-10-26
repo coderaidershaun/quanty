@@ -228,12 +228,7 @@ impl Shared {
             }
             Ok(IngestOutcome::Cancelled) => {}
             Err(failure) => {
-                self.mark_down(failure);
-                self.add_notice(
-                    NoticeKind::Failed,
-                    format!("Ingest of {file} failed"),
-                    failure.hint.clone(),
-                );
+                self.fail_notice(format!("Ingest of {file} failed"), failure);
             }
         }
     }

@@ -3,9 +3,8 @@
 //! never a laid-out galley.
 
 use eframe::egui::text::{LayoutJob, TextFormat};
-use eframe::egui::{self, Color32, FontId};
+use eframe::egui::{self, Color32, FontId, Rect, Vec2};
 
-use super::geometry::{Rect, Size};
 use super::place::{Placed, place};
 use super::plan::{Plan, is_concept, plan};
 use super::seats::{Metrics, Sizes};
@@ -62,8 +61,8 @@ pub(super) enum Density {
 }
 
 impl Density {
-    fn of(canvas: Size) -> Density {
-        if canvas.h >= ROOMY_FROM {
+    fn of(canvas: Vec2) -> Density {
+        if canvas.y >= ROOMY_FROM {
             Density::Roomy
         } else {
             Density::Compact
@@ -250,7 +249,7 @@ pub(super) struct Scene {
     pub placed: Placed,
     /// The canvas the picture was laid out for, in whole points. The view is opened, moved and
     /// kept by this size alone, so a view that was never moved stays equal to the opening view.
-    pub canvas: Size,
+    pub canvas: Vec2,
     pub density: Density,
     pub opening: View,
     /// The words on each of `Plan::links`.
@@ -328,10 +327,7 @@ impl Scene {
 
     fn build(ui: &egui::Ui, graph: &ConceptGraph, key: SceneKey) -> Option<Scene> {
         let plan = plan(graph, key.focus)?;
-        let canvas = Size {
-            w: key.canvas[0] as f32,
-            h: key.canvas[1] as f32,
-        };
+        let canvas = egui::vec2(key.canvas[0] as f32, key.canvas[1] as f32);
         let density = Density::of(canvas);
         let nodes: Vec<&GraphNode> = plan
             .nodes
@@ -351,7 +347,7 @@ impl Scene {
             canvas,
         };
         let placed = place(&plan, &sizes, &density.metrics());
-        let opening = View::opening(placed.world, canvas, placed.nodes[0].centre());
+        let opening = View::opening(placed.world, canvas, placed.nodes[0].center());
         let not_drawn = (plan.left_out > 0).then(|| NotDrawn {
             count: format!("+{} not drawn", plan.left_out),
             hover: format!("The {} least connected nodes are left out.", plan.left_out),

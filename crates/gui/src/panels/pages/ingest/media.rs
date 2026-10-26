@@ -182,13 +182,10 @@ fn new_media(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     };
     // SMELL: this copies a part of the rule by which the state takes a save of a media. The state
     // also drops a save while an edit of a media is on its way, and this button stays on then.
-    let save = if media_save.is_saving() {
-        Save::Sent
-    } else if typed.is_some() && !cx.shared.library.is_deleting() {
-        Save::On
-    } else {
-        Save::Off
-    };
+    let save = Save::of(
+        media_save.is_saving(),
+        typed.is_some() && !cx.shared.library.is_deleting(),
+    );
     let setup = FormSetup {
         id_salt: "ingest_new_media",
         purpose: Purpose::New,
@@ -236,13 +233,7 @@ fn edited_media(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
         .and_then(|catalogue| titled(catalogue, title));
     let can_save =
         stored.is_some_and(|stored| would_change(&edit, stored)) && cx.shared.can_edit_media();
-    let save = if *is_sent {
-        Save::Sent
-    } else if can_save {
-        Save::On
-    } else {
-        Save::Off
-    };
+    let save = Save::of(*is_sent, can_save);
     let refusal = refusal_of(&library.media_edit, &edit);
     ui.add_space(space::SM);
     let shown = Card::new().show(ui, |ui| {

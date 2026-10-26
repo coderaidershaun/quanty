@@ -2,9 +2,10 @@
 
 use std::collections::BTreeMap;
 
-use super::shared::{Shared, push_cancel};
+use super::shared::Shared;
 use contract::{
-    Command, Effect, Failure, FailureKind, RequestId, Service, ServiceState, StartupFacts,
+    Command, Effect, Failure, FailureKind, NoticeKind, RequestId, Service, ServiceState,
+    StartupFacts,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -89,10 +90,7 @@ impl Health {
 
 impl Shared {
     pub(super) fn recheck_health(&mut self, effects: &mut Vec<Effect>) {
-        let request = self.issue_request();
-        if let Some(old) = self.health.pending {
-            push_cancel(effects, old);
-        }
+        let request = self.restart(self.health.pending, effects);
         for service in Service::ALL {
             self.health.set(service, ServiceState::Checking);
         }
@@ -120,5 +118,11 @@ impl Shared {
             self.health
                 .set(service, ServiceState::Down(failure.clone()));
         }
+    }
+
+    /// Marks the service of the failure down, and tells the person with its hint.
+    pub(super) fn fail_notice(&mut self, title: String, failure: &Failure) {
+        self.mark_down(failure);
+        self.add_notice(NoticeKind::Failed, title, failure.hint.clone());
     }
 }

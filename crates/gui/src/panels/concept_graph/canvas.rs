@@ -3,8 +3,7 @@
 
 use eframe::egui::{self, Sense, WidgetInfo, WidgetType};
 
-use super::geometry::point;
-use super::paint::{self, Drawing, NodeState, to_offset, to_point, to_pos};
+use super::paint::{self, Drawing, NodeState};
 use super::scene::{Picture, SCROLL_PER_DOUBLING, Scene};
 use super::view::View;
 use crate::state::AskSession;
@@ -37,7 +36,7 @@ impl<'a> Canvas<'a> {
         );
         let mut next = *view;
         if background.dragged() {
-            next = next.panned(to_offset(background.drag_delta()));
+            next = next.panned(background.drag_delta());
         }
         if ui.rect_contains_pointer(stage.canvas) {
             let (zoom, scroll, pointer) = ui.input(|input| {
@@ -51,11 +50,11 @@ impl<'a> Canvas<'a> {
             ui.input_mut(|input| input.smooth_scroll_delta = egui::Vec2::ZERO);
             let doublings = zoom.log2() + scroll.y / SCROLL_PER_DOUBLING;
             if let (true, Some(pointer)) = (doublings != 0.0, pointer) {
-                let from_centre = to_offset(pointer - stage.canvas.center());
+                let from_centre = pointer - stage.canvas.center();
                 next = next.zoomed(doublings, from_centre);
             }
             if scroll.x != 0.0 {
-                next = next.panned(point(scroll.x, 0.0));
+                next = next.panned(egui::vec2(scroll.x, 0.0));
             }
         }
         *view = next.held(stage.scene.placed.world, stage.scene.canvas);
@@ -120,14 +119,13 @@ impl<'a> Canvas<'a> {
             graph,
             ask,
         } = self.stage;
-        let centre = to_point(canvas.center());
+        let centre = canvas.center();
         let registered = *self.view;
         let mut responses = Vec::with_capacity(scene.plan.nodes.len());
         let mut states = Vec::with_capacity(scene.plan.nodes.len());
         for (place, index) in scene.plan.nodes.iter().enumerate() {
             let node = &graph.nodes[*index];
             let rect = registered.rect_on_canvas(centre, scene.placed.nodes[place]);
-            let rect = egui::Rect::from_min_max(to_pos(rect.min), to_pos(rect.max));
             let response = ui.interact(
                 rect.intersect(canvas),
                 ui.id().with(node.id),
@@ -142,7 +140,7 @@ impl<'a> Canvas<'a> {
                 WidgetInfo::selected(WidgetType::Button, true, is_selected, name(node))
             });
             if response.gained_focus() {
-                let wanted = scene.placed.nodes[place].inflate(space::XS);
+                let wanted = scene.placed.nodes[place].expand(space::XS);
                 *self.view = self
                     .view
                     .showing(wanted, scene.canvas)

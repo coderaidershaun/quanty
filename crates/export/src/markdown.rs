@@ -2,7 +2,7 @@
 //! pictures inside the file as data addresses.
 
 use crate::commonmark;
-use crate::document::language_word;
+use crate::document::{language_word, one_line};
 use crate::pictures::Picture;
 use crate::{Block, Document};
 
@@ -128,8 +128,4 @@ fn caption_line(label: Option<&str>, caption: &str, cite: Option<usize>) -> Opti
         .chain(cite.map(|number| format!("[{number}]")))
         .collect();
     (!words.is_empty()).then(|| one_line(&words.join(" ")))
-}
-
-fn one_line(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }

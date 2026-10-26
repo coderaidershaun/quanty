@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use super::shared::{Shared, push_cancel};
+use super::shared::Shared;
 use contract::{
     Balance, BalanceReads, Command, Effect, Event, FailureKind, IngestOutcome, Provider, RequestId,
 };
@@ -39,10 +39,7 @@ impl Balances {
 
 impl Shared {
     pub(super) fn read_balances(&mut self, effects: &mut Vec<Effect>) {
-        if let Some(old) = self.balances.pending {
-            push_cancel(effects, old);
-        }
-        let request = self.issue_request();
+        let request = self.restart(self.balances.pending, effects);
         self.balances.pending = Some(request);
         effects.push(Effect::Send(Command::ReadBalances { request }));
     }

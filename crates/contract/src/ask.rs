@@ -2,7 +2,7 @@
 //! them, and the answer written from them.
 
 use super::ids::{DocId, ItemId};
-use super::library::Category;
+use super::library::{Category, page_words};
 use super::source::ImageRef;
 use super::usage::Usage;
 
@@ -123,6 +123,16 @@ pub struct ResultItem {
 }
 
 impl ResultItem {
+    /// The page it is printed on, worded as `ChapterItem::page_label` words it.
+    pub fn page_label(&self) -> String {
+        page_words(
+            self.page,
+            self.printed_page.as_deref(),
+            self.last_page,
+            self.last_printed_page.as_deref(),
+        )
+    }
+
     /// The words under a figure, a table or a code listing: `**{label}** {caption}`, either part
     /// left out when the chapter does not have it. A formula shows its label beside it instead,
     /// and a passage has no caption.

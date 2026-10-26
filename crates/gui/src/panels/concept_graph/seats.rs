@@ -1,7 +1,8 @@
 //! Where each node sits: how high the three rows stand, and the rectangle of every node in its
 //! row. The links are routed afterwards, from these rectangles.
 
-use super::geometry::{Rect, Size, point};
+use eframe::egui::{Rect, Vec2, pos2, vec2};
+
 use super::plan::{BOTTOM, MIDDLE, Plan, TOP};
 
 /// What the picture is made of, in points.
@@ -27,7 +28,7 @@ pub(super) struct Sizes<'a> {
     pub nodes: &'a [f32],
     /// There is one for each of `Plan::links`: the width of its words.
     pub labels: &'a [f32],
-    pub canvas: Size,
+    pub canvas: Vec2,
 }
 
 pub(super) struct Rows {
@@ -88,7 +89,7 @@ impl<'a> Layout<'a> {
             plan,
             sizes,
             metrics,
-            rows: Rows::new(sizes.canvas.h, metrics),
+            rows: Rows::new(sizes.canvas.y, metrics),
             row_of,
             seat_of,
             nodes: Vec::new(),
@@ -98,15 +99,12 @@ impl<'a> Layout<'a> {
     }
 
     fn node_rect(&self, place: usize, left: f32) -> Rect {
-        let size = Size {
-            w: self.sizes.nodes[place],
-            h: self.metrics.node_height,
-        };
-        Rect::from_min_size(point(left, self.rows.top[self.row_of[place]]), size)
+        let size = vec2(self.sizes.nodes[place], self.metrics.node_height);
+        Rect::from_min_size(pos2(left, self.rows.top[self.row_of[place]]), size)
     }
 
     fn seat_nodes(&self) -> Vec<Rect> {
-        let mut nodes = vec![Rect::default(); self.plan.nodes.len()];
+        let mut nodes = vec![Rect::ZERO; self.plan.nodes.len()];
         nodes[0] = self.node_rect(0, -self.sizes.nodes[0] / 2.0);
         for side in [Side::Right, Side::Left] {
             self.seat_middle(&mut nodes, side);
@@ -177,10 +175,10 @@ impl<'a> Layout<'a> {
             .map(|rect| rect.max.x)
             .fold(f32::NEG_INFINITY, f32::max)
             + self.metrics.gap;
-        let spare = ((self.sizes.canvas.w - (right - left)) / 2.0).max(0.0);
-        Rect {
-            min: point(left - spare, 0.0),
-            max: point(right + spare, self.rows.height),
-        }
+        let spare = ((self.sizes.canvas.x - (right - left)) / 2.0).max(0.0);
+        Rect::from_min_max(
+            pos2(left - spare, 0.0),
+            pos2(right + spare, self.rows.height),
+        )
     }
 }

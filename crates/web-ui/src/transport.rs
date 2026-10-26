@@ -10,6 +10,9 @@ use ewebsock::{WsEvent, WsMessage, WsReceiver, WsSender};
 use gui::transport::Transport;
 use web_time::Instant;
 
+/// The wait before each new try to reach the server; the last wait repeats.
+const RETRY_SECONDS: [u64; 5] = [1, 2, 4, 8, 15];
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum TaskKind {
     Ingest,
@@ -86,13 +89,7 @@ impl SocketTransport {
         }
         self.outstanding.clear();
         if self.retry_at.is_none() {
-            let seconds = match self.attempt {
-                0 => 1,
-                1 => 2,
-                2 => 4,
-                3 => 8,
-                _ => 15,
-            };
+            let seconds = RETRY_SECONDS[(self.attempt as usize).min(RETRY_SECONDS.len() - 1)];
             self.attempt = self.attempt.saturating_add(1);
             let delay = Duration::from_secs(seconds);
             self.retry_at = Some(Instant::now() + delay);

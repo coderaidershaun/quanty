@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use super::shared::{Shared, push_cancel};
+use super::shared::Shared;
 use super::{IngestJob, Open};
 use contract::{
     Catalogue, Command, DocId, DocumentTagsEdit, Effect, Failure, Loadable, MediaEdit, NewMedia,
@@ -113,10 +113,7 @@ impl Library {
 // too long for one file. The rules of a delete are the part to move out first.
 impl Shared {
     pub(super) fn refresh_catalogue(&mut self, effects: &mut Vec<Effect>) {
-        let request = self.issue_request();
-        if let Some(old) = self.library.pending {
-            push_cancel(effects, old);
-        }
+        let request = self.restart(self.library.pending, effects);
         self.library.pending = Some(request);
         if matches!(self.library.catalogue, Loadable::Idle | Loadable::Failed(_)) {
             self.library.catalogue = Loadable::Loading;
@@ -337,11 +334,10 @@ impl Shared {
                 self.refresh_catalogue(effects);
             }
             Err(failure) => {
-                self.mark_down(&failure);
                 let title = title.map_or("Could not delete a document".to_owned(), |title| {
                     format!("Could not delete {title}")
                 });
-                self.add_notice(NoticeKind::Failed, title, failure.hint.clone());
+                self.fail_notice(title, &failure);
                 self.library.failures.insert(doc, failure);
                 // The document may be gone already, or gone in part.
                 self.refresh_catalogue(effects);
@@ -378,12 +374,7 @@ impl Shared {
                 self.refresh_catalogue(effects);
             }
             Err(failure) => {
-                self.mark_down(&failure);
-                self.add_notice(
-                    NoticeKind::Failed,
-                    format!("Could not delete {title}"),
-                    failure.hint.clone(),
-                );
+                self.fail_notice(format!("Could not delete {title}"), &failure);
                 self.library.media_delete = MediaDelete::Failed { title, failure };
                 // The documents before the one that failed are already gone.
                 self.refresh_catalogue(effects);

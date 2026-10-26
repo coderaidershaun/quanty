@@ -2,13 +2,14 @@
 //! the rule that handles it.
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use super::{
     AskSession, Balances, Contents, DatasetJob, ExportJob, Health, IngestJob, Insights, Library,
     Shelf, SourceNav,
 };
 use contract::{
-    Command, Effect, Event, Failure, Intent, Loadable, Notice, NoticeId, NoticeKind, Panel,
+    Command, DocId, Effect, Event, Failure, Intent, Loadable, Notice, NoticeId, NoticeKind, Panel,
     RequestId, StartupFacts, Tab,
 };
 
@@ -219,6 +220,27 @@ impl Shared {
     pub(super) fn issue_request(&mut self) -> RequestId {
         self.next_request += 1;
         RequestId(self.next_request)
+    }
+
+    /// Cancels the request that is still pending, if any, and issues the one that replaces it.
+    pub(super) fn restart(
+        &mut self,
+        pending: Option<RequestId>,
+        effects: &mut Vec<Effect>,
+    ) -> RequestId {
+        if let Some(old) = pending {
+            push_cancel(effects, old);
+        }
+        self.issue_request()
+    }
+
+    /// The folder on disk of a document of the catalogue, when the catalogue has it.
+    pub(super) fn folder_of(&self, doc: DocId) -> Option<PathBuf> {
+        self.library
+            .catalogue
+            .ready()
+            .and_then(|catalogue| catalogue.document(doc))
+            .and_then(|document| document.folder.clone())
     }
 
     pub(super) fn add_notice(

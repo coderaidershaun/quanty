@@ -65,18 +65,10 @@ impl Shared {
     }
 
     fn load_page(&mut self, doc: DocId, page: u32, effects: &mut Vec<Effect>) {
-        let request = self.issue_request();
-        if let Some(old) = self.source.pending {
-            push_cancel(effects, old);
-        }
+        let request = self.restart(self.source.pending, effects);
         self.source.pending = Some(request);
         self.source.concepts = Loadable::Loading;
-        let folder = self
-            .library
-            .catalogue
-            .ready()
-            .and_then(|catalogue| catalogue.document(doc))
-            .and_then(|document| document.folder.clone());
+        let folder = self.folder_of(doc);
         effects.push(Effect::Send(Command::LoadPage {
             request,
             doc,

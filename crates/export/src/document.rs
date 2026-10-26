@@ -83,6 +83,11 @@ pub(crate) fn language_word(language: Option<&str>) -> &str {
         .unwrap_or("")
 }
 
+/// The words of `text` on one line, with a single space between them.
+pub(crate) fn one_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 #[derive(
     serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
 )]

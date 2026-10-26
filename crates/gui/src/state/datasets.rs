@@ -109,12 +109,7 @@ impl Shared {
                 );
             }
             Err(failure) => {
-                self.mark_down(failure);
-                self.add_notice(
-                    NoticeKind::Failed,
-                    format!("Could not build {}", request.name),
-                    failure.hint.clone(),
-                );
+                self.fail_notice(format!("Could not build {}", request.name), failure);
             }
         }
     }

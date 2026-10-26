@@ -107,7 +107,7 @@ impl Local {
             if let Some(rect) = shown {
                 self.view = self
                     .view
-                    .showing(rect.inflate(space::XS), scene.canvas)
+                    .showing(rect.expand(space::XS), scene.canvas)
                     .held(scene.placed.world, scene.canvas);
             }
         }

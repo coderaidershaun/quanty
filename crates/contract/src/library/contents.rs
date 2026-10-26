@@ -36,14 +36,26 @@ impl ChapterItem {
     /// The page it is printed on, as a result row names it: "p. 7", "pp. 7–8" for a listing that
     /// page breaks cut, and "page 3" or "pages 3–4" by position when the page shows no number.
     pub fn page_label(&self) -> String {
-        // SMELL: the result rows of an answer write their pages with their own copy of these
-        // words, so a change here must be made there too.
-        match (&self.printed_page, self.last_page, &self.last_printed_page) {
-            (Some(first), Some(_), Some(last)) => format!("pp. {first}\u{2013}{last}"),
-            (_, Some(last_page), _) => format!("pages {}\u{2013}{last_page}", self.page),
-            (Some(printed), None, _) => format!("p. {printed}"),
-            (None, None, _) => format!("page {}", self.page),
-        }
+        page_words(
+            self.page,
+            self.printed_page.as_deref(),
+            self.last_page,
+            self.last_printed_page.as_deref(),
+        )
+    }
+}
+
+pub(crate) fn page_words(
+    page: u32,
+    printed: Option<&str>,
+    last_page: Option<u32>,
+    last_printed: Option<&str>,
+) -> String {
+    match (printed, last_page, last_printed) {
+        (Some(first), Some(_), Some(last)) => format!("pp. {first}\u{2013}{last}"),
+        (_, Some(last_page), _) => format!("pages {page}\u{2013}{last_page}"),
+        (Some(printed), None, _) => format!("p. {printed}"),
+        (None, None, _) => format!("page {page}"),
     }
 }
 

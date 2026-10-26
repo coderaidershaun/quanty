@@ -6,7 +6,7 @@
 use eframe::egui;
 
 use super::{Local, Missing};
-use crate::panels::labels::{caption, list_of, text_of};
+use crate::panels::labels::{caption, list_of};
 use crate::theme::{TextRole, color, space};
 use crate::widgets::{Button, Chip, TextInput, TextInputResponse};
 use contract::{Category, DocumentName, IngestRequest, Intent};
@@ -45,7 +45,7 @@ pub(super) struct DocumentFields {
 impl DocumentFields {
     pub(super) fn of(request: &IngestRequest) -> DocumentFields {
         let mut fields = DocumentFields {
-            own_tags: text_of(&request.tags),
+            own_tags: request.tags.join(", "),
             ..DocumentFields::default()
         };
         match &request.name {

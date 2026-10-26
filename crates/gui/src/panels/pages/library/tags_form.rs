@@ -3,7 +3,7 @@
 use eframe::egui;
 
 use super::{CANCEL, SAVE, SaveStep};
-use crate::panels::labels::{TAGS, caption, list_of, text_of};
+use crate::panels::labels::{TAGS, caption, list_of};
 use crate::state::{Library, Shared};
 use crate::theme::space;
 use crate::widgets::{Button, Notice, TextInput};
@@ -22,7 +22,7 @@ impl Draft {
     pub(super) fn of(document: &Document) -> Draft {
         Draft {
             doc: document.id,
-            tags: text_of(&document.tags),
+            tags: document.tags.join(", "),
             step: SaveStep::Typing,
         }
     }

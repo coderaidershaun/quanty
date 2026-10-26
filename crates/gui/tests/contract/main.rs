@@ -6,6 +6,7 @@ mod flows;
 mod look;
 mod media_math;
 mod media_rich_text;
+mod narrow_views;
 mod navigation;
 mod panel_seam;
 mod shell;

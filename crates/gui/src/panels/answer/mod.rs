@@ -20,6 +20,10 @@ use crate::theme::space;
 use crate::widgets;
 use contract::{ExportPlace, Loadable};
 
+/// A pane whose content is narrower than this counts as narrow, as on a phone. A phone's pane has
+/// 340 points of content and the narrowest wide window 682, so a wide window never does.
+const NARROW: f32 = 480.0;
+
 #[derive(Debug, Default)]
 pub struct Local {
     seen: u64,
@@ -42,18 +46,19 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
         local.listing = Some(Listing::of(&reply.results));
     }
     let Local { listing, view, .. } = local;
-    let mut pane = Pane {
-        ask,
-        phase: Phase::of(ask),
-        listing: listing.as_ref(),
-        view,
-        cx,
-    };
     let margin = egui::Margin::symmetric(space::LG as i8, space::XS as i8);
     widgets::panel_frame(widgets::Surface::Sheet)
         .inner_margin(margin)
         .show(ui, |ui| {
             ui.set_min_size(ui.available_size());
+            let mut pane = Pane {
+                ask,
+                phase: Phase::of(ask),
+                listing: listing.as_ref(),
+                view,
+                is_narrow: ui.available_width() < NARROW,
+                cx,
+            };
             header::show(ui, &mut pane);
             let place = ExportPlace::Answer {
                 generation: ask.generation,

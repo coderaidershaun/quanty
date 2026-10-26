@@ -11,11 +11,24 @@ use crate::widgets::{Button, ControlSize};
 
 const SHARE_WIDTH: f32 = 3.0 * size::CONTROL_MD;
 
+/// How much of the row the button takes, so that the tabs can leave room for it.
+pub(super) fn width(is_narrow: bool) -> f32 {
+    if is_narrow {
+        ControlSize::Medium.height()
+    } else {
+        SHARE_WIDTH
+    }
+}
+
 pub(super) fn show(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>) {
-    let button = Button::secondary("Share")
-        .icon(Icon::SHARE)
-        .size(ControlSize::Small)
-        .min_width(SHARE_WIDTH);
+    let button = if pane.is_narrow {
+        Button::icon_only(Icon::SHARE, "Share").size(ControlSize::Medium)
+    } else {
+        Button::secondary("Share")
+            .icon(Icon::SHARE)
+            .size(ControlSize::Small)
+            .min_width(SHARE_WIDTH)
+    };
     let has_answer = matches!(
         pane.phase,
         Phase::Found {

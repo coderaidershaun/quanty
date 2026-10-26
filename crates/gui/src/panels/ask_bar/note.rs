@@ -1,5 +1,5 @@
-//! The one line beside the filters: why the bar cannot ask, or what is wrong with the library,
-//! and the button that fixes it.
+//! The one line that says why the bar cannot ask, or what is wrong with the library, and the
+//! button that fixes it. It stands beside the filters, or on a row of its own on a narrow bar.
 
 use eframe::egui;
 

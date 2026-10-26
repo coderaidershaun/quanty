@@ -57,7 +57,12 @@ pub const ASK_BAR: f32 = 2.0 * space::MD + size::CONTROL_LG + space::SM + size::
 pub const ASK_BAR_MEDIUM: f32 = ASK_BAR;
 /// The height of the Ask bar of a compact window, in points. The Answer view under it keeps at
 /// least 100 points in a phone held sideways only while this stays at 130 or below.
-pub const ASK_BAR_COMPACT: f32 = ASK_BAR;
+pub const ASK_BAR_COMPACT: f32 = 2.0 * space::SM
+    + size::CONTROL_LG
+    + space::SM
+    + size::CONTROL_MD
+    + space::XS
+    + size::CONTROL_SM;
 /// The height of the bottom navigation of a compact window, in points. Each item fills it.
 pub const BOTTOM_NAV: f32 = size::TAB + space::MD;
 

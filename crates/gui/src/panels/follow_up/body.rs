@@ -7,6 +7,28 @@ use super::guidance::{self, Guidance, Message};
 use crate::theme::{TextRole, color, hairline, radius, size, space, stroke};
 use crate::widgets;
 
+/// A panel narrower than this, as on a phone, wraps each suggested question to at most three
+/// lines and makes each row tall enough for a finger. The narrowest wide window gives the panel
+/// 388 points, so a wide window never wraps.
+const NARROW: f32 = 380.0;
+
+/// How a suggested question is set in its row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Fit {
+    OneLine,
+    Wrapped,
+}
+
+impl Fit {
+    fn of(width: f32) -> Fit {
+        if width < NARROW {
+            Fit::Wrapped
+        } else {
+            Fit::OneLine
+        }
+    }
+}
+
 pub(super) fn show<'a>(ui: &mut egui::Ui, guidance: &Guidance<'a>) -> Option<&'a str> {
     if let Some(message) = &guidance.message {
         show_message(ui, message);
@@ -30,8 +52,16 @@ fn show_questions<'a>(ui: &mut egui::Ui, questions: &'a [String]) -> Option<&'a 
 // SMELL: the kit has no list row, so this row paints by hand the cut text, the hover fill and
 // the focus ring that a kit widget would paint. A change to the kit's look will miss this row.
 fn question_row(ui: &mut egui::Ui, question: &str, has_row_above: bool) -> egui::Response {
-    let side = egui::vec2(ui.available_width(), size::CHIP);
-    let (rect, response) = ui.allocate_exact_size(side, Sense::click());
+    let width = ui.available_width();
+    let fit = Fit::of(width);
+    let galley = ui
+        .painter()
+        .layout_job(question_job(question, width - 2.0 * space::SM, fit));
+    let height = match fit {
+        Fit::OneLine => size::CHIP,
+        Fit::Wrapped => (galley.size().y + 2.0 * space::XS).max(size::CONTROL_MD),
+    };
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(width, height), Sense::click());
     crate::widgets::interactive_cursor(ui, &response);
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), question));
     let is_hovered = response.hovered();
@@ -40,8 +70,6 @@ fn question_row(ui: &mut egui::Ui, question: &str, has_row_above: bool) -> egui:
     } else {
         TextRole::Caption.color()
     };
-    let job = one_line(question, ink, rect.width() - 2.0 * space::SM);
-    let galley = ui.painter().layout_job(job);
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
         if response.is_pointer_button_down_on() {
@@ -71,9 +99,14 @@ fn question_row(ui: &mut egui::Ui, question: &str, has_row_above: bool) -> egui:
     }
 }
 
-fn one_line(question: &str, ink: Color32, width: f32) -> LayoutJob {
+/// The colour is left to be chosen when the text is painted, because it depends on the pointer.
+fn question_job(question: &str, width: f32, fit: Fit) -> LayoutJob {
+    let ink = Color32::PLACEHOLDER;
     let mut job = LayoutJob::single_section(question.to_owned(), TextRole::Caption.format(ink));
-    job.wrap.max_rows = 1;
+    job.wrap.max_rows = match fit {
+        Fit::OneLine => 1,
+        Fit::Wrapped => 3,
+    };
     job.wrap.overflow_character = Some('…');
     job.wrap.max_width = width.max(0.0);
     job.break_on_newline = false;

@@ -38,6 +38,9 @@ pub(super) struct Pane<'a, 'c> {
     /// with every count at zero.
     pub(super) listing: Option<&'a Listing>,
     pub(super) view: &'a mut View,
+    /// True when the room inside the sheet is as narrow as on a phone. Parts that stand side by
+    /// side in a wide pane then stand one over the other, or take less room.
+    pub(super) is_narrow: bool,
     pub(super) cx: &'a mut PanelCx<'c>,
 }
 

@@ -197,14 +197,7 @@ fn stage_words(stage: Option<IngestStage>) -> String {
 fn running(ui: &mut egui::Ui, progress: Option<&IngestProgress>) {
     let stage = progress.map(|progress| progress.stage);
     let words = stage_words(stage);
-    ui.horizontal(|ui| {
-        ui.label(TextRole::BodyStrong.rich(&words));
-        if let Some(progress) = progress {
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                spent_so_far(ui, progress);
-            });
-        }
-    });
+    stage_row(ui, &words, progress.and_then(spent_so_far).as_deref());
     ui.add_space(space::XS);
     match stage.and_then(IngestStage::share_done) {
         Some(share) => widgets::progress_bar(ui, &words, share),
@@ -214,11 +207,41 @@ fn running(ui: &mut egui::Ui, progress: Option<&IngestProgress>) {
     ui.label(TextRole::Small.rich(KEEP_OPEN));
 }
 
-fn spent_so_far(ui: &mut egui::Ui, progress: &IngestProgress) {
-    if progress.spent.tokens() > 0 {
-        let spent = format!("{} so far", spent_text(&progress.spent));
-        ui.label(TextRole::Small.rich(spent).color(color::TEXT_MUTED));
+/// The words of the stage, with what was spent so far at the right end of their line when both
+/// fit on it, and under them when they do not.
+// SMELL: the Datasets page keeps its own copy of this row and of the words of what was spent, so
+// a change to one must be made in both.
+fn stage_row(ui: &mut egui::Ui, words: &str, spent: Option<&str>) {
+    let words_width = TextRole::BodyStrong
+        .galley(ui, words, TextRole::BodyStrong.color())
+        .size()
+        .x;
+    let gap_and_spent_width = spent.map_or(0.0, |spent| {
+        let width = TextRole::Small
+            .galley(ui, spent, color::TEXT_MUTED)
+            .size()
+            .x;
+        ui.spacing().item_spacing.x + width
+    });
+    if words_width + gap_and_spent_width > ui.available_width() {
+        ui.label(TextRole::BodyStrong.rich(words));
+        if let Some(spent) = spent {
+            ui.label(TextRole::Small.rich(spent).color(color::TEXT_MUTED));
+        }
+        return;
     }
+    ui.horizontal(|ui| {
+        ui.label(TextRole::BodyStrong.rich(words));
+        if let Some(spent) = spent {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.label(TextRole::Small.rich(spent).color(color::TEXT_MUTED));
+            });
+        }
+    });
+}
+
+fn spent_so_far(progress: &IngestProgress) -> Option<String> {
+    (progress.spent.tokens() > 0).then(|| format!("{} so far", spent_text(&progress.spent)))
 }
 
 fn finished(
@@ -267,7 +290,7 @@ fn finished(
         }
     }
     ui.add_space(space::MD);
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         if result.is_err() && ui.add(Button::primary(TRY_AGAIN)).clicked() {
             intents.push(Intent::CheckIngest(request.clone()));
         }

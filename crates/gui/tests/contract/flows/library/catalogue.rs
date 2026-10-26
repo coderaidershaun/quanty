@@ -40,7 +40,7 @@ impl Handler for Listing {
             });
             return;
         }
-        let failure = Failure::not_built("this command of the test");
+        let failure = Failure::internal("the test answers only the catalogue");
         for event in command.failed(&failure) {
             reply.send(event);
         }

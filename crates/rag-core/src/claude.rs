@@ -56,17 +56,6 @@ pub enum ClaudeCliError {
     NotSignedIn { status: ExitStatus, stderr: String },
 }
 
-/// `claude auth status` makes no model call. Its standard output is thrown away, because it can
-/// hold the account name.
-///
-/// # Errors
-/// - [`ClaudeCliError::Start`] when the command cannot be started
-/// - [`ClaudeCliError::TimedOut`] when it does not finish in time
-/// - [`ClaudeCliError::NotSignedIn`] when it exits with failure
-pub async fn check_signed_in() -> Result<(), ClaudeCliError> {
-    auth_status(Command::new("claude")).await
-}
-
 async fn auth_status(mut command: Command) -> Result<(), ClaudeCliError> {
     command
         .args(["auth", "status"])

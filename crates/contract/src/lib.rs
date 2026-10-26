@@ -37,6 +37,6 @@ pub use library::{
 };
 pub use message::{Command, Connection, Effect, Event, Frame, Intent, Panel, Tab, unknown_health};
 pub use notice::{Notice, NoticeKind};
-pub use shortcut::{Chord, KeyName, PANEL_KEYS, SHORTCUTS, Shortcut, When};
+pub use shortcut::{Chord, KeyName, SHORTCUTS, Shortcut, When};
 pub use source::{ImageRef, PageBox, PageConcept, PagePiece, PageView, PieceKind};
 pub use usage::{ModelTokens, Usage};

@@ -119,13 +119,6 @@ impl Failure {
         Failure::new(FailureKind::Internal, detail)
     }
 
-    /// What a part that is not built yet answers, so the app shows a designed error state and
-    /// not a wait.
-    pub fn not_built(what: &str) -> Failure {
-        Failure::internal(format!("{what} is not built yet"))
-            .with_hint("This part of quanty is not built yet.")
-    }
-
     /// The refusal of a media whose title the library has. `title` is the title as the library
     /// has it, so the person sees which row of the Media list to choose.
     pub fn media_exists(title: &str) -> Failure {

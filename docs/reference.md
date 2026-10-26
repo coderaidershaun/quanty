@@ -612,9 +612,10 @@ Build `crates/web-ui` with `trunk build --release` before building `cargo build 
 | --- | --- |
 | `--listen ADDR` | Overrides `QUANTY_LISTEN` |
 | `--home FOLDER` | Folder containing `.env`, `content/` and `data/`; default is the current folder |
-| `--fixture SCENE` | Built-in fake backend, no stores or models; `/mcp` is unavailable |
+| `--fixture SCENE` | Built-in fake backend, no stores or models; `/mcp` is unavailable unless `--trusted-integration` is set, when it serves the free fixture tools |
 | `--fixture list` | List fixture scenes |
 | `--open` | Open the server address in the browser |
+| `--trusted-integration` | For a trusted app host on loopback: no login and no MCP token. Refuses a non-loopback address, `QUANTY_PASSWORD` and `QUANTY_MCP_TOKEN`. See [server.md](server.md#trusted-app-host-integration) |
 
 | Setting | Meaning | Default |
 | --- | --- | --- |
@@ -768,7 +769,7 @@ The settings are read once, when the server starts, so a click does not pick up 
 
 The footer reads at start, after an ask, an ingest run or a dataset build ends (also an ask that was stopped), and on a click. It never reads on a timer, and it draws static text with no spinner, so a window at rest asks for no repaint. A read that fails or hangs blocks nothing: the model lists in the top bar do not wait for it. No key is shown, logged or put in the name of a control.
 
-Not built yet: the notices tray, the help sheet and the health check.
+Not built yet: the notices tray and the help sheet.
 
 ## The MCP server
 

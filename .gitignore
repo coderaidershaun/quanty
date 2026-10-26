@@ -27,7 +27,3 @@ crates/gui/tests/snapshots/**/*.old.png
 
 # Saved model selection
 .quanty-model.json
-
-# Browser bundle
-crates/web-ui/dist/*
-!crates/web-ui/dist/.gitkeep

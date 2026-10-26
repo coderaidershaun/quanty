@@ -210,7 +210,7 @@ fn picture(path: PathBuf) -> Option<ImageRef> {
                 .ancestors()
                 .find(|parent| parent.ends_with("samples/content"))
                 .unwrap_or(&path);
-            crate::content::image_url(&path, root).map(|url| ImageRef { url })
+            crate::live::image_url(&path, root).map(|url| ImageRef { url })
         })
         .flatten()
 }

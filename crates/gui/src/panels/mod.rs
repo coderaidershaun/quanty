@@ -8,11 +8,10 @@ mod exporting;
 pub mod follow_up;
 mod heights;
 mod labels;
-pub mod notices;
 mod pages;
 pub mod retrieval_path;
 mod seam;
 pub mod source;
 
 pub use pages::{datasets, ingest, library};
-pub use seam::{Locals, PanelCx, placeholder};
+pub use seam::{Locals, PanelCx};

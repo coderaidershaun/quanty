@@ -1,7 +1,6 @@
 //! A message the app keeps for the person after something finished: a document deleted, an
 //! ingest done, a failure to read about later.
 
-use super::failure::Failure;
 use super::ids::NoticeId;
 
 #[derive(
@@ -20,6 +19,4 @@ pub struct Notice {
     pub kind: NoticeKind,
     pub title: String,
     pub detail: String,
-    pub failure: Option<Failure>,
-    pub read: bool,
 }

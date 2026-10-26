@@ -332,7 +332,7 @@ impl Shared {
                     format!("Deleted {title}")
                 });
                 let detail = removed.map_or(String::new(), |counts| format!("Removed {counts}."));
-                self.add_notice(NoticeKind::Done, title, detail, None);
+                self.add_notice(NoticeKind::Done, title, detail);
                 self.close_source_of(doc, effects);
                 self.refresh_catalogue(effects);
             }
@@ -341,12 +341,7 @@ impl Shared {
                 let title = title.map_or("Could not delete a document".to_owned(), |title| {
                     format!("Could not delete {title}")
                 });
-                self.add_notice(
-                    NoticeKind::Failed,
-                    title,
-                    failure.hint.clone(),
-                    Some(failure.clone()),
-                );
+                self.add_notice(NoticeKind::Failed, title, failure.hint.clone());
                 self.library.failures.insert(doc, failure);
                 // The document may be gone already, or gone in part.
                 self.refresh_catalogue(effects);
@@ -379,7 +374,7 @@ impl Shared {
                     1 => "Removed 1 document.".to_owned(),
                     count => format!("Removed {count} documents."),
                 };
-                self.add_notice(NoticeKind::Done, format!("Deleted {title}"), detail, None);
+                self.add_notice(NoticeKind::Done, format!("Deleted {title}"), detail);
                 self.refresh_catalogue(effects);
             }
             Err(failure) => {
@@ -388,7 +383,6 @@ impl Shared {
                     NoticeKind::Failed,
                     format!("Could not delete {title}"),
                     failure.hint.clone(),
-                    Some(failure.clone()),
                 );
                 self.library.media_delete = MediaDelete::Failed { title, failure };
                 // The documents before the one that failed are already gone.

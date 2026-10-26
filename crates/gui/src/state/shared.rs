@@ -32,7 +32,6 @@ pub struct Shared {
     pub tab: Tab,
     /// The panel that has the whole Ask tab. The other panels of the tab are not drawn.
     pub maximised: Option<Panel>,
-    pub help_open: bool,
     pub cues: Cues,
     pub ask: AskSession,
     pub source: SourceNav,
@@ -69,7 +68,6 @@ impl Shared {
             Intent::Maximise(panel) => self.maximised = Some(panel),
             Intent::RestorePanels => self.maximised = None,
             Intent::StopOrRestore => self.stop_or_restore(effects),
-            Intent::ToggleHelp => self.help_open = !self.help_open,
             Intent::FocusAskBar => {
                 self.open_tab(Tab::Ask);
                 self.cues.focus_ask_bar += 1;
@@ -110,11 +108,6 @@ impl Shared {
             Intent::StartDatasetBuild(request) => self.start_dataset_build(request, effects),
             Intent::ClearDatasetBuild => self.clear_dataset_build(),
             Intent::DismissNotice(id) => self.notices.retain(|notice| notice.id != id),
-            Intent::MarkNoticesRead => {
-                self.notices
-                    .iter_mut()
-                    .for_each(|notice| notice.read = true);
-            }
             Intent::RecheckHealth => self.recheck_health(effects),
             Intent::ChooseModel { work, choice } => {
                 *self.health.facts.model_choices.of_mut(work) = choice.clone();
@@ -233,7 +226,6 @@ impl Shared {
         kind: NoticeKind,
         title: String,
         detail: String,
-        failure: Option<Failure>,
     ) -> NoticeId {
         self.next_notice += 1;
         let id = NoticeId(self.next_notice);
@@ -244,8 +236,6 @@ impl Shared {
                 kind,
                 title,
                 detail,
-                failure,
-                read: false,
             },
         );
         id

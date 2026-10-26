@@ -40,7 +40,6 @@ pub struct Confirm<'a> {
     title: &'a str,
     body: Option<&'a str>,
     confirm_label: &'a str,
-    cancel_label: &'a str,
     is_destructive: bool,
 }
 
@@ -52,7 +51,6 @@ impl<'a> Confirm<'a> {
             title,
             body: None,
             confirm_label: "Confirm",
-            cancel_label: "Cancel",
             is_destructive: false,
         }
     }
@@ -64,11 +62,6 @@ impl<'a> Confirm<'a> {
 
     pub fn confirm_label(mut self, label: &'a str) -> Self {
         self.confirm_label = label;
-        self
-    }
-
-    pub fn cancel_label(mut self, label: &'a str) -> Self {
-        self.cancel_label = label;
         self
     }
 
@@ -96,7 +89,7 @@ impl<'a> Confirm<'a> {
                 if ui.add(confirm).clicked() {
                     choice = Some(Choice::Confirmed);
                 }
-                if ui.add(Button::secondary(self.cancel_label)).clicked() {
+                if ui.add(Button::secondary("Cancel")).clicked() {
                     choice = Some(Choice::Cancelled);
                 }
             });

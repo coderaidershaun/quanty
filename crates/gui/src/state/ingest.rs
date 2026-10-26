@@ -211,7 +211,6 @@ impl Shared {
                     NoticeKind::Done,
                     format!("Ingested {}", report.title),
                     detail,
-                    None,
                 );
             }
             Ok(IngestOutcome::AlreadyIngested { doc, items, .. }) => {
@@ -225,7 +224,6 @@ impl Shared {
                     NoticeKind::Done,
                     format!("{name} was already ingested"),
                     format!("{items} items are stored. Nothing was converted or embedded."),
-                    None,
                 );
             }
             Ok(IngestOutcome::Cancelled) => {}
@@ -235,7 +233,6 @@ impl Shared {
                     NoticeKind::Failed,
                     format!("Ingest of {file} failed"),
                     failure.hint.clone(),
-                    Some(failure.clone()),
                 );
             }
         }

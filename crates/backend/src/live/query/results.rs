@@ -125,7 +125,7 @@ pub(super) fn result_items(
                 image: payload
                     .image_path
                     .as_deref()
-                    .and_then(|path| crate::content::image_url(path, content_folder))
+                    .and_then(|path| crate::live::image_url(path, content_folder))
                     .map(|url| ImageRef { url }),
                 piece,
                 caption,

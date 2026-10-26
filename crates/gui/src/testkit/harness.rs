@@ -1,5 +1,5 @@
 //! Puts one panel, or the whole app, in a test window: drawn as the app draws it, with the theme
-//! installed, the window background, and no file dialog.
+//! installed and the window background.
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -96,7 +96,7 @@ pub fn panel(
         })
 }
 
-/// The whole app on the fake backend, with no waits and no file dialog.
+/// The whole app on the fake backend, with no waits. Asking to pick a PDF does nothing.
 ///
 /// # Panics
 /// When the scene does not exist or the backend cannot start.
@@ -145,7 +145,7 @@ pub fn app_at_with_home(
     )
 }
 
-/// The whole app on any backend, with no file dialog.
+/// The whole app on any backend. Asking to pick a PDF does nothing.
 ///
 /// # Panics
 /// When the backend's threads cannot start.

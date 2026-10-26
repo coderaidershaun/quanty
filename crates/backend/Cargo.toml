@@ -29,10 +29,8 @@ uuid.workspace = true
 backend = { path = ".", features = ["testing"] }
 eframe.workspace = true
 egui_kittest.workspace = true
-graph = { workspace = true, features = ["testing"] }
 gui = { workspace = true, features = ["testing"] }
 image.workspace = true
 ocr = { workspace = true, features = ["testing"] }
-proptest.workspace = true
 rag-ingestion = { workspace = true, features = ["testing"] }
 tempfile.workspace = true

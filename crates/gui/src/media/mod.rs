@@ -36,11 +36,6 @@ impl Media {
         media
     }
 
-    /// For tests: nothing runs until `run_pending`.
-    pub fn manual(ctx: &egui::Context) -> Media {
-        Media::manual_with_fetch(ctx, Box::new(UnavailableFetch))
-    }
-
     pub fn manual_with_fetch(ctx: &egui::Context, fetch: Box<dyn Fetch>) -> Media {
         Media {
             images: images::Images::new(ctx, Offload::Manual, fetch),

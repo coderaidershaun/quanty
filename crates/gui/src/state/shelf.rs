@@ -171,7 +171,7 @@ mod tests {
     #[test]
     fn the_first_media_opens_when_a_catalogue_arrives_and_nothing_is_open() {
         let mut shared = Shared::default();
-        read(&mut shared, Err(Failure::not_built("the catalogue")));
+        read(&mut shared, Err(Failure::internal("the catalogue failed")));
         assert_eq!(
             shared.shelf.open, None,
             "a catalogue that failed opens nothing"

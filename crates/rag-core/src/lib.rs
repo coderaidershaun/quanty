@@ -19,7 +19,7 @@ mod usage;
 
 pub use agent_cli::AgentCli;
 pub use choices::{ApiKey, ModelSettings, SettingsError, WorkKind};
-pub use claude::{ClaudeCli, ClaudeCliError, check_signed_in};
+pub use claude::{ClaudeCli, ClaudeCliError};
 pub use codex::{CodexCli, CodexError};
 pub use concept::ConceptId;
 pub use concept_store::{ConceptHit, ConceptPoint, ConceptStore, concept_input};

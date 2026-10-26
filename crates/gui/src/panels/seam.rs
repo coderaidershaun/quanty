@@ -4,12 +4,11 @@
 use eframe::egui;
 
 use super::{
-    answer, ask_bar, concept_graph, datasets, follow_up, ingest, library, notices, retrieval_path,
-    source,
+    answer, ask_bar, concept_graph, datasets, follow_up, ingest, library, retrieval_path, source,
 };
 use crate::media::Media;
 use crate::state::Shared;
-use crate::theme::{Icon, TextRole, color, radius, stroke};
+use crate::theme::Icon;
 use crate::widgets::{Button, Surface, panel_frame};
 use contract::{Intent, Panel};
 
@@ -46,7 +45,6 @@ pub struct Locals {
     pub library: library::Local,
     pub ingest: ingest::Local,
     pub datasets: datasets::Local,
-    pub notices: notices::Local,
 }
 
 /// A framed column in the middle of the room. `add` draws in it and gets the height inside it.
@@ -84,25 +82,4 @@ pub(super) fn framed(
             add(ui, rect.height() - margin.y);
         });
     });
-}
-
-pub fn placeholder(ui: &mut egui::Ui, name: &str) {
-    let rect = ui.max_rect();
-    let response = ui.allocate_rect(rect, egui::Sense::hover());
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, name));
-    let painter = ui.painter();
-    painter.rect(
-        rect,
-        radius::XL,
-        color::SHEET,
-        egui::Stroke::new(stroke::BORDER, color::HAIRLINE),
-        egui::StrokeKind::Inside,
-    );
-    painter.text(
-        rect.center(),
-        egui::Align2::CENTER_CENTER,
-        name,
-        TextRole::Heading.font(),
-        color::TEXT_SECONDARY,
-    );
 }

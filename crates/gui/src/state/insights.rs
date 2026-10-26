@@ -233,7 +233,7 @@ mod tests {
             "what was shown stays until the answer comes"
         );
 
-        let failure = Failure::not_built("the insights");
+        let failure = Failure::internal("the insights could not be read");
         reply(&mut shared, 3, Err(failure.clone()));
         assert_eq!(shared.insights.saved, Loadable::Failed(failure));
         assert_eq!(

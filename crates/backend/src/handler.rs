@@ -28,7 +28,8 @@ impl Reply {
 
     /// It never waits: the channel has no bound.
     pub fn send(&self, event: Event) {
-        // The window is gone when this fails, and then nobody waits for the event.
+        // The receiver is gone when this fails, as when the browser has left, and then nobody
+        // waits for the event.
         if self.events.send(event).is_ok() {
             (self.wake)();
         }

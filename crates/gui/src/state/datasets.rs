@@ -106,7 +106,6 @@ impl Shared {
                     NoticeKind::Done,
                     format!("Built {}", report.name),
                     format!("{} Saved in {}.", report.summary(), report.folder.display()),
-                    None,
                 );
             }
             Err(failure) => {
@@ -115,7 +114,6 @@ impl Shared {
                     NoticeKind::Failed,
                     format!("Could not build {}", request.name),
                     failure.hint.clone(),
-                    Some(failure.clone()),
                 );
             }
         }

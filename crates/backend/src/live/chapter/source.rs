@@ -159,7 +159,7 @@ fn picture(folder: &Path, page: u32, content_folder: &Path) -> Option<ImageRef> 
 
 fn existing(path: PathBuf, content_folder: &Path) -> Option<ImageRef> {
     path.is_file()
-        .then(|| crate::content::image_url(&path, content_folder))
+        .then(|| crate::live::image_url(&path, content_folder))
         .flatten()
         .map(|url| ImageRef { url })
 }

@@ -96,14 +96,12 @@ impl Shared {
                     NoticeKind::Done,
                     format!("Exported {what} as {name}"),
                     format!("Your browser is downloading {}.", download.file_name),
-                    None,
                 )
             }
             Err(failure) => self.add_notice(
                 NoticeKind::Failed,
                 format!("Could not export {what} as {name}"),
-                failure.hint.clone(),
-                Some(failure),
+                failure.hint,
             ),
         };
         self.export = Some(ExportJob {

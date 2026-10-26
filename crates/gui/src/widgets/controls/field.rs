@@ -20,7 +20,6 @@ pub struct TextInput<'a> {
     trailing: Option<(Icon, &'a str)>,
     size: ControlSize,
     width: Option<f32>,
-    is_secret: bool,
 }
 
 /// `response` is that of the text itself, so its id is the one that holds the focus. `submitted`
@@ -45,7 +44,6 @@ impl<'a> TextInput<'a> {
             trailing: None,
             size: ControlSize::Medium,
             width: None,
-            is_secret: false,
         }
     }
 
@@ -78,13 +76,6 @@ impl<'a> TextInput<'a> {
 
     pub fn width(mut self, width: f32) -> Self {
         self.width = Some(width);
-        self
-    }
-
-    /// Shows dots in place of the text, for a key or a password. egui also keeps the text out of
-    /// the accessibility tree, where the box is a password input and not a text input.
-    pub fn secret(mut self) -> Self {
-        self.is_secret = true;
         self
     }
 
@@ -155,7 +146,6 @@ impl<'a> TextInput<'a> {
             .frame(egui::Frame::NONE)
             .margin(Margin::ZERO)
             .vertical_align(Align::Center)
-            .password(self.is_secret)
             .desired_width((ui.available_width() - after).max(0.0))
             .min_size(egui::vec2(0.0, height));
         if let Some(hint) = self.hint {

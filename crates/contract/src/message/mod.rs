@@ -62,7 +62,6 @@ pub enum Intent {
     /// What Escape asks for: a running ask stops, and with none running the maximised panel is
     /// put back.
     StopOrRestore,
-    ToggleHelp,
     FocusAskBar,
     CopyText(String),
     ShareAnswer,
@@ -95,7 +94,8 @@ pub enum Intent {
     EditMedia(MediaEdit),
     /// The title of the media as the library has it.
     DeleteMedia(String),
-    /// The Ingest panel asks for the file dialog. It never opens one itself.
+    /// The Ingest panel asks the shell to pick a PDF and upload it. It never opens the browser's
+    /// file picker itself.
     PickPdf,
     /// The shell's answer to `PickPdf`.
     PdfPicked(crate::UploadedPdf),
@@ -106,7 +106,6 @@ pub enum Intent {
     StartDatasetBuild(DatasetRequest),
     ClearDatasetBuild,
     DismissNotice(NoticeId),
-    MarkNoticesRead,
     RecheckHealth,
     /// What the footer's entries and the start of the app ask for.
     ReadBalances,
@@ -343,7 +342,7 @@ mod tests {
 
     #[test]
     fn a_failed_chapter_load_answers_every_event_it_owes() {
-        let failure = Failure::not_built("the contents of a chapter");
+        let failure = Failure::internal("the contents of a chapter could not be read");
         let request = RequestId(7);
         let doc = DocId::default();
 

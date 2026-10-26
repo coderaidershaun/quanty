@@ -625,7 +625,6 @@ dependencies = [
  "image",
  "ocr",
  "percent-encoding",
- "proptest",
  "rag-core",
  "rag-dataset",
  "rag-ingestion",

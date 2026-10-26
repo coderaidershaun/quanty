@@ -1,19 +1,17 @@
-//! No key and no control of the app leads to a part of it that is not built: not a page, not the
-//! help sheet, not a command whose backend only says it is not built.
+//! No key and no control of the app leads to a part of it that is not built.
 
 use std::collections::{HashMap, HashSet};
 
 use backend::fake::{self, Fake};
-use contract::{Chord, Command, Failure, Intent, KeyName, SHORTCUTS};
+use contract::{Chord, Command, Intent, KeyName, SHORTCUTS};
 use eframe::egui;
 use eframe::egui::accesskit::{Action, NodeId, Role};
 use egui_kittest::kittest::{AccessKitNode, By, NodeT as _, Queryable as _};
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::state::MediaDelete;
 use gui::testkit;
 
 use super::recording::{self, Seen};
-use super::{Window, failures, is_open_tab, node, press, shared};
+use super::{Window, is_open_tab, node, press};
 
 /// Names that no node of the app may have, because each is a part that is not built.
 const ABSENT_NAMES: [&str; 7] = [
@@ -37,7 +35,6 @@ fn key_of(key: KeyName) -> egui::Key {
         KeyName::Num4 => egui::Key::Num4,
         KeyName::J => egui::Key::J,
         KeyName::K => egui::Key::K,
-        KeyName::R => egui::Key::R,
         KeyName::S => egui::Key::S,
         KeyName::Slash => egui::Key::Slash,
         KeyName::Period => egui::Key::Period,
@@ -342,38 +339,8 @@ fn assert_ingest_commands_follow_a_check(scene: &str, seen: &Seen) {
     }
 }
 
-/// Every failure that the library state holds: the last failed change of each document, and the
-/// last failed delete of a media.
-fn library_failures(shared: &gui::state::Shared) -> Vec<&Failure> {
-    let media = match &shared.library.media_delete {
-        MediaDelete::Failed { failure, .. } => Some(failure),
-        MediaDelete::Idle | MediaDelete::Deleting { .. } => None,
-    };
-    shared.library.failures.values().chain(media).collect()
-}
-
 fn assert_nothing_unbuilt_was_reached(harness: &Window, scene: &str, seen: &Seen) {
     assert_ingest_commands_follow_a_check(scene, seen);
-    let shared = shared(harness);
-    assert!(!shared.help_open, "`{scene}` opened the help sheet");
-    let not_built = Failure::not_built("anything").hint;
-    let health_failures =
-        contract::Service::ALL
-            .into_iter()
-            .filter_map(|service| match shared.health.of(service) {
-                contract::ServiceState::Down(failure) => Some(failure),
-                _ => None,
-            });
-    let all_failures = failures(shared)
-        .into_iter()
-        .chain(library_failures(shared))
-        .chain(health_failures);
-    for failure in all_failures {
-        assert_ne!(
-            failure.hint, not_built,
-            "`{scene}` shows a part that is not built"
-        );
-    }
     assert_no_unbuilt_name_is_drawn(harness, scene);
     for name in ["Ask", "Library", "Ingest", "Datasets"] {
         assert!(
@@ -427,16 +394,7 @@ fn every_key_and_control_of(scene: &str) {
         {
             press(&mut harness, egui::Modifiers::NONE, egui::Key::Escape);
         }
-        let tab = shared(&harness).tab;
         press(&mut harness, modifiers_of(row.chord), key_of(row.chord.key));
-        if matches!(row.intent, Intent::RecheckHealth | Intent::ToggleHelp) {
-            assert_eq!(
-                shared(&harness).tab,
-                tab,
-                "`{scene}`: {} left the tab",
-                row.chord
-            );
-        }
     }
     assert_nothing_unbuilt_was_reached(&harness, scene, &seen);
     assert_eq!(

@@ -1,15 +1,8 @@
-//! Turns the keys a person presses into intents. A shortcut that leads to a part that is not
-//! built stays unbound.
+//! Turns the keys a person presses into intents.
 
 use eframe::egui;
 
-use contract::{Chord, Intent, KeyName, SHORTCUTS, Shortcut, When};
-
-/// False for a shortcut that leads to a part that is not built: the help sheet and the health
-/// check.
-fn is_bound(shortcut: &Shortcut) -> bool {
-    !matches!(shortcut.intent, Intent::ToggleHelp | Intent::RecheckHealth)
-}
+use contract::{Chord, Intent, KeyName, SHORTCUTS, When};
 
 /// A row that matches takes its key away, so a widget never sees it too.
 pub(super) fn read(ctx: &egui::Context, intents: &mut Vec<Intent>) {
@@ -21,7 +14,7 @@ pub(super) fn read(ctx: &egui::Context, intents: &mut Vec<Intent>) {
     // block every plain key.
     let has_keyboard = text_box_has_keyboard(ctx) || egui::Popup::is_any_open(ctx);
     ctx.input_mut(|input| {
-        for row in SHORTCUTS.iter().filter(|row| is_bound(row)) {
+        for row in &SHORTCUTS {
             if row.when == When::NotTyping && has_keyboard {
                 continue;
             }
@@ -68,7 +61,6 @@ fn key_of(key: KeyName) -> egui::Key {
         KeyName::Num4 => egui::Key::Num4,
         KeyName::J => egui::Key::J,
         KeyName::K => egui::Key::K,
-        KeyName::R => egui::Key::R,
         KeyName::S => egui::Key::S,
         KeyName::Slash => egui::Key::Slash,
         KeyName::Period => egui::Key::Period,

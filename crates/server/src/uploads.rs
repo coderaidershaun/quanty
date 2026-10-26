@@ -37,7 +37,7 @@ pub(crate) async fn upload(
     let upload = UploadId(uuid::Uuid::new_v4());
     let folder = settings
         .home
-        .join("data/uploads")
+        .join(backend::UPLOADS)
         .join(upload.0.to_string());
     tokio::fs::create_dir_all(&folder).await.map_err(|error| {
         tracing::error!(%error, "could not create the PDF staging folder");

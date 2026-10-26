@@ -18,7 +18,8 @@ use serde::Deserialize;
 use tokio::task::JoinError;
 
 use crate::args::non_blank;
-use crate::jobs::{BackgroundJobs, BackgroundReservation, JobKind, Jobs, StopState};
+use crate::jobs::{BackgroundJobs, JobKind};
+use crate::jobs::{Jobs, first_report};
 use crate::library::{LibraryError, parse_document_id};
 use crate::services::Services;
 pub(crate) use error::InsightsToolError;
@@ -88,8 +89,7 @@ impl WriteInsightsArgs {
 pub(crate) struct Insights<S> {
     config: Config,
     services: Arc<S>,
-    jobs: Jobs<InsightsReport>,
-    background_jobs: Option<BackgroundJobs>,
+    pub(crate) jobs: Jobs<InsightsReport>,
 }
 
 impl<S: Services> Insights<S> {
@@ -101,8 +101,7 @@ impl<S: Services> Insights<S> {
         Insights {
             config,
             services,
-            jobs: Jobs::default(),
-            background_jobs,
+            jobs: Jobs::new(JobKind::Insights, background_jobs),
         }
     }
 
@@ -119,18 +118,12 @@ impl<S: Services> Insights<S> {
         args: WriteInsightsArgs,
         error_text: fn(InsightsToolError) -> String,
     ) -> Result<InsightsReport, InsightsToolError> {
-        let reservation: Option<BackgroundReservation> = self
-            .background_jobs
-            .as_ref()
-            .map(|jobs| {
-                let name = args
-                    .document_id
-                    .clone()
-                    .or_else(|| args.media.clone())
-                    .unwrap_or_else(|| "all documents".to_owned());
-                jobs.reserve(JobKind::Insights, name)
-            })
-            .transpose()?;
+        let reservation = self.jobs.reserve(|| {
+            args.document_id
+                .clone()
+                .or_else(|| args.media.clone())
+                .unwrap_or_else(|| "all documents".to_owned())
+        })?;
         let chosen = args.chosen()?;
         let dry_run = args.dry_run == Some(true);
         let graph = FalkorGraph::connect(&self.config).await?;
@@ -161,12 +154,11 @@ impl<S: Services> Insights<S> {
             },
             reservation,
         );
-        let mut watcher = started.watcher;
-        let report = watcher
-            .wait_for(|report| report.current.is_some() || report.state != InsightsState::Running)
-            .await
-            .map(|report| report.clone())
-            .map_err(|_| InsightsToolError::Lost)?;
+        let report = first_report(started.watcher, |report| {
+            report.current.is_some() || report.state != InsightsState::Running
+        })
+        .await
+        .ok_or(InsightsToolError::Lost)?;
         match report.state {
             InsightsState::Failed => {
                 Err(InsightsToolError::Failed(report.error.unwrap_or_default()))
@@ -194,11 +186,6 @@ impl<S: Services> Insights<S> {
             .await
             .map_err(InsightsToolError::ModelNotReady)?;
         Ok(Some(InsightsWriter::new(llm)))
-    }
-
-    /// Stops the job with this id when it is running. `None` when no insights job has the id.
-    pub(crate) async fn stop(&self, job_id: &str) -> Option<StopState> {
-        self.jobs.stop(job_id).await
     }
 
     /// The latest report of a job.

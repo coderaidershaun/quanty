@@ -13,7 +13,9 @@ use rag_core::Config;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::jobs::{BackgroundJobs, BackgroundReservation, JobKind, Jobs, StopState};
+use crate::args::file_name_of;
+use crate::jobs::{BackgroundJobs, JobKind};
+use crate::jobs::{Jobs, first_report};
 use crate::services::Services;
 pub(crate) use error::PdfIngestError;
 pub(crate) use pdf::base64_len;
@@ -78,8 +80,7 @@ pub(crate) struct Ingest<S> {
     config: Config,
     services: Arc<S>,
     max_pdf_bytes: u64,
-    jobs: Jobs<IngestReport>,
-    background_jobs: Option<BackgroundJobs>,
+    pub(crate) jobs: Jobs<IngestReport>,
 }
 
 impl<S: Services> Ingest<S> {
@@ -93,8 +94,7 @@ impl<S: Services> Ingest<S> {
             config,
             services,
             max_pdf_bytes,
-            jobs: Jobs::default(),
-            background_jobs,
+            jobs: Jobs::new(JobKind::Ingest, background_jobs),
         }
     }
 
@@ -110,24 +110,12 @@ impl<S: Services> Ingest<S> {
         args: IngestPdfArgs,
         error_text: fn(PdfIngestError) -> String,
     ) -> Result<IngestReport, PdfIngestError> {
-        let reservation: Option<BackgroundReservation> = self
-            .background_jobs
-            .as_ref()
-            .map(|jobs| {
-                let name = args
-                    .file_name
-                    .clone()
-                    .or_else(|| {
-                        args.path.as_ref().and_then(|path| {
-                            std::path::Path::new(path)
-                                .file_name()
-                                .map(|name| name.to_string_lossy().into_owned())
-                        })
-                    })
-                    .unwrap_or_else(|| args.media.clone());
-                jobs.reserve(JobKind::Ingest, name)
-            })
-            .transpose()?;
+        let reservation = self.jobs.reserve(|| {
+            args.file_name
+                .clone()
+                .or_else(|| args.path.as_deref().and_then(file_name_of))
+                .unwrap_or_else(|| args.media.clone())
+        })?;
         let config = self.config.clone();
         let max_pdf_bytes = self.max_pdf_bytes;
         // The check decodes a PDF that was sent as base64, which can be megabytes of text, so it
@@ -157,12 +145,11 @@ impl<S: Services> Ingest<S> {
             },
             reservation,
         );
-        let mut watcher = started.watcher;
-        let report = watcher
-            .wait_for(|report| report.stage.is_some() || report.state != JobState::Running)
-            .await
-            .map(|report| report.clone())
-            .map_err(|_| PdfIngestError::Lost)?;
+        let report = first_report(started.watcher, |report| {
+            report.stage.is_some() || report.state != JobState::Running
+        })
+        .await
+        .ok_or(PdfIngestError::Lost)?;
         match report.state {
             JobState::Failed => Err(PdfIngestError::Failed(report.error.unwrap_or_default())),
             JobState::Running | JobState::Done | JobState::AlreadyIngested | JobState::Stopped => {
@@ -193,11 +180,6 @@ impl<S: Services> Ingest<S> {
                 refused => refused,
             })?;
         Ok((ready, graph))
-    }
-
-    /// Stops the job with this id when it is running. `None` when no ingest job has the id.
-    pub(crate) async fn stop(&self, job_id: &str) -> Option<StopState> {
-        self.jobs.stop(job_id).await
     }
 
     /// The latest report of a job.

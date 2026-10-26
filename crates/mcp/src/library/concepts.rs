@@ -32,17 +32,17 @@ pub(crate) struct ConceptsView {
 }
 
 #[derive(Serialize, JsonSchema)]
-struct ConceptView {
+pub(crate) struct ConceptView {
     name: String,
     /// What the concept is, in one line.
     definition: String,
 }
 
-impl From<ConceptNode> for ConceptView {
-    fn from(concept: ConceptNode) -> ConceptView {
+impl From<&ConceptNode> for ConceptView {
+    fn from(concept: &ConceptNode) -> ConceptView {
         ConceptView {
-            name: concept.name,
-            definition: concept.definition,
+            name: concept.name.clone(),
+            definition: concept.definition.clone(),
         }
     }
 }
@@ -73,6 +73,6 @@ pub(crate) async fn chapter_concepts(
         document_id: id.to_string(),
         title: document.title,
         page: args.page,
-        concepts: concepts.into_iter().map(ConceptView::from).collect(),
+        concepts: concepts.iter().map(ConceptView::from).collect(),
     })
 }

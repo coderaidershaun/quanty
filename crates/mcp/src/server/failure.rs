@@ -162,8 +162,8 @@ impl ToolError {
                 | DatasetToolError::UnknownDocument { .. }
                 | DatasetToolError::UnknownHoldout { .. }
                 | DatasetToolError::NothingToExport
-                | DatasetToolError::Busy { .. }
-                | DatasetToolError::SharedBusy { .. }
+                | DatasetToolError::Busy(_)
+                | DatasetToolError::SharedBusy(_)
                 | DatasetToolError::UnknownJob { .. }
                 | DatasetToolError::Lost
                 | DatasetToolError::Failed(_)
@@ -185,8 +185,8 @@ fn is_service_failure_of_insights(error: &InsightsToolError) -> bool {
         // needed one, when the job ended.
         InsightsToolError::Unreadable(_)
         | InsightsToolError::Choice
-        | InsightsToolError::Busy { .. }
-        | InsightsToolError::SharedBusy { .. }
+        | InsightsToolError::Busy(_)
+        | InsightsToolError::SharedBusy(_)
         | InsightsToolError::UnknownJob { .. }
         | InsightsToolError::Lost
         | InsightsToolError::Failed(_)

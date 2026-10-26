@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use super::LibraryError;
 use super::chapter::parse_document_id;
-use crate::args::{non_blank, parse_tags};
+use crate::args::{non_blank, parse_optional, parse_tags};
 
 /// What an agent gives `edit_media`. A label that is left out stays as it is.
 #[derive(Deserialize, JsonSchema)]
@@ -101,10 +101,7 @@ pub(crate) async fn edit_media(
     args: EditMediaArgs,
 ) -> Result<MediaLabelsView, LibraryError> {
     let media = non_blank(Some(args.media)).ok_or(LibraryError::BlankMedia)?;
-    let category = non_blank(args.category)
-        .map(|category| category.parse::<Category>())
-        .transpose()
-        .map_err(LibraryError::Category)?;
+    let category = parse_optional::<Category>(args.category).map_err(LibraryError::Category)?;
     let tags = args
         .tags
         .map(|tags| parse_tags::<BTreeSet<Tag>>(Some(tags)))

@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use ocr::content::{PAGE_IMAGE_FILE, PageIndex, own_title, page_folder_name};
 use ocr::{Chapter, ChapterPiece, ContentError, ImageShows, PieceDetail, ReadChapterError};
 
+use super::blocking;
 use super::folder::{FolderFault, chapter_folder};
 use crate::Reply;
 use crate::live::{LiveContext, Services};
@@ -86,14 +87,12 @@ async fn read_page<S: Services>(
 ) -> Result<PageView, Failure> {
     let wanted = target.clone();
     let content_folder = cx.config().content_folder.clone();
-    let read = tokio::task::spawn_blocking(move || page_from_disk(&wanted, &content_folder)).await;
-    match read {
-        Ok(Ok(page)) => Ok(page),
-        Ok(Err(fault)) => Err(fault.failure(cx, target)),
-        Err(error) => Err(Failure::internal(format!(
-            "the page reader stopped: {error}"
-        ))),
-    }
+    blocking(
+        "page reader",
+        move || page_from_disk(&wanted, &content_folder),
+        |fault| fault.failure(cx, target),
+    )
+    .await
 }
 
 async fn page_concepts<S: Services>(

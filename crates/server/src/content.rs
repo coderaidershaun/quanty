@@ -1,11 +1,33 @@
 //! Pictures are readable only inside the configured content folder.
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path as UrlPath, Query, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-use std::{io::Cursor, path::PathBuf};
+use std::{
+    io::Cursor,
+    path::{Path, PathBuf},
+};
+
+/// The real path of `relative` beneath `root`, or not found when it leads out of `root` or is not
+/// there.
+pub(crate) async fn contained(
+    root: &Path,
+    relative: impl AsRef<Path>,
+) -> Result<PathBuf, StatusCode> {
+    let canonical_root = tokio::fs::canonicalize(root)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    let path = tokio::fs::canonicalize(root.join(relative))
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    if path.starts_with(canonical_root) {
+        Ok(path)
+    } else {
+        Err(StatusCode::NOT_FOUND)
+    }
+}
 
 #[derive(serde::Deserialize)]
 pub(crate) struct Size {
@@ -14,21 +36,13 @@ pub(crate) struct Size {
 
 pub(crate) async fn picture(
     State(root): State<PathBuf>,
-    Path(path): Path<String>,
+    UrlPath(path): UrlPath<String>,
     Query(size): Query<Size>,
 ) -> Result<Response, StatusCode> {
     if size.max_side.is_some_and(|n| n == 0 || n > 8192) {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let root = tokio::fs::canonicalize(root)
-        .await
-        .map_err(|_| StatusCode::NOT_FOUND)?;
-    let path = tokio::fs::canonicalize(root.join(path))
-        .await
-        .map_err(|_| StatusCode::NOT_FOUND)?;
-    if !path.starts_with(&root) {
-        return Err(StatusCode::NOT_FOUND);
-    }
+    let path = contained(&root, path).await?;
     let extension = path
         .extension()
         .and_then(|s| s.to_str())

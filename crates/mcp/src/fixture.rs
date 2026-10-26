@@ -1,14 +1,17 @@
 //! A free catalogue proves app connections without constructing store or model clients.
 
-use std::sync::Arc;
-
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
-use rmcp::transport::{StreamableHttpServerConfig, StreamableHttpService};
+use rmcp::transport::StreamableHttpServerConfig;
 use rmcp::{Json, ServerHandler, tool, tool_handler, tool_router};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+
+use crate::transport::mount;
+
+const TITLE: &str = "Black–Scholes fixture";
+const TEXT: &str = "A free sample for checking the connection between an app and its host.";
+const PICTURE: &str = "content/option-volatility-and-pricing/chapter-1/page-num-1/page.png";
 
 #[derive(Clone)]
 struct Fixture {
@@ -56,14 +59,12 @@ impl Fixture {
         Json(SearchResult {
             results: vec![Figure {
                 number: 1,
-                document: "Black–Scholes fixture".into(),
+                document: TITLE.into(),
                 document_id: "black-scholes-fixture".into(),
                 page: 1,
                 kind: "figure".into(),
-                text: "A free sample for checking the connection between an app and its host."
-                    .into(),
-                picture: "content/option-volatility-and-pricing/chapter-1/page-num-1/page.png"
-                    .into(),
+                text: TEXT.into(),
+                picture: PICTURE.into(),
                 label: "Black–Scholes sample page".into(),
             }],
         })
@@ -73,9 +74,9 @@ impl Fixture {
     #[tool(annotations(read_only_hint = true, destructive_hint = false))]
     async fn fixture_page(&self) -> Json<Page> {
         Json(Page {
-            title: "Black–Scholes fixture".into(),
-            text: "A free sample for checking the connection between an app and its host.".into(),
-            image: "content/option-volatility-and-pricing/chapter-1/page-num-1/page.png".into(),
+            title: TITLE.into(),
+            text: TEXT.into(),
+            image: PICTURE.into(),
         })
     }
 }
@@ -85,16 +86,12 @@ impl ServerHandler for Fixture {}
 
 /// A standalone fixture endpoint with no paid operations or external clients.
 pub fn fixture_http_service() -> axum::Router {
-    let service = StreamableHttpService::new(
+    mount(
         || {
             Ok(Fixture {
                 tool_router: Fixture::tool_router(),
             })
         },
-        Arc::new(LocalSessionManager::default()),
-        StreamableHttpServerConfig::default()
-            .disable_allowed_hosts()
-            .enforce_origin_validation(),
-    );
-    axum::Router::new().nest_service("/mcp", service)
+        StreamableHttpServerConfig::default(),
+    )
 }

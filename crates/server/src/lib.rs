@@ -21,6 +21,21 @@ pub use launch::{Settings, SettingsError};
 use mcp::BackgroundJobs;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
+/// The type of a file that the server sends, by its extension.
+fn mime(path: &str) -> &'static str {
+    match path.rsplit('.').next() {
+        Some("html") => "text/html; charset=utf-8",
+        Some("js") => "text/javascript; charset=utf-8",
+        Some("wasm") => "application/wasm",
+        Some("css") => "text/css; charset=utf-8",
+        Some("png") => "image/png",
+        Some("ico") => "image/x-icon",
+        Some("pdf") => "application/pdf",
+        Some("md") => "text/markdown; charset=utf-8",
+        _ => "application/octet-stream",
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum RouterError {
     #[error(transparent)]
@@ -51,16 +66,13 @@ pub fn router<H: Handler>(handler: H, options: ServerOptions) -> Result<Router, 
         background_jobs,
     } = options;
     settings.validate()?;
-    uploads::clean_old_folders(
-        &settings.home.join("data/uploads"),
-        Duration::from_secs(7 * 86400),
-    )
-    .map_err(RouterError::Cleanup)?;
-    uploads::clean_old_folders(
-        &settings.home.join("data/exports"),
-        Duration::from_secs(86400),
-    )
-    .map_err(RouterError::Cleanup)?;
+    for (folder, days) in [(backend::UPLOADS, 7), (backend::EXPORTS, 1)] {
+        uploads::clean_old_folders(
+            &settings.home.join(folder),
+            Duration::from_secs(days * 24 * 60 * 60),
+        )
+        .map_err(RouterError::Cleanup)?;
+    }
     let auth = auth::Auth::new(settings.clone());
     let guard = jobs::Guard::new(background_jobs);
     let facts_guard = guard.clone();
@@ -130,7 +142,10 @@ pub fn router<H: Handler>(handler: H, options: ServerOptions) -> Result<Router, 
     let mcp = if mcp.has_routes() {
         mcp.layer(middleware::from_fn_with_state(auth.clone(), auth::bearer))
     } else {
-        Router::new().route("/mcp", any(|| async { axum::http::StatusCode::NOT_FOUND }))
+        Router::new().route(
+            mcp::MCP_PATH,
+            any(|| async { axum::http::StatusCode::NOT_FOUND }),
+        )
     };
     Ok(protected
         .merge(mcp)

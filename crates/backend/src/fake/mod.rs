@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
+use super::handler::save_model_choice;
 use super::{Handler, Reply, exporting};
 use contract::{
     AskDraft, AskMode, Catalogue, Command, DatasetRequest, DocId, Event, Failure, FailureKind,
@@ -405,16 +406,7 @@ impl Handler for Fake {
                 work,
                 choice,
             } => {
-                let path = self.home.join(choices::MODEL_SETTINGS_FILE);
-                let result = choices::WorkChoices::load_from(&path)
-                    .and_then(|mut choices| {
-                        *choices.of_mut(work) = choice;
-                        choices.save_to(&path)
-                    })
-                    .map_err(|error| {
-                        Failure::internal(format!("could not save the model choice: {error}"))
-                            .with_hint(format!("The model choice could not be saved: {error}"))
-                    });
+                let result = save_model_choice(&self.home, work, choice);
                 reply.send(Event::ModelChoiceSaved { request, result });
             }
             Command::Ask { request, ask } => self.ask(request, &ask, &reply).await,

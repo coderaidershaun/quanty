@@ -14,7 +14,8 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::args::non_blank;
-use crate::jobs::{BackgroundJobs, BackgroundReservation, JobKind, Jobs, StopState};
+use crate::jobs::{BackgroundJobs, JobKind};
+use crate::jobs::{Jobs, first_report};
 use crate::services::Services;
 pub(crate) use error::DatasetToolError;
 pub(crate) use report::DatasetReport;
@@ -112,8 +113,7 @@ pub(crate) struct DatasetStatusArgs {
 pub(crate) struct Datasets<S> {
     config: Config,
     services: Arc<S>,
-    jobs: Jobs<DatasetReport>,
-    background_jobs: Option<BackgroundJobs>,
+    pub(crate) jobs: Jobs<DatasetReport>,
 }
 
 impl<S: Services> Datasets<S> {
@@ -125,8 +125,7 @@ impl<S: Services> Datasets<S> {
         Datasets {
             config,
             services,
-            jobs: Jobs::default(),
-            background_jobs,
+            jobs: Jobs::new(JobKind::Dataset, background_jobs),
         }
     }
 
@@ -142,11 +141,7 @@ impl<S: Services> Datasets<S> {
         args: BuildDatasetArgs,
         error_text: fn(DatasetToolError) -> String,
     ) -> Result<DatasetReport, DatasetToolError> {
-        let reservation: Option<BackgroundReservation> = self
-            .background_jobs
-            .as_ref()
-            .map(|jobs| jobs.reserve(JobKind::Dataset, args.name.clone()))
-            .transpose()?;
+        let reservation = self.jobs.reserve(|| args.name.clone())?;
         let options = args.options(&self.config)?;
         let graph = FalkorGraph::connect(&self.config).await?;
         let llm = self.services.llm(WorkKind::Datasets);
@@ -175,21 +170,15 @@ impl<S: Services> Datasets<S> {
             },
             reservation,
         );
-        let mut watcher = started.watcher;
-        let report = watcher
-            .wait_for(|report| report.stage.is_some() || report.state != DatasetState::Running)
-            .await
-            .map(|report| report.clone())
-            .map_err(|_| DatasetToolError::Lost)?;
+        let report = first_report(started.watcher, |report| {
+            report.stage.is_some() || report.state != DatasetState::Running
+        })
+        .await
+        .ok_or(DatasetToolError::Lost)?;
         match report.state {
             DatasetState::Failed => Err(DatasetToolError::Failed(report.error.unwrap_or_default())),
             DatasetState::Running | DatasetState::Done | DatasetState::Stopped => Ok(report),
         }
-    }
-
-    /// Stops the build with this id when it is running. `None` when no build has the id.
-    pub(crate) async fn stop(&self, job_id: &str) -> Option<StopState> {
-        self.jobs.stop(job_id).await
     }
 
     /// The latest report of a build.

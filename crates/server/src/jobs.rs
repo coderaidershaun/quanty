@@ -22,6 +22,16 @@ impl Owner {
     }
 }
 
+/// A runtime for `handler`, and the signal that tells its owner there is something to collect.
+pub(crate) fn spawn_runtime<H: Handler>(handler: Arc<H>) -> (Runtime<H>, Arc<Notify>) {
+    let wake = Arc::new(Notify::new());
+    let notify = wake.clone();
+    let runtime = Runtime::on(tokio::runtime::Handle::current(), handler, move || {
+        notify.notify_one()
+    });
+    (runtime, wake)
+}
+
 struct Active {
     id: Uuid,
     owner: Uuid,
@@ -127,11 +137,7 @@ impl Guard {
             _admission: admission,
         };
         tokio::spawn(async move {
-            let wake = Arc::new(Notify::new());
-            let notify = wake.clone();
-            let mut runtime = Runtime::on(tokio::runtime::Handle::current(), handler, move || {
-                notify.notify_one()
-            });
+            let (mut runtime, wake) = spawn_runtime(handler);
             runtime.send(command);
             loop {
                 tokio::select! {

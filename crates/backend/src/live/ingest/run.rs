@@ -1,7 +1,7 @@
 //! The paid work of one ingest, the same steps as `rag-ingest pdf`: set up the models and the
 //! stores, convert and ingest the document, and write its own tags.
 
-use crate::live::convert::IntoView;
+use crate::live::convert::{IntoView, tags};
 
 use ocr::{ChapterJob, PageProgress};
 use rag_core::{MediaLabels, UsageTally};
@@ -160,11 +160,7 @@ impl ProgressLine {
 /// A blank tag is dropped.
 fn tag_change(ingest: &IngestRequest) -> TagChange {
     TagChange {
-        add: ingest
-            .tags
-            .iter()
-            .filter_map(|tag| tag.parse().ok())
-            .collect(),
+        add: tags(&ingest.tags).collect(),
         remove: Vec::new(),
     }
 }

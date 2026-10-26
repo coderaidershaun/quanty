@@ -9,7 +9,8 @@ use super::{QuantyServer, Shared};
 use crate::datasets::{BuildDatasetArgs, DatasetReport, DatasetStatusArgs};
 use crate::ingest::{IngestPdfArgs, IngestReport, IngestStatusArgs};
 use crate::insights::{InsightsReport, InsightsStatusArgs, WriteInsightsArgs};
-use crate::jobs::{JobKind, StopError, StopJobArgs, StopResult, StopState};
+use crate::jobs::JobKind;
+use crate::jobs::{StopError, StopJobArgs, StopResult, StopState};
 use crate::services::Services;
 
 #[tool_router(router = jobs_router, vis = "pub(super)")]
@@ -141,14 +142,15 @@ impl<S: Services> QuantyServer<S> {
 
 /// Stops the job with this id, whichever kind of job it is. `None` when no list holds it.
 async fn stop_any<S: Services>(shared: &Shared<S>, job_id: &str) -> Option<(JobKind, StopState)> {
-    if let Some(state) = shared.ingest.stop(job_id).await {
+    if let Some(state) = shared.ingest.jobs.stop(job_id).await {
         return Some((JobKind::Ingest, state));
     }
-    if let Some(state) = shared.insights.stop(job_id).await {
+    if let Some(state) = shared.insights.jobs.stop(job_id).await {
         return Some((JobKind::Insights, state));
     }
     shared
         .datasets
+        .jobs
         .stop(job_id)
         .await
         .map(|state| (JobKind::Dataset, state))

@@ -21,6 +21,7 @@ use crate::Settings;
 const SESSION: &str = "quanty_session";
 const LIFETIME: u64 = 30 * 24 * 60 * 60;
 const WINDOW: Duration = Duration::from_secs(60);
+const MAX_FAILURES: u32 = 5;
 
 #[derive(Clone)]
 pub(crate) struct Auth {
@@ -161,13 +162,12 @@ fn parse_authority(value: &str) -> Option<axum::http::uri::Authority> {
     Some(authority)
 }
 
+fn parse_ip(host: &str) -> Result<std::net::IpAddr, std::net::AddrParseError> {
+    host.trim_start_matches('[').trim_end_matches(']').parse()
+}
+
 fn same_host(first: &str, second: &str) -> bool {
-    let ip = |host: &str| {
-        host.trim_start_matches('[')
-            .trim_end_matches(']')
-            .parse::<std::net::IpAddr>()
-    };
-    match (ip(first), ip(second)) {
+    match (parse_ip(first), parse_ip(second)) {
         (Ok(first), Ok(second)) => first == second,
         _ => first.eq_ignore_ascii_case(second),
     }
@@ -197,11 +197,8 @@ fn has_local_host(headers: &HeaderMap, listen: SocketAddr) -> bool {
         return false;
     };
     let name = host.host();
-    let ip = name.trim_start_matches('[').trim_end_matches(']');
-    let is_loopback = name.eq_ignore_ascii_case("localhost")
-        || ip
-            .parse::<std::net::IpAddr>()
-            .is_ok_and(|ip| ip.is_loopback());
+    let is_loopback =
+        name.eq_ignore_ascii_case("localhost") || parse_ip(name).is_ok_and(|ip| ip.is_loopback());
     is_loopback && host.port_u16().unwrap_or(80) == listen.port()
 }
 
@@ -216,6 +213,15 @@ fn page(message: &str) -> Html<String> {
 #[derive(serde::Deserialize)]
 pub(crate) struct Login {
     password: String,
+}
+
+fn too_many_attempts() -> Response {
+    (
+        StatusCode::TOO_MANY_REQUESTS,
+        [("retry-after", "60")],
+        page("Too many attempts. Try again in a minute."),
+    )
+        .into_response()
 }
 
 pub(crate) async fn login(
@@ -246,12 +252,7 @@ pub(crate) async fn login(
         .get(&address)
         .is_some_and(|a| a.blocked_until.is_some_and(|until| until > current))
     {
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            [("retry-after", "60")],
-            page("Too many attempts. Try again in a minute."),
-        )
-            .into_response();
+        return too_many_attempts();
     }
     if !matches_secret(
         &form.password,
@@ -263,14 +264,9 @@ pub(crate) async fn login(
             blocked_until: None,
         });
         attempts.count += 1;
-        if attempts.count >= 5 {
+        if attempts.count >= MAX_FAILURES {
             attempts.blocked_until = Some(current + WINDOW);
-            return (
-                StatusCode::TOO_MANY_REQUESTS,
-                [("retry-after", "60")],
-                page("Too many attempts. Try again in a minute."),
-            )
-                .into_response();
+            return too_many_attempts();
         }
         return page("That is not the password.").into_response();
     }

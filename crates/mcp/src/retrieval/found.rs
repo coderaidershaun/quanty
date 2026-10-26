@@ -1,12 +1,12 @@
 //! What `search` gives back: the items found, each with the reason it is there, and the trace
 //! of the steps that found them.
 
-use graph::ConceptNode;
 use rag_core::{ConceptHit, ItemPayload, UsageTally};
 use rag_retrieval::{Reason, SearchHit, SearchTrace};
 use schemars::JsonSchema;
 use serde::Serialize;
 
+use crate::library::ConceptView;
 use crate::usage::Spent;
 
 /// The items a search found, best first.
@@ -127,13 +127,6 @@ struct ConceptScore {
     score: f32,
 }
 
-#[derive(Serialize, JsonSchema)]
-struct ConceptView {
-    name: String,
-    /// What the concept is, in one line.
-    definition: String,
-}
-
 impl SearchResult {
     /// The hits in order, numbered from 1, the trace when one was asked for, and what the search
     /// used.
@@ -237,15 +230,6 @@ impl From<&ConceptHit> for ConceptScore {
         ConceptScore {
             name: hit.name.clone(),
             score: hit.score,
-        }
-    }
-}
-
-impl From<&ConceptNode> for ConceptView {
-    fn from(concept: &ConceptNode) -> ConceptView {
-        ConceptView {
-            name: concept.name.clone(),
-            definition: concept.definition.clone(),
         }
     }
 }

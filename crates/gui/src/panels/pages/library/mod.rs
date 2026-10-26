@@ -1,5 +1,6 @@
 //! The Library page: the shelf of media on the left, the page of the open media or document on the
-//! right, what is said when there is nothing to list, and the sheet that asks before a delete.
+//! right, what is said when there is nothing to list, and the sheet that asks before a delete. In a
+//! room too narrow for both, the shelf and the page take turns at filling it.
 
 mod concepts;
 mod contents;
@@ -15,17 +16,26 @@ mod tags_form;
 use eframe::egui;
 
 use crate::panels::PanelCx;
-use crate::panels::labels::TRY_AGAIN;
+use crate::panels::labels::{NO_MEDIA, TRY_AGAIN};
 use crate::panels::seam::{column, framed};
 use crate::state::{Library, Open, Shared};
 use crate::theme::{Icon, TextRole, space};
-use crate::widgets::Placeholder;
+use crate::widgets::{ControlSize, ListRow, Placeholder};
 use contract::{Catalogue, Document, Intent, Loadable, Media};
 
 /// The column of what is said in place of a list is never wider than this, however wide the
 /// window.
 const COLUMN_WIDTH: f32 = 960.0;
 const SHELF_WIDTH: f32 = 300.0;
+/// The width of the shelf beside the page in a room too narrow for the full shelf.
+const NARROW_SHELF_WIDTH: f32 = 240.0;
+/// From this width of the room on, the shelf is drawn at its full width.
+const FULL_SHELF_FROM: f32 = 960.0;
+/// Below this width of the room, the shelf and the page take turns at filling it.
+const BESIDE_FROM: f32 = 720.0;
+/// A page whose content is narrower than this wraps its rows of buttons and makes the buttons tall
+/// enough for a finger.
+const NARROW_BELOW: f32 = 480.0;
 /// The page of the open item is never wider than this, and the desk shows to its right.
 const PAGE_WIDTH: f32 = 960.0;
 
@@ -49,6 +59,9 @@ pub struct Local {
     rows: shelf::Rows,
     form: Option<Form>,
     question: Option<delete::Question>,
+    /// The title of the media whose own page fills a room too narrow for the shelf beside it. It
+    /// is dropped as soon as that media is not the open item.
+    media_page: Option<String>,
 }
 
 #[derive(Debug)]
@@ -90,8 +103,18 @@ fn follow(form: &mut Option<Form>, library: &Library) {
     }
 }
 
+/// The page of a media fills the room only while that media is open.
+fn follow_media_page(media_page: &mut Option<String>, open: Option<&Open>) {
+    if let Some(title) = media_page
+        && !matches!(open, Some(Open::Media { title: Some(open_title) }) if open_title == title)
+    {
+        *media_page = None;
+    }
+}
+
 pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     follow(&mut local.form, &cx.shared.library);
+    follow_media_page(&mut local.media_page, cx.shared.shelf.open.as_ref());
     delete::follow(&mut local.question, cx.shared);
     let shared = cx.shared;
     let listed = shared
@@ -140,10 +163,50 @@ fn nothing_listed(ui: &mut egui::Ui, catalogue: &Loadable<Catalogue>, intents: &
     }
 }
 
-/// Two sheets that fill the room: the shelf, and beside it the page of what is open.
+/// How the shelf is drawn, by the room it is given.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ShelfFit {
+    /// Beside the page, at its full width and with its rows at the usual height.
+    Full,
+    /// Beside the page, narrower, with rows tall enough for a finger.
+    Narrow,
+    /// Alone in the room, with rows tall enough for a finger and a row that opens the page of the
+    /// open media.
+    Alone,
+}
+
+impl ShelfFit {
+    fn row_size(self) -> ControlSize {
+        match self {
+            ShelfFit::Full => ControlSize::Small,
+            ShelfFit::Narrow | ShelfFit::Alone => ControlSize::Large,
+        }
+    }
+}
+
+/// Where a page is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Place {
+    /// Beside the shelf.
+    Beside,
+    /// Alone in the room, with a row at its top that goes back.
+    Alone,
+}
+
+/// Two sheets that fill the room: the shelf, and beside it the page of what is open. A room too
+/// narrow for both is filled by one of them.
 fn panes(ui: &mut egui::Ui, catalogue: &Catalogue, local: &mut Local, cx: &mut PanelCx<'_>) {
     let room = ui.max_rect();
-    let shelf_width = SHELF_WIDTH.min(room.width());
+    let open = opened(catalogue, cx.shared.shelf.open.as_ref());
+    if room.width() < BESIDE_FROM {
+        one_at_a_time(ui, catalogue, open, local, cx);
+        return;
+    }
+    let (fit, shelf_width) = if room.width() >= FULL_SHELF_FROM {
+        (ShelfFit::Full, SHELF_WIDTH)
+    } else {
+        (ShelfFit::Narrow, NARROW_SHELF_WIDTH)
+    };
     let shelf = egui::Rect::from_min_size(room.min, egui::vec2(shelf_width, room.height()));
     let page_left = shelf.right() + space::MD;
     let page_width = (room.right() - page_left).clamp(0.0, PAGE_WIDTH);
@@ -153,28 +216,97 @@ fn panes(ui: &mut egui::Ui, catalogue: &Catalogue, local: &mut Local, cx: &mut P
     );
     framed(ui, "library_shelf", shelf, |ui, height| {
         ui.set_min_height(height);
-        shelf::show(ui, local, catalogue, cx);
+        shelf::show(ui, local, catalogue, fit, cx);
     });
     framed(ui, "library_page", page, |ui, height| {
         ui.set_min_height(height);
-        open_page(ui, catalogue, local, cx);
+        open_page(ui, open, Place::Beside, local, cx);
     });
 }
 
-fn open_page(ui: &mut egui::Ui, catalogue: &Catalogue, local: &mut Local, cx: &mut PanelCx<'_>) {
+/// The shelf fills the room, unless the page of the open document fills it, or the page of the
+/// open media once "About this media" was pressed. Each sheet keeps the id it has beside the other,
+/// so it keeps its scroll position when the window changes its width.
+fn one_at_a_time(
+    ui: &mut egui::Ui,
+    catalogue: &Catalogue,
+    open: Option<Opened<'_>>,
+    local: &mut Local,
+    cx: &mut PanelCx<'_>,
+) {
+    let room = ui.max_rect();
+    let has_page = match &open {
+        Some(Opened::Document(..)) => true,
+        Some(Opened::Media(media)) => media.title.is_some() && media.title == local.media_page,
+        None => false,
+    };
+    if has_page {
+        framed(ui, "library_page", room, |ui, height| {
+            ui.set_min_height(height);
+            open_page(ui, open, Place::Alone, local, cx);
+        });
+    } else {
+        framed(ui, "library_shelf", room, |ui, height| {
+            ui.set_min_height(height);
+            shelf::show(ui, local, catalogue, ShelfFit::Alone, cx);
+        });
+    }
+}
+
+fn open_page(
+    ui: &mut egui::Ui,
+    open: Option<Opened<'_>>,
+    place: Place,
+    local: &mut Local,
+    cx: &mut PanelCx<'_>,
+) {
+    if place == Place::Alone
+        && let Some(label) = back_label(open.as_ref())
+    {
+        back_row(ui, label, cx.intents);
+        ui.add_space(space::SM);
+    }
     if cx.shared.ingest.is_running() {
         ui.label(TextRole::Small.rich(INGEST_RUNNING));
         ui.add_space(space::SM);
     }
-    match opened(catalogue, cx.shared.shelf.open.as_ref()) {
+    match open {
         Some(Opened::Media(media)) => media::show(ui, media, local, cx),
-        Some(Opened::Document(media, document)) => document::show(ui, media, document, local, cx),
+        Some(Opened::Document(media, document)) => {
+            // Alone, the back row already names the media.
+            let named = (place == Place::Beside).then_some(media);
+            document::show(ui, named, document, local, cx);
+        }
         None => {
             Placeholder::empty(Icon::LIBRARY, NOTHING_OPEN)
                 .hint(NOTHING_OPEN_HINT)
                 .show(ui);
         }
     }
+}
+
+/// Where Back leads from a page that fills the room: a document to its media, a media to the shelf.
+fn back_label<'a>(open: Option<&Opened<'a>>) -> Option<&'a str> {
+    match open? {
+        Opened::Media(_) => Some(TITLE),
+        Opened::Document(media, _) => Some(media.title.as_deref().unwrap_or(NO_MEDIA)),
+    }
+}
+
+/// The first row of a page that fills the room.
+fn back_row(ui: &mut egui::Ui, label: &str, intents: &mut Vec<Intent>) {
+    let row = ListRow::new(label)
+        .glyph(Icon::CARET_LEFT)
+        .size(ControlSize::Large);
+    if ui.add(row).clicked() {
+        intents.push(Intent::Back);
+    }
+}
+
+/// Whether the room left in this ui is too narrow for a row of buttons. Call it where the whole
+/// width of the page is left, not inside a part that has less, such as the end of a title line.
+fn is_narrow(ui: &egui::Ui) -> bool {
+    ui.available_width() < NARROW_BELOW
 }
 
 /// What the page shows. A document comes with its media, for the line that names it.

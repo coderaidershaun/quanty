@@ -4,6 +4,7 @@
 
 use eframe::egui;
 
+use super::is_narrow;
 use crate::media::math::{self, MathRef};
 use crate::media::rich_text::{self, Clicked, DollarBlock, RichText, dollar_blocks};
 use crate::panels::PanelCx;
@@ -88,12 +89,19 @@ fn saved_part(
     doc: DocId,
     saved: &ChapterInsights,
 ) {
-    ui.horizontal(|ui| {
-        ui.label(TextRole::Small.rich(format!("Written by {}", saved.model)));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            export_menu(ui, cx, catalogue);
+    let written_by = TextRole::Small.rich(format!("Written by {}", saved.model));
+    if is_narrow(ui) {
+        // The label may wrap, so the button gets a line of its own, tall enough for a finger.
+        ui.label(written_by);
+        export_menu(ui, cx, catalogue, ControlSize::Medium);
+    } else {
+        ui.horizontal(|ui| {
+            ui.label(written_by);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                export_menu(ui, cx, catalogue, ControlSize::Small);
+            });
         });
-    });
+    }
     exporting::strip(ui, cx, ExportPlace::Insights { doc });
     ui.add_space(space::SM);
     egui::ScrollArea::vertical()
@@ -122,11 +130,9 @@ fn saved_part(
         });
 }
 
-fn export_menu(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, catalogue: &Catalogue) {
+fn export_menu(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, catalogue: &Catalogue, size: ControlSize) {
     let shared = cx.shared;
-    let button = Button::secondary(EXPORT)
-        .icon(Icon::DOCUMENT)
-        .size(ControlSize::Small);
+    let button = Button::secondary(EXPORT).icon(Icon::DOCUMENT).size(size);
     let response = ui.add(button);
     egui::Popup::menu(&response)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)

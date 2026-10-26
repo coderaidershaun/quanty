@@ -3,7 +3,7 @@
 
 use eframe::egui;
 
-use super::{Form, Local, can_edit, delete, tags_form};
+use super::{Form, Local, can_edit, delete, is_narrow, tags_form};
 use crate::panels::PanelCx;
 use crate::panels::labels::TAGS;
 use crate::state::Busy;
@@ -59,6 +59,8 @@ fn labels(ui: &mut egui::Ui, document: &Document) {
     });
 }
 
+/// The buttons that act on the document. In a narrow page they are tall enough for a finger and
+/// go on to a second line when one line is too short for them.
 fn buttons(
     ui: &mut egui::Ui,
     document: &Document,
@@ -66,16 +68,18 @@ fn buttons(
     local: &mut Local,
     cx: &mut PanelCx<'_>,
 ) {
-    ui.horizontal(|ui| {
-        let copy = Button::ghost(COPY_ID)
-            .icon(Icon::COPY)
-            .size(ControlSize::Small);
+    let is_narrow = is_narrow(ui);
+    let size = if is_narrow {
+        ControlSize::Medium
+    } else {
+        ControlSize::Small
+    };
+    let row = |ui: &mut egui::Ui| {
+        let copy = Button::ghost(COPY_ID).icon(Icon::COPY).size(size);
         if ui.add(copy).clicked() {
             cx.intents.push(Intent::CopyText(document.id.0.to_string()));
         }
-        let read = Button::ghost(READ)
-            .icon(Icon::OPEN)
-            .size(ControlSize::Small);
+        let read = Button::ghost(READ).icon(Icon::OPEN).size(size);
         let read = ui
             .add_enabled(document.folder.is_some(), read)
             .on_disabled_hover_text(READ_DISABLED);
@@ -87,9 +91,7 @@ fn buttons(
             });
         }
         if !is_edited {
-            let edit_tags = Button::ghost(EDIT_TAGS)
-                .icon(Icon::EDIT)
-                .size(ControlSize::Small);
+            let edit_tags = Button::ghost(EDIT_TAGS).icon(Icon::EDIT).size(size);
             if ui.add_enabled(can_edit(cx.shared), edit_tags).clicked() {
                 local.form = Some(Form::Tags(tags_form::Draft::of(document)));
             }
@@ -99,8 +101,18 @@ fn buttons(
             cx.shared.library.busy.get(&document.id),
             Some(Busy::Deleting(_))
         );
-        if delete::button(ui, &name, is_busy, cx.shared) {
+        let delete = delete::DeleteButton {
+            name: &name,
+            is_busy,
+            size,
+        };
+        if delete.show(ui, cx.shared) {
             local.question = Some(delete::Question::of_document(document));
         }
-    });
+    };
+    if is_narrow {
+        ui.horizontal_wrapped(row);
+    } else {
+        ui.horizontal(row);
+    }
 }

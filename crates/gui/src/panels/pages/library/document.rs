@@ -14,9 +14,10 @@ use contract::{Document, DocumentView, Intent, Media};
 
 const NOT_WHOLE: &str = "The ingest of this document did not finish, so a search may miss parts of it. Ingest it again to finish it.";
 
+/// `media` is named above the document, unless it is `None` because the page names it already.
 pub(super) fn show(
     ui: &mut egui::Ui,
-    media: &Media,
+    media: Option<&Media>,
     document: &Document,
     local: &mut Local,
     cx: &mut PanelCx<'_>,
@@ -37,12 +38,17 @@ pub(super) fn show(
     }
 }
 
-fn header(ui: &mut egui::Ui, media: &Media, document: &Document) {
-    match media.title.as_deref() {
-        Some(title) => media_card::title_line(ui, title, media.category, |_| ()),
-        None => {
+fn header(ui: &mut egui::Ui, media: Option<&Media>, document: &Document) {
+    match media {
+        Some(Media {
+            title: Some(title),
+            category,
+            ..
+        }) => media_card::title_line(ui, title, *category, |_| ()),
+        Some(_) => {
             ui.label(TextRole::BodyStrong.rich(NO_MEDIA));
         }
+        None => {}
     }
     ui.label(TextRole::Heading.rich(document.name().label()));
     ui.label(TextRole::Small.rich(facts(document)));

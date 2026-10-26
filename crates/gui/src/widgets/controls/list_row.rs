@@ -4,7 +4,7 @@
 use eframe::egui::{self, Response, Sense, WidgetInfo, WidgetType, pos2, text::LayoutJob, vec2};
 
 use crate::theme::{Icon, TextRole, color, radius, size, space, stroke};
-use crate::widgets::look::{Look, focus_ring};
+use crate::widgets::look::{ControlSize, Look, focus_ring};
 
 pub struct ListRow<'a> {
     label: &'a str,
@@ -13,6 +13,7 @@ pub struct ListRow<'a> {
     indent: f32,
     is_selected: bool,
     role: TextRole,
+    size: ControlSize,
     forced: Option<Look>,
 }
 
@@ -25,6 +26,7 @@ impl<'a> ListRow<'a> {
             indent: 0.0,
             is_selected: false,
             role: TextRole::Body,
+            size: ControlSize::Small,
             forced: None,
         }
     }
@@ -54,6 +56,12 @@ impl<'a> ListRow<'a> {
 
     pub fn role(mut self, role: TextRole) -> Self {
         self.role = role;
+        self
+    }
+
+    /// The height of the row. A row that a finger presses is `Large`.
+    pub fn size(mut self, size: ControlSize) -> Self {
+        self.size = size;
         self
     }
 
@@ -115,7 +123,7 @@ impl<'a> ListRow<'a> {
 
 impl egui::Widget for ListRow<'_> {
     fn ui(self, ui: &mut egui::Ui) -> Response {
-        let side = vec2(ui.available_width(), size::CONTROL_SM);
+        let side = vec2(ui.available_width(), self.size.height());
         let (rect, response) = ui.allocate_exact_size(side, Sense::click());
         crate::widgets::interactive_cursor(ui, &response);
         response.widget_info(|| {

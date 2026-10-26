@@ -74,7 +74,11 @@ impl<'a> Confirm<'a> {
     pub fn show(self, ctx: &egui::Context) -> Option<Choice> {
         let mut choice = None;
         let sheet = modal(ctx, self.id, |ui| {
-            ui.set_width(CONFIRM_WIDTH);
+            // The sheet shrinks in a narrow window, so that its frame and a gap fit on each side.
+            // SMELL: the margin and border repeat the frame in `modal`, so change them together.
+            let room =
+                ui.ctx().content_rect().width() - 2.0 * (space::XL + stroke::BORDER + space::LG);
+            ui.set_width(CONFIRM_WIDTH.min(room).max(0.0));
             ui.label(TextRole::Heading.rich(self.title));
             if let Some(body) = self.body {
                 ui.label(TextRole::Body.rich(body).color(color::TEXT_SECONDARY));

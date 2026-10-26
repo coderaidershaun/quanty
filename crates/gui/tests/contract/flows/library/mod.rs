@@ -11,6 +11,7 @@ mod delete_on_its_way;
 mod document_tags;
 mod insights;
 mod media;
+mod narrow;
 mod navigation;
 
 use std::sync::Arc;

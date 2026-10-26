@@ -3,13 +3,13 @@
 
 use eframe::egui;
 
-use super::{Local, TITLE};
+use super::{Local, ShelfFit, TITLE};
 use crate::panels::PanelCx;
 use crate::panels::labels::NO_MEDIA;
 use crate::panels::pages::media_card::category_icon;
 use crate::state::Open;
 use crate::theme::{Icon, TextRole, space};
-use crate::widgets::{ListRow, Placeholder, TextInput};
+use crate::widgets::{ControlSize, ListRow, Placeholder, TextInput};
 use contract::{Catalogue, Category, DocId, Document, Intent, Media};
 
 const FIND: &str = "Find";
@@ -17,6 +17,7 @@ const FIND_HINT: &str = "Find a media or chapter";
 const CLEAR: &str = "Clear";
 const NOTHING_MATCHES: &str = "Nothing matches";
 const NOTHING_MATCHES_HINT: &str = "Try fewer letters.";
+const ABOUT_MEDIA: &str = "About this media";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Row {
@@ -127,6 +128,7 @@ pub(super) fn show(
     ui: &mut egui::Ui,
     local: &mut Local,
     catalogue: &Catalogue,
+    fit: ShelfFit,
     cx: &mut PanelCx<'_>,
 ) {
     ui.label(TextRole::Title.rich(TITLE));
@@ -159,15 +161,37 @@ pub(super) fn show(
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
             for row in &local.rows.rows {
-                if let Some(intent) = show_row(ui, row) {
+                if let Some(intent) = show_row(ui, row, fit.row_size()) {
                     cx.intents.push(intent);
+                }
+                // Alone in the room, the open media has no page beside the shelf, so a row under it
+                // opens its page. The group with no media has nothing to manage.
+                if fit == ShelfFit::Alone
+                    && let Row::Media {
+                        title: Some(title),
+                        is_open: true,
+                        ..
+                    } = row
+                    && about_row(ui, fit.row_size())
+                {
+                    local.media_page = Some(title.clone());
                 }
             }
         });
 }
 
+/// The row that opens the page of the open media. Returns true when it was pressed.
+fn about_row(ui: &mut egui::Ui, size: ControlSize) -> bool {
+    let row = ListRow::new(ABOUT_MEDIA)
+        .glyph(Icon::INFO)
+        .role(TextRole::Small)
+        .indent(space::XL)
+        .size(size);
+    ui.add(row).clicked()
+}
+
 /// The intent of the row if it was clicked.
-fn show_row(ui: &mut egui::Ui, row: &Row) -> Option<Intent> {
+fn show_row(ui: &mut egui::Ui, row: &Row, size: ControlSize) -> Option<Intent> {
     match row {
         Row::Media {
             title,
@@ -176,7 +200,10 @@ fn show_row(ui: &mut egui::Ui, row: &Row) -> Option<Intent> {
             count,
             is_open,
         } => {
-            let mut media = ListRow::new(label).count(*count).selected(*is_open);
+            let mut media = ListRow::new(label)
+                .count(*count)
+                .selected(*is_open)
+                .size(size);
             if let Some(category) = category {
                 media = media.glyph(category_icon(*category));
             }
@@ -192,7 +219,8 @@ fn show_row(ui: &mut egui::Ui, row: &Row) -> Option<Intent> {
             let document = ListRow::new(label)
                 .role(TextRole::Small)
                 .indent(space::XL)
-                .selected(*is_open);
+                .selected(*is_open)
+                .size(size);
             ui.add(document)
                 .clicked()
                 .then_some(Intent::OpenDocument(*doc))

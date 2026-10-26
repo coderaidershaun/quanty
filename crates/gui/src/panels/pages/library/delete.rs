@@ -131,16 +131,24 @@ pub(super) fn sheet(
 
 /// The Delete button of a media or a document, named after what it deletes. It shows that its own
 /// delete is on its way, and it is off, with the reason on hover, while no delete can start.
-/// Returns true when it was pressed.
-pub(super) fn button(ui: &mut egui::Ui, name: &str, is_busy: bool, shared: &Shared) -> bool {
-    let button = Button::danger(DELETE)
-        .icon(Icon::DELETE)
-        .size(ControlSize::Small)
-        .accessible_name(name)
-        .loading(is_busy);
-    ui.add_enabled(can_delete(shared), button)
-        .on_disabled_hover_text(why_off(shared))
-        .clicked()
+pub(super) struct DeleteButton<'a> {
+    pub(super) name: &'a str,
+    pub(super) is_busy: bool,
+    pub(super) size: ControlSize,
+}
+
+impl DeleteButton<'_> {
+    /// Returns true when it was pressed.
+    pub(super) fn show(self, ui: &mut egui::Ui, shared: &Shared) -> bool {
+        let button = Button::danger(DELETE)
+            .icon(Icon::DELETE)
+            .size(self.size)
+            .accessible_name(self.name)
+            .loading(self.is_busy);
+        ui.add_enabled(can_delete(shared), button)
+            .on_disabled_hover_text(why_off(shared))
+            .clicked()
+    }
 }
 
 fn why_off(shared: &Shared) -> &'static str {

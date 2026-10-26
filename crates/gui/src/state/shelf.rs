@@ -18,6 +18,9 @@ pub struct Shelf {
     pub open: Option<Open>,
     /// Kept when another document opens, so a person can read one view of chapter after chapter.
     pub view: DocumentView,
+    /// True only while nothing is open because Back closed the last open item. A catalogue read
+    /// meanwhile leaves the shelf empty and does not open the first media.
+    is_left_empty: bool,
 }
 
 impl Shelf {
@@ -69,18 +72,23 @@ impl Shared {
     }
 
     /// The slots of the views belong to one document, so another item, or none, empties them.
+    /// Opening an item clears `is_left_empty`. Closing one never sets it, because a catalogue with
+    /// no media closes the open item too.
     fn open_item(&mut self, item: Option<Open>, effects: &mut Vec<Effect>) {
         if self.shelf.open == item {
             return;
         }
         self.forget_contents(effects);
         self.forget_insights(effects);
+        if item.is_some() {
+            self.shelf.is_left_empty = false;
+        }
         self.shelf.open = item;
     }
 
     /// The Library's step of Back: a document gives way to its media, and a media to a shelf with
-    /// nothing open. A document that the catalogue does not list has no media to go back to.
-    /// Returns false when nothing was open.
+    /// nothing open, which a catalogue that is read later does not fill again. A document that the
+    /// catalogue does not list has no media to go back to. Returns false when nothing was open.
     pub(super) fn back_on_shelf(&mut self, effects: &mut Vec<Effect>) -> bool {
         let Some(open) = &self.shelf.open else {
             return false;
@@ -97,12 +105,14 @@ impl Shared {
             Open::Media { .. } => None,
         };
         self.open_item(media, effects);
+        self.shelf.is_left_empty = self.shelf.open.is_none();
         true
     }
 
     /// Called when a catalogue has been read. `fallback` is the media that the open document
     /// belonged to in the catalogue before this one. An open item that is listed stays open, and
-    /// one that is not falls back to its media, or else to the first media.
+    /// one that is not falls back to its media, or else to the first media. A shelf that Back left
+    /// empty stays empty until a catalogue lists no media at all.
     ///
     /// It never changes the tab: a catalogue that arrives while another tab is open must not pull
     /// the window onto the Library.
@@ -116,22 +126,22 @@ impl Shared {
         let Some(catalogue) = self.library.catalogue.ready() else {
             return;
         };
-        if self
+        if catalogue.media.is_empty() {
+            self.shelf.is_left_empty = false;
+        }
+        let is_open_listed = self
             .shelf
             .open
             .as_ref()
-            .is_some_and(|open| open.is_listed_in(catalogue))
-        {
+            .is_some_and(|open| open.is_listed_in(catalogue));
+        let is_kept_empty = self.shelf.open.is_none() && self.shelf.is_left_empty;
+        if is_open_listed || is_kept_empty {
             return;
         }
         let title = match fallback {
             Some(title) if is_media_listed(title.as_deref(), catalogue) => Some(title),
             _ => catalogue.media.first().map(|media| media.title.clone()),
         };
-        // SMELL: these lines repeat `open_item` without its check for an unchanged item, so the
-        // rule that empties the views lives in two places.
-        self.forget_contents(effects);
-        self.forget_insights(effects);
-        self.shelf.open = title.map(|title| Open::Media { title });
+        self.open_item(title.map(|title| Open::Media { title }), effects);
     }
 }

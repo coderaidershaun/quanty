@@ -1,5 +1,5 @@
-//! A build starts from the form and ends in a notice on the fake backend, and a build that is
-//! running or that failed shows it.
+//! The Datasets page on the whole app and the fake backend: a build starts from the form and ends
+//! in a notice, shows its stage and its cost while it runs, and a build that failed shows it.
 
 use std::time::{Duration, Instant};
 
@@ -10,13 +10,42 @@ use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::NodeT as _;
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::state::DatasetJob;
+use gui::state::{DatasetJob, Shared};
 use gui::testkit::{self, run_until};
 use uuid::Uuid;
 
-use super::{is_at_its_stall, open, sent_builds};
-use crate::flows::recording;
-use crate::flows::{COMMAND, click, field, has, is_enabled, node, press, says, shared, type_into};
+use crate::flows::recording::{self, Seen};
+use crate::flows::{
+    COMMAND, Window, click, field, has, is_enabled, node, press, says, shared, type_into,
+};
+
+/// The stage at which the scenes with a build that never ends stand still.
+const STALL: DatasetStage = DatasetStage::WritingSynthetic { done: 6, total: 12 };
+
+fn open(scene: &str, size: [f32; 2]) -> (Window, Seen) {
+    let (mut harness, seen) = recording::open(scene, size);
+    testkit::settle(&mut harness);
+    (harness, seen)
+}
+
+/// The builds the app sent, in the order it sent them.
+fn sent_builds(seen: &Seen) -> Vec<DatasetRequest> {
+    seen.all()
+        .into_iter()
+        .filter_map(|command| match command {
+            Command::BuildDataset { build, .. } => Some(build),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Whether a build that never ends has played up to its stall.
+fn is_at_its_stall(shared: &Shared) -> bool {
+    matches!(
+        &shared.datasets,
+        DatasetJob::Running { progress: Some(progress), .. } if progress.stage == STALL
+    )
+}
 
 const DRY_RUN: &str = "Dry run (export, check and plan only; asks no model)";
 const CHAPTER_2: &str = "Chapter 2 · Black Scholes In Depth";

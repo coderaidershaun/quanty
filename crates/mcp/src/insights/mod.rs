@@ -1,8 +1,9 @@
-//! The `chapter_insights`, `write_insights` and `insights_status` tools. Writing the insights of
-//! stored documents takes a minute or more for each, and a client puts a time limit on a tool
-//! call, so `write_insights` starts a job and `insights_status` reads it.
+//! The `chapter_insights`, `write_insights`, `insights_status` and `export_insights` tools. Writing
+//! the insights of stored documents takes a minute or more for each, and a client puts a time
+//! limit on a tool call, so `write_insights` starts a job and `insights_status` reads it.
 
 mod error;
+mod exporting;
 mod report;
 mod saved;
 mod work;
@@ -21,6 +22,7 @@ use crate::jobs::{BackgroundJobs, BackgroundReservation, JobKind, Jobs, StopStat
 use crate::library::{LibraryError, parse_document_id};
 use crate::services::Services;
 pub(crate) use error::InsightsToolError;
+pub(crate) use exporting::{ExportInsightsArgs, ExportResult, ExportToolError, export_insights};
 pub(crate) use report::InsightsReport;
 use report::InsightsState;
 pub(crate) use saved::{

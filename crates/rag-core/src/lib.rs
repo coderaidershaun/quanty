@@ -1,28 +1,19 @@
 //! The pieces that ingestion and retrieval must agree on: the settings, the identifiers, the
 //! embedder, the item store, the concept store, the language model and the prices of the models.
 
-mod agent_cli;
-mod claude;
-mod codex;
 mod concept;
-mod concept_store;
 mod config;
 mod content;
 mod embedder;
 mod error_chain;
 mod item;
-mod item_store;
 mod labels;
 mod llm;
 mod qdrant;
 mod usage;
 
-pub use agent_cli::AgentCli;
 pub use choices::{ApiKey, ModelSettings, SettingsError, WorkKind};
-pub use claude::{ClaudeCli, ClaudeCliError};
-pub use codex::{CodexCli, CodexError};
 pub use concept::ConceptId;
-pub use concept_store::{ConceptHit, ConceptPoint, ConceptStore, concept_input};
 pub use config::{Config, ConfigError};
 pub use content::content_url;
 pub use embedder::{
@@ -31,11 +22,15 @@ pub use embedder::{
 };
 pub use error_chain::error_chain;
 pub use item::{DocId, ItemId, ItemKind, ItemPayload, ParseDocIdError, UnknownItemKind};
-pub use item_store::{ItemFilter, ItemHit, ItemPoint, ItemStore};
 pub use labels::{
     Category, DocumentLabels, EmptyTag, LabelFilter, MediaLabels, Tag, UnknownCategory,
     WantedDocument, author_list, is_same_name,
 };
-pub use llm::{Llm, LlmError, LlmReply, Question};
-pub use qdrant::StoreError;
+pub use llm::{
+    AgentCli, ClaudeCli, ClaudeCliError, CodexCli, CodexError, Llm, LlmError, LlmReply, Question,
+};
+pub use qdrant::{
+    ConceptHit, ConceptPoint, ConceptStore, ItemFilter, ItemHit, ItemPoint, ItemStore, StoreError,
+    concept_input,
+};
 pub use usage::{ModelPrice, ModelUsage, Usage, UsageTally, cost_text, price_of};

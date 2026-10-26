@@ -2,7 +2,6 @@
 //! picture, converts and ingests a PDF, writes the insights of chapters that are stored already,
 //! relabels a stored media or document, or deletes a document or a whole media.
 
-// SMELL: command modules share this crowded folder with library jobs, making commands harder to find.
 mod cli;
 mod progress;
 mod stored_artifacts;

@@ -9,7 +9,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinError;
 
-use crate::insights::{InsightsToolError, Saved, saved_insights};
+use super::{InsightsToolError, Saved, saved_insights};
 use crate::library::{find_chapter, parse_document_id};
 
 /// What an agent gives `export_insights`.

@@ -6,7 +6,7 @@ use rmcp::{Json, tool, tool_router};
 
 use super::QuantyServer;
 use super::failure::ToolError;
-use crate::exporting::{self, ExportInsightsArgs, ExportResult};
+use crate::insights::{ExportInsightsArgs, ExportResult, export_insights};
 use crate::library::{
     self, DocumentTagsView, EditDocumentTagsArgs, EditMediaArgs, MediaLabelsView,
 };
@@ -63,8 +63,6 @@ impl<S: Services> QuantyServer<S> {
         &self,
         Parameters(args): Parameters<ExportInsightsArgs>,
     ) -> Result<Json<ExportResult>, ToolError> {
-        Ok(Json(
-            exporting::export_insights(&self.shared.config, args).await?,
-        ))
+        Ok(Json(export_insights(&self.shared.config, args).await?))
     }
 }

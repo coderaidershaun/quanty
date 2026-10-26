@@ -10,7 +10,7 @@ use serde_json::{Map, Value};
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
-use crate::llm::{Llm, LlmError, LlmReply, Question};
+use super::{Llm, LlmError, LlmReply, Question};
 use crate::usage::{ModelUsage, Usage, UsageTally};
 
 const STATUS_TIMEOUT: Duration = Duration::from_secs(10);

@@ -1,7 +1,15 @@
 //! What a program may ask of a language model: one question in, one answer in JSON out. The
 //! question fits any model, and installed agent commands report their own failures.
 
+mod agent_cli;
+mod claude;
+mod codex;
+
 use serde_json::Value;
+
+pub use agent_cli::AgentCli;
+pub use claude::{ClaudeCli, ClaudeCliError};
+pub use codex::{CodexCli, CodexError};
 
 use crate::usage::UsageTally;
 

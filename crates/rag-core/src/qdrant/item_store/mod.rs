@@ -8,7 +8,7 @@ use qdrant_client::qdrant::{CreateFieldIndexCollectionBuilder, FieldType};
 
 pub use search::{ItemFilter, ItemHit};
 
-use crate::qdrant::Collection;
+use super::Collection;
 use crate::{Config, Embedding, ItemId, ItemPayload, StoreError};
 
 #[derive(Debug, Clone, PartialEq)]

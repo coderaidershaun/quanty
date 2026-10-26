@@ -3,7 +3,6 @@
 
 mod args;
 mod datasets;
-mod exporting;
 mod fixture;
 mod ingest;
 mod insights;

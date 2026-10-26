@@ -1,12 +1,18 @@
 //! What the item store and the concept store share: one collection of Qdrant with its client, the
 //! one shape that every collection has, the id of a point as text, and the errors of both stores.
 
+mod concept_store;
+mod item_store;
+
 use std::time::Duration;
 
 use qdrant_client::qdrant::{
     CreateCollectionBuilder, Distance, PointId, VectorParamsBuilder, point_id::PointIdOptions,
 };
 use qdrant_client::{Qdrant, QdrantError};
+
+pub use concept_store::{ConceptHit, ConceptPoint, ConceptStore, concept_input};
+pub use item_store::{ItemFilter, ItemHit, ItemPoint, ItemStore};
 
 use crate::{ApiKey, ConceptId, Config, EMBEDDING_DIMENSIONS, ItemId};
 

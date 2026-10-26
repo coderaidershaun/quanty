@@ -9,7 +9,7 @@ use qdrant_client::qdrant::{
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
-use crate::qdrant::{Collection, point_id_text};
+use super::{Collection, point_id_text};
 use crate::{ConceptId, Config, DocumentInput, Embedding, StoreError};
 
 const NAME_FIELD: &str = "name";

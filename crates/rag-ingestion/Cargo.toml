@@ -5,7 +5,7 @@ edition.workspace = true
 
 [[bin]]
 name = "rag-ingest"
-path = "src/main.rs"
+path = "src/bin/rag-ingest/main.rs"
 
 [dependencies]
 anyhow.workspace = true

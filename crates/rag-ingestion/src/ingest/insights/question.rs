@@ -4,11 +4,11 @@
 use std::collections::BTreeSet;
 
 use ocr::Insight;
-use rag_core::ItemKind;
+use rag_core::{ItemKind, estimated_tokens};
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::ingest::items::{Item, estimated_tokens};
+use crate::ingest::items::Item;
 
 pub(crate) const SYSTEM_PROMPT: &str = include_str!("prompts/insights.md");
 pub(super) const SCHEMA: &str = include_str!("prompts/insights.schema.json");

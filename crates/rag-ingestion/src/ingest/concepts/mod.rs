@@ -20,7 +20,8 @@ use rag_core::{
 use decision_log::DecisionLog;
 use resolve::Resolver;
 
-pub use cache::Cache;
+pub(crate) use cache::TRIES_FOR_ONE_QUESTION;
+pub use cache::{CALLS_AT_A_TIME, Cache, Outcome, Reading};
 pub use resolve::{ASK_SCORE, LINK_SCORE};
 
 use super::items::Item;

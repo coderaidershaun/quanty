@@ -8,7 +8,7 @@ use std::fmt;
 use graph::{FalkorGraph, GraphError, MediaNode};
 use rag_core::{Category, MediaLabels, Tag, author_list, is_same_name};
 
-use crate::labels::{RelabelError, tag_text};
+use crate::labels::{RelabelError, list_or_none, tag_text};
 use crate::stores::Stores;
 
 /// The title is not here: it names the media and cannot change. A label that is `None` stays as
@@ -50,11 +50,7 @@ pub struct MediaRelabelled {
 
 impl fmt::Display for MediaRelabelled {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let authors = if self.labels.authors.is_empty() {
-            "none".to_owned()
-        } else {
-            self.labels.authors.join(", ")
-        };
+        let authors = list_or_none(self.labels.authors.iter().map(String::as_str));
         writeln!(
             formatter,
             "labels written to the media {:?} and to its {} documents in both stores",
@@ -90,12 +86,7 @@ pub async fn relabel_media(
     stores.graph.update_media(&media).await?;
     let mut documents = 0;
     for mut node in stores.graph.documents().await? {
-        let of_this_media = node
-            .labels
-            .media
-            .as_deref()
-            .is_some_and(|other| is_same_name(other, &media.title));
-        if !of_this_media {
+        if !node.labels.is_of_media(&media.title) {
             continue;
         }
         node.labels.take_media(&media.title, &media.labels);

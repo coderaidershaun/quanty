@@ -20,7 +20,7 @@ pub use embedder::{
     DocumentInput, EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, EmbedError, Embedder, Embedding,
     GeminiEmbedder, embedding_usage, question_usage,
 };
-pub use error_chain::error_chain;
+pub use error_chain::{error_chain, one_line};
 pub use item::{DocId, ItemId, ItemKind, ItemPayload, ParseDocIdError, UnknownItemKind};
 pub use labels::{
     Category, DocumentLabels, EmptyTag, LabelFilter, MediaLabels, Tag, UnknownCategory,
@@ -28,9 +28,10 @@ pub use labels::{
 };
 pub use llm::{
     AgentCli, ClaudeCli, ClaudeCliError, CodexCli, CodexError, Llm, LlmError, LlmReply, Question,
+    SESSION_VARIABLES, api_key_is_set,
 };
 pub use qdrant::{
     ConceptHit, ConceptPoint, ConceptStore, ItemFilter, ItemHit, ItemPoint, ItemStore, StoreError,
     concept_input,
 };
-pub use usage::{ModelPrice, ModelUsage, Usage, UsageTally, cost_text, price_of};
+pub use usage::{ModelPrice, ModelUsage, Usage, UsageTally, cost_text, estimated_tokens, price_of};

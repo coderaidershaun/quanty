@@ -24,6 +24,9 @@ pub(super) fn query_text(query: &str) -> String {
 
 #[derive(Serialize)]
 pub(super) struct EmbedBody {
+    /// Only a request inside a batch names its model.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model: Option<String>,
     content: Content,
     output_dimensionality: usize,
 }
@@ -53,6 +56,7 @@ impl EmbedBody {
 
     fn new(parts: Vec<Part>) -> Self {
         Self {
+            model: None,
             content: Content { parts },
             output_dimensionality: EMBEDDING_DIMENSIONS,
         }
@@ -61,30 +65,20 @@ impl EmbedBody {
 
 #[derive(Serialize)]
 pub(super) struct BatchBody {
-    requests: Vec<BatchRequest>,
+    requests: Vec<EmbedBody>,
 }
 
 impl BatchBody {
     pub(super) fn of_texts(texts: Vec<String>) -> Self {
         let requests = texts
             .into_iter()
-            .map(|text| BatchRequest {
-                model: format!("models/{EMBEDDING_MODEL}"),
-                content: Content {
-                    parts: vec![Part::Text { text }],
-                },
-                output_dimensionality: EMBEDDING_DIMENSIONS,
+            .map(|text| EmbedBody {
+                model: Some(format!("models/{EMBEDDING_MODEL}")),
+                ..EmbedBody::text(text)
             })
             .collect();
         Self { requests }
     }
-}
-
-#[derive(Serialize)]
-struct BatchRequest {
-    model: String,
-    content: Content,
-    output_dimensionality: usize,
 }
 
 #[derive(Serialize)]

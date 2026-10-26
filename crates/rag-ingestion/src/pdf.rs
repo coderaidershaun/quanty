@@ -148,8 +148,7 @@ impl fmt::Display for PdfSummary {
         conversion.calls.by_model.clear();
         writeln!(formatter, "{conversion}")?;
         self.ingest.write_counts(formatter)?;
-        let usage = self.usage();
-        write_usage(formatter, &usage, usage.cost_usd())
+        write_usage(formatter, &self.usage())
     }
 }
 
@@ -175,8 +174,7 @@ impl fmt::Display for PdfOutcome {
                 if let Some(insights) = insights {
                     write!(formatter, "\n{}", insights.outcome.line(*doc_id))?;
                 }
-                let usage = self.usage();
-                write_usage(formatter, &usage, usage.cost_usd())
+                write_usage(formatter, &self.usage())
             }
             PdfOutcome::Ingested(summary) => summary.fmt(formatter),
         }
@@ -344,18 +342,11 @@ impl UnnamedPdf<'_> {
             .filter(|title| !title.is_empty());
         let document = match (category, document_title) {
             (Category::Book, Some(part)) => MediaDocument::book_part(self.media_title, part),
-            (Category::Book, None) => {
-                let file_name = self
-                    .pdf
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                MediaDocument {
-                    media_title: self.media_title.to_owned(),
-                    name: parse_chapter_file_name(&file_name)
-                        .map_err(NamePdfError::ChapterFileName)?,
-                }
-            }
+            (Category::Book, None) => MediaDocument {
+                media_title: self.media_title.to_owned(),
+                name: parse_chapter_file_name(&ocr::content::file_name_text(self.pdf))
+                    .map_err(NamePdfError::ChapterFileName)?,
+            },
             (Category::Paper | Category::Other, title) => MediaDocument {
                 media_title: self.media_title.to_owned(),
                 name: DocumentName::Title(title.unwrap_or(self.media_title).trim().to_owned()),

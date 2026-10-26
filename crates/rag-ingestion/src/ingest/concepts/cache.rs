@@ -1,17 +1,36 @@
 //! The folder of kept answers: one plain file for each question that was answered well, so that
 //! the same question is never paid for twice.
 
+use std::error::Error;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use rag_core::Question;
+use rag_core::{Llm, LlmError, Question, UsageTally, error_chain};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 
 use super::ConceptError;
 
 const FILE_EXTENSION: &str = "json";
+/// How many questions the programs ask at one time.
+pub const CALLS_AT_A_TIME: usize = 4;
+/// A question that fails is asked once more before it counts as failed.
+pub const TRIES_FOR_ONE_QUESTION: usize = 2;
+
+pub struct Reading<T> {
+    pub llm_calls: usize,
+    /// What the replies used, counting a reply that was refused, because it was paid for.
+    pub usage: UsageTally,
+    pub outcome: Outcome<T>,
+}
+
+pub enum Outcome<T> {
+    Cached(T),
+    Asked(T),
+    /// Both tries failed, and this is why the last one did.
+    Failed(String),
+    Stopped(LlmError),
+}
 
 /// The folder of kept answers, shared by every program that asks the model the same kind of
 /// question.
@@ -27,7 +46,7 @@ impl Cache {
     /// document. With that in the name, the same item would be asked about again each time the
     /// stores had changed.
     pub fn key_of(prompt_version: &str, model: &str, question: Question<'_>) -> String {
-        let mut hasher = Sha256::new();
+        let mut hashed = Vec::new();
         for part in [
             prompt_version,
             model,
@@ -37,14 +56,10 @@ impl Cache {
         ] {
             // The length goes first, so that the end of one part cannot be taken for the start of
             // the next.
-            hasher.update(part.len().to_le_bytes());
-            hasher.update(part.as_bytes());
+            hashed.extend(part.len().to_le_bytes());
+            hashed.extend(part.as_bytes());
         }
-        hasher
-            .finalize()
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect()
+        ocr::sha256_hex(&hashed)
     }
 
     /// Makes the folder when it is missing.
@@ -96,5 +111,68 @@ impl Cache {
             .and_then(|bytes| fs::write(&temporary, bytes))
             .and_then(|()| fs::rename(&temporary, &path));
         written.map_err(|source| ConceptError::Cache { path, source })
+    }
+
+    /// The answer kept under the key, or else the model's answer to the question, asked up to
+    /// twice. `read` turns a reply into the answer, and a reply it refuses counts as a failed try.
+    /// A good reply is kept, so the question is not asked again.
+    ///
+    /// # Errors
+    /// [`ConceptError::Cache`] when the cache folder cannot be used.
+    pub async fn answer<T, E: Error>(
+        &self,
+        llm: &impl Llm,
+        key: &str,
+        question: Question<'_>,
+        read: impl Fn(&Value) -> Result<T, E>,
+    ) -> Result<Reading<T>, ConceptError> {
+        if let Some(kept) = self.get(key)?
+            && let Ok(answer) = read(&kept)
+        {
+            return Ok(Reading {
+                llm_calls: 0,
+                usage: UsageTally::default(),
+                outcome: Outcome::Cached(answer),
+            });
+        }
+        let mut llm_calls = 0;
+        let mut usage = UsageTally::default();
+        let mut reason = String::new();
+        for _ in 0..TRIES_FOR_ONE_QUESTION {
+            llm_calls += 1;
+            let reply = match llm.ask(question).await {
+                Ok(reply) => reply,
+                Err(error) if error.stops_the_run() => {
+                    let outcome = Outcome::Stopped(error);
+                    return Ok(Reading {
+                        llm_calls,
+                        usage,
+                        outcome,
+                    });
+                }
+                Err(error) => {
+                    reason = error_chain(&error);
+                    continue;
+                }
+            };
+            usage.add_all(&reply.usage);
+            match read(&reply.value) {
+                Ok(answer) => {
+                    self.put(key, &reply.value)?;
+                    let outcome = Outcome::Asked(answer);
+                    return Ok(Reading {
+                        llm_calls,
+                        usage,
+                        outcome,
+                    });
+                }
+                Err(error) => reason = error_chain(&error),
+            }
+        }
+        Ok(Reading {
+            llm_calls,
+            usage,
+            outcome: Outcome::Failed(reason),
+        })
     }
 }

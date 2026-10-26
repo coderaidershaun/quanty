@@ -9,6 +9,7 @@ mod records;
 mod writes;
 
 use std::pin::Pin;
+use std::str::FromStr;
 use std::time::Duration;
 
 use falkordb::{
@@ -158,6 +159,34 @@ fn read_rows<T, C: FromIterator<T>>(
         .map(from_row)
         .collect::<Result<_, _>>()
         .map_err(|found| unreadable_reply(graph, action, expected, found))
+}
+
+/// A row of exactly `N` values.
+fn fixed<const N: usize>(row: Vec<FalkorValue>) -> Result<[FalkorValue; N], String> {
+    <[FalkorValue; N]>::try_from(row).map_err(|row| format!("{row:?}"))
+}
+
+fn parsed<T: FromStr>(text: &str) -> Result<T, String> {
+    text.parse().map_err(|_| format!("{text:?}"))
+}
+
+/// The texts of an array, each one made into a `T`. Null is an empty array.
+fn texts_into<T, C: FromIterator<T>>(
+    value: FalkorValue,
+    make: impl Fn(String) -> Result<T, String>,
+) -> Result<C, String> {
+    let items = match value {
+        FalkorValue::None => Vec::new(),
+        FalkorValue::Array(items) => items,
+        other => return Err(format!("{other:?}")),
+    };
+    items
+        .into_iter()
+        .map(|item| match item {
+            FalkorValue::String(text) => make(text),
+            other => Err(format!("{other:?}")),
+        })
+        .collect()
 }
 
 fn id_list(ids: &[impl ToString + Copy]) -> FalkorValue {

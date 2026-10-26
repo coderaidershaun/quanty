@@ -10,7 +10,7 @@ use ocr::{Catalogue, ContentError, ReadChapterError};
 use rag_core::{ConceptId, Llm, LlmError, UsageTally};
 use rag_ingestion::chapter_items;
 
-use crate::checks::{Checked, Reason, Seen, Verdict, check};
+use crate::checks::{Checked, Reason, Verdict, check};
 use crate::documents::{ExportDocument, SelectionError, Split, exported_documents};
 use crate::generate::asker::{AskError, Asker};
 use crate::generate::{self, GenerateError};
@@ -18,7 +18,7 @@ use crate::layout::{DatasetFolder, WriteError, write_json, write_jsonl};
 use crate::manifest::{Manifest, ManifestDocument, ManifestError};
 use crate::options::BuildOptions;
 use crate::plan::{GenerationPlan, PlanError, plan_for};
-use crate::progress::{Report, SplitCounts, Step, Written};
+use crate::progress::{Report, SplitCounts, Step, Written, tally};
 use crate::sample::{CptSample, Dedup, Quality, RejectedSample};
 use crate::section::{Section, sections_of};
 use crate::sft::{self, SftError};
@@ -173,8 +173,7 @@ pub async fn build(
     let (synthetic, sft, usage) = if options.generation {
         let asker = Asker::new(llm, &options.cache_folder)?;
         let synthetic =
-            generate::write_synthetic(&plan, &kept_sections, &asker, &folder, options, on_step)
-                .await?;
+            generate::write_synthetic(&plan, &kept_sections, &asker, &folder, on_step).await?;
         let sft = sft::write_sft(&plan, &kept_sections, &asker, &folder, options, on_step).await?;
         (synthetic, sft, asker.usage())
     } else {
@@ -290,7 +289,7 @@ fn check_sections(
     sections: Vec<Section>,
     options: &BuildOptions,
 ) -> (Vec<CheckedSection>, Vec<(CheckedSection, Reason)>) {
-    let mut seen = Seen::default();
+    let mut seen = HashMap::new();
     let mut kept = Vec::new();
     let mut rejected = Vec::new();
     for section in sections {
@@ -384,7 +383,7 @@ fn manifest_documents(
 fn reason_counts(rejected: &[(CheckedSection, Reason)]) -> BTreeMap<String, usize> {
     let mut counts = BTreeMap::new();
     for (_, reason) in rejected {
-        *counts.entry(reason.name().to_owned()).or_insert(0) += 1;
+        tally(&mut counts, reason.name(), 1);
     }
     counts
 }

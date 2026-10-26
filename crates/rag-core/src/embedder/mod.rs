@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 pub use gemini::GeminiEmbedder;
 
-use crate::usage::{ModelUsage, Usage, UsageTally};
+use crate::usage::{ModelUsage, Usage, UsageTally, estimated_tokens};
 
 pub const EMBEDDING_MODEL: &str = "gemini-embedding-2";
 pub const EMBEDDING_DIMENSIONS: usize = 768;
@@ -49,18 +49,14 @@ pub trait Embedder {
 pub fn embedding_usage(inputs: &[DocumentInput]) -> UsageTally {
     let tokens = inputs
         .iter()
-        .map(|input| tokens_of(&request::document_text(input)))
+        .map(|input| estimated_tokens(&request::document_text(input)) as u64)
         .sum();
     estimated(tokens)
 }
 
 /// What embedding a question uses, worked out as [`embedding_usage`] works it out.
 pub fn question_usage(question: &str) -> UsageTally {
-    estimated(tokens_of(&request::query_text(question)))
-}
-
-fn tokens_of(text: &str) -> u64 {
-    text.chars().count().div_ceil(4) as u64
+    estimated(estimated_tokens(&request::query_text(question)) as u64)
 }
 
 fn estimated(input_tokens: u64) -> UsageTally {

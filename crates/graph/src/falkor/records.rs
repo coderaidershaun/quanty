@@ -7,7 +7,7 @@ use falkordb::FalkorValue;
 use rag_core::ItemKind;
 
 use super::documents::{DOCUMENT_COLUMNS, count_or_null, document_from_row, text_or_null};
-use super::{FalkorGraph, read_rows};
+use super::{FalkorGraph, fixed, parsed, read_rows};
 use crate::contents::{DocumentRecord, ItemsByKind};
 use crate::error::GraphError;
 
@@ -61,7 +61,7 @@ fn count_of(items: &mut ItemsByKind, kind: ItemKind) -> &mut u64 {
 }
 
 fn record_from_row(row: Vec<FalkorValue>) -> Result<DocumentRecord, String> {
-    let row = <[FalkorValue; 10]>::try_from(row).map_err(|row| format!("{row:?}"))?;
+    let row = fixed::<10>(row)?;
     let [
         id,
         title,
@@ -102,7 +102,7 @@ fn items_of_kind_from_pair(pair: FalkorValue) -> Result<Option<(ItemKind, u64)>,
     match <[FalkorValue; 2]>::try_from(pair).map_err(|pair| format!("{pair:?}"))? {
         [FalkorValue::None, FalkorValue::I64(0)] => Ok(None),
         [FalkorValue::String(kind), FalkorValue::I64(count)] => Ok(Some((
-            kind.parse().map_err(|_| format!("{kind:?}"))?,
+            parsed(&kind)?,
             u64::try_from(count).map_err(|_| count.to_string())?,
         ))),
         pair => Err(format!("{pair:?}")),

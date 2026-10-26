@@ -5,11 +5,13 @@ mod question;
 
 use std::path::Path;
 
-use ocr::content::{ARTIFACTS_VERSION, ArtifactEntry, ChapterArtifacts, ContentError};
+use ocr::content::{
+    ARTIFACTS_VERSION, ArtifactEntry, ArtifactSource, ArtifactTarget, ChapterArtifacts,
+    ContentError,
+};
 use rag_core::{Llm, LlmError, Question, UsageTally};
-use sha2::{Digest, Sha256};
 
-use super::{IngestStep, Meter};
+use super::{IngestStep, Meter, TRIES_FOR_ONE_QUESTION};
 pub use assessment::{ArtifactAssessment, ArtifactState, assess_artifacts};
 use question::{ArtifactRequest, MAX_BYTES, PROMPT, SCHEMA, validate};
 
@@ -88,19 +90,14 @@ impl<L: Llm> ArtifactWriter<L> {
         let chapter = ocr::read_chapter(folder)?;
         let source = chapter.artifact_source();
         let mut saved = checkpoint(folder, &source);
-        let pending: Vec<_> = source
-            .manifest
-            .iter()
-            .filter(|target| saved.text(&target.id).is_none())
-            .cloned()
-            .collect();
+        let pending = pending(&source, &saved);
         let total = source.manifest.len();
         let mut usage = UsageTally::default();
         let mut written = 0;
-        for targets in pending.chunks(20) {
+        for targets in pending.chunks(BATCH_SIZE) {
             let mut feedback = String::new();
             let mut accepted = None;
-            for _ in 0..2 {
+            for _ in 0..TRIES_FOR_ONE_QUESTION {
                 let input = ArtifactRequest {
                     chapter: &chapter,
                     source: &source,
@@ -173,14 +170,24 @@ impl<L: Llm> ArtifactWriter<L> {
     }
 }
 
+/// How many targets one question asks for.
+const BATCH_SIZE: usize = 20;
+
+/// The targets that have no accepted text yet.
+fn pending(source: &ArtifactSource, saved: &ChapterArtifacts) -> Vec<ArtifactTarget> {
+    source
+        .manifest
+        .iter()
+        .filter(|target| saved.text(&target.id).is_none())
+        .cloned()
+        .collect()
+}
+
 // Raise this when chapter rendering or acceptance rules change, so old work is regenerated.
 const GENERATION_POLICY_VERSION: &str = "2";
 
 fn generation_signature() -> String {
-    Sha256::digest(format!("{GENERATION_POLICY_VERSION}:{PROMPT}:{SCHEMA}"))
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    ocr::sha256_hex(format!("{GENERATION_POLICY_VERSION}:{PROMPT}:{SCHEMA}").as_bytes())
 }
 
 fn checkpoint(folder: &Path, source: &ocr::content::ArtifactSource) -> ChapterArtifacts {

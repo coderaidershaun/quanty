@@ -89,7 +89,7 @@ impl ConceptStore {
                 UpsertPointsBuilder::new(self.collection.name.as_str(), vec![point]).wait(true),
             )
             .await
-            .map_err(|source| self.collection.request_error("store the concept", source))?;
+            .map_err(self.collection.request_error("store the concept"))?;
         Ok(())
     }
 
@@ -110,10 +110,10 @@ impl ConceptStore {
                     .wait(true),
             )
             .await
-            .map_err(|source| {
+            .map_err(
                 self.collection
-                    .request_error("set the aliases of the concept", source)
-            })?;
+                    .request_error("set the aliases of the concept"),
+            )?;
         Ok(())
     }
 
@@ -138,7 +138,7 @@ impl ConceptStore {
             .client
             .query(query)
             .await
-            .map_err(|source| self.collection.request_error("search for concepts", source))?;
+            .map_err(self.collection.request_error("search for concepts"))?;
         reply
             .result
             .into_iter()

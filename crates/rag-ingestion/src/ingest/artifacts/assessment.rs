@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use super::{ArtifactRequest, check_budget, checkpoint, generation_signature};
+use super::{ArtifactRequest, BATCH_SIZE, check_budget, checkpoint, generation_signature, pending};
 use ocr::content::ChapterArtifacts;
 
 /// Why metadata needs work, or why it cannot currently be completed.
@@ -55,12 +55,7 @@ pub fn assess_artifacts(folder: &Path) -> ArtifactAssessment {
     let source = chapter.artifact_source();
     let current = matches!(ChapterArtifacts::read(folder), Ok(Some(ref file)) if file.matches_source(&source) && file.generation_signature == generation_signature());
     let saved = checkpoint(folder, &source);
-    let pending: Vec<_> = source
-        .manifest
-        .iter()
-        .filter(|target| saved.text(&target.id).is_none())
-        .cloned()
-        .collect();
+    let pending = pending(&source, &saved);
     let mut result = ArtifactAssessment {
         state: if pending.is_empty() {
             ArtifactState::Ready
@@ -75,7 +70,7 @@ pub fn assess_artifacts(folder: &Path) -> ArtifactAssessment {
         total: source.manifest.len(),
         reason: None,
     };
-    for batch in pending.chunks(20) {
+    for batch in pending.chunks(BATCH_SIZE) {
         if let Err(error) = check_budget(
             &ArtifactRequest {
                 chapter: &chapter,

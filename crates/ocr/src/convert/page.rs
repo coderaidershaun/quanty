@@ -90,7 +90,12 @@ fn math_answer_of(answer: Result<Option<MathPlacement>, ServiceError>) -> MathAn
         Err(error) => {
             return MathAnswer {
                 check: MathCheck::NoAnswer,
-                failure: Some(error_with_causes(&error)),
+                failure: Some(
+                    rag_core::error_chain(&error)
+                        .chars()
+                        .take(MATH_CHECK_FAILURE_MAX_CHARS)
+                        .collect(),
+                ),
             };
         }
     };
@@ -98,17 +103,6 @@ fn math_answer_of(answer: Result<Option<MathPlacement>, ServiceError>) -> MathAn
         check,
         failure: None,
     }
-}
-
-fn error_with_causes(error: &ServiceError) -> String {
-    let mut text = error.to_string();
-    let mut cause = std::error::Error::source(error);
-    while let Some(next) = cause {
-        text.push_str(": ");
-        text.push_str(&next.to_string());
-        cause = next.source();
-    }
-    text.chars().take(MATH_CHECK_FAILURE_MAX_CHARS).collect()
 }
 
 struct Written {

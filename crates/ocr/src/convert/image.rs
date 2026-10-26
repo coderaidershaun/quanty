@@ -191,9 +191,7 @@ fn only_figure(answer: Answer<TranscribedPage>) -> Result<LoneFigure, ReplyFault
 fn read_saved(folder: &Path, source_sha256: &str) -> Result<Option<ConvertedImage>, ConvertError> {
     let index = match ImageIndex::read(folder) {
         Ok(index) => index,
-        Err(ContentError::Read { source, .. }) if source.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(None);
-        }
+        Err(error) if error.is_not_found() => return Ok(None),
         Err(ContentError::Parse { .. }) => return Ok(None),
         Err(error) => return Err(error.into()),
     };

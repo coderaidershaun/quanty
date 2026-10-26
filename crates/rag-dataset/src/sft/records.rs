@@ -1,12 +1,10 @@
 //! The records of the fine-tuning files, made from the questions and what the checks found, and
 //! the count of what was written.
 
-use std::collections::BTreeMap;
-
 use serde::Serialize;
 
 use crate::documents::Split;
-use crate::progress::Written;
+use crate::progress::{Written, tally};
 use crate::sample::{Message, PIPELINE_VERSION, Seed, SftSample, Speaker, sft_id};
 
 use super::questions::{Asked, json_name};
@@ -39,8 +37,8 @@ impl Records {
         let sample = record(asked, verified);
         match failure {
             None => {
-                add_count(&mut self.written.by_kind, &json_name(sample.task), 1);
-                add_count(
+                tally(&mut self.written.by_kind, &json_name(sample.task), 1);
+                tally(
                     &mut self.written.by_reasoning,
                     &json_name(sample.reasoning),
                     1,
@@ -51,7 +49,7 @@ impl Records {
                 }
             }
             Some(failure) => {
-                add_count(&mut self.written.rejected, failure.name(), 1);
+                tally(&mut self.written.rejected, failure.name(), 1);
                 self.rejected.push(RejectedSft {
                     sample,
                     rejected: failure.name().to_owned(),
@@ -64,13 +62,9 @@ impl Records {
     /// record, because there is no question to put in it.
     pub(super) fn add_unanswered(&mut self, count: usize) {
         if count > 0 {
-            add_count(&mut self.written.rejected, Failure::NoAnswer.name(), count);
+            tally(&mut self.written.rejected, Failure::NoAnswer.name(), count);
         }
     }
-}
-
-fn add_count(counts: &mut BTreeMap<String, usize>, name: &str, count: usize) {
-    *counts.entry(name.to_owned()).or_insert(0) += count;
 }
 
 fn record(asked: &Asked<'_>, verified: Verified) -> SftSample {

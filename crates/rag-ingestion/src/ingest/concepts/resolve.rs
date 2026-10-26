@@ -7,8 +7,8 @@ use rag_core::{
     UsageTally, concept_input, embedding_usage,
 };
 
-use super::ask::Outcome;
 use super::cache::Cache;
+use super::cache::Outcome;
 use super::decision_log::{DecisionLog, Naming, Rule};
 use super::question::ExtractedConcept;
 use super::{ConceptError, ConceptExtractor, ConceptSummary};
@@ -33,39 +33,9 @@ pub(super) enum Resolved {
 /// letters or digits turned into one space. A hyphen is a word break, not a letter to delete, so
 /// "Black–Scholes", "black-scholes" and "Black Scholes" are the same name.
 pub(super) fn normalised(name: &str) -> String {
-    let mut normalised = String::new();
-    let mut after_break = false;
-    for character in name.to_lowercase().chars() {
-        if !character.is_alphanumeric() {
-            after_break = true;
-            continue;
-        }
-        if after_break && !normalised.is_empty() {
-            normalised.push(' ');
-        }
-        after_break = false;
-        normalised.push(character);
-    }
-    normalised
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Band {
-    High,
-    Middle,
-    Low,
-}
-
-impl Band {
-    fn of(score: f32) -> Band {
-        if score >= LINK_SCORE {
-            Band::High
-        } else if score >= ASK_SCORE {
-            Band::Middle
-        } else {
-            Band::Low
-        }
-    }
+    ocr::content::slug(name)
+        .unwrap_or_default()
+        .replace('-', " ")
 }
 
 enum Judgement {
@@ -189,8 +159,7 @@ impl<L: Llm, E: Embedder> Resolver<'_, L, E> {
         summary: &mut ConceptSummary,
         spent: &mut UsageTally,
     ) -> Result<Judgement, ConceptError> {
-        let band = Band::of(hit.score);
-        if band == Band::Low {
+        if hit.score < ASK_SCORE {
             return Ok(Judgement::Different(Rule::LowScore));
         }
         // The definition is in the graph only, and the node also shows that the collection and
@@ -202,7 +171,7 @@ impl<L: Llm, E: Embedder> Resolver<'_, L, E> {
                 id: hit.id,
             });
         };
-        if band == Band::High {
+        if hit.score >= LINK_SCORE {
             return Ok(Judgement::Same(Rule::HighScore, stored));
         }
 

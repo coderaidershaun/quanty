@@ -269,9 +269,7 @@ fn prepare(job: &ChapterJob) -> Result<Prepared, ConvertError> {
     let source_sha256 = job.source_sha256()?;
     let saved = match ChapterIndex::read(&job.chapter_folder) {
         Ok(saved) => saved,
-        Err(ContentError::Read { source, .. }) if source.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(Prepared::ToDo { source_sha256 });
-        }
+        Err(error) if error.is_not_found() => return Ok(Prepared::ToDo { source_sha256 }),
         Err(error) => return Err(error.into()),
     };
     if saved.source_sha256 != source_sha256 {
@@ -299,9 +297,7 @@ fn prepare(job: &ChapterJob) -> Result<Prepared, ConvertError> {
 fn is_saved(chapter_folder: &Path, position: u32) -> Result<bool, ContentError> {
     match PageIndex::read(&chapter_folder.join(page_folder_name(position))) {
         Ok(page) => Ok(page.format_version == FORMAT_VERSION),
-        Err(ContentError::Read { source, .. }) if source.kind() == std::io::ErrorKind::NotFound => {
-            Ok(false)
-        }
+        Err(error) if error.is_not_found() => Ok(false),
         Err(ContentError::Parse { .. }) => Ok(false),
         Err(error) => Err(error),
     }

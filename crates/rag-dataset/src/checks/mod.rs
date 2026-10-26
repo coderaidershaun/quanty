@@ -2,17 +2,15 @@
 //! the ones that stay.
 
 mod code;
-mod dedup;
 mod latex;
 mod page_gate;
 
+use std::collections::HashMap;
 use std::fmt;
 
 use crate::options::BuildOptions;
 use crate::sample::{Dedup, Quality};
 use crate::section::Section;
-
-pub use dedup::Seen;
 
 /// What the checks made of one section.
 #[derive(Debug, Clone)]
@@ -64,7 +62,11 @@ impl fmt::Display for Reason {
 /// a page that matches too little of its text layer, a formula that does not render, or the same
 /// text after the heading line as a section that was kept. Only a kept section is remembered, so a
 /// copy of a rejected section is judged on its own pages.
-pub fn check(section: &Section, seen: &mut Seen, options: &BuildOptions) -> Checked {
+pub fn check(
+    section: &Section,
+    first_id_by_sha256: &mut HashMap<String, String>,
+    options: &BuildOptions,
+) -> Checked {
     let (prose, listings) = code::split_listings(&section.markdown);
     let quality = Quality {
         page_score: page_gate::page_score(section),
@@ -81,13 +83,16 @@ pub fn check(section: &Section, seen: &mut Seen, options: &BuildOptions) -> Chec
     } else if quality.latex_renders == Some(false) && !options.keep_unrendered {
         Some(Reason::Latex)
     } else {
-        seen.first_with(&sha256)
-            .map(|first| Reason::DuplicateOf(first.to_owned()))
+        first_id_by_sha256
+            .get(&sha256)
+            .map(|first| Reason::DuplicateOf(first.clone()))
     };
     let verdict = match reason {
         Some(reason) => Verdict::Reject(reason),
         None => {
-            seen.remember(sha256.clone(), &section.id);
+            first_id_by_sha256
+                .entry(sha256.clone())
+                .or_insert_with(|| section.id.clone());
             Verdict::Keep
         }
     };

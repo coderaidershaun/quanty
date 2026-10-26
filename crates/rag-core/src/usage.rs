@@ -44,6 +44,14 @@ impl Usage {
     pub fn total(&self) -> u64 {
         self.input_tokens + self.output_tokens + self.cache_read_tokens + self.cache_write_tokens
     }
+
+    /// The line that names what the model used, with no line break.
+    pub fn line_for(&self, model: &str) -> String {
+        format!(
+            "tokens of {model}: {} in, {} out, {} cache read, {} cache write",
+            self.input_tokens, self.output_tokens, self.cache_read_tokens, self.cache_write_tokens
+        )
+    }
 }
 
 impl AddAssign for Usage {
@@ -53,6 +61,13 @@ impl AddAssign for Usage {
         self.cache_read_tokens += other.cache_read_tokens;
         self.cache_write_tokens += other.cache_write_tokens;
     }
+}
+
+/// A rough count, four characters to a token. It only shapes chunks and bounds the size of a
+/// question, so a better count is not worth a tokenizer. Every record that carries a count also
+/// says that it is estimated.
+pub fn estimated_tokens(text: &str) -> usize {
+    text.chars().count().div_ceil(4)
 }
 
 /// US dollars for one million tokens.
@@ -207,15 +222,7 @@ impl fmt::Display for UsageTally {
             if index > 0 {
                 writeln!(formatter)?;
             }
-            let tokens = &usage.tokens;
-            write!(
-                formatter,
-                "tokens of {model}: {} in, {} out, {} cache read, {} cache write",
-                tokens.input_tokens,
-                tokens.output_tokens,
-                tokens.cache_read_tokens,
-                tokens.cache_write_tokens
-            )?;
+            write!(formatter, "{}", usage.tokens.line_for(model))?;
             if usage.estimated {
                 write!(formatter, " (estimated)")?;
             }

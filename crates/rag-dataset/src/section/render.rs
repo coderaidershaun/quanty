@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use ocr::{Chapter, ChapterPiece, ImageShows, PieceDetail, PieceId, RelationshipKind};
+use rag_core::estimated_tokens;
 use unicode_normalization::UnicodeNormalization;
 
 use super::Provenance;
@@ -12,7 +13,6 @@ use super::markdown::{
     FIGURE_NOTE_MARK, explanation_of, fenced, figure_name, formula_note, formula_text,
     heading_text, inline_math, non_blank, with_label_line,
 };
-use super::tokens::estimated_tokens;
 
 /// One unit of rendered text, with the pieces it holds.
 pub(super) struct Block {

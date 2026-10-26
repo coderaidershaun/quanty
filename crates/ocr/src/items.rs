@@ -2,6 +2,7 @@
 //! parts of a listing that page breaks cut joined again.
 
 use crate::content::PieceDetail;
+use crate::convert::sha256_hex;
 use crate::reader::{Chapter, ChapterPiece};
 
 /// A formula, a figure, a table or a code listing, each one item on its own. Text, headings and
@@ -66,7 +67,6 @@ impl Chapter {
     /// Fingerprints source content and inventory without paths or generated sidecars.
     pub fn artifact_source(&self) -> crate::content::ArtifactSource {
         use crate::content::{ArtifactPiece, ArtifactSource, ArtifactTarget};
-        use sha2::{Digest, Sha256};
         let manifest: Vec<_> = self
             .items()
             .iter()
@@ -93,7 +93,6 @@ impl Chapter {
                 }
             })
             .collect();
-        let mut hash = Sha256::new();
         let pieces: Vec<_> = self.pieces.iter().map(|piece| {
             let mut detail = serde_json::to_value(&piece.detail).expect("piece details always serialize");
             normalize_detail(&mut detail);
@@ -101,14 +100,10 @@ impl Chapter {
         }).collect();
         let mut content = serde_json::json!({"media":self.index.media_title,"name":self.index.name,"pieces":pieces});
         content.sort_all_objects();
-        hash.update(content.to_string().as_bytes());
-        hash.update(serde_json::to_vec(&manifest).expect("source inventory always serializes"));
+        let mut hashed = content.to_string().into_bytes();
+        hashed.extend(serde_json::to_vec(&manifest).expect("source inventory always serializes"));
         ArtifactSource {
-            signature: hash
-                .finalize()
-                .iter()
-                .map(|byte| format!("{byte:02x}"))
-                .collect(),
+            signature: sha256_hex(&hashed),
             manifest,
         }
     }

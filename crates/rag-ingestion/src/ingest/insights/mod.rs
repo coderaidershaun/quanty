@@ -18,15 +18,13 @@ pub use stored::{
     ChapterChoice, InsightsNeed, StoredChapter, StoredChaptersError, stored_chapters,
 };
 
+use super::TRIES_FOR_ONE_QUESTION;
 use super::items::{Item, chapter_items};
 use super::summary::{IngestStep, Meter};
 
 /// The stand-in model finds the question about a whole document by this prompt.
 #[cfg(feature = "testing")]
 pub(crate) use question::SYSTEM_PROMPT as INSIGHTS_PROMPT;
-
-/// A question that fails is asked once more before it counts as failed.
-const TRIES_FOR_ONE_QUESTION: usize = 2;
 
 /// Writes the notes on a whole document with the language model it is given, the agent of the
 /// Ingest choice in the programs.
@@ -97,15 +95,16 @@ impl InsightsOutcome {
 impl InsightsSummary {
     /// For a part of a book that is not a chapter: nothing was asked and nothing was used.
     pub(crate) fn none_for_book_part() -> InsightsSummary {
-        InsightsSummary {
-            outcome: InsightsOutcome::NoneForBookPart,
-            usage: UsageTally::default(),
-        }
+        InsightsSummary::without_usage(InsightsOutcome::NoneForBookPart)
     }
 
     fn not_written(reason: String) -> InsightsSummary {
+        InsightsSummary::without_usage(InsightsOutcome::NotWritten { reason })
+    }
+
+    fn without_usage(outcome: InsightsOutcome) -> InsightsSummary {
         InsightsSummary {
-            outcome: InsightsOutcome::NotWritten { reason },
+            outcome,
             usage: UsageTally::default(),
         }
     }
@@ -239,10 +238,9 @@ impl<L: Llm> InsightsWriter<L> {
 /// A file that cannot be read counts as none, so it is asked for again and written over.
 fn saved_in(chapter_folder: &Path) -> Option<InsightsSummary> {
     let saved = matches!(ChapterInsights::read(chapter_folder), Ok(Some(_)));
-    saved.then(|| InsightsSummary {
-        outcome: InsightsOutcome::AlreadySaved {
+    saved.then(|| {
+        InsightsSummary::without_usage(InsightsOutcome::AlreadySaved {
             file: chapter_folder.join(INSIGHTS_FILE),
-        },
-        usage: UsageTally::default(),
+        })
     })
 }

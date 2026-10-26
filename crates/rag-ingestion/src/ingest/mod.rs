@@ -22,8 +22,10 @@ pub use artifacts::{
     ArtifactAssessment, ArtifactError, ArtifactState, ArtifactSummary, ArtifactWriter,
     assess_artifacts,
 };
+pub(crate) use concepts::TRIES_FOR_ONE_QUESTION;
 pub use concepts::{
-    ASK_SCORE, Cache, ConceptError, ConceptExtractor, ConceptSummary, LINK_SCORE, SkippedItem,
+    ASK_SCORE, CALLS_AT_A_TIME, Cache, ConceptError, ConceptExtractor, ConceptSummary, LINK_SCORE,
+    Outcome, Reading, SkippedItem,
 };
 #[cfg(feature = "testing")]
 pub(crate) use insights::INSIGHTS_PROMPT;

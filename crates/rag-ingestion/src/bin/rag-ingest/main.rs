@@ -29,7 +29,7 @@ use tracing_subscriber::filter::Targets;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-use crate::cli::{Cli, Command, GivenPath, GivenPdf};
+use crate::cli::{Cli, Command, DocumentTags, GivenPath, GivenPdf};
 use crate::progress::print_step;
 
 #[tokio::main]
@@ -64,9 +64,7 @@ async fn run(cli: Cli) -> Result<ExitCode> {
                 ExitCode::FAILURE
             })
         }
-        (Some(Command::Pdf(given)), _) => {
-            convert_and_ingest(&given).await.map(|()| ExitCode::SUCCESS)
-        }
+        (Some(Command::Pdf(given)), _) => convert_and_ingest(&given).await.map(succeeded),
         (Some(Command::Artifacts(given)), _) => {
             stored_artifacts::run(given.choice(), given.dry_run).await
         }
@@ -83,19 +81,19 @@ async fn run(cli: Cli) -> Result<ExitCode> {
             _,
         ) => tag(document_id, &TagChange { add, remove })
             .await
-            .map(|()| ExitCode::SUCCESS),
+            .map(succeeded),
         (Some(Command::Media { title, labels }), _) => {
             relabel_stored_media(&title, &labels.change())
                 .await
-                .map(|()| ExitCode::SUCCESS)
+                .map(succeeded)
         }
-        (Some(Command::DeleteDocument { document_id }), _) => delete_stored_document(document_id)
-            .await
-            .map(|()| ExitCode::SUCCESS),
-        (Some(Command::DeleteMedia { title }), _) => delete_stored_media(&title)
-            .await
-            .map(|()| ExitCode::SUCCESS),
-        (None, Some(path)) => ingest(path, &cli.given).await.map(|()| ExitCode::SUCCESS),
+        (Some(Command::DeleteDocument { document_id }), _) => {
+            delete_stored_document(document_id).await.map(succeeded)
+        }
+        (Some(Command::DeleteMedia { title }), _) => {
+            delete_stored_media(&title).await.map(succeeded)
+        }
+        (None, Some(path)) => ingest(path, &cli.given).await.map(succeeded),
         (None, None) => {
             Cli::command()
                 .print_help()
@@ -103,6 +101,17 @@ async fn run(cli: Cli) -> Result<ExitCode> {
             Ok(ExitCode::from(2))
         }
     }
+}
+
+fn succeeded((): ()) -> ExitCode {
+    ExitCode::SUCCESS
+}
+
+/// The settings and the stores they name.
+async fn open() -> Result<(Config, Stores)> {
+    let config = Config::load().context("could not read the settings")?;
+    let stores = connect_stores(&config).await?;
+    Ok((config, stores))
 }
 
 async fn connect_stores(config: &Config) -> Result<Stores> {
@@ -194,11 +203,7 @@ async fn ingest(path: &Path, given: &GivenPath) -> Result<()> {
         }
     };
     println!("{summary}");
-    let change = given.document.change();
-    if !change.is_empty() {
-        write_tags(summary.doc_id, &change, &stores).await?;
-    }
-    Ok(())
+    write_given_tags(&given.document, summary.doc_id, &stores).await
 }
 
 async fn convert_and_ingest(given: &GivenPdf) -> Result<()> {
@@ -252,11 +257,7 @@ async fn convert_and_ingest(given: &GivenPdf) -> Result<()> {
     .await
     .with_context(|| format!("could not ingest {}", pdf.display()))?;
     println!("{outcome}");
-    let change = given.document.change();
-    if !change.is_empty() {
-        write_tags(outcome.doc_id(), &change, &stores).await?;
-    }
-    Ok(())
+    write_given_tags(&given.document, outcome.doc_id(), &stores).await
 }
 
 /// Only a book refuses a name, so a refusal says "the library has" when the flag was not
@@ -290,9 +291,16 @@ fn naming_failure(error: NamePdfError, unnamed: &UnnamedPdf) -> anyhow::Error {
 }
 
 async fn tag(document: DocId, change: &TagChange) -> Result<()> {
-    let config = Config::load().context("could not read the settings")?;
-    let stores = connect_stores(&config).await?;
+    let (_, stores) = open().await?;
     write_tags(document, change, &stores).await
+}
+
+async fn write_given_tags(given: &DocumentTags, document: DocId, stores: &Stores) -> Result<()> {
+    let change = given.change();
+    if change.is_empty() {
+        return Ok(());
+    }
+    write_tags(document, &change, stores).await
 }
 
 async fn write_tags(document: DocId, change: &TagChange, stores: &Stores) -> Result<()> {
@@ -309,8 +317,7 @@ async fn relabel_stored_media(title: &str, change: &MediaChange) -> Result<()> {
             "give at least one of --category, --author, --no-authors, --tag and --no-tags to change the media {title:?}"
         );
     }
-    let config = Config::load().context("could not read the settings")?;
-    let stores = connect_stores(&config).await?;
+    let (_, stores) = open().await?;
     let relabelled = relabel_media(title, change, &stores)
         .await
         .with_context(|| format!("could not label the media {title:?}"))?;
@@ -319,8 +326,7 @@ async fn relabel_stored_media(title: &str, change: &MediaChange) -> Result<()> {
 }
 
 async fn delete_stored_document(document_id: DocId) -> Result<()> {
-    let config = Config::load().context("could not read the settings")?;
-    let stores = connect_stores(&config).await?;
+    let (config, stores) = open().await?;
     let summary = delete_document(document_id, &config.content_folder, &stores)
         .await
         .with_context(|| format!("could not delete the document {document_id}"))?;
@@ -329,8 +335,7 @@ async fn delete_stored_document(document_id: DocId) -> Result<()> {
 }
 
 async fn delete_stored_media(title: &str) -> Result<()> {
-    let config = Config::load().context("could not read the settings")?;
-    let stores = connect_stores(&config).await?;
+    let (config, stores) = open().await?;
     let summary = delete_media(title, &config.content_folder, &stores)
         .await
         .with_context(|| format!("could not delete the media {title:?}"))?;

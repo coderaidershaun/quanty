@@ -5,9 +5,11 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 
 use falkordb::FalkorValue;
-use rag_core::{Category, DocId, DocumentLabels, MediaLabels, Tag};
+use rag_core::{DocId, DocumentLabels, MediaLabels, Tag};
 
-use super::{FalkorGraph, id_list, id_value, read_rows, unreadable_reply};
+use super::{
+    FalkorGraph, fixed, id_list, id_value, parsed, read_rows, texts_into, unreadable_reply,
+};
 use crate::contents::{DocumentNode, MediaNode};
 use crate::error::GraphError;
 
@@ -143,7 +145,7 @@ impl FalkorGraph {
 }
 
 pub(super) fn document_from_row(row: Vec<FalkorValue>) -> Result<DocumentNode, String> {
-    let row = <[FalkorValue; 7]>::try_from(row).map_err(|row| format!("{row:?}"))?;
+    let row = fixed::<7>(row)?;
     let [
         FalkorValue::String(id),
         FalkorValue::String(title),
@@ -157,15 +159,15 @@ pub(super) fn document_from_row(row: Vec<FalkorValue>) -> Result<DocumentNode, S
         return Err(format!("{row:?}"));
     };
     let category = text_or_null(category)?
-        .map(|text| category_from(&text))
+        .map(|text| parsed(&text))
         .transpose()?;
     Ok(DocumentNode {
-        id: id.parse().map_err(|_| format!("{id:?}"))?,
+        id: parsed(&id)?,
         title,
         labels: DocumentLabels {
             media: text_or_null(media)?,
             category,
-            authors: text_list(authors)?,
+            authors: texts_into(authors, Ok)?,
             media_tags: tag_set(media_tags)?,
             tags: tag_set(tags)?,
         },
@@ -173,7 +175,7 @@ pub(super) fn document_from_row(row: Vec<FalkorValue>) -> Result<DocumentNode, S
 }
 
 fn media_from_row(row: Vec<FalkorValue>) -> Result<MediaNode, String> {
-    let row = <[FalkorValue; 4]>::try_from(row).map_err(|row| format!("{row:?}"))?;
+    let row = fixed::<4>(row)?;
     let [
         FalkorValue::String(title),
         FalkorValue::String(category),
@@ -186,15 +188,11 @@ fn media_from_row(row: Vec<FalkorValue>) -> Result<MediaNode, String> {
     Ok(MediaNode {
         title,
         labels: MediaLabels {
-            category: category_from(&category)?,
-            authors: text_list(authors)?,
+            category: parsed(&category)?,
+            authors: texts_into(authors, Ok)?,
             tags: tag_set(tags)?,
         },
     })
-}
-
-fn category_from(text: &str) -> Result<Category, String> {
-    text.parse().map_err(|_| format!("{text:?}"))
 }
 
 pub(super) fn text_or_null(value: FalkorValue) -> Result<Option<String>, String> {
@@ -216,37 +214,12 @@ pub(super) fn count_or_null(value: FalkorValue) -> Result<Option<u64>, String> {
     }
 }
 
-fn text_list(value: FalkorValue) -> Result<Vec<String>, String> {
-    let texts = match value {
-        FalkorValue::None => return Ok(Vec::new()),
-        FalkorValue::Array(texts) => texts,
-        other => return Err(format!("{other:?}")),
-    };
-    texts
-        .into_iter()
-        .map(|text| match text {
-            FalkorValue::String(text) => Ok(text),
-            other => Err(format!("{other:?}")),
-        })
-        .collect()
-}
-
 fn tag_set(value: FalkorValue) -> Result<BTreeSet<Tag>, String> {
-    let tags = match value {
-        FalkorValue::None => return Ok(BTreeSet::new()),
-        FalkorValue::Array(tags) => tags,
-        other => return Err(format!("{other:?}")),
-    };
-    tags.into_iter()
-        .map(|tag| match tag {
-            FalkorValue::String(text) => text.parse::<Tag>().map_err(|_| format!("{text:?}")),
-            other => Err(format!("{other:?}")),
-        })
-        .collect()
+    texts_into(value, |text| parsed(&text))
 }
 
 fn ingested_items_from_row(row: Vec<FalkorValue>) -> Result<Option<u64>, String> {
-    let row = <[FalkorValue; 1]>::try_from(row).map_err(|row| format!("{row:?}"))?;
+    let row = fixed::<1>(row)?;
     match row {
         [value @ (FalkorValue::None | FalkorValue::I64(_))] => count_or_null(value),
         other => Err(format!("{other:?}")),
@@ -254,10 +227,10 @@ fn ingested_items_from_row(row: Vec<FalkorValue>) -> Result<Option<u64>, String>
 }
 
 fn folder_from_row(row: Vec<FalkorValue>) -> Result<(DocId, PathBuf), String> {
-    let row = <[FalkorValue; 2]>::try_from(row).map_err(|row| format!("{row:?}"))?;
+    let row = fixed::<2>(row)?;
     let [FalkorValue::String(id), FalkorValue::String(folder)] = row else {
         return Err(format!("{row:?}"));
     };
-    let id = id.parse().map_err(|_| format!("{id:?}"))?;
+    let id = parsed(&id)?;
     Ok((id, PathBuf::from(folder)))
 }

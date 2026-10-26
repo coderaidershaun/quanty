@@ -4,7 +4,7 @@ use std::fmt;
 
 use ocr::PageProgress;
 use ocr::convert::CallTally;
-use rag_core::{DocId, ItemKind, ModelUsage, Usage, UsageTally, cost_text};
+use rag_core::{DocId, ItemKind, ModelUsage, UsageTally, cost_text};
 
 use super::concepts::ConceptSummary;
 use super::insights::InsightsSummary;
@@ -70,14 +70,8 @@ impl<'a> Meter<'a> {
 pub fn usage_of(calls: &CallTally) -> UsageTally {
     let mut usage = UsageTally::default();
     for (model, used) in &calls.by_model {
-        let tokens = Usage {
-            input_tokens: used.input_tokens,
-            output_tokens: used.output_tokens,
-            cache_read_tokens: used.cache_read_tokens,
-            cache_write_tokens: used.cache_write_tokens,
-        };
         let model_usage = ModelUsage {
-            tokens,
+            tokens: used.tokens(),
             reported_usd: used.cost_usd,
             estimated: false,
         };
@@ -137,21 +131,21 @@ pub struct IngestSummary {
 impl fmt::Display for IngestSummary {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.write_counts(formatter)?;
-        write_usage(formatter, &self.usage, self.usage.cost_usd())
+        write_usage(formatter, &self.usage)
     }
 }
 
 /// The lines of each model that `listed` holds, then the cost of the whole run, each on a line of
 /// its own after what was written before.
-pub(crate) fn write_usage(
-    formatter: &mut fmt::Formatter<'_>,
-    listed: &UsageTally,
-    run_cost_usd: Option<f64>,
-) -> fmt::Result {
+pub(crate) fn write_usage(formatter: &mut fmt::Formatter<'_>, listed: &UsageTally) -> fmt::Result {
     if !listed.is_empty() {
         write!(formatter, "\n{listed}")?;
     }
-    write!(formatter, "\ncost of this run: {}", cost_text(run_cost_usd))
+    write!(
+        formatter,
+        "\ncost of this run: {}",
+        cost_text(listed.cost_usd())
+    )
 }
 
 impl IngestSummary {

@@ -50,6 +50,16 @@ impl Written {
     pub fn total(&self) -> usize {
         self.by_kind.values().sum()
     }
+
+    /// How many examples were written with this reasoning, or none.
+    pub fn reasoning(&self, name: &str) -> usize {
+        self.by_reasoning.get(name).copied().unwrap_or(0)
+    }
+}
+
+/// Counts `count` more under `name`.
+pub(crate) fn tally(counts: &mut BTreeMap<String, usize>, name: &str, count: usize) {
+    *counts.entry(name.to_owned()).or_insert(0) += count;
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -133,13 +143,12 @@ impl Report {
         if self.sft.by_kind.is_empty() {
             return writeln!(formatter, "SFT examples: none");
         }
-        let reasoning = |name: &str| self.sft.by_reasoning.get(name).copied().unwrap_or(0);
         writeln!(
             formatter,
             "SFT examples: {} (think {}, direct {})",
             counts_text(&self.sft.by_kind),
-            reasoning("think"),
-            reasoning("direct")
+            self.sft.reasoning("think"),
+            self.sft.reasoning("direct")
         )
     }
 }

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use falkordb::FalkorValue;
 use rag_core::{ConceptId, DocId, ItemId};
 
-use super::{FalkorGraph, id_list, id_value, read_rows};
+use super::{FalkorGraph, fixed, id_list, id_value, parsed, read_rows, texts_into};
 use crate::contents::{ConceptNode, ItemMentions};
 use crate::error::GraphError;
 
@@ -278,7 +278,7 @@ async fn read_concepts(
 }
 
 fn concept_from_row(row: Vec<FalkorValue>) -> Result<ConceptNode, String> {
-    let row = <[FalkorValue; 4]>::try_from(row).map_err(|row| format!("{row:?}"))?;
+    let row = fixed::<4>(row)?;
     let [
         FalkorValue::String(id),
         FalkorValue::String(name),
@@ -288,7 +288,7 @@ fn concept_from_row(row: Vec<FalkorValue>) -> Result<ConceptNode, String> {
     else {
         return Err(format!("{row:?}"));
     };
-    let id = id.parse().map_err(|_| format!("{id:?}"))?;
+    let id = parsed(&id)?;
     Ok(ConceptNode {
         id,
         name,
@@ -298,27 +298,21 @@ fn concept_from_row(row: Vec<FalkorValue>) -> Result<ConceptNode, String> {
 }
 
 fn item_mentions_from_row(row: Vec<FalkorValue>) -> Result<ItemMentions, String> {
-    let row = <[FalkorValue; 2]>::try_from(row).map_err(|row| format!("{row:?}"))?;
+    let row = fixed::<2>(row)?;
     let [FalkorValue::String(item), FalkorValue::Array(concepts)] = row else {
         return Err(format!("{row:?}"));
     };
-    let item = item.parse().map_err(|_| format!("{item:?}"))?;
-    let concepts = concepts
-        .into_iter()
-        .map(|concept| match concept {
-            FalkorValue::String(id) => id.parse().map_err(|_| format!("{id:?}")),
-            other => Err(format!("{other:?}")),
-        })
-        .collect::<Result<_, _>>()?;
+    let item = parsed(&item)?;
+    let concepts = texts_into(FalkorValue::Array(concepts), |id| parsed(&id))?;
     Ok(ItemMentions { item, concepts })
 }
 
 fn mention_count_from_row(row: Vec<FalkorValue>) -> Result<(ConceptId, u64), String> {
-    let row = <[FalkorValue; 2]>::try_from(row).map_err(|row| format!("{row:?}"))?;
+    let row = fixed::<2>(row)?;
     let [FalkorValue::String(concept), FalkorValue::I64(count)] = row else {
         return Err(format!("{row:?}"));
     };
-    let concept = concept.parse().map_err(|_| format!("{concept:?}"))?;
+    let concept = parsed(&concept)?;
     let count = u64::try_from(count).map_err(|_| count.to_string())?;
     Ok((concept, count))
 }

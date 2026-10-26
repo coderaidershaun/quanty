@@ -17,9 +17,8 @@ use futures_util::StreamExt;
 use rag_core::{Llm, UsageTally};
 
 use crate::layout::{DatasetFolder, WriteError, write_jsonl};
-use crate::options::BuildOptions;
 use crate::plan::GenerationPlan;
-use crate::progress::{GenerationKind, Step, Written};
+use crate::progress::{GenerationKind, Step, Written, tally};
 use crate::section::Section;
 
 use asker::{AskError, Asker, few_at_a_time};
@@ -62,7 +61,6 @@ pub async fn write_synthetic<L: Llm>(
     sections: &[Section],
     asker: &Asker<'_, L>,
     folder: &DatasetFolder,
-    _options: &BuildOptions,
     on_step: &mut (dyn FnMut(Step, &UsageTally) + Send),
 ) -> Result<Written, GenerateError> {
     let drafts = draft::planned(plan, sections);
@@ -85,14 +83,11 @@ pub async fn write_synthetic<L: Llm>(
     while let Some(outcome) = outcomes.next().await {
         match outcome? {
             Outcome::Kept(record) => {
-                *written
-                    .by_kind
-                    .entry(record.kind.as_str().to_owned())
-                    .or_insert(0) += 1;
+                tally(&mut written.by_kind, record.kind.as_str(), 1);
                 records.push(*record);
             }
             Outcome::Rejected { role } => {
-                *written.rejected.entry(role.id.to_owned()).or_insert(0) += 1;
+                tally(&mut written.rejected, role.id, 1);
             }
         }
         done += 1;

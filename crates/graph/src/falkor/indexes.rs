@@ -3,7 +3,7 @@
 
 use falkordb::FalkorValue;
 
-use super::{FalkorGraph, unreadable_reply};
+use super::{FalkorGraph, fixed, texts_into, unreadable_reply};
 use crate::error::GraphError;
 
 /// Each pair is a label and the property that statements find its nodes by. Media are few, so
@@ -60,15 +60,11 @@ async fn indexed(graph: &FalkorGraph) -> Result<Vec<(String, String)>, GraphErro
 }
 
 fn index_from_row(row: Vec<FalkorValue>) -> Result<Vec<(String, String)>, String> {
-    let row = <[FalkorValue; 2]>::try_from(row).map_err(|row| format!("{row:?}"))?;
+    let row = fixed::<2>(row)?;
     let [FalkorValue::String(label), FalkorValue::Array(properties)] = row else {
         return Err(format!("{row:?}"));
     };
-    properties
-        .into_iter()
-        .map(|property| match property {
-            FalkorValue::String(property) => Ok((label.clone(), property)),
-            other => Err(format!("{other:?}")),
-        })
-        .collect()
+    texts_into(FalkorValue::Array(properties), |property| {
+        Ok((label.clone(), property))
+    })
 }

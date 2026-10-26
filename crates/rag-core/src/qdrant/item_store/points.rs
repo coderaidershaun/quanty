@@ -1,28 +1,22 @@
 //! Writes the points of the items: stores them, counts them, deletes the points of a document and
 //! writes the labels of a document onto every point of it.
 
-use std::collections::BTreeSet;
-
 use qdrant_client::Payload;
 use qdrant_client::qdrant::{
     Condition, CountPointsBuilder, DeletePayloadPointsBuilder, DeletePointsBuilder, Filter,
     PointStruct, SetPayloadPointsBuilder, UpsertPointsBuilder,
 };
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 use super::{DOC_ID_FIELD, ItemPoint, ItemStore};
-use crate::{DocId, DocumentLabels, StoreError, Tag};
+use crate::{DocId, DocumentLabels, StoreError};
 
 /// A group of this many points with their vectors is about a megabyte, well inside a request.
 const UPSERT_GROUP_SIZE: usize = 256;
 
 /// The names of the payload fields that hold the labels of a document. They must match the field
 /// names of `DocumentLabels`.
-const MEDIA_FIELD: &str = "media";
-const CATEGORY_FIELD: &str = "category";
-const AUTHORS_FIELD: &str = "authors";
-const MEDIA_TAGS_FIELD: &str = "media_tags";
-const TAGS_FIELD: &str = "tags";
+const LABEL_FIELDS: [&str; 5] = ["media", "category", "authors", "media_tags", "tags"];
 
 impl ItemStore {
     /// Stores the points, replacing any point that has the same identifier, and returns once
@@ -43,7 +37,7 @@ impl ItemStore {
                     UpsertPointsBuilder::new(self.collection.name.as_str(), structs).wait(true),
                 )
                 .await
-                .map_err(|source| self.collection.request_error("store points", source))?;
+                .map_err(self.collection.request_error("store points"))?;
         }
         Ok(())
     }
@@ -58,7 +52,7 @@ impl ItemStore {
             .client
             .count(CountPointsBuilder::new(self.collection.name.as_str()).exact(true))
             .await
-            .map_err(|source| self.collection.request_error("count points", source))?;
+            .map_err(self.collection.request_error("count points"))?;
         Ok(reply.result.map_or(0, |result| result.count))
     }
 
@@ -76,10 +70,10 @@ impl ItemStore {
                     .exact(true),
             )
             .await
-            .map_err(|source| {
+            .map_err(
                 self.collection
-                    .request_error("count the points of the document", source)
-            })?;
+                    .request_error("count the points of the document"),
+            )?;
         Ok(reply.result.map_or(0, |result| result.count))
     }
 
@@ -102,10 +96,10 @@ impl ItemStore {
                     .wait(true),
             )
             .await
-            .map_err(|source| {
+            .map_err(
                 self.collection
-                    .request_error("delete the points of the document", source)
-            })?;
+                    .request_error("delete the points of the document"),
+            )?;
         Ok(count)
     }
 
@@ -120,31 +114,14 @@ impl ItemStore {
         document: DocId,
         labels: &DocumentLabels,
     ) -> Result<(), StoreError> {
-        let fields = [
-            (MEDIA_FIELD, labels.media.as_deref().map(Value::from)),
-            (
-                CATEGORY_FIELD,
-                labels
-                    .category
-                    .map(|category| Value::from(category.as_str())),
-            ),
-            (
-                AUTHORS_FIELD,
-                (!labels.authors.is_empty()).then(|| Value::from(labels.authors.clone())),
-            ),
-            (MEDIA_TAGS_FIELD, tag_list(&labels.media_tags)),
-            (TAGS_FIELD, tag_list(&labels.tags)),
-        ];
-        let mut given = Map::new();
-        let mut left_out = Vec::new();
-        for (field, value) in fields {
-            match value {
-                Some(value) => {
-                    given.insert(field.to_owned(), value);
-                }
-                None => left_out.push(field.to_owned()),
-            }
-        }
+        let Ok(Value::Object(given)) = serde_json::to_value(labels) else {
+            unreachable!("labels are a struct of strings and lists, which is a JSON object");
+        };
+        let left_out: Vec<String> = LABEL_FIELDS
+            .into_iter()
+            .filter(|field| !given.contains_key(*field))
+            .map(str::to_owned)
+            .collect();
         if !left_out.is_empty() {
             self.collection
                 .client
@@ -154,10 +131,10 @@ impl ItemStore {
                         .wait(true),
                 )
                 .await
-                .map_err(|source| {
+                .map_err(
                     self.collection
-                        .request_error("remove labels from the document", source)
-                })?;
+                        .request_error("remove labels from the document"),
+                )?;
         }
         if !given.is_empty() {
             self.collection
@@ -171,18 +148,13 @@ impl ItemStore {
                     .wait(true),
                 )
                 .await
-                .map_err(|source| {
+                .map_err(
                     self.collection
-                        .request_error("write labels to the document", source)
-                })?;
+                        .request_error("write labels to the document"),
+                )?;
         }
         Ok(())
     }
-}
-
-fn tag_list(tags: &BTreeSet<Tag>) -> Option<Value> {
-    let tags: Vec<&str> = tags.iter().map(Tag::as_str).collect();
-    (!tags.is_empty()).then(|| Value::from(tags))
 }
 
 fn points_of(document: DocId) -> Filter {

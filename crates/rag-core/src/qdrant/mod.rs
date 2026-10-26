@@ -123,10 +123,16 @@ impl Collection {
         })
     }
 
-    pub(crate) fn request_error(&self, action: &'static str, source: QdrantError) -> StoreError {
-        StoreError::Request {
-            url: self.url.clone(),
-            collection: self.name.clone(),
+    /// For `map_err` on a call to Qdrant that was making `action`.
+    pub(crate) fn request_error(
+        &self,
+        action: &'static str,
+    ) -> impl FnOnce(QdrantError) -> StoreError {
+        let url = self.url.clone();
+        let collection = self.name.clone();
+        move |source| StoreError::Request {
+            url,
+            collection,
             action,
             source: Box::new(source),
         }
@@ -136,7 +142,7 @@ impl Collection {
         self.client
             .collection_exists(self.name.as_str())
             .await
-            .map_err(|source| self.request_error("look for the collection", source))
+            .map_err(self.request_error("look for the collection"))
     }
 
     pub(crate) async fn ensure(&self) -> Result<(), StoreError> {
@@ -156,7 +162,7 @@ impl Collection {
             // refuses this request. The collection is there, which is all that was asked for.
             Err(source) => match self.exists().await {
                 Ok(true) => Ok(()),
-                _ => Err(self.request_error("create the collection", source)),
+                _ => Err(self.request_error("create the collection")(source)),
             },
         }
     }

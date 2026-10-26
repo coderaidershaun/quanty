@@ -4,7 +4,7 @@
 use falkordb::FalkorValue;
 use rag_core::{ConceptId, ItemId};
 
-use super::{FalkorGraph, id_list, read_rows};
+use super::{FalkorGraph, fixed, id_list, parsed, read_rows};
 use crate::contents::{Mention, Relation};
 use crate::error::GraphError;
 
@@ -72,7 +72,7 @@ impl FalkorGraph {
 }
 
 fn relation_from_row(row: Vec<FalkorValue>) -> Result<Relation, String> {
-    let row = <[FalkorValue; 4]>::try_from(row).map_err(|row| format!("{row:?}"))?;
+    let row = fixed::<4>(row)?;
     let [
         FalkorValue::String(from),
         FalkorValue::String(to),
@@ -83,15 +83,15 @@ fn relation_from_row(row: Vec<FalkorValue>) -> Result<Relation, String> {
         return Err(format!("{row:?}"));
     };
     Ok(Relation {
-        from: from.parse().map_err(|_| format!("{from:?}"))?,
-        to: to.parse().map_err(|_| format!("{to:?}"))?,
-        kind: kind.parse().map_err(|_| format!("{kind:?}"))?,
-        item: item.parse().map_err(|_| format!("{item:?}"))?,
+        from: parsed(&from)?,
+        to: parsed(&to)?,
+        kind: parsed(&kind)?,
+        item: parsed(&item)?,
     })
 }
 
 fn mention_from_row(row: Vec<FalkorValue>) -> Result<Mention, String> {
-    let row = <[FalkorValue; 3]>::try_from(row).map_err(|row| format!("{row:?}"))?;
+    let row = fixed::<3>(row)?;
     let [
         FalkorValue::String(item),
         FalkorValue::String(concept),
@@ -101,8 +101,8 @@ fn mention_from_row(row: Vec<FalkorValue>) -> Result<Mention, String> {
         return Err(format!("{row:?}"));
     };
     Ok(Mention {
-        item: item.parse().map_err(|_| format!("{item:?}"))?,
-        concept: concept.parse().map_err(|_| format!("{concept:?}"))?,
+        item: parsed(&item)?,
+        concept: parsed(&concept)?,
         wording,
     })
 }

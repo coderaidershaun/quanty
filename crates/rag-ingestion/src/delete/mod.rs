@@ -150,10 +150,7 @@ pub async fn delete_media(
         .documents()
         .await?
         .into_iter()
-        .filter(|node| {
-            let media = node.labels.media.as_deref();
-            media.is_some_and(|media| is_same_name(media, title))
-        })
+        .filter(|node| node.labels.is_of_media(title))
         .map(|node| node.id)
         .collect();
     if media_nodes.is_empty() && document_ids.is_empty() {

@@ -84,10 +84,17 @@ impl fmt::Display for Relabelled {
 
 /// The tags with commas between them, or "none".
 pub(crate) fn tag_text(tags: &BTreeSet<Tag>) -> String {
-    if tags.is_empty() {
-        return "none".to_owned();
+    list_or_none(tags.iter().map(Tag::as_str))
+}
+
+/// The items with commas between them, or "none".
+pub(crate) fn list_or_none<'a>(items: impl Iterator<Item = &'a str>) -> String {
+    let items: Vec<&str> = items.collect();
+    if items.is_empty() {
+        "none".to_owned()
+    } else {
+        items.join(", ")
     }
-    tags.iter().map(Tag::as_str).collect::<Vec<_>>().join(", ")
 }
 
 /// Applies the change to the own tags of the stored document: the graph node first, as an ingest

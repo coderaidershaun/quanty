@@ -5,7 +5,6 @@ mod cut;
 mod markdown;
 mod passage;
 mod render;
-mod tokens;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
@@ -23,7 +22,7 @@ use markdown::inline_math;
 use render::{Block, Rendered};
 
 pub(crate) use passage::{body_of, passages_of};
-pub use tokens::estimated_tokens;
+pub use rag_core::estimated_tokens;
 
 /// A picture that a section's text points at: the file, and where in the text its note starts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

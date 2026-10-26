@@ -73,6 +73,13 @@ pub enum ContentError {
     },
 }
 
+impl ContentError {
+    /// Whether the file that was to be read is not there.
+    pub(crate) fn is_not_found(&self) -> bool {
+        matches!(self, ContentError::Read { source, .. } if source.kind() == std::io::ErrorKind::NotFound)
+    }
+}
+
 /// How a document of a media is named: a chapter of a book, or a document with a title of its
 /// own, such as a paper, a document of another media, or a part of a book that is not a chapter.
 /// The order puts chapters first, by number, and then titled documents by title.
@@ -189,7 +196,7 @@ pub fn media_folder_name(media_title: &str) -> Result<String, ContentError> {
 
 /// The text in lower case, with one dash for each run of characters that are not letters or
 /// digits. `None` when no letter or digit is left.
-fn slug(text: &str) -> Option<String> {
+pub fn slug(text: &str) -> Option<String> {
     let mut folder = String::new();
     for character in text.to_lowercase().chars() {
         if character.is_alphanumeric() {

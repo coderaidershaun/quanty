@@ -1,27 +1,21 @@
 //! The first half of extraction: asks about every item, a few at a time, and keeps each good
 //! answer. One failed item never stops the others; a failure all items share stops the run.
 
-use std::error::Error;
-
 use futures_util::StreamExt;
 use futures_util::stream;
-use rag_core::{Embedding, ItemFilter, ItemId, ItemStore, Llm, LlmError, Question, UsageTally};
-use serde_json::Value;
+use rag_core::{Embedding, ItemFilter, ItemId, ItemStore, Llm, Question};
 
-use super::cache::Cache;
+use super::cache::{CALLS_AT_A_TIME, Cache, Outcome, Reading};
 use super::question::{Extraction, SCHEMA, SYSTEM_PROMPT, input_for, related_material};
 use super::{ConceptError, ConceptExtractor, EmbeddedItems, SkippedItem};
 use crate::ingest::items::Item;
 use crate::ingest::{IngestStep, Meter};
 
-const CALLS_AT_A_TIME: usize = 4;
 /// How many of the stored items nearest to a lone item are added to its question.
 const RELATED_ITEMS_KEPT: usize = 5;
 /// One more is looked at than is kept, because one of them is the item itself, which is already
 /// stored.
 const RELATED_ITEMS_SEARCHED: usize = RELATED_ITEMS_KEPT + 1;
-/// A question that fails is asked once more before it counts as failed.
-const TRIES_FOR_ONE_QUESTION: usize = 2;
 
 /// What the first half found, with the items in the order they came in.
 #[derive(Default)]
@@ -37,26 +31,6 @@ pub(super) struct ItemAnswer {
     /// How many items of the run come before this one, the skipped ones among them.
     pub items_before: usize,
     pub extraction: Extraction,
-}
-
-pub(super) struct Reading<T> {
-    pub llm_calls: usize,
-    /// What the replies used, counting a reply that was refused, because it was paid for.
-    pub usage: UsageTally,
-    pub outcome: Outcome<T>,
-}
-
-pub(super) enum Outcome<T> {
-    Cached(T),
-    Asked(T),
-    /// Both tries failed, and this is why the last one did.
-    Failed(String),
-    Stopped(LlmError),
-}
-
-pub(super) struct KeyedQuestion<'a> {
-    pub key: String,
-    pub question: Question<'a>,
 }
 
 impl<L: Llm> ConceptExtractor<L> {
@@ -152,77 +126,14 @@ impl<L: Llm> ConceptExtractor<L> {
             },
         );
         let message = format!("{input}{related}");
-        let asked = KeyedQuestion {
-            key,
-            question: Question {
-                system_prompt: SYSTEM_PROMPT,
-                schema: SCHEMA,
-                input: &message,
-            },
+        let question = Question {
+            system_prompt: SYSTEM_PROMPT,
+            schema: SCHEMA,
+            input: &message,
         };
-        self.answer(cache, &asked, Extraction::from_value).await
-    }
-
-    /// The answer kept under the key, or else the model's answer to the question, asked up to
-    /// twice. `read` turns a reply into the answer, and a reply it refuses counts as a failed try.
-    /// A good reply is kept, so the question is not asked again.
-    ///
-    /// # Errors
-    /// [`ConceptError::Cache`] when the cache folder cannot be used.
-    pub(super) async fn answer<T, E: Error>(
-        &self,
-        cache: &Cache,
-        asked: &KeyedQuestion<'_>,
-        read: impl Fn(&Value) -> Result<T, E>,
-    ) -> Result<Reading<T>, ConceptError> {
-        let key = asked.key.as_str();
-        let question = asked.question;
-        if let Some(kept) = cache.get(key)?
-            && let Ok(answer) = read(&kept)
-        {
-            return Ok(Reading {
-                llm_calls: 0,
-                usage: UsageTally::default(),
-                outcome: Outcome::Cached(answer),
-            });
-        }
-        let mut llm_calls = 0;
-        let mut usage = UsageTally::default();
-        let mut reason = String::new();
-        for _ in 0..TRIES_FOR_ONE_QUESTION {
-            llm_calls += 1;
-            let reply = match self.llm.ask(question).await {
-                Ok(reply) => reply,
-                Err(error) if error.stops_the_run() => {
-                    return Ok(Reading {
-                        llm_calls,
-                        usage,
-                        outcome: Outcome::Stopped(error),
-                    });
-                }
-                Err(error) => {
-                    reason = rag_core::error_chain(&error);
-                    continue;
-                }
-            };
-            usage.add_all(&reply.usage);
-            match read(&reply.value) {
-                Ok(answer) => {
-                    cache.put(key, &reply.value)?;
-                    return Ok(Reading {
-                        llm_calls,
-                        usage,
-                        outcome: Outcome::Asked(answer),
-                    });
-                }
-                Err(error) => reason = rag_core::error_chain(&error),
-            }
-        }
-        Ok(Reading {
-            llm_calls,
-            usage,
-            outcome: Outcome::Failed(reason),
-        })
+        cache
+            .answer(&self.llm, &key, question, Extraction::from_value)
+            .await
     }
 }
 

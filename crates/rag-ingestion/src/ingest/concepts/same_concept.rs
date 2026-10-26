@@ -5,8 +5,8 @@ use graph::ConceptNode;
 use rag_core::{Llm, Question};
 use serde::Deserialize;
 
-use super::ask::{KeyedQuestion, Reading};
 use super::cache::Cache;
+use super::cache::Reading;
 use super::question::ExtractedConcept;
 use super::{ConceptError, ConceptExtractor};
 
@@ -44,13 +44,11 @@ impl<L: Llm> ConceptExtractor<L> {
             schema: SCHEMA,
             input: &input,
         };
-        let asked = KeyedQuestion {
-            key: Cache::key_of(&self.prompt_version, &self.llm.cache_identity(), question),
-            question,
-        };
-        self.answer(cache, &asked, |value| {
-            Reply::deserialize(value).map(|reply| reply.same)
-        })
-        .await
+        let key = Cache::key_of(&self.prompt_version, &self.llm.cache_identity(), question);
+        cache
+            .answer(&self.llm, &key, question, |value| {
+                Reply::deserialize(value).map(|reply| reply.same)
+            })
+            .await
     }
 }

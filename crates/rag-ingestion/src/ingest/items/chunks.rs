@@ -2,17 +2,11 @@
 //! size limit.
 
 use ocr::{Chapter, ChapterPiece, Cite, CiteKind, PieceDetail, PieceId, RelationshipKind};
-use rag_core::{DocumentInput, ItemKind};
+use rag_core::{DocumentInput, ItemKind, estimated_tokens};
 
 use super::{BLOCK_SEPARATOR, Draft, context_line};
 
 const MAX_CHUNK_TOKENS: usize = 500;
-
-/// A rough count, four characters to a token. It only shapes chunks and bounds the size of a
-/// question, so a better count is not worth a tokenizer.
-pub(crate) fn estimated_tokens(text: &str) -> usize {
-    text.chars().count().div_ceil(4)
-}
 
 /// A footnote marker is left out: it points at a note, and a note is not an item.
 fn cited_labels(piece: &ChapterPiece) -> impl Iterator<Item = &str> {

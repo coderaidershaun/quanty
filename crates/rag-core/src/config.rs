@@ -4,32 +4,6 @@ use crate::ApiKey;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-const QDRANT_URL: &str = "QDRANT_URL";
-const QDRANT_API_KEY: &str = "QDRANT_API_KEY";
-const FALKORDB_URL: &str = "FALKORDB_URL";
-const FALKORDB_PASSWORD: &str = "FALKORDB_PASSWORD";
-const FALKORDB_GRAPH: &str = "FALKORDB_GRAPH";
-const QDRANT_ITEMS_COLLECTION: &str = "QDRANT_ITEMS_COLLECTION";
-const GEMINI_API_KEY: &str = "EMBEDDING_GEMINI_API_KEY";
-const JEV_API_KEY: &str = "CONVERTER_JEV_API_KEY";
-const QDRANT_CONCEPTS_COLLECTION: &str = "QDRANT_CONCEPTS_COLLECTION";
-const CONCEPT_CACHE_DIR: &str = "CONCEPT_CACHE_DIR";
-const CONCEPT_DECISION_LOG: &str = "CONCEPT_DECISION_LOG";
-const CONTENT_DIR: &str = "CONTENT_DIR";
-const DATASET_DIR: &str = "DATASET_DIR";
-const DATASET_CACHE_DIR: &str = "DATASET_CACHE_DIR";
-
-const DEFAULT_QDRANT_URL: &str = "http://localhost:6334";
-const DEFAULT_FALKORDB_URL: &str = "falkor://localhost:6379";
-const DEFAULT_FALKORDB_GRAPH: &str = "quanty";
-const DEFAULT_ITEMS_COLLECTION: &str = "items";
-const DEFAULT_CONCEPTS_COLLECTION: &str = "concepts";
-const DEFAULT_CONCEPT_CACHE_FOLDER: &str = "data/concept-cache";
-const DEFAULT_CONCEPT_DECISION_LOG: &str = "data/concept-decisions.jsonl";
-const DEFAULT_CONTENT_FOLDER: &str = "content";
-const DEFAULT_DATASET_FOLDER: &str = "datasets";
-const DEFAULT_DATASET_CACHE_FOLDER: &str = "data/dataset-cache";
-
 const DOTENV_FILE_NAME: &str = ".env";
 
 /// A setting that nobody set has its local default.
@@ -131,20 +105,20 @@ impl Config {
         };
         let or = |name: &str, default: &str| setting(name).unwrap_or_else(|| default.to_owned());
         Ok(Config {
-            qdrant_url: or(QDRANT_URL, DEFAULT_QDRANT_URL),
-            qdrant_api_key: setting(QDRANT_API_KEY).map(ApiKey::new),
-            falkordb_url: or(FALKORDB_URL, DEFAULT_FALKORDB_URL),
-            falkordb_password: setting(FALKORDB_PASSWORD).map(ApiKey::new),
-            falkordb_graph: or(FALKORDB_GRAPH, DEFAULT_FALKORDB_GRAPH),
-            items_collection: or(QDRANT_ITEMS_COLLECTION, DEFAULT_ITEMS_COLLECTION),
-            concepts_collection: or(QDRANT_CONCEPTS_COLLECTION, DEFAULT_CONCEPTS_COLLECTION),
-            concept_cache_folder: or(CONCEPT_CACHE_DIR, DEFAULT_CONCEPT_CACHE_FOLDER).into(),
-            concept_decision_log: or(CONCEPT_DECISION_LOG, DEFAULT_CONCEPT_DECISION_LOG).into(),
-            content_folder: or(CONTENT_DIR, DEFAULT_CONTENT_FOLDER).into(),
-            dataset_folder: or(DATASET_DIR, DEFAULT_DATASET_FOLDER).into(),
-            dataset_cache_folder: or(DATASET_CACHE_DIR, DEFAULT_DATASET_CACHE_FOLDER).into(),
-            gemini_api_key: setting(GEMINI_API_KEY).map(ApiKey::new),
-            jev_api_key: setting(JEV_API_KEY).map(ApiKey::new),
+            qdrant_url: or("QDRANT_URL", "http://localhost:6334"),
+            qdrant_api_key: setting("QDRANT_API_KEY").map(ApiKey::new),
+            falkordb_url: or("FALKORDB_URL", "falkor://localhost:6379"),
+            falkordb_password: setting("FALKORDB_PASSWORD").map(ApiKey::new),
+            falkordb_graph: or("FALKORDB_GRAPH", "quanty"),
+            items_collection: or("QDRANT_ITEMS_COLLECTION", "items"),
+            concepts_collection: or("QDRANT_CONCEPTS_COLLECTION", "concepts"),
+            concept_cache_folder: or("CONCEPT_CACHE_DIR", "data/concept-cache").into(),
+            concept_decision_log: or("CONCEPT_DECISION_LOG", "data/concept-decisions.jsonl").into(),
+            content_folder: or("CONTENT_DIR", "content").into(),
+            dataset_folder: or("DATASET_DIR", "datasets").into(),
+            dataset_cache_folder: or("DATASET_CACHE_DIR", "data/dataset-cache").into(),
+            gemini_api_key: setting("EMBEDDING_GEMINI_API_KEY").map(ApiKey::new),
+            jev_api_key: setting("CONVERTER_JEV_API_KEY").map(ApiKey::new),
         })
     }
 }

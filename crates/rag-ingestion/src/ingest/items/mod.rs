@@ -9,7 +9,6 @@ mod pieces;
 use ocr::{Chapter, ChapterIndex, DocumentName, PieceId, SectionHeading};
 use rag_core::{DocId, DocumentInput, DocumentLabels, ItemId, ItemKind, ItemPayload};
 
-pub(super) use chunks::estimated_tokens;
 pub use image::{LoneImage, image_items};
 
 const BLOCK_SEPARATOR: &str = "\n\n";

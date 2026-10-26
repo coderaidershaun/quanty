@@ -6,6 +6,8 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use rag_core::Usage;
+
 use super::services::CallUsage;
 use crate::content::{
     ChapterIndex, ContentError, Conversion, FigureImage, ImageShows, PageIndex, PieceDetail, Route,
@@ -49,6 +51,15 @@ pub struct ModelCalls {
 }
 
 impl ModelCalls {
+    pub fn tokens(&self) -> Usage {
+        Usage {
+            input_tokens: self.input_tokens,
+            output_tokens: self.output_tokens,
+            cache_read_tokens: self.cache_read_tokens,
+            cache_write_tokens: self.cache_write_tokens,
+        }
+    }
+
     fn add(&mut self, other: &ModelCalls) {
         self.input_tokens += other.input_tokens;
         self.output_tokens += other.output_tokens;
@@ -338,16 +349,8 @@ impl fmt::Display for ConversionSummary {
             calls.copy,
             calls.transcribe
         )?;
-        // SMELL: The core crate duplicates these words, so changes must be made in both copies.
         for (model, used) in &calls.by_model {
-            writeln!(
-                formatter,
-                "tokens of {model}: {} in, {} out, {} cache read, {} cache write",
-                used.input_tokens,
-                used.output_tokens,
-                used.cache_read_tokens,
-                used.cache_write_tokens
-            )?;
+            writeln!(formatter, "{}", used.tokens().line_for(model))?;
         }
         if self.out_of_sequence.is_empty() {
             writeln!(formatter, "printed page numbers: in sequence")?;

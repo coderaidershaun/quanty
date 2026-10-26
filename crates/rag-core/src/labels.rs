@@ -163,6 +163,13 @@ impl DocumentLabels {
         self.media_tags = media.tags.clone();
     }
 
+    /// Whether the document is of the media with this title, whatever the capitals.
+    pub fn is_of_media(&self, title: &str) -> bool {
+        self.media
+            .as_deref()
+            .is_some_and(|media| is_same_name(media, title))
+    }
+
     /// Whether these labels fit every label part that `wanted` gives; its document part is not
     /// looked at. A filter that gives no label part is carried by all labels.
     fn carries(&self, wanted: &LabelFilter) -> bool {

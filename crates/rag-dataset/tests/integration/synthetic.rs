@@ -171,14 +171,12 @@ impl Work {
     /// Writes into `out`, asking through `llm` with the answers kept in `cache`.
     async fn run(&self, llm: &StandInLlm, cache: &Path, out: &Path) -> Run {
         let asker = Asker::new(llm, cache).unwrap();
-        let options = support::options_over(&support::sample_content(), out);
         let mut steps = Vec::new();
         let written = write_synthetic(
             &self.plan,
             &self.sections,
             &asker,
             &DatasetFolder::new(out),
-            &options,
             &mut |step, usage| steps.push((step, usage.clone())),
         )
         .await

@@ -56,7 +56,7 @@ pub(super) struct Extraction {
     pub relations: Vec<ExtractedRelation>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub(super) struct ExtractedConcept {
     pub name: String,
     pub definition: String,
@@ -85,14 +85,8 @@ pub(super) enum ReplyError {
 
 #[derive(Deserialize)]
 struct Reply {
-    concepts: Vec<ReplyConcept>,
+    concepts: Vec<ExtractedConcept>,
     relations: Vec<ReplyRelation>,
-}
-
-#[derive(Deserialize)]
-struct ReplyConcept {
-    name: String,
-    definition: String,
 }
 
 #[derive(Deserialize)]

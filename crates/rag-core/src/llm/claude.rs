@@ -25,8 +25,7 @@ const API_KEY_SUFFIX: &str = "_API_KEY";
 // The variables a Claude Code session sets for its children. A child that inherits them thinks it
 // is a nested session. They are removed by name, not by prefix: `CLAUDE_CONFIG_DIR` and
 // `CLAUDE_CODE_OAUTH_TOKEN` are how some sign-ins work.
-// SMELL: The converter duplicates this list, so changes must be made in both copies.
-const SESSION_VARIABLES: [&str; 13] = [
+pub const SESSION_VARIABLES: [&str; 13] = [
     "CLAUDECODE",
     "CLAUDE_CODE_ENTRYPOINT",
     "CLAUDE_CODE_SSE_PORT",
@@ -41,6 +40,11 @@ const SESSION_VARIABLES: [&str; 13] = [
     "CLAUDE_CODE_BRIDGE_SESSION_ID",
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS",
 ];
+
+/// Says whether this process has the key that makes `claude` bill the API.
+pub fn api_key_is_set() -> bool {
+    std::env::var_os(API_KEY_VARIABLE).is_some_and(|value| !value.is_empty())
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum ClaudeCliError {
@@ -254,17 +258,11 @@ async fn run(mut command: Command, input: &str) -> Result<Output, LlmError> {
 // Do not add `deny_unknown_fields`: `claude` adds new fields to this object over time.
 #[derive(Deserialize)]
 struct Envelope {
-    #[serde(default)]
     is_error: Option<bool>,
-    #[serde(default)]
     result: Option<String>,
-    #[serde(default)]
     errors: Option<Vec<String>>,
-    #[serde(default)]
     api_error_status: Option<Value>,
-    #[serde(default)]
     structured_output: Option<Value>,
-    #[serde(default)]
     total_cost_usd: Option<f64>,
     #[serde(default)]
     usage: Value,

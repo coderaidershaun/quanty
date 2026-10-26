@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use graph::{DocumentNode, FalkorGraph, GraphError};
 use ocr::{Catalogue, ChapterEntry, ChapterInsights, ContentError, gets_insights};
-use rag_core::{DocId, is_same_name};
+use rag_core::DocId;
 
 /// Which stored documents a command works on.
 #[derive(Debug, Clone, Copy)]
@@ -139,10 +139,7 @@ fn chosen_documents(
         ChapterChoice::Media(title) => {
             let found: Vec<DocumentNode> = stored
                 .into_iter()
-                .filter(|node| {
-                    let media = node.labels.media.as_deref();
-                    media.is_some_and(|media| is_same_name(media, title))
-                })
+                .filter(|node| node.labels.is_of_media(title))
                 .collect();
             if found.is_empty() {
                 return Err(StoredChaptersError::NoDocumentOfMedia {

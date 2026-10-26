@@ -12,27 +12,6 @@ use tokio::process::Command;
 
 use crate::convert::child_process;
 
-const API_KEY_VARIABLE: &str = "ANTHROPIC_API_KEY";
-
-// The variables a Claude Code session sets for its children. A child that inherits them thinks
-// it is a nested session. They are removed by name, not by prefix: `CLAUDE_CONFIG_DIR` and
-// `CLAUDE_CODE_OAUTH_TOKEN` are how some logins work.
-const SESSION_VARIABLES: [&str; 13] = [
-    "CLAUDECODE",
-    "CLAUDE_CODE_ENTRYPOINT",
-    "CLAUDE_CODE_SSE_PORT",
-    "CLAUDE_CODE_SESSION_ID",
-    "CLAUDE_CODE_CHILD_SESSION",
-    "CLAUDE_CODE_SESSION_ATTENDED",
-    "CLAUDE_PID",
-    "CLAUDE_EFFORT",
-    "CLAUDE_CODE_EXECPATH",
-    "CLAUDE_CODE_MESSAGING_SOCKET",
-    "CLAUDE_CODE_MESSAGING_TOKEN",
-    "CLAUDE_CODE_BRIDGE_SESSION_ID",
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS",
-];
-
 pub(super) struct ClaudeCall<'a> {
     pub model: &'a str,
     pub effort: Option<&'a str>,
@@ -78,9 +57,7 @@ pub enum ClaudeError {
     PagePreparation(#[from] crate::convert::PopplerError),
     #[error("model settings could not be loaded")]
     Configuration(#[from] rag_core::SettingsError),
-    #[error(
-        "ANTHROPIC_API_KEY is set, so claude could bill the API instead of the subscription; unset it and run again"
-    )]
+    #[error("{}", rag_core::LlmError::ApiKeySet)]
     ApiKeySet,
 
     #[error("page file is missing or unreadable at {}", path.display())]
@@ -170,15 +147,11 @@ fn join_reasons(result: Option<&str>, errors: &[String]) -> String {
 #[derive(Deserialize)]
 struct Envelope {
     subtype: String,
-    #[serde(default)]
     result: Option<String>,
     #[serde(default)]
     errors: Vec<String>,
-    #[serde(default)]
     api_error_status: Option<Value>,
-    #[serde(default)]
     structured_output: Option<Value>,
-    #[serde(default)]
     total_cost_usd: Option<f64>,
     #[serde(default)]
     usage: UsageFigures,
@@ -187,22 +160,18 @@ struct Envelope {
 }
 
 #[derive(Deserialize, Default)]
+#[serde(default)]
 struct UsageFigures {
-    #[serde(default)]
     input_tokens: u64,
-    #[serde(default)]
     output_tokens: u64,
-    #[serde(default)]
     cache_read_input_tokens: u64,
-    #[serde(default)]
     cache_creation_input_tokens: u64,
-    #[serde(default)]
     output_tokens_details: OutputTokenDetails,
 }
 
 #[derive(Deserialize, Default)]
+#[serde(default)]
 struct OutputTokenDetails {
-    #[serde(default)]
     thinking_tokens: u64,
 }
 
@@ -217,7 +186,7 @@ pub(in crate::convert) fn check_subscription() -> Result<(), ClaudeError> {
 
 // An API key makes Claude bill the API instead of the subscription, so nothing may be started.
 fn check_claude_subscription() -> Result<(), ClaudeError> {
-    if std::env::var_os(API_KEY_VARIABLE).is_some_and(|value| !value.is_empty()) {
+    if rag_core::api_key_is_set() {
         return Err(ClaudeError::ApiKeySet);
     }
     Ok(())
@@ -338,7 +307,7 @@ fn locked_down_command(call: &ClaudeCall<'_>, prompt: String, page_folder: &Path
     if let Some(effort) = call.effort {
         command.args(["--effort", effort]);
     }
-    for variable in SESSION_VARIABLES {
+    for variable in rag_core::SESSION_VARIABLES {
         command.env_remove(variable);
     }
     command

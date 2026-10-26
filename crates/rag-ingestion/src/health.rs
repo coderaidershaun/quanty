@@ -1,12 +1,13 @@
 //! Checks that Qdrant, FalkorDB and the sign-in of the Ingest choice's agent are ready. Every
 //! check is always run, so one report names everything that is wrong.
 
-use std::error::Error;
 use std::fmt;
 use std::time::Duration;
 
 use graph::{FalkorGraph, GraphError};
-use rag_core::{AgentCli, Config, ItemStore, Llm, LlmError, StoreError, WorkKind, error_chain};
+use rag_core::{
+    AgentCli, Config, ItemStore, Llm, LlmError, StoreError, WorkKind, error_chain, one_line,
+};
 
 const STORE_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -42,7 +43,7 @@ impl fmt::Display for Check {
                 "{}: FAILED ({}): {}",
                 self.name,
                 self.detail,
-                one_line_chain(error)
+                one_line(&error_chain(error))
             ),
         }
     }
@@ -123,11 +124,4 @@ async fn within_store_timeout(
         .unwrap_or(Err(HealthError::TimedOut {
             seconds: STORE_TIMEOUT.as_secs(),
         }))
-}
-
-fn one_line_chain(error: &dyn Error) -> String {
-    error_chain(error)
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
 }

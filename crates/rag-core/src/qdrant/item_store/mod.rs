@@ -75,10 +75,7 @@ impl ItemStore {
             .client
             .create_field_index(index)
             .await
-            .map_err(|source| {
-                self.collection
-                    .request_error("index the kind of the items", source)
-            })?;
+            .map_err(self.collection.request_error("index the kind of the items"))?;
         Ok(())
     }
 

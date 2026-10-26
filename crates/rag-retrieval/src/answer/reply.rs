@@ -149,7 +149,7 @@ fn kept_follow_ups(asked: &[String]) -> Vec<String> {
 
 /// The text on one line, or `None` when it holds no word.
 fn one_line(text: &str) -> Option<String> {
-    let line = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let line = rag_core::one_line(text);
     (!line.is_empty()).then_some(line)
 }
 

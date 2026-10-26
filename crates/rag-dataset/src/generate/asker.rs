@@ -8,15 +8,11 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 use futures_util::Stream;
 use futures_util::StreamExt;
 use futures_util::stream;
-use rag_core::{Llm, LlmError, UsageTally, error_chain};
-use rag_ingestion::{AnswerCache, ConceptError};
+use rag_core::{Llm, LlmError, UsageTally};
+use rag_ingestion::{AnswerCache, CALLS_AT_A_TIME, ConceptError, Outcome};
 use serde::de::DeserializeOwned;
 
 use super::role::Role;
-
-const CALLS_AT_A_TIME: usize = 4;
-/// A question that fails is asked once more before it counts as failed.
-const TRIES_FOR_ONE_QUESTION: usize = 2;
 
 /// What the model was asked so far and what it cost.
 #[derive(Default)]
@@ -85,34 +81,25 @@ impl<'a, L: Llm> Asker<'a, L> {
     ) -> Result<Answer<T>, AskError> {
         let question = role.question(input);
         let key = AnswerCache::key_of(&role.prompt_id(), &self.llm.cache_identity(), question);
-        if let Some(kept) = self.cache.get(&key)?
-            && let Ok(answer) = serde_json::from_value::<T>(kept)
+        let reading = self
+            .cache
+            .answer(self.llm, &key, question, |value| {
+                serde_json::from_value::<T>(value.clone())
+            })
+            .await?;
         {
-            self.record().cache_hits += 1;
-            return Ok(Answer::Given(answer));
-        }
-        let mut reason = String::new();
-        for _ in 0..TRIES_FOR_ONE_QUESTION {
-            self.record().calls += 1;
-            let reply = match self.llm.ask(question).await {
-                Ok(reply) => reply,
-                Err(error) if error.stops_the_run() => return Err(AskError::Stopped(error)),
-                Err(error) => {
-                    reason = error_chain(&error);
-                    continue;
-                }
-            };
-            // A reply that does not fit was paid for too.
-            self.record().usage.add_all(&reply.usage);
-            match serde_json::from_value::<T>(reply.value.clone()) {
-                Ok(answer) => {
-                    self.cache.put(&key, &reply.value)?;
-                    return Ok(Answer::Given(answer));
-                }
-                Err(error) => reason = error_chain(&error),
+            let mut record = self.record();
+            record.calls += reading.llm_calls;
+            record.usage.add_all(&reading.usage);
+            if matches!(reading.outcome, Outcome::Cached(_)) {
+                record.cache_hits += 1;
             }
         }
-        Ok(Answer::Failed { reason })
+        match reading.outcome {
+            Outcome::Cached(answer) | Outcome::Asked(answer) => Ok(Answer::Given(answer)),
+            Outcome::Failed(reason) => Ok(Answer::Failed { reason }),
+            Outcome::Stopped(error) => Err(AskError::Stopped(error)),
+        }
     }
 
     /// Asks every input, a few at a time. The answers come back in the order of the inputs.

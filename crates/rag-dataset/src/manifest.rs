@@ -174,7 +174,6 @@ impl Manifest {
         // SMELL: the report counts the examples under the plain strings "think" and "direct", with
         // no constant for either, so a typo here still compiles and counts nothing. The browser app
         // reads them the same way.
-        let by_reasoning = |name: &str| report.sft.by_reasoning.get(name).copied().unwrap_or(0);
         let sha256 = dataset_version(&files);
         Ok(Manifest {
             name: options.name.clone(),
@@ -196,8 +195,8 @@ impl Manifest {
                 heldout: report.sections.heldout,
                 synthetic_by_kind: report.synthetic.by_kind.clone(),
                 sft_by_task: report.sft.by_kind.clone(),
-                think: by_reasoning("think"),
-                direct: by_reasoning("direct"),
+                think: report.sft.reasoning("think"),
+                direct: report.sft.reasoning("direct"),
             },
             rejected: Rejected {
                 sections: report.rejected.clone(),

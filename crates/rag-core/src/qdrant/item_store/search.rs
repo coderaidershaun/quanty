@@ -147,7 +147,7 @@ impl ItemStore {
             .client
             .query(query)
             .await
-            .map_err(|source| self.collection.request_error(action, source))?;
+            .map_err(self.collection.request_error(action))?;
         reply
             .result
             .into_iter()

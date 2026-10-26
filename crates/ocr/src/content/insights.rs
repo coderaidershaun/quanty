@@ -44,11 +44,7 @@ impl ChapterInsights {
     pub fn read(chapter_folder: &Path) -> Result<Option<ChapterInsights>, ContentError> {
         match read_json(&chapter_folder.join(INSIGHTS_FILE)) {
             Ok(insights) => Ok(Some(insights)),
-            Err(ContentError::Read { source, .. })
-                if source.kind() == std::io::ErrorKind::NotFound =>
-            {
-                Ok(None)
-            }
+            Err(error) if error.is_not_found() => Ok(None),
             Err(error) => Err(error),
         }
     }

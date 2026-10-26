@@ -8,7 +8,7 @@ mod codex;
 use serde_json::Value;
 
 pub use agent_cli::AgentCli;
-pub use claude::{ClaudeCli, ClaudeCliError};
+pub use claude::{ClaudeCli, ClaudeCliError, SESSION_VARIABLES, api_key_is_set};
 pub use codex::{CodexCli, CodexError};
 
 use crate::usage::UsageTally;

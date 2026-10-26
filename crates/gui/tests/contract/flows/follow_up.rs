@@ -1,19 +1,21 @@
-//! The filters offer what the library holds and an ask sends what was chosen, a follow-up starts a
-//! new ask with the same mode and filters, a plain key stays in the question box, and every way to
-//! copy reaches the clipboard.
+//! The filters offer what the library holds and an ask sends what was chosen, on a wide window and
+//! through the sheet of the Ask bar of a phone or a tablet, which fits its window. A follow-up
+//! starts a new ask with the same mode and filters, a plain key stays in the question box, and
+//! every way to copy reaches the clipboard.
 
-use contract::{AnswerBlock, Category, Command, DocId, Filters};
+use contract::{AnswerBlock, Catalogue, Category, Command, DocId, Filters};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
-use gui::app::layout::DEFAULT_WINDOW;
+use gui::app::layout::{DEFAULT_WINDOW, PHONE_WINDOW, TABLET_WINDOW};
 use gui::testkit;
+use gui::theme::size;
 use uuid::Uuid;
 
 use super::recording::{self, Seen};
 use super::{
     Window, are_stacked_in_order, click, click_in, copied_by, has, is_enabled, is_open_tab, node,
-    panels, press, shared,
+    node_in, panels, press, retype, shared,
 };
 
 fn question_box(harness: &Window) -> Option<String> {
@@ -125,18 +127,7 @@ fn the_filters_offer_the_library_and_an_ask_sends_them(harness: &mut Window, see
         .filter(|media| !media.documents.is_empty())
         .filter_map(|media| media.title.as_deref())
         .collect();
-    let paper = catalogue
-        .media
-        .iter()
-        .find(|media| media.category == Category::Paper)
-        .expect("the library has a paper");
-    let title = paper.title.clone().expect("the paper has a title");
-    let author = paper
-        .authors
-        .first()
-        .expect("the paper has authors")
-        .clone();
-    let media_tag = paper.tags.first().expect("the paper has a tag").clone();
+    let paper = Paper::of(&catalogue);
     let bar = panels(DEFAULT_WINDOW).ask_bar;
 
     click_in(harness, Role::ComboBox, "Media", bar);
@@ -147,13 +138,13 @@ fn the_filters_offer_the_library_and_an_ask_sends_them(harness: &mut Window, see
             "`{media}` is a row of Media"
         );
     }
-    click(harness, Role::Button, &title);
+    click(harness, Role::Button, &paper.title);
 
     click_in(harness, Role::ComboBox, "Authors", bar);
-    click(harness, Role::Button, &author);
+    click(harness, Role::Button, &paper.author);
 
     click_in(harness, Role::ComboBox, "Tags", bar);
-    click(harness, Role::CheckBox, &media_tag);
+    click(harness, Role::CheckBox, &paper.tag);
     press(harness, egui::Modifiers::NONE, egui::Key::Escape);
 
     click_in(harness, Role::ComboBox, "Category", bar);
@@ -168,15 +159,45 @@ fn the_filters_offer_the_library_and_an_ask_sends_them(harness: &mut Window, see
     click(harness, Role::Button, "Ask");
     assert_eq!(
         filters_of_the_last_ask(seen),
-        Some(Filters {
-            document: None,
-            media: Some(title),
-            author: Some(author),
-            tags: vec![media_tag],
-            category: Some(Category::Paper),
-        }),
+        Some(paper.filters()),
         "the ask sends the filters that were chosen"
     );
+}
+
+/// The paper of the library, by its title, its first author and its first tag.
+struct Paper {
+    title: String,
+    author: String,
+    tag: String,
+}
+
+impl Paper {
+    fn of(catalogue: &Catalogue) -> Paper {
+        let paper = catalogue
+            .media
+            .iter()
+            .find(|media| media.category == Category::Paper)
+            .expect("the library has a paper");
+        Paper {
+            title: paper.title.clone().expect("the paper has a title"),
+            author: paper
+                .authors
+                .first()
+                .cloned()
+                .expect("the paper has authors"),
+            tag: paper.tags.first().cloned().expect("the paper has a tag"),
+        }
+    }
+
+    fn filters(&self) -> Filters {
+        Filters {
+            document: None,
+            media: Some(self.title.clone()),
+            author: Some(self.author.clone()),
+            tags: vec![self.tag.clone()],
+            category: Some(Category::Paper),
+        }
+    }
 }
 
 fn filters_of_the_last_ask(seen: &Seen) -> Option<Filters> {
@@ -187,6 +208,158 @@ fn filters_of_the_last_ask(seen: &Seen) -> Option<Filters> {
             Command::Ask { ask, .. } => Some(ask.filters),
             _ => None,
         })
+}
+
+const FILTER_BOXES: [&str; 5] = ["Media", "Document filter", "Authors", "Tags", "Category"];
+
+#[test]
+fn the_ask_bar_fits_a_phone_and_a_tablet_and_asks_with_the_filters_of_its_sheet() {
+    let windows = [
+        ("phone", PHONE_WINDOW, "Filters"),
+        ("tablet", TABLET_WINDOW, "More filters"),
+    ];
+    for (name, window, more) in windows {
+        let (mut harness, seen) = recording::open("black-scholes", window);
+        testkit::settle(&mut harness);
+        let bar = panels(window).ask_bar;
+        let library = &shared(&harness).library;
+        let paper = Paper::of(library.catalogue.ready().expect("the library loaded"));
+
+        let names = assert_the_bar_fits(&harness, window);
+        let mut on_the_bar = vec!["Question", "Mode", "Ask", more];
+        if window == TABLET_WINDOW {
+            on_the_bar.extend(["Media", "Document filter"]);
+        }
+        for control in on_the_bar.iter().chain(&FILTER_BOXES) {
+            let is_there = names.iter().any(|name| name == control);
+            let is_wanted = on_the_bar.contains(control);
+            assert_eq!(is_there, is_wanted, "{name}: `{control}` on the bar");
+        }
+        testkit::save_png(&mut harness, &format!("{name}-ask-bar"));
+
+        if window == PHONE_WINDOW {
+            let question = shared(&harness).ask.question.clone();
+            click(&mut harness, Role::TextInput, "Question");
+            harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+            harness.step();
+            harness.key_press(egui::Key::Backspace);
+            testkit::settle(&mut harness);
+            assert_eq!(question_box(&harness).as_deref(), Some(""));
+            let names = assert_the_bar_fits(&harness, window);
+            assert!(
+                names.iter().any(|name| name == "Type a question to ask."),
+                "the note shows"
+            );
+            retype(&mut harness, "Question", &question);
+        }
+
+        // A filter on the bar is chosen where it stands. The rest are chosen in the sheet.
+        let mut in_the_sheet = Vec::new();
+        for filter in ["Media", "Authors", "Tags", "Category"] {
+            if node_in(&harness, Role::ComboBox, filter, bar).is_some() {
+                choose(&mut harness, filter, bar, &paper);
+            } else {
+                in_the_sheet.push(filter);
+            }
+        }
+        click_in(&mut harness, Role::Button, more, bar);
+        let heading = node(&harness, Role::Label, more).rect();
+        let sheet = heading.union(node(&harness, Role::Button, "Done").rect());
+        for filter in FILTER_BOXES {
+            let places = harness
+                .query_all_by_role_and_label(Role::ComboBox, filter)
+                .filter(|found| {
+                    [bar, sheet]
+                        .iter()
+                        .any(|area| area.contains(found.rect().center()))
+                })
+                .count();
+            assert_eq!(
+                places, 1,
+                "{name}: `{filter}` stands once, on the bar or in the sheet"
+            );
+        }
+        testkit::save_png(&mut harness, &format!("{name}-filters-sheet"));
+        for filter in &in_the_sheet {
+            choose(&mut harness, filter, sheet, &paper);
+        }
+        let count = node_in(&harness, Role::Button, more, bar).and_then(|button| button.value());
+        let set_in_the_sheet = in_the_sheet.len().to_string();
+        assert_eq!(
+            count.as_deref(),
+            Some(set_in_the_sheet.as_str()),
+            "{name}: filters set in the sheet"
+        );
+        click(&mut harness, Role::Button, "Done");
+        let modal = harness.ctx.memory(|memory| memory.top_modal_layer());
+        assert!(modal.is_none(), "Done closes the sheet");
+
+        assert_the_bar_fits(&harness, window);
+        click_in(&mut harness, Role::Button, "Ask", bar);
+        assert_eq!(
+            filters_of_the_last_ask(&seen),
+            Some(paper.filters()),
+            "{name}: what the ask sends"
+        );
+    }
+}
+
+/// Every control of the bar lies in the bar and in the window, and none covers another. On a
+/// phone each one is tall enough for a finger. Returns their names.
+fn assert_the_bar_fits(harness: &Window, window: [f32; 2]) -> Vec<String> {
+    let bar = panels(window).ask_bar.expand(0.5);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::Vec2::from(window)).expand(0.5);
+    let touched = [Role::TextInput, Role::ComboBox, Role::Button];
+    let roles = touched.into_iter().chain([Role::CheckBox, Role::Label]);
+    let controls: Vec<(String, Role, egui::Rect)> = roles
+        .flat_map(|role| {
+            harness
+                .query_all_by_role(role)
+                .map(move |node| (role, node))
+        })
+        .filter(|(_, control)| bar.contains(control.rect().center()))
+        .map(|(role, control)| {
+            // A label keeps its words as its value.
+            let name = control.accesskit_node().label().or_else(|| control.value());
+            let name = name.unwrap_or_default();
+            (name, role, control.rect())
+        })
+        .collect();
+    for (at, (name, role, rect)) in controls.iter().enumerate() {
+        assert!(
+            bar.contains_rect(*rect) && screen.contains_rect(*rect),
+            "`{name}` {rect:?} leaves the bar {bar:?} or the window"
+        );
+        let is_finger_sized = rect.height() >= size::CONTROL_MD;
+        assert!(
+            window != PHONE_WINDOW || !touched.contains(role) || is_finger_sized,
+            "`{name}` is {} tall",
+            rect.height()
+        );
+        for (other, _, other_rect) in &controls[at + 1..] {
+            let both = rect.intersect(*other_rect);
+            assert!(
+                both.width() <= 0.0 || both.height() <= 0.0,
+                "`{name}` {rect:?} covers `{other}` {other_rect:?}"
+            );
+        }
+    }
+    controls.into_iter().map(|(name, ..)| name).collect()
+}
+
+/// Opens the list `filter` in `area` and picks what `paper` stands for.
+fn choose(harness: &mut Window, filter: &str, area: egui::Rect, paper: &Paper) {
+    click_in(harness, Role::ComboBox, filter, area);
+    match filter {
+        "Media" => click(harness, Role::Button, &paper.title),
+        "Authors" => click(harness, Role::Button, &paper.author),
+        "Tags" => {
+            click(harness, Role::CheckBox, &paper.tag);
+            press(harness, egui::Modifiers::NONE, egui::Key::Escape);
+        }
+        "Category" => click(harness, Role::Button, "Paper"),
+        other => panic!("`{other}` is not a filter to choose"),
+    }
 }
 
 #[test]

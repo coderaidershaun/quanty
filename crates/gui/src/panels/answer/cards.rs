@@ -146,7 +146,9 @@ fn centred_caption(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem
 }
 
 /// The formula in the middle of the column, whatever the width of its printed label such as
-/// "(2.4)", and the label at the right, level with the formula.
+/// "(2.4)", and the label at the right, level with the formula. In a narrow pane a formula that
+/// does not fit beside its label takes the whole column, and the label stands under it at the
+/// right, as a printed book sets an equation that is too long for its line.
 fn centred_formula(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem) {
     let label = item.label.as_deref();
     let gutter = label.map_or(0.0, |label| {
@@ -157,11 +159,22 @@ fn centred_formula(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem
             + space::MD
     });
     let outer = ui.available_rect_before_wrap();
+    let formula = math::MathRef::block(&item.text);
+    if pane.is_narrow
+        && let Some(label) = label
+        && let math::MathState::Ready(image) = pane.cx.media.math.get(&formula)
+        && image.width > outer.width() - 2.0 * gutter
+    {
+        math::show(ui, pane.cx.media, &formula);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+            ui.label(TextRole::Body.rich(label).color(color::TEXT_SECONDARY));
+        });
+        return;
+    }
     let room = egui::Rect::from_min_max(
         egui::pos2(outer.left() + gutter, outer.top()),
         egui::pos2(outer.right() - gutter, outer.bottom()),
     );
-    let formula = math::MathRef::block(&item.text);
     let shown = ui
         .scope_builder(egui::UiBuilder::new().max_rect(room), |ui| {
             math::show(ui, pane.cx.media, &formula)

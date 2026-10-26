@@ -249,31 +249,7 @@ fn preview(
             let formula = math::MathRef::block(&item.text);
             (math::show(ui, pane.cx.media, &formula).clicked(), None)
         }
-        ItemKind::Figure => {
-            let mut clicked = false;
-            let mut cut = None;
-            ui.horizontal_top(|ui| {
-                if let Some(image) = &item.image {
-                    let top_down = egui::Layout::top_down(egui::Align::Min);
-                    ui.allocate_ui_with_layout(THUMBNAIL, top_down, |ui| {
-                        ui.set_min_size(THUMBNAIL);
-                        let media = &mut *pane.cx.media;
-                        let response = images::show(ui, media, image, &row.kind_label, THUMBNAIL);
-                        crate::widgets::interactive_cursor(ui, &response);
-                        clicked = response.clicked();
-                    });
-                }
-                ui.vertical(|ui| {
-                    cut = clipped(ui, TEXT_PREVIEW, |ui| {
-                        if let Some(caption) = &item.caption {
-                            pane.rich(ui, &body(caption));
-                        }
-                        pane.rich(ui, &body(&item.text));
-                    });
-                });
-            });
-            (clicked, cut)
-        }
+        ItemKind::Figure => figure(ui, pane, item, row),
         ItemKind::Table => {
             if let Some(caption) = &item.caption {
                 pane.rich(ui, &body(caption));
@@ -293,6 +269,59 @@ fn preview(
             (false, None)
         }
     }
+}
+
+/// The picture of a figure beside its words, or over them in a narrow pane, where words beside
+/// the picture would have room for only a few letters.
+fn figure(
+    ui: &mut egui::Ui,
+    pane: &mut Pane<'_, '_>,
+    item: &ResultItem,
+    row: &Row,
+) -> (bool, Option<egui::Rect>) {
+    if pane.is_narrow {
+        let clicked = thumbnail(ui, pane, item, row);
+        return (clicked, figure_words(ui, pane, item));
+    }
+    let mut clicked = false;
+    let mut cut = None;
+    ui.horizontal_top(|ui| {
+        clicked = thumbnail(ui, pane, item, row);
+        ui.vertical(|ui| {
+            cut = figure_words(ui, pane, item);
+        });
+    });
+    (clicked, cut)
+}
+
+/// True when the picture was clicked.
+fn thumbnail(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem, row: &Row) -> bool {
+    let Some(image) = &item.image else {
+        return false;
+    };
+    let mut clicked = false;
+    let top_down = egui::Layout::top_down(egui::Align::Min);
+    ui.allocate_ui_with_layout(THUMBNAIL, top_down, |ui| {
+        ui.set_min_size(THUMBNAIL);
+        let media = &mut *pane.cx.media;
+        let response = images::show(ui, media, image, &row.kind_label, THUMBNAIL);
+        crate::widgets::interactive_cursor(ui, &response);
+        clicked = response.clicked();
+    });
+    clicked
+}
+
+fn figure_words(
+    ui: &mut egui::Ui,
+    pane: &mut Pane<'_, '_>,
+    item: &ResultItem,
+) -> Option<egui::Rect> {
+    clipped(ui, TEXT_PREVIEW, |ui| {
+        if let Some(caption) = &item.caption {
+            pane.rich(ui, &body(caption));
+        }
+        pane.rich(ui, &body(&item.text));
+    })
 }
 
 fn body(text: &str) -> rich_text::RichText<'_> {

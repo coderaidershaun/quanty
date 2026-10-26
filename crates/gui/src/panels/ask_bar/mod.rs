@@ -4,6 +4,7 @@ mod filters;
 mod layout;
 mod note;
 mod question;
+mod sheet;
 
 use eframe::egui;
 
@@ -18,6 +19,7 @@ pub struct Local {
     seen_generation: u64,
     seen_focus_cue: u64,
     choices: filters::Choices,
+    is_sheet_open: bool,
 }
 
 impl Local {
@@ -44,15 +46,12 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     local.follow(cx.shared);
     // The bar has no frame of its own, because the top line of a frame on the desk would sit just
     // under the line of the top bar.
-    let margins = egui::Frame::NONE.inner_margin(layout::MARGIN);
-    margins.show(ui, |ui| {
-        let room = egui::vec2(ui.available_width(), layout::CONTENT_HEIGHT);
-        let (content, _) = ui.allocate_exact_size(room, egui::Sense::hover());
-        let rects = layout::rects(content);
-        local.show_question(ui, &rects, cx);
-        local.choices.show(ui, &rects, &mut local.draft.filters);
-        if let Some(note) = Note::of(cx.shared, &local.draft) {
-            note.show(ui, rects.note, cx.intents);
-        }
-    });
+    let (bar, _) = ui.allocate_exact_size(ui.available_size(), egui::Sense::hover());
+    let rects = layout::arrange(bar);
+    local.show_question(ui, &rects, cx);
+    local.choices.show(ui, &rects, &mut local.draft.filters);
+    local.show_more_filters(ui, &rects);
+    if let Some(note) = Note::of(cx.shared, &local.draft) {
+        note.show(ui, rects.note, cx.intents);
+    }
 }

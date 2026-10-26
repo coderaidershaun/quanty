@@ -25,11 +25,15 @@ pub(super) fn show(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>) {
 
     let mut row = ui.available_rect_before_wrap();
     row.set_height(size::TAB);
+    // Share keeps its room at every width, so tabs that do not fit scroll inside their own strip
+    // and never run under Share.
+    let mut strip_room = row;
+    strip_room.max.x = row.right() - share::width(pane.is_narrow) - space::SM;
     // Top down, not centred: a strip built with `ui.horizontal` sits eight points low in a
     // centred row.
     let top_down = egui::Layout::top_down(egui::Align::Min);
     let strip = ui.scope_builder(
-        egui::UiBuilder::new().max_rect(row).layout(top_down),
+        egui::UiBuilder::new().max_rect(strip_room).layout(top_down),
         |ui| {
             ui.add_enabled_ui(has_results, |ui| {
                 TabStrip::new(&tabs, active.index()).show(ui)

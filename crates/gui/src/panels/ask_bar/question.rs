@@ -1,4 +1,5 @@
-//! The first row of the bar: the question box, the mode, and the Ask or Stop button.
+//! The question box, the mode, and the Ask or Stop button. They make up the first row of the bar,
+//! except on a narrow bar, where the mode stands on the second row.
 
 use eframe::egui;
 use egui::text::{CCursor, CCursorRange};
@@ -94,7 +95,7 @@ impl Local {
             Dropdown::new("Mode", &labels, rects.mode.width())
                 .id_salt("mode")
                 .selected(selected)
-                .size(ControlSize::Large)
+                .size(rects.mode_size)
                 .show(ui)
         });
         if let Some(index) = chosen {

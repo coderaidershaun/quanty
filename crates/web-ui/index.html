@@ -3,7 +3,7 @@
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 
     <title>quanty</title>
 
@@ -23,11 +23,6 @@
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#f2f0e5">
 
     <style>
-        html {
-
-            touch-action: manipulation;
-        }
-
         body {
 
             background: #f2f0e5;
@@ -47,6 +42,7 @@
             padding: 0 !important;
             height: 100%;
             width: 100%;
+            touch-action: none;
         }
 
         canvas {
@@ -54,10 +50,10 @@
             margin-left: auto;
             display: block;
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: env(safe-area-inset-top, 0px);
+            left: env(safe-area-inset-left, 0px);
+            width: calc(100% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+            height: calc(100% - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
         }
 
         .centered {
@@ -115,6 +111,11 @@
         </p>
         <div class="lds-dual-ring"></div>
     </div>
+
+    <script>
+        // iOS Safari ignores user-scalable=no, so stop its pinch-zoom of the page here.
+        document.addEventListener("gesturestart", (event) => event.preventDefault(), { passive: false });
+    </script>
 
 </body>
 

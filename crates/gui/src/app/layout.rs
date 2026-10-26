@@ -61,9 +61,6 @@ pub const ASK_BAR_COMPACT: f32 = ASK_BAR;
 /// The height of the bottom navigation of a compact window, in points. Each item fills it.
 pub const BOTTOM_NAV: f32 = size::TAB + space::MD;
 
-const TABS_WIDTH: f32 = 300.0;
-const LOGO_WIDTH: f32 = 120.0;
-
 const GUTTER: f32 = space::LG;
 const GAP: f32 = space::MD;
 /// A compact window is narrow, and the sheets of the panels keep their own margin, so it spends
@@ -340,40 +337,6 @@ fn compact(window: Rect) -> ShellRects {
 
 fn edges(left: f32, top: f32, right: f32, bottom: f32) -> Rect {
     Rect::from_min_max(pos2(left, top), pos2(right, bottom))
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct TopBarRects {
-    pub logo: Rect,
-    pub tabs: Rect,
-}
-
-pub fn top_bar(bar: Rect) -> TopBarRects {
-    let centre = bar.center();
-    TopBarRects {
-        logo: Rect::from_min_size(
-            pos2(bar.left() + GUTTER, centre.y - size::CONTROL_MD / 2.0),
-            vec2(LOGO_WIDTH, size::CONTROL_MD),
-        ),
-        tabs: Rect::from_center_size(centre, vec2(TABS_WIDTH, size::TAB.min(bar.height()))),
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct FooterRects {
-    /// The two paid accounts, from the left.
-    pub accounts: Rect,
-    pub connection: Rect,
-}
-
-pub fn footer(footer: Rect) -> FooterRects {
-    let row = footer.shrink2(vec2(GUTTER, 0.0));
-    let connection = Rect::from_min_max(pos2(row.right() - 240.0, row.top()), row.max);
-    let accounts = Rect::from_min_max(row.min, pos2(connection.left() - GUTTER, row.bottom()));
-    FooterRects {
-        accounts,
-        connection,
-    }
 }
 
 #[cfg(test)]

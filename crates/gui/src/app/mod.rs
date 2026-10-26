@@ -3,6 +3,7 @@
 
 mod ask_nav;
 mod balances;
+mod footer;
 pub mod layout;
 mod model_picker;
 mod region;

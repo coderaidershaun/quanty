@@ -393,6 +393,10 @@ fn a_phone_shows_one_view_of_the_ask_tab_at_a_time() {
     citation.click();
     testkit::settle(&mut harness);
     assert_shows_only(&harness, &rects, AskView::Source);
+    assert!(
+        harness.state().can_go_back(),
+        "a phone shows the Source alone, so Back has the Answer to return to"
+    );
     assert_eq!(state_of(&harness).ask.selected_result, Some(1));
 
     click_in(&mut harness, Role::Tab, label_of(AskView::FollowUp), bar);
@@ -412,6 +416,7 @@ fn a_phone_shows_one_view_of_the_ask_tab_at_a_time() {
     testkit::settle(&mut harness);
     assert_shows_only(&harness, &rects, AskView::Answer);
     assert!(!state_of(&harness).can_go_back());
+    assert!(!harness.state().can_go_back());
 }
 
 #[test]
@@ -468,4 +473,17 @@ fn a_tablet_shows_the_answer_beside_the_chosen_side_panel() {
     testkit::settle(&mut harness);
     both(&harness, AskView::Source);
     assert!(is_selected(&harness, label_of(AskView::Source), tabs));
+
+    assert!(
+        !harness.state().can_go_back(),
+        "a tablet keeps the Answer on screen, so Back has nothing to change"
+    );
+    harness.state_mut().push(Intent::Back);
+    testkit::settle(&mut harness);
+    assert_eq!(
+        state_of(&harness).ask_view,
+        AskView::Source,
+        "a Back that changes nothing on screen is dropped"
+    );
+    both(&harness, AskView::Source);
 }

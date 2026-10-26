@@ -1,5 +1,7 @@
 //! The browser owns the window while the server owns the library and its work.
 
+#[cfg(any(target_arch = "wasm32", test))]
+mod back;
 #[cfg(target_arch = "wasm32")]
 mod fetch;
 #[cfg(target_arch = "wasm32")]

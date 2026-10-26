@@ -18,4 +18,4 @@ pub use fixture::fixture_http_service;
 pub use jobs::{BackgroundJob, BackgroundJobs, BackgroundReservation, JobKind};
 pub use server::QuantyServer;
 pub use services::{PaidServices, Services};
-pub use transport::{ServeError, http_service, serve_stdio};
+pub use transport::{MCP_PATH, ServeError, http_service, serve_stdio};

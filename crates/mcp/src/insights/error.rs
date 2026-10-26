@@ -6,7 +6,8 @@ use ocr::ContentError;
 use rag_core::LlmError;
 use tokio::task::JoinError;
 
-use crate::jobs::{BackgroundJob, Busy, KEPT_JOBS};
+use crate::jobs::BackgroundJob;
+use crate::jobs::{Busy, KEPT_JOBS, busy_from};
 use crate::library::LibraryError;
 
 #[derive(thiserror::Error, Debug)]
@@ -36,14 +37,13 @@ pub(crate) enum InsightsToolError {
     ModelNotReady(#[source] LlmError),
 
     #[error(
-        "insights are being written (job {job_id}); ask `insights_status` with that job_id, and call `write_insights` again when that job has ended"
+        "insights are being written (job {}); ask `insights_status` with that job_id, and call `write_insights` again when that job has ended",
+        .0.running_job
     )]
-    Busy { job_id: String },
+    Busy(Busy),
 
-    #[error(
-        "background work is running: {kind} of {name}; wait for it to end before writing insights"
-    )]
-    SharedBusy { kind: &'static str, name: String },
+    #[error("background work is running: {0}; wait for it to end before writing insights")]
+    SharedBusy(BackgroundJob),
 
     #[error(
         "no insights job has the id {job_id:?}; job ids are forgotten when the server restarts, and the server keeps only its last {KEPT_JOBS} jobs, so call `write_insights` again: insights that are saved are not asked for twice"
@@ -65,19 +65,4 @@ pub(crate) enum InsightsToolError {
     Stopped(#[from] JoinError),
 }
 
-impl From<Busy> for InsightsToolError {
-    fn from(busy: Busy) -> InsightsToolError {
-        InsightsToolError::Busy {
-            job_id: busy.running_job.to_string(),
-        }
-    }
-}
-
-impl From<BackgroundJob> for InsightsToolError {
-    fn from(job: BackgroundJob) -> Self {
-        Self::SharedBusy {
-            kind: job.kind.label(),
-            name: job.name,
-        }
-    }
-}
+busy_from!(InsightsToolError);

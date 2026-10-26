@@ -142,22 +142,16 @@ impl<S: Services> LiveContext<S> {
     /// # Errors
     /// A failure that says which store or key is not ready.
     pub async fn retriever(&self) -> Result<Kept<S>, Failure> {
-        let mut kept = self.retriever.lock().await;
-        let era = self.era.load(Ordering::Acquire);
-        if let Some((built, retriever)) = kept.as_ref()
-            && *built == era
-        {
-            return Ok(Arc::clone(retriever));
-        }
-        let config = self.config();
-        let retriever = Arc::new(Retriever {
-            embedder: self.services.embedder(&config)?,
-            items: ItemStore::connect(&config).map_err(|error| self.failure(error))?,
-            concepts: ConceptStore::connect(&config).map_err(|error| self.failure(error))?,
-            graph: self.connect_graph(&config).await?,
-        });
-        *kept = Some((era, Arc::clone(&retriever)));
-        Ok(retriever)
+        self.kept(&self.retriever, async {
+            let config = self.config();
+            Ok(Retriever {
+                embedder: self.services.embedder(&config)?,
+                items: ItemStore::connect(&config).map_err(|error| self.failure(error))?,
+                concepts: ConceptStore::connect(&config).map_err(|error| self.failure(error))?,
+                graph: self.connect_graph(&config).await?,
+            })
+        })
+        .await
     }
 
     /// The graph alone, kept the same way: a read that needs no embedder, such as the concepts
@@ -166,27 +160,41 @@ impl<S: Services> LiveContext<S> {
     /// # Errors
     /// A failure that says the graph store is not ready.
     pub async fn graph(&self) -> Result<Arc<FalkorGraph>, Failure> {
-        let mut kept = self.graph.lock().await;
+        self.kept(&self.graph, async {
+            self.connect_graph(&self.config()).await
+        })
+        .await
+    }
+
+    /// What `slot` kept in the current era, or else what `build` makes, which is then kept.
+    async fn kept<T>(
+        &self,
+        slot: &tokio::sync::Mutex<Option<(u64, Arc<T>)>>,
+        build: impl Future<Output = Result<T, Failure>>,
+    ) -> Result<Arc<T>, Failure> {
+        let mut kept = slot.lock().await;
         let era = self.era.load(Ordering::Acquire);
-        if let Some((built, graph)) = kept.as_ref()
+        if let Some((built, value)) = kept.as_ref()
             && *built == era
         {
-            return Ok(Arc::clone(graph));
+            return Ok(Arc::clone(value));
         }
-        let config = self.config();
-        let graph = Arc::new(self.connect_graph(&config).await?);
-        *kept = Some((era, Arc::clone(&graph)));
-        Ok(graph)
+        let value = Arc::new(build.await?);
+        *kept = Some((era, Arc::clone(&value)));
+        Ok(value)
     }
 
     async fn connect_graph(&self, config: &Config) -> Result<FalkorGraph, Failure> {
         match tokio::time::timeout(CONNECT_LIMIT, self.services.graph(config)).await {
             Ok(connected) => connected.map_err(|failure| self.failure(failure)),
-            Err(_) => Err(self.failure(did_not_answer(
-                "FalkorDB",
-                &config.falkordb_url,
-                Failure::falkordb_down,
-            ))),
+            Err(_) => Err(self.failure(Failure {
+                detail: format!(
+                    "FalkorDB at {} did not answer within {} seconds",
+                    config.falkordb_url,
+                    CONNECT_LIMIT.as_secs()
+                ),
+                ..Failure::falkordb_down(&config.falkordb_url)
+            })),
         }
     }
 
@@ -279,16 +287,5 @@ impl<S: Services> LiveContext<S> {
             self.era.fetch_add(1, Ordering::AcqRel);
         }
         failure
-    }
-}
-
-/// A store that did not answer within the limit, which counts as that store being down.
-fn did_not_answer(store: &str, address: &str, down: fn(&str) -> Failure) -> Failure {
-    Failure {
-        detail: format!(
-            "{store} at {address} did not answer within {} seconds",
-            CONNECT_LIMIT.as_secs()
-        ),
-        ..down(address)
     }
 }

@@ -11,7 +11,7 @@ mod page;
 mod piece;
 
 pub(crate) use chapter::{DocumentHeader, find_chapter, parse_document_id};
-pub(crate) use concepts::{ChapterConceptsArgs, ConceptsView, chapter_concepts};
+pub(crate) use concepts::{ChapterConceptsArgs, ConceptView, ConceptsView, chapter_concepts};
 pub(crate) use contents::{ChapterContentsArgs, ContentsView, chapter_contents};
 pub(crate) use documents::{Documents, list_documents};
 pub(crate) use error::LibraryError;

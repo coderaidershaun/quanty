@@ -3,6 +3,10 @@
 //!
 //! Every `match` here ends with a catch-all arm. An error type that gains a variant still
 //! compiles, and the new variant is `Internal` until it is given a row.
+#![allow(
+    unreachable_patterns,
+    reason = "some matches have a row for every variant today"
+)]
 
 // SMELL: this file is near the 500-line limit, and each new kind of work adds a row. The rows of
 // the stores and the models, which the rows of every job call, are the part to move out first.
@@ -32,8 +36,8 @@ impl Verdict {
         Verdict { kind, hint: None }
     }
 
-    fn saying(kind: Kind, hint: String) -> Verdict {
-        let hint = Some(hint);
+    fn saying(kind: Kind, hint: impl Into<String>) -> Verdict {
+        let hint = Some(hint.into());
         Verdict { kind, hint }
     }
 
@@ -141,7 +145,6 @@ fn claude_cli(error: &ClaudeCliError) -> Verdict {
         ClaudeCliError::Start(_) => Verdict::of(Kind::ClaudeMissing),
         ClaudeCliError::NotSignedIn { .. } => Verdict::of(Kind::ClaudeSignedOut),
         ClaudeCliError::TimedOut { seconds } => timed_out(*seconds),
-        #[allow(unreachable_patterns, reason = "every variant has a row today")]
         _ => Verdict::internal(),
     }
 }
@@ -184,7 +187,6 @@ fn poppler(error: &PopplerError) -> Verdict {
         PopplerError::Failed { file, .. }
         | PopplerError::NoPageCount { file }
         | PopplerError::NoPageSize { file } => bad_file(file),
-        #[allow(unreachable_patterns, reason = "every variant has a row today")]
         _ => Verdict::internal(),
     }
 }
@@ -285,7 +287,6 @@ fn pdf(error: &PdfError) -> Verdict {
         PdfError::Graph(error) => graph(error),
         PdfError::Store(error) => store(error),
         PdfError::Ingest(error) => ingest(error),
-        #[allow(unreachable_patterns, reason = "every variant has a row today")]
         _ => Verdict::internal(),
     }
 }
@@ -322,7 +323,7 @@ fn delete(error: &DeleteError) -> Verdict {
         }
         DeleteError::UnknownDocument { .. } => {
             let hint = "The library no longer holds this document, so nothing was removed. The library is read again.";
-            Verdict::saying(Kind::SourceMissing, hint.to_owned())
+            Verdict::saying(Kind::SourceMissing, hint)
         }
         DeleteError::UnknownMedia { title } => {
             let hint = format!(
@@ -330,7 +331,6 @@ fn delete(error: &DeleteError) -> Verdict {
             );
             Verdict::saying(Kind::SourceMissing, hint)
         }
-        #[allow(unreachable_patterns, reason = "every variant has a row today")]
         _ => Verdict::internal(),
     }
 }
@@ -346,7 +346,6 @@ fn relabel(error: &RelabelError) -> Verdict {
             );
             Verdict::saying(Kind::SourceMissing, hint)
         }
-        #[allow(unreachable_patterns, reason = "every variant has a row today")]
         _ => Verdict::internal(),
     }
 }
@@ -356,7 +355,6 @@ fn search(error: &SearchError) -> Verdict {
         SearchError::Embed(error) => embed(error),
         SearchError::Items(error) | SearchError::Concepts(error) => store(error),
         SearchError::Graph(error) => graph(error),
-        #[allow(unreachable_patterns, reason = "every variant has a row today")]
         _ => Verdict::internal(),
     }
 }
@@ -393,11 +391,6 @@ fn dataset(error: &BuildError) -> Verdict {
     Verdict::saying(Kind::BadFile, hint)
 }
 
-/// A settings error is raised before the window opens, so it has no row.
-fn config(_error: &ConfigError) -> Verdict {
-    Verdict::internal()
-}
-
 pub trait IntoFailure {
     fn into_failure(self) -> Failure;
 }
@@ -408,11 +401,10 @@ impl IntoFailure for Failure {
 }
 
 macro_rules! failures_from {
-    ($($error:ty => $verdict:ident),+ $(,)?) => {
+    ($($error:ty => $verdict:expr),+ $(,)?) => {
         $(impl IntoFailure for $error {
             fn into_failure(self) -> Failure {
-                let error = self;
-                $verdict(&error).failure(&error)
+                $verdict(&self).failure(&self)
             }
         })+
     };
@@ -434,6 +426,7 @@ failures_from!(
     ConvertError => convert,
     ContentError => content,
     ReadChapterError => read_chapter,
-    ConfigError => config,
+    // A settings error is raised before the window opens, so it has no row.
+    ConfigError => |_: &ConfigError| Verdict::internal(),
     BuildError => dataset,
 );

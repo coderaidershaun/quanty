@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use ocr::ReadChapterError;
 
+use super::blocking;
 use super::folder::{FolderFault, chapter_folder};
 use super::source::piece_view;
 use crate::Reply;
@@ -49,18 +50,15 @@ async fn read_items<S: Services>(
     folder: Option<PathBuf>,
 ) -> Result<ChapterContents, Failure> {
     let content_folder = cx.config().content_folder.clone();
-    let read = tokio::task::spawn_blocking(move || {
-        items_from_disk(doc, folder.as_deref(), &content_folder)
-    })
-    .await;
-    match read {
-        Ok(Ok(contents)) => Ok(contents),
-        Ok(Err(ItemsFault::Folder(fault))) => Err(fault.failure(cx, doc.into_view())),
-        Ok(Err(ItemsFault::Read(error))) => Err(cx.failure(error)),
-        Err(error) => Err(Failure::internal(format!(
-            "the chapter reader stopped: {error}"
-        ))),
-    }
+    blocking(
+        "chapter reader",
+        move || items_from_disk(doc, folder.as_deref(), &content_folder),
+        |fault| match fault {
+            ItemsFault::Folder(fault) => fault.failure(cx, doc.into_view()),
+            ItemsFault::Read(error) => cx.failure(error),
+        },
+    )
+    .await
 }
 
 async fn document_concepts<S: Services>(

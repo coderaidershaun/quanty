@@ -1,6 +1,6 @@
 //! Exports are claimed once before their bytes leave the server.
 
-use crate::Settings;
+use crate::{Settings, content::contained};
 use axum::{
     extract::{Path, State},
     http::{StatusCode, header},
@@ -21,17 +21,9 @@ pub(crate) async fn download(
     {
         return Err(StatusCode::NOT_FOUND);
     }
-    let root = settings.home.join("data/exports");
-    let canonical_root = tokio::fs::canonicalize(&root)
-        .await
-        .map_err(|_| StatusCode::NOT_FOUND)?;
+    let root = settings.home.join(backend::EXPORTS);
     let folder = root.join(id.to_string());
-    let path = tokio::fs::canonicalize(folder.join(&file))
-        .await
-        .map_err(|_| StatusCode::NOT_FOUND)?;
-    if !path.starts_with(&canonical_root) {
-        return Err(StatusCode::NOT_FOUND);
-    }
+    let path = contained(&root, format!("{id}/{file}")).await?;
     let claimed = folder.join(format!(".download-{}", uuid::Uuid::new_v4()));
     tokio::fs::rename(&path, &claimed)
         .await
@@ -60,16 +52,10 @@ pub(crate) async fn download(
         "attachment; filename=\"{ascii}\"; filename*=UTF-8''{}",
         utf8_percent_encode(&file, NON_ALPHANUMERIC)
     );
-    let mime = match file.rsplit('.').next() {
-        Some("pdf") => "application/pdf",
-        Some("html") => "text/html; charset=utf-8",
-        Some("md") => "text/markdown; charset=utf-8",
-        _ => "application/octet-stream",
-    };
     Ok((
         [
             (header::CONTENT_DISPOSITION, disposition),
-            (header::CONTENT_TYPE, mime.into()),
+            (header::CONTENT_TYPE, crate::mime(&file).into()),
             (header::CACHE_CONTROL, "no-store".into()),
         ],
         axum::body::Body::from_stream(futures_util::stream::unfold(body, |mut body| async move {

@@ -55,42 +55,23 @@ fn uploaded_source<S: Services>(
 ) -> Result<PathBuf, Failure> {
     rag_ingestion::check_upload_file_name(&ingest.file_name)
         .map_err(|error| Failure::new(FailureKind::BadFile, error.to_string()))?;
-    let uploads = cx.home().join("data/uploads");
+    let uploads = cx.home().join(crate::UPLOADS);
     let folder = uploads.join(ingest.pdf.0.to_string());
     let pdf = folder.join(&ingest.file_name);
     if !pdf
         .try_exists()
         .map_err(|error| upload_failure(&pdf, "read", error))?
     {
-        let media =
-            ocr::content::media_folder_name(&ingest.media).map_err(|error| cx.failure(error))?;
-        let persistent = rag_ingestion::uploaded_pdf_path(
-            &cx.config().content_folder,
-            &media,
-            &ingest.file_name,
-        )
-        .map_err(|error| Failure::new(FailureKind::BadFile, error.to_string()))?;
-        let uploads = cx.config().content_folder.join("_uploads");
-        let root = uploads
-            .canonicalize()
-            .map_err(|error| upload_failure(&uploads, "read", error))?;
-        let resolved = persistent
-            .canonicalize()
-            .map_err(|error| upload_failure(&persistent, "read", error))?;
-        if !resolved.starts_with(root) {
+        let persistent = persistent_path(cx, ingest)?;
+        if !inside(&persistent, &cx.config().content_folder.join("_uploads"))? {
             return Err(Failure::new(
                 FailureKind::BadFile,
                 "the PDF is outside the persistent upload folder",
             ));
         }
-        check_is_a_pdf(&persistent)?;
         return Ok(persistent);
     }
-    let unreadable = |error: std::io::Error| upload_failure(&pdf, "read", error);
-    let root = uploads.canonicalize().map_err(unreadable)?;
-    let resolved_folder = folder.canonicalize().map_err(unreadable)?;
-    let resolved = pdf.canonicalize().map_err(unreadable)?;
-    if !resolved_folder.starts_with(root) || !resolved.starts_with(resolved_folder) {
+    if !inside(&folder, &uploads)? || !inside(&pdf, &folder)? {
         return Err(Failure::new(
             FailureKind::BadFile,
             "the PDF is outside its upload folder",
@@ -99,18 +80,34 @@ fn uploaded_source<S: Services>(
     Ok(pdf)
 }
 
+/// Where the PDF of the request is kept for good, beneath the content folder.
+fn persistent_path<S: Services>(
+    cx: &LiveContext<S>,
+    ingest: &IngestRequest,
+) -> Result<PathBuf, Failure> {
+    let media =
+        ocr::content::media_folder_name(&ingest.media).map_err(|error| cx.failure(error))?;
+    rag_ingestion::uploaded_pdf_path(&cx.config().content_folder, &media, &ingest.file_name)
+        .map_err(|error| Failure::new(FailureKind::BadFile, error.to_string()))
+}
+
+/// Whether `child` is beneath `root` once both are resolved.
+fn inside(child: &Path, root: &Path) -> Result<bool, Failure> {
+    let resolve = |path: &Path| {
+        path.canonicalize()
+            .map_err(|error| upload_failure(path, "read", error))
+    };
+    let root = resolve(root)?;
+    Ok(resolve(child)?.starts_with(root))
+}
+
 fn prepare_upload<S: Services>(
     cx: &LiveContext<S>,
     ingest: &IngestRequest,
 ) -> Result<ChapterJob, Failure> {
     let source = uploaded_source(cx, ingest)?;
     check_is_a_pdf(&source)?;
-    let media_folder =
-        ocr::content::media_folder_name(&ingest.media).map_err(|error| cx.failure(error))?;
-    let config = cx.config();
-    let saved =
-        rag_ingestion::uploaded_pdf_path(&config.content_folder, &media_folder, &ingest.file_name)
-            .map_err(|error| Failure::new(FailureKind::BadFile, error.to_string()))?;
+    let saved = persistent_path(cx, ingest)?;
     let job = chapter_job_at(cx, ingest, &saved)?;
     if source == saved {
         return Ok(job);

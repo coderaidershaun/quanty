@@ -78,22 +78,16 @@ impl Settings {
         let session_key = match value("QUANTY_SESSION_KEY") {
             None => Key::generate(),
             Some(hex) => {
-                if hex.len() != 64 {
-                    return Err(invalid("QUANTY_SESSION_KEY", "expected 64 hex characters"));
-                }
-                let bytes: Result<Vec<_>, _> = hex
-                    .as_bytes()
-                    .chunks_exact(2)
-                    .map(|pair| {
-                        std::str::from_utf8(pair)
-                            .ok()
-                            .and_then(|s| u8::from_str_radix(s, 16).ok())
-                            .ok_or_else(|| {
-                                invalid("QUANTY_SESSION_KEY", "expected 64 hex characters")
-                            })
+                let bytes: Option<Vec<u8>> = (hex.len() == 64)
+                    .then(|| {
+                        (0..32)
+                            .map(|i| u8::from_str_radix(hex.get(2 * i..2 * i + 2)?, 16).ok())
+                            .collect()
                     })
-                    .collect();
-                Key::derive_from(&bytes?)
+                    .flatten();
+                let bytes = bytes
+                    .ok_or_else(|| invalid("QUANTY_SESSION_KEY", "expected 64 hex characters"))?;
+                Key::derive_from(&bytes)
             }
         };
         let megabytes = value("QUANTY_UPLOAD_LIMIT_MB")

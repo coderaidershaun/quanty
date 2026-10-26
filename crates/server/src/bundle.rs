@@ -16,22 +16,16 @@ pub(crate) async fn serve(request: Request) -> Response {
     let path = if path.is_empty() { "index.html" } else { path };
     #[cfg(ui_bundle)]
     if let Some(file) = Bundle::get(path) {
-        let mime = match path.rsplit('.').next() {
-            Some("html") => "text/html; charset=utf-8",
-            Some("js") => "text/javascript; charset=utf-8",
-            Some("wasm") => "application/wasm",
-            Some("css") => "text/css; charset=utf-8",
-            Some("png") => "image/png",
-            Some("ico") => "image/x-icon",
-            _ => "application/octet-stream",
-        };
         let cache = if path == "index.html" {
             "no-store"
         } else {
             "public, max-age=31536000, immutable"
         };
         return (
-            [(header::CONTENT_TYPE, mime), (header::CACHE_CONTROL, cache)],
+            [
+                (header::CONTENT_TYPE, crate::mime(path)),
+                (header::CACHE_CONTROL, cache),
+            ],
             file.data.into_owned(),
         )
             .into_response();

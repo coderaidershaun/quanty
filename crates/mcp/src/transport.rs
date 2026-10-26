@@ -3,17 +3,18 @@
 
 use std::sync::Arc;
 
-use rmcp::ServiceExt;
 use rmcp::service::ServerInitializeError;
 use rmcp::transport::stdio;
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::transport::{StreamableHttpServerConfig, StreamableHttpService};
+use rmcp::{ServerHandler, ServiceExt};
 use tokio::task::JoinError;
 
 use crate::server::QuantyServer;
 use crate::services::Services;
 
-const HTTP_PATH: &str = "/mcp";
+/// Where the tools are served over HTTP.
+pub const MCP_PATH: &str = "/mcp";
 
 #[derive(thiserror::Error, Debug)]
 pub enum ServeError {
@@ -45,14 +46,22 @@ pub async fn serve_stdio<S: Services>(server: QuantyServer<S>) -> Result<(), Ser
 /// Browser origins are refused; authenticated CLI clients can use a public host.
 pub fn http_service<S: Services>(server: QuantyServer<S>) -> axum::Router {
     let largest_request = usize::try_from(server.largest_request_bytes()).unwrap_or(usize::MAX);
-    let config = StreamableHttpServerConfig::default()
-        .with_max_request_body_bytes(largest_request)
-        .disable_allowed_hosts()
-        .enforce_origin_validation();
-    let service = StreamableHttpService::new(
+    mount(
         move || Ok(server.clone()),
+        StreamableHttpServerConfig::default().with_max_request_body_bytes(largest_request),
+    )
+}
+
+/// The tools of `factory` at [`MCP_PATH`]. The caller authenticates every request, so the host is
+/// not checked here; a request from a browser origin is refused.
+pub(crate) fn mount<H: ServerHandler + Send + 'static>(
+    factory: impl Fn() -> Result<H, std::io::Error> + Send + Sync + 'static,
+    config: StreamableHttpServerConfig,
+) -> axum::Router {
+    let service = StreamableHttpService::new(
+        factory,
         Arc::new(LocalSessionManager::default()),
-        config,
+        config.disable_allowed_hosts().enforce_origin_validation(),
     );
-    axum::Router::new().nest_service(HTTP_PATH, service)
+    axum::Router::new().nest_service(MCP_PATH, service)
 }

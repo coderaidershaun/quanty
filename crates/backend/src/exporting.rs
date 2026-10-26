@@ -15,11 +15,9 @@ pub(super) async fn write_file(
     let format = file.format;
     let home = home.to_owned();
     let content = content.to_owned();
-    let written = tokio::task::spawn_blocking(move || write_download(file, &home, &content)).await;
-    let result = match written {
-        Ok(result) => result,
-        Err(error) => Err(Failure::internal(format!("the export stopped: {error}"))),
-    };
+    let result = tokio::task::spawn_blocking(move || write_download(file, &home, &content))
+        .await
+        .unwrap_or_else(|error| Err(Failure::internal(format!("the export stopped: {error}"))));
     reply.send(Event::Exported {
         request,
         format,
@@ -45,7 +43,7 @@ fn write_download(mut file: ExportFile, home: &Path, content: &Path) -> Result<D
         }
     }
     let id = uuid::Uuid::new_v4();
-    let folder = home.join("data/exports").join(id.to_string());
+    let folder = home.join(crate::EXPORTS).join(id.to_string());
     std::fs::create_dir_all(&folder).map_err(|error| {
         Failure::new(
             FailureKind::WriteFailed,

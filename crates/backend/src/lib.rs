@@ -9,3 +9,7 @@ mod runtime;
 
 pub use handler::{Handler, Reply, Stop};
 pub use runtime::Runtime;
+
+/// Where the staged PDFs and the finished exports live, beneath the home folder.
+pub const UPLOADS: &str = "data/uploads";
+pub const EXPORTS: &str = "data/exports";

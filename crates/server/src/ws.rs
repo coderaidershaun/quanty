@@ -1,6 +1,6 @@
 //! Each socket owns ordinary requests while the shared guard owns paid work.
 
-use crate::jobs::{Guard, Owner};
+use crate::jobs::{Guard, Owner, spawn_runtime};
 use axum::{
     extract::{
         State, WebSocketUpgrade,
@@ -11,7 +11,7 @@ use axum::{
 use backend::{Handler, Runtime};
 use contract::{Command, Frame};
 use std::sync::Arc;
-use tokio::sync::{Notify, mpsc};
+use tokio::sync::mpsc;
 
 pub(crate) struct SocketState<H> {
     pub(crate) handler: Arc<H>,
@@ -56,13 +56,7 @@ async fn flush<H: Handler>(socket: &mut WebSocket, runtime: &mut Runtime<H>) -> 
 }
 
 async fn connection<H: Handler>(mut socket: WebSocket, state: SocketState<H>) {
-    let wake = Arc::new(Notify::new());
-    let notify = wake.clone();
-    let mut runtime = Runtime::on(
-        tokio::runtime::Handle::current(),
-        state.handler.clone(),
-        move || notify.notify_one(),
-    );
+    let (mut runtime, wake) = spawn_runtime(state.handler.clone());
     let (frames, mut incoming) = mpsc::unbounded_channel();
     let owner = Owner::new(frames);
     loop {

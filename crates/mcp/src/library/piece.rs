@@ -55,9 +55,7 @@ impl PieceView {
                 .and_then(|picture| rag_core::content_url(&picture.path, content)),
         }
     }
-}
 
-impl PieceView {
     /// An item of a chapter as one piece: the first piece, with the content and the language of
     /// the whole item, which is longer than the first piece for a listing that page breaks cut.
     pub(super) fn of_item(item: &ChapterItem<'_>, content: &std::path::Path) -> PieceView {

@@ -9,7 +9,8 @@ use rag_core::{EmbedError, EmptyTag, StoreError, UnknownCategory};
 use rag_ingestion::{NamePdfError, PdfError, RelabelError};
 use tokio::task::JoinError;
 
-use crate::jobs::{BackgroundJob, Busy, KEPT_JOBS};
+use crate::jobs::BackgroundJob;
+use crate::jobs::{Busy, KEPT_JOBS, busy_from};
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum PdfIngestError {
@@ -98,14 +99,13 @@ pub(crate) enum PdfIngestError {
     DocumentTitle(#[source] ConvertError),
 
     #[error(
-        "an ingest is running (job {job_id}); ask `ingest_status` with that job_id, and send this PDF when that job has ended"
+        "an ingest is running (job {}); ask `ingest_status` with that job_id, and send this PDF when that job has ended",
+        .0.running_job
     )]
-    Busy { job_id: String },
+    Busy(Busy),
 
-    #[error(
-        "background work is running: {kind} of {name}; wait for it to end before sending this PDF"
-    )]
-    SharedBusy { kind: &'static str, name: String },
+    #[error("background work is running: {0}; wait for it to end before sending this PDF")]
+    SharedBusy(BackgroundJob),
 
     #[error(
         "no ingest job has the id {job_id:?}; job ids are forgotten when the server restarts, and the server keeps only its last {KEPT_JOBS} jobs, so send the PDF again: a PDF that is ingested is not ingested twice"
@@ -156,22 +156,7 @@ pub(crate) enum PdfIngestError {
     Stopped(#[from] JoinError),
 }
 
-impl From<Busy> for PdfIngestError {
-    fn from(busy: Busy) -> PdfIngestError {
-        PdfIngestError::Busy {
-            job_id: busy.running_job.to_string(),
-        }
-    }
-}
-
-impl From<BackgroundJob> for PdfIngestError {
-    fn from(job: BackgroundJob) -> Self {
-        Self::SharedBusy {
-            kind: job.kind.label(),
-            name: job.name,
-        }
-    }
-}
+busy_from!(PdfIngestError);
 
 /// Each refusal of a name is worded for an agent, which sends arguments and not flags.
 impl From<NamePdfError> for PdfIngestError {

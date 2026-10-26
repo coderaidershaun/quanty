@@ -7,7 +7,8 @@ use rag_dataset::BuildError;
 use rag_dataset::documents::SelectionError;
 use tokio::task::JoinError;
 
-use crate::jobs::{BackgroundJob, Busy, KEPT_JOBS};
+use crate::jobs::BackgroundJob;
+use crate::jobs::{Busy, KEPT_JOBS, busy_from};
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum DatasetToolError {
@@ -50,14 +51,13 @@ pub(crate) enum DatasetToolError {
     ModelNotReady(#[source] LlmError),
 
     #[error(
-        "a dataset build is running (job {job_id}); ask `dataset_status` with that job_id, and start this build when that job has ended"
+        "a dataset build is running (job {}); ask `dataset_status` with that job_id, and start this build when that job has ended",
+        .0.running_job
     )]
-    Busy { job_id: String },
+    Busy(Busy),
 
-    #[error(
-        "background work is running: {kind} of {name}; wait for it to end before starting this build"
-    )]
-    SharedBusy { kind: &'static str, name: String },
+    #[error("background work is running: {0}; wait for it to end before starting this build")]
+    SharedBusy(BackgroundJob),
 
     #[error(
         "no dataset build has the job id {job_id:?}; job ids are forgotten when the server restarts, and the server keeps only its last {KEPT_JOBS} builds, so call `build_dataset` again: a dry run is free, and the answers a model already gave are kept and not paid for twice"
@@ -82,22 +82,7 @@ pub(crate) enum DatasetToolError {
     Stopped(#[from] JoinError),
 }
 
-impl From<Busy> for DatasetToolError {
-    fn from(busy: Busy) -> DatasetToolError {
-        DatasetToolError::Busy {
-            job_id: busy.running_job.to_string(),
-        }
-    }
-}
-
-impl From<BackgroundJob> for DatasetToolError {
-    fn from(job: BackgroundJob) -> Self {
-        Self::SharedBusy {
-            kind: job.kind.label(),
-            name: job.name,
-        }
-    }
-}
+busy_from!(DatasetToolError);
 
 /// A refusal of the name or of the selection is worded for an agent, which sends arguments and not
 /// flags. A model that is not ready gets the words of the tool's own check. Every other failure

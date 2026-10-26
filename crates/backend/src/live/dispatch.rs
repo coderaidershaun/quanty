@@ -4,6 +4,7 @@
 use super::context::{LiveContext, Services};
 use super::source::PageTarget;
 use super::{balances, chapter, datasets, health, ingest, library, query, source};
+use crate::handler::save_model_choice;
 use crate::{Handler, Reply, exporting};
 use contract::{Command, Event};
 
@@ -15,18 +16,7 @@ impl<S: Services> Handler for LiveContext<S> {
                 work,
                 choice,
             } => {
-                let path = self.home().join(choices::MODEL_SETTINGS_FILE);
-                let result = choices::WorkChoices::load_from(&path)
-                    .and_then(|mut choices| {
-                        *choices.of_mut(work) = choice;
-                        choices.save_to(&path)
-                    })
-                    .map_err(|error| {
-                        contract::Failure::internal(format!(
-                            "could not save the model choice: {error}"
-                        ))
-                        .with_hint(format!("The model choice could not be saved: {error}"))
-                    });
+                let result = save_model_choice(self.home(), work, choice);
                 reply.send(Event::ModelChoiceSaved { request, result });
             }
             Command::Ask { request, ask } => query::ask(self, request, &ask, &reply).await,

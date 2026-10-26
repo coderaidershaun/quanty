@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use super::LibraryError;
 use super::chapter::{DocumentHeader, find_chapter, parse_document_id};
 use super::piece::PieceView;
-use crate::args::non_blank;
+use crate::args::parse_optional;
 
 /// What an agent gives `chapter_contents`.
 #[derive(Deserialize, JsonSchema)]
@@ -97,10 +97,7 @@ fn is_of_kind(item: &ChapterItem<'_>, kind: ItemKind) -> bool {
 
 /// The kind that was asked for, or `None` for every kind.
 fn wanted_kind(kind: Option<String>) -> Result<Option<ItemKind>, LibraryError> {
-    let kind = non_blank(kind)
-        .map(|kind| kind.parse::<ItemKind>())
-        .transpose()
-        .map_err(LibraryError::ItemKind)?;
+    let kind = parse_optional::<ItemKind>(kind).map_err(LibraryError::ItemKind)?;
     match kind {
         Some(ItemKind::Chunk) => Err(LibraryError::ChunkKind),
         other => Ok(other),

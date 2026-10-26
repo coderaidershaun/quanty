@@ -7,6 +7,7 @@ use std::path::Path;
 
 use ocr::content::{PageIndex, page_folder_name};
 use ocr::{ChapterIndex, ChapterInsights, ChapterJob, ContentError, ConvertError, gets_insights};
+use rag_ingestion::ArtifactState;
 
 use super::{chapter_job, uploaded_source};
 use crate::Reply;
@@ -55,18 +56,12 @@ async fn ingested_check<S: Services>(
     job: &ChapterJob,
     items: u64,
 ) -> Preflight {
-    let mut blockers = Vec::new();
     let gets = gets_insights(job.name(), Some(ingest.category.into_view()));
     // A file that cannot be read counts as none, as it does when the insights are written.
     let missing = gets && !matches!(ChapterInsights::read(&job.chapter_folder()), Ok(Some(_)));
-    let assessment = rag_ingestion::assess_artifacts(&job.chapter_folder());
-    let missing_artifacts = assessment.state != rag_ingestion::ArtifactState::Ready;
-    if matches!(
-        assessment.state,
-        rag_ingestion::ArtifactState::NoFolder | rag_ingestion::ArtifactState::TooLarge
-    ) {
-        blockers.push(metadata_blocker(assessment));
-    }
+    let (artifacts, blocker) = assess_artifacts(&job.chapter_folder());
+    let missing_artifacts = artifacts != ArtifactState::Ready;
+    let mut blockers: Vec<Failure> = blocker.into_iter().collect();
     let state = if missing_artifacts {
         if blockers.is_empty()
             && let Err(failure) = cx.ingest_agent_ready().await
@@ -133,13 +128,7 @@ async fn folder_check<S: Services>(
         Err(error) => return Err(cx.failure(error)),
     };
     if state == ChapterState::Converted {
-        let assessment = rag_ingestion::assess_artifacts(&folder);
-        if matches!(
-            assessment.state,
-            rag_ingestion::ArtifactState::NoFolder | rag_ingestion::ArtifactState::TooLarge
-        ) {
-            blockers.push(metadata_blocker(assessment));
-        }
+        blockers.extend(assess_artifacts(&folder).1);
     }
     Ok(Preflight {
         name,
@@ -162,11 +151,20 @@ fn converted_so_far(folder: &Path, saved: &ChapterIndex) -> ChapterState {
     ChapterState::PartlyConverted { pages_done }
 }
 
+/// The state of the artifact metadata of a chapter, and the blocker when it cannot be completed.
+fn assess_artifacts(folder: &Path) -> (ArtifactState, Option<Failure>) {
+    let assessment = rag_ingestion::assess_artifacts(folder);
+    let state = assessment.state;
+    let blocked = matches!(state, ArtifactState::NoFolder | ArtifactState::TooLarge)
+        .then(|| metadata_blocker(assessment));
+    (state, blocked)
+}
+
 fn metadata_blocker(assessment: rag_ingestion::ArtifactAssessment) -> Failure {
     let reason = assessment
         .reason
         .unwrap_or_else(|| "required artifact metadata cannot be completed".to_owned());
-    let hint = if assessment.state == rag_ingestion::ArtifactState::NoFolder {
+    let hint = if assessment.state == ArtifactState::NoFolder {
         "Restore the saved converted chapter folder before repairing metadata. Existing searchable data is kept.".to_owned()
     } else {
         reason.clone()

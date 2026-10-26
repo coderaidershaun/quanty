@@ -5,6 +5,7 @@ use crate::live::convert::IntoView;
 
 use std::path::{Path, PathBuf};
 
+use super::blocking;
 use super::folder::chapters_on_disk;
 use crate::Reply;
 use crate::live::{LiveContext, Services};
@@ -23,15 +24,13 @@ pub(in crate::live) async fn load_chapter_insights<S: Services>(
 ) {
     let content_folder = cx.config().content_folder.clone();
     let searched = content_folder.clone();
-    let read =
-        tokio::task::spawn_blocking(move || saved_on_disk(doc, folder.as_deref(), &searched)).await;
-    let result = match read {
-        Ok(Ok(saved)) => Ok(saved.map(chapter_insights)),
-        Ok(Err(fault)) => Err(fault.failure(doc, &content_folder)),
-        Err(error) => Err(Failure::internal(format!(
-            "the insights reader stopped: {error}"
-        ))),
-    };
+    let result = blocking(
+        "insights reader",
+        move || saved_on_disk(doc, folder.as_deref(), &searched),
+        |fault| fault.failure(doc, &content_folder),
+    )
+    .await
+    .map(|saved| saved.map(chapter_insights));
     reply.send(Event::ChapterInsights { request, result });
 }
 

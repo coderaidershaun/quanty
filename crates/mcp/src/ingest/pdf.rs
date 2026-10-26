@@ -16,7 +16,7 @@ use rag_core::{Category, Config, MediaLabels, Tag, author_list};
 use rag_ingestion::{TagChange, UnnamedPdf, uploaded_pdf_path};
 
 use super::{IngestPdfArgs, PdfIngestError};
-use crate::args::{non_blank, parse_tags};
+use crate::args::{file_name_of, non_blank, parse_optional, parse_tags};
 
 const PDF_START: &[u8] = b"%PDF-";
 
@@ -74,10 +74,7 @@ pub(super) fn check(
     max_pdf_bytes: u64,
 ) -> Result<CheckedPdf, PdfIngestError> {
     let media = non_blank(Some(args.media)).ok_or(PdfIngestError::BlankMedia)?;
-    let category = non_blank(args.category)
-        .map(|category| category.parse::<Category>())
-        .transpose()
-        .map_err(PdfIngestError::Category)?;
+    let category = parse_optional::<Category>(args.category).map_err(PdfIngestError::Category)?;
     // The media is checked here, so that the checks below can fail for the document only.
     let media_folder = media_folder_name(&media).map_err(PdfIngestError::Media)?;
     let media_tags = parse_tags(args.tags).map_err(PdfIngestError::Tag)?;
@@ -124,10 +121,7 @@ fn checked_source(
                 return Err(PdfIngestError::FileNameWithPath);
             }
             let pdf_path = path_of_a_pdf(&path, max_pdf_bytes)?;
-            let file_name = pdf_path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_default();
+            let file_name = file_name_of(&pdf_path).unwrap_or_default();
             Ok(Source {
                 pdf_path,
                 file_name,

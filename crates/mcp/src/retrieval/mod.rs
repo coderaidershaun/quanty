@@ -13,7 +13,7 @@ use rag_retrieval::{AnswerError, Retriever, SearchError};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::args::{non_blank, parse_tags};
+use crate::args::{non_blank, parse_optional, parse_tags};
 use crate::services::Services;
 pub(crate) use found::SearchResult;
 pub(crate) use written::AnswerResult;
@@ -104,14 +104,9 @@ struct Asked {
 impl QuestionArgs {
     fn read(self) -> Result<Asked, RetrievalError> {
         let question = non_blank(Some(self.question)).ok_or(RetrievalError::BlankQuestion)?;
-        let kind = non_blank(self.kind)
-            .map(|kind| kind.parse::<ItemKind>())
-            .transpose()
-            .map_err(RetrievalError::Kind)?;
-        let category = non_blank(self.category)
-            .map(|category| category.parse::<Category>())
-            .transpose()
-            .map_err(RetrievalError::Category)?;
+        let kind = parse_optional::<ItemKind>(self.kind).map_err(RetrievalError::Kind)?;
+        let category =
+            parse_optional::<Category>(self.category).map_err(RetrievalError::Category)?;
         let tags = parse_tags(self.tags).map_err(RetrievalError::Tag)?;
         Ok(Asked {
             question,

@@ -4,13 +4,18 @@
 
 use std::collections::VecDeque;
 use std::future::Future;
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::Mutex;
 
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 use tokio::task::{AbortHandle, JoinError};
 use uuid::Uuid;
+
+mod background;
+mod stop;
+
+pub(crate) use background::lock;
+pub use background::{BackgroundJob, BackgroundJobs, BackgroundReservation, JobKind};
+pub(crate) use stop::{StopError, StopJobArgs, StopResult, StopState};
 
 /// A report that says whether its job is still going on.
 pub(crate) trait JobReport: Clone + Send + Sync + 'static {
@@ -37,157 +42,24 @@ pub(crate) struct Busy {
     pub(crate) running_job: Uuid,
 }
 
-/// The background work occupying the one slot of an HTTP server.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BackgroundJob {
-    pub kind: JobKind,
-    pub name: String,
-    id: Uuid,
-}
-
-/// Admission shared by the browser and the embedded MCP server.
-#[derive(Clone, Default)]
-pub struct BackgroundJobs(Arc<Mutex<Option<BackgroundJob>>>);
-
-impl BackgroundJobs {
-    /// A new slot for one HTTP server.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// The process slot used by browser routers that share a process.
-    pub fn global() -> Self {
-        static GLOBAL: OnceLock<BackgroundJobs> = OnceLock::new();
-        GLOBAL.get_or_init(Self::new).clone()
-    }
-
-    /// The job still doing work, including work whose caller disconnected.
-    pub fn running(&self) -> Option<BackgroundJob> {
-        self.0
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
-    }
-
-    /// Holds admission until the returned reservation is dropped.
-    ///
-    /// # Errors
-    /// Returns the running job when the slot is occupied.
-    pub fn reserve(
-        &self,
-        kind: JobKind,
-        name: impl Into<String>,
-    ) -> Result<BackgroundReservation, BackgroundJob> {
-        let mut slot = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(running) = slot.as_ref() {
-            return Err(running.clone());
+/// Makes `Busy` and `BackgroundJob` convertible into the variants of a tool error that hold them.
+macro_rules! busy_from {
+    ($error:ident) => {
+        impl From<Busy> for $error {
+            fn from(busy: Busy) -> $error {
+                $error::Busy(busy)
+            }
         }
-        let id = Uuid::new_v4();
-        *slot = Some(BackgroundJob {
-            kind,
-            name: name.into(),
-            id,
-        });
-        Ok(BackgroundReservation {
-            jobs: self.clone(),
-            id,
-        })
-    }
-}
 
-/// Ownership of one admitted background job.
-pub struct BackgroundReservation {
-    jobs: BackgroundJobs,
-    id: Uuid,
-}
-
-impl Drop for BackgroundReservation {
-    fn drop(&mut self) {
-        let mut slot = self.jobs.0.lock().unwrap_or_else(PoisonError::into_inner);
-        if slot.as_ref().is_some_and(|running| running.id == self.id) {
-            *slot = None;
+        impl From<BackgroundJob> for $error {
+            fn from(job: BackgroundJob) -> $error {
+                $error::SharedBusy(job)
+            }
         }
-    }
+    };
 }
+pub(crate) use busy_from;
 
-/// What an agent gives `stop_job`.
-#[derive(Deserialize, JsonSchema)]
-pub(crate) struct StopJobArgs {
-    /// The `job_id` that `ingest_pdf`, `write_insights` or `build_dataset` gave.
-    pub(crate) job_id: String,
-}
-
-/// The kind of work a job does.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum JobKind {
-    /// A job that `ingest_pdf` started.
-    Ingest,
-    /// A job that `write_insights` started.
-    Insights,
-    /// A job that `build_dataset` started.
-    Dataset,
-}
-
-impl JobKind {
-    /// The short name shown for a running job.
-    pub fn label(self) -> &'static str {
-        match self {
-            JobKind::Ingest => "ingest",
-            JobKind::Insights => "insights",
-            JobKind::Dataset => "dataset build",
-        }
-    }
-
-    /// The tool that tells how a job of this kind goes or how it ended.
-    fn status_tool(self) -> &'static str {
-        match self {
-            JobKind::Ingest => "ingest_status",
-            JobKind::Insights => "insights_status",
-            JobKind::Dataset => "dataset_status",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum StopState {
-    /// The job was running and is stopped now.
-    Stopped,
-    /// The job had ended already, and was left as it was.
-    Ended,
-}
-
-/// What `stop_job` did.
-#[derive(Debug, Serialize, JsonSchema)]
-pub(crate) struct StopResult {
-    job_id: String,
-    kind: JobKind,
-    state: StopState,
-    /// The tool that says how the job ended and what to do next.
-    status_tool: &'static str,
-}
-
-impl StopResult {
-    pub(crate) fn new(job_id: &str, kind: JobKind, state: StopState) -> StopResult {
-        StopResult {
-            job_id: job_id.trim().to_owned(),
-            kind,
-            state,
-            status_tool: kind.status_tool(),
-        }
-    }
-}
-
-#[derive(thiserror::Error, Debug)]
-pub(crate) enum StopError {
-    #[error(
-        "no job of this server has the id {job_id:?}; job ids are forgotten when the server restarts, and the server keeps only its last {KEPT_JOBS} jobs of each kind"
-    )]
-    UnknownJob { job_id: String },
-}
-
-/// How many jobs the list keeps. Without a limit, a server that runs for months would keep one
 /// report for each job it was ever given.
 pub(crate) const KEPT_JOBS: usize = 100;
 
@@ -200,21 +72,36 @@ struct Listed<R> {
     abort: Option<AbortHandle>,
 }
 
-/// The newest jobs of one kind, oldest first.
+/// The newest jobs of one kind, oldest first, and the shared slot that admits them.
 pub(crate) struct Jobs<R> {
+    kind: JobKind,
+    background: Option<BackgroundJobs>,
     list: Mutex<VecDeque<Listed<R>>>,
 }
 
-// Written by hand, because `#[derive(Default)]` would require `R: Default`.
-impl<R> Default for Jobs<R> {
-    fn default() -> Jobs<R> {
+impl<R: JobReport> Jobs<R> {
+    pub(crate) fn new(kind: JobKind, background: Option<BackgroundJobs>) -> Jobs<R> {
         Jobs {
-            list: Mutex::new(VecDeque::new()),
+            kind,
+            background,
+            list: Mutex::default(),
         }
     }
-}
 
-impl<R: JobReport> Jobs<R> {
+    /// Takes the shared slot for a job named `name` when the server has one.
+    ///
+    /// # Errors
+    /// The job that holds the slot.
+    pub(crate) fn reserve(
+        &self,
+        name: impl FnOnce() -> String,
+    ) -> Result<Option<BackgroundReservation>, BackgroundJob> {
+        self.background
+            .as_ref()
+            .map(|slot| slot.reserve(self.kind, name()))
+            .transpose()
+    }
+
     /// Makes a job, unless one is running, and forgets the oldest job when the list is full. The
     /// check and the new job are in one lock with no `.await` between them, so two calls at the
     /// same moment cannot both start. It holds in one server only: a second server, or a command
@@ -224,7 +111,7 @@ impl<R: JobReport> Jobs<R> {
     /// # Errors
     /// [`Busy`] with the id of the job that is running.
     pub(crate) fn start(&self, first_report: impl FnOnce(Uuid) -> R) -> Result<Started<R>, Busy> {
-        let mut list = self.list.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut list = lock(&self.list);
         if let Some(running) = list.iter().find(|listed| is_running(&listed.watcher)) {
             return Err(Busy {
                 running_job: running.id,
@@ -251,7 +138,7 @@ impl<R: JobReport> Jobs<R> {
     /// The latest report of the job with this id, or `None` when no job has it.
     pub(crate) fn report_of(&self, job_id: &str) -> Option<R> {
         let wanted = Uuid::parse_str(job_id.trim()).ok()?;
-        let list = self.list.lock().unwrap_or_else(PoisonError::into_inner);
+        let list = lock(&self.list);
         list.iter()
             .find(|listed| listed.id == wanted)
             .map(|listed| listed.watcher.borrow().clone())
@@ -274,7 +161,7 @@ impl<R: JobReport> Jobs<R> {
         E: From<JoinError> + Send + 'static,
     {
         let running = tokio::spawn(work);
-        let mut list = self.list.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut list = lock(&self.list);
         if let Some(listed) = list.iter_mut().find(|listed| listed.id == id) {
             listed.abort = Some(running.abort_handle());
         }
@@ -298,7 +185,7 @@ impl<R: JobReport> Jobs<R> {
     pub(crate) async fn stop(&self, job_id: &str) -> Option<StopState> {
         let wanted = Uuid::parse_str(job_id.trim()).ok()?;
         let (mut watcher, abort) = {
-            let list = self.list.lock().unwrap_or_else(PoisonError::into_inner);
+            let list = lock(&self.list);
             let listed = list.iter().find(|listed| listed.id == wanted)?;
             (listed.watcher.clone(), listed.abort.clone())
         };
@@ -317,6 +204,16 @@ impl<R: JobReport> Jobs<R> {
             StopState::Ended
         })
     }
+}
+
+/// The first report that `ready` accepts. `None` when the tasks of the job are gone before one
+/// was written.
+pub(crate) async fn first_report<R: JobReport>(
+    mut watcher: watch::Receiver<R>,
+    ready: impl FnMut(&R) -> bool,
+) -> Option<R> {
+    let report = watcher.wait_for(ready).await.ok()?;
+    Some(report.clone())
 }
 
 /// Whether the job is going on. A job whose tasks are gone is not, whatever its report says:
@@ -400,8 +297,8 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn background_work_holds_admission_until_it_is_settled() {
         let admission = BackgroundJobs::new();
-        let jobs = Jobs::<Report>::default();
-        let second_kind = Jobs::<Report>::default();
+        let jobs = Jobs::<Report>::new(JobKind::Ingest, None);
+        let second_kind = Jobs::<Report>::new(JobKind::Ingest, None);
         let first = jobs.start(|_| report(BackgroundJobs::new())).unwrap();
         let second = second_kind
             .start(|_| report(BackgroundJobs::new()))

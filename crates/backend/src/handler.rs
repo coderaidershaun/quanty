@@ -6,7 +6,9 @@ use std::sync::mpsc::Sender;
 
 use tokio::sync::watch;
 
-use contract::{Command, Event};
+use std::path::Path;
+
+use contract::{Command, Event, Failure};
 
 /// It is `Send + Sync`: code that reports progress captures `&Reply` and calls it between two
 /// awaits.
@@ -69,6 +71,24 @@ impl Stop {
     pub fn ask(&self) {
         self.asked.send_replace(true);
     }
+}
+
+/// Saves the model choice of one kind of work in the settings file of the home folder.
+pub(crate) fn save_model_choice(
+    home: &Path,
+    work: choices::WorkKind,
+    choice: choices::ModelSettings,
+) -> Result<(), Failure> {
+    let path = home.join(choices::MODEL_SETTINGS_FILE);
+    choices::WorkChoices::load_from(&path)
+        .and_then(|mut choices| {
+            *choices.of_mut(work) = choice;
+            choices.save_to(&path)
+        })
+        .map_err(|error| {
+            Failure::internal(format!("could not save the model choice: {error}"))
+                .with_hint(format!("The model choice could not be saved: {error}"))
+        })
 }
 
 /// It is named `Handler` because `contract::Service` is the health enum.

@@ -9,8 +9,8 @@ use super::{
     Shelf, SourceNav,
 };
 use contract::{
-    Command, DocId, Effect, Event, Failure, Intent, Loadable, Notice, NoticeId, NoticeKind, Panel,
-    RequestId, StartupFacts, Tab,
+    AskView, Command, DocId, Effect, Event, Failure, Intent, Loadable, Notice, NoticeId,
+    NoticeKind, Panel, RequestId, StartupFacts, Tab,
 };
 
 /// Counters that only go up. A panel acts when one is above what it saw last.
@@ -33,6 +33,10 @@ pub struct Shared {
     pub tab: Tab,
     /// The panel that has the whole Ask tab. The other panels of the tab are not drawn.
     pub maximised: Option<Panel>,
+    /// The view of the Ask tab that a compact window shows.
+    pub ask_view: AskView,
+    /// The last view other than the Answer that was chosen. `None` until one is.
+    side_view: Option<AskView>,
     pub cues: Cues,
     pub ask: AskSession,
     pub source: SourceNav,
@@ -69,8 +73,14 @@ impl Shared {
             Intent::Maximise(panel) => self.maximised = Some(panel),
             Intent::RestorePanels => self.maximised = None,
             Intent::StopOrRestore => self.stop_or_restore(effects),
+            Intent::ShowAskView(view) => {
+                self.open_tab(Tab::Ask);
+                self.show_ask_view(view);
+            }
+            Intent::Back => self.back(effects),
             Intent::FocusAskBar => {
                 self.open_tab(Tab::Ask);
+                self.ask_view = AskView::Answer;
                 self.cues.focus_ask_bar += 1;
             }
             Intent::CopyText(text) => effects.push(Effect::CopyText(text)),
@@ -82,10 +92,13 @@ impl Shared {
             Intent::Export(export) => self.start_export(export, effects),
             Intent::Ask(draft) => self.start_ask(draft, effects),
             Intent::CancelAsk => self.cancel_ask(effects),
-            Intent::SelectResult(number) => self.select_result(number, effects),
+            Intent::SelectResult(number) => self.choose_result(number, effects),
             Intent::StepResult(delta) => self.step_result(delta, effects),
             Intent::FocusConcept(concept) => self.ask.focused_concept = concept,
-            Intent::OpenSource { doc, page, piece } => self.open_source(doc, page, piece, effects),
+            Intent::OpenSource { doc, page, piece } => {
+                self.open_source(doc, page, piece, effects);
+                self.show_ask_view(AskView::Source);
+            }
             Intent::TurnPage(delta) => self.turn_page(delta, effects),
             Intent::ReloadSource => self.reload_source(effects),
             Intent::OpenMedia { title } => self.open_media(title, effects),
@@ -275,6 +288,51 @@ impl Shared {
     fn open_tab(&mut self, tab: Tab) {
         self.tab = tab;
         self.maximised = None;
+    }
+
+    /// The view that a medium window shows beside the Answer. Never the Answer.
+    pub fn side_view(&self) -> AskView {
+        self.side_view.unwrap_or(AskView::Source)
+    }
+
+    /// Whether `Intent::Back` would change anything.
+    // SMELL: this repeats the rules of `back` without running them, so a change to one of the two
+    // must change the other, the Library's step included. One decision that both read would fix it.
+    pub fn can_go_back(&self) -> bool {
+        self.tab != Tab::Ask || self.maximised.is_some() || self.ask_view != AskView::Answer
+    }
+
+    /// Any view other than the Answer also becomes the side view.
+    fn show_ask_view(&mut self, view: AskView) {
+        self.ask_view = view;
+        if view != AskView::Answer {
+            self.side_view = Some(view);
+        }
+    }
+
+    /// Chooses a result that exists and shows it in the Source view. A number with no result
+    /// changes nothing.
+    fn choose_result(&mut self, number: usize, effects: &mut Vec<Effect>) {
+        if self.ask.result(number).is_some() {
+            self.select_result(number, effects);
+            self.show_ask_view(AskView::Source);
+        }
+    }
+
+    /// Undoes one step, the first that applies: a maximised panel of the Ask tab is put back, the
+    /// Ask tab returns to its Answer, the Library goes up one level, any other tab returns to the
+    /// Ask tab.
+    fn back(&mut self, effects: &mut Vec<Effect>) {
+        match self.tab {
+            Tab::Ask if self.maximised.is_some() => self.maximised = None,
+            Tab::Ask => self.ask_view = AskView::Answer,
+            Tab::Library => {
+                if !self.back_on_shelf(effects) {
+                    self.open_tab(Tab::Ask);
+                }
+            }
+            Tab::Ingest | Tab::Datasets => self.open_tab(Tab::Ask),
+        }
     }
 
     /// A running ask is stopped first, so Escape still stops it while a panel is maximised.

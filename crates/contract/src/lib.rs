@@ -35,7 +35,9 @@ pub use library::{
     ChapterLabel, Document, DocumentName, DocumentTagsEdit, DocumentView, Insight, ItemCounts,
     Media, MediaEdit, NewMedia, is_same_name,
 };
-pub use message::{Command, Connection, Effect, Event, Frame, Intent, Panel, Tab, unknown_health};
+pub use message::{
+    AskView, Command, Connection, Effect, Event, Frame, Intent, Panel, Tab, unknown_health,
+};
 pub use notice::{Notice, NoticeKind};
 pub use shortcut::{Chord, KeyName, SHORTCUTS, Shortcut, When};
 pub use source::{ImageRef, PageBox, PageConcept, PagePiece, PageView, PieceKind};

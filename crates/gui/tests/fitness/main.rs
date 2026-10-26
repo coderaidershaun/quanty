@@ -5,4 +5,5 @@ mod boundaries;
 mod idle;
 mod math_total;
 mod rich_text_draws_every_word;
+mod shell_layout;
 mod stale_replies;

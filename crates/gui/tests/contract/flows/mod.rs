@@ -24,11 +24,11 @@ use gui::app::layout::{self, ShellRects};
 use gui::state::{DatasetJob, IngestJob, Shared};
 use gui::testkit;
 
-type Window = Harness<'static, App>;
+pub(super) type Window = Harness<'static, App>;
 
 const COMMAND: egui::Modifiers = egui::Modifiers::COMMAND;
 
-fn shared(harness: &Window) -> &Shared {
+pub(super) fn shared(harness: &Window) -> &Shared {
     harness.state().shared()
 }
 
@@ -46,7 +46,7 @@ fn node<'a>(harness: &'a Window, role: Role, name: &'a str) -> Node<'a> {
         .unwrap_or_else(|| panic!("no {role:?} is named `{name}`"))
 }
 
-fn has(harness: &Window, role: Role, name: &str) -> bool {
+pub(super) fn has(harness: &Window, role: Role, name: &str) -> bool {
     harness
         .query_all_by_role_and_label(role, name)
         .next()
@@ -147,14 +147,20 @@ fn hover_on(harness: &mut Window, role: Role, name: &str) {
 }
 
 #[derive(Clone, Copy)]
-enum Wheel {
+pub(super) enum Wheel {
     Down,
     Up,
 }
 
 /// A row or a chip that is off screen has no node, so the wheel is turned until a node of that
 /// name is wholly inside `over`.
-fn scroll_to(harness: &mut Window, over: egui::Rect, wheel: Wheel, role: Role, name: &str) {
+pub(super) fn scroll_to(
+    harness: &mut Window,
+    over: egui::Rect,
+    wheel: Wheel,
+    role: Role,
+    name: &str,
+) {
     let delta = match wheel {
         Wheel::Down => -240.0,
         Wheel::Up => 240.0,
@@ -184,7 +190,7 @@ fn press(harness: &mut Window, modifiers: egui::Modifiers, key: egui::Key) {
     testkit::settle(harness);
 }
 
-fn node_in<'a>(
+pub(super) fn node_in<'a>(
     harness: &'a Window,
     role: Role,
     name: &'a str,
@@ -232,7 +238,7 @@ fn failures(shared: &Shared) -> Vec<&contract::Failure> {
 
 /// The Ask bar and the Source panel each have a list named "Media", so a control is found by the
 /// panel it is in.
-fn click_in(harness: &mut Window, role: Role, name: &str, area: egui::Rect) {
+pub(super) fn click_in(harness: &mut Window, role: Role, name: &str, area: egui::Rect) {
     node_in(harness, role, name, area)
         .unwrap_or_else(|| panic!("no {role:?} named `{name}` is in {area:?}"))
         .click();

@@ -8,8 +8,9 @@ use export::{Block, Document, Format, Source, fence_for};
 use super::HealthLevel;
 use super::shared::{Shared, push_cancel};
 use contract::{
-    Answer, AnswerBlock, AskDraft, AskMode, Command, ConceptGraph, ConceptId, Effect, ExportPlace,
-    ExportRequest, Failure, Filters, ItemKind, Loadable, RequestId, ResultItem, SearchReply, Tab,
+    Answer, AnswerBlock, AskDraft, AskMode, AskView, Command, ConceptGraph, ConceptId, Effect,
+    ExportPlace, ExportRequest, Failure, Filters, ItemKind, Loadable, RequestId, ResultItem,
+    SearchReply, Tab,
 };
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
@@ -304,6 +305,7 @@ impl Shared {
             focused_concept: None,
         };
         self.tab = Tab::Ask;
+        self.ask_view = AskView::Answer;
         effects.push(Effect::Send(Command::Ask {
             request,
             ask: draft,

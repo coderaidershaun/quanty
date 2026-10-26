@@ -30,6 +30,8 @@ struct Demo {
     tab: usize,
     top_tab: usize,
     compact_tab: usize,
+    narrow_tab: usize,
+    nav: usize,
     is_confirm_open: bool,
 }
 
@@ -43,6 +45,10 @@ impl Default for Demo {
             tab: 0,
             top_tab: 0,
             compact_tab: 0,
+            // The narrow strip opens on its last tab, to show that the open tab is scrolled into
+            // view.
+            narrow_tab: 4,
+            nav: 0,
             is_confirm_open: false,
         }
     }

@@ -7,7 +7,8 @@ use super::{State, section, used};
 use crate::theme::{Icon, TextRole, space};
 use crate::widgets::look::Look;
 use crate::widgets::{
-    Button, ControlSize, Dropdown, ListRow, Slider, Stepper, Tab, TabStrip, TextInput,
+    Button, ControlSize, Dropdown, ListRow, NavBar, NavItem, Slider, Stepper, Tab, TabStrip,
+    TextInput,
 };
 
 const MODES: [&str; 3] = ["Answer", "Search only", "Formulas"];
@@ -21,6 +22,32 @@ const DROPDOWN_WIDTH: f32 = 140.0;
 /// The width of the dropdown whose choice is too long for it, to show that it stays that wide.
 const MEDIA_WIDTH: f32 = 160.0;
 const LIST_WIDTH: f32 = 300.0;
+/// The room of the bar of views: a phone's width, and the height of the bar on a phone.
+const NAV_SIZE: egui::Vec2 = egui::vec2(390.0, 56.0);
+/// The room of the strip that has less room than its tabs need.
+const NARROW_STRIP: egui::Vec2 = egui::vec2(200.0, 48.0);
+const NAV_ITEMS: [NavItem<'static>; 5] = [
+    NavItem {
+        icon: Icon::ANSWER,
+        label: "Answer",
+    },
+    NavItem {
+        icon: Icon::BOOK,
+        label: "Source",
+    },
+    NavItem {
+        icon: Icon::GRAPH,
+        label: "Graph",
+    },
+    NavItem {
+        icon: Icon::PATH,
+        label: "Path",
+    },
+    NavItem {
+        icon: Icon::FOLLOW_UP,
+        label: "Follow up",
+    },
+];
 
 pub(super) fn buttons(ui: &mut egui::Ui, state: &mut State) {
     section(ui, "Buttons");
@@ -219,6 +246,20 @@ pub(super) fn tabs(ui: &mut egui::Ui, state: &mut State) {
     }
     let hovered = [Tab::new("Alpha"), Tab::new("Beta"), Tab::new("Gamma")];
     TabStrip::new(&hovered, 0).preview(Look::HOVERED).show(ui);
+    let narrow = ui.allocate_ui(NARROW_STRIP, |ui| {
+        TabStrip::new(&counted, state.demo.narrow_tab).show(ui)
+    });
+    if let Some(index) = narrow.inner {
+        state.demo.narrow_tab = index;
+        state.last_activated = Some("TabStrip::narrow");
+    }
+    let bar = ui.allocate_ui(NAV_SIZE, |ui| {
+        NavBar::new(&NAV_ITEMS, state.demo.nav).show(ui)
+    });
+    if let Some(index) = bar.inner {
+        state.demo.nav = index;
+        state.last_activated = Some("NavBar");
+    }
 }
 
 pub(super) fn list_rows(ui: &mut egui::Ui, state: &mut State) {

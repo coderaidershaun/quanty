@@ -78,8 +78,9 @@ pub(super) fn framed(
         .layout(egui::Layout::top_down(egui::Align::Min));
     ui.scope_builder(builder, |ui| {
         frame.show(ui, |ui| {
-            ui.set_width(rect.width() - margin.x);
-            add(ui, rect.height() - margin.y);
+            // A rect smaller than its own margin has no inside, and egui refuses a negative width.
+            ui.set_width((rect.width() - margin.x).max(0.0));
+            add(ui, (rect.height() - margin.y).max(0.0));
         });
     });
 }

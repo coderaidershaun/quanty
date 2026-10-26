@@ -6,9 +6,9 @@ use web_time::Instant;
 
 use eframe::egui;
 
-use super::layout::{self, ShellRects};
+use super::layout::{self, AskRegion, ShellRects};
 use super::region::region;
-use super::{balances, shortcuts, top_bar};
+use super::{ask_nav, balances, shortcuts, top_bar};
 use crate::media::Media;
 use crate::panels::{
     Locals, PanelCx, answer, ask_bar, concept_graph, datasets, follow_up, ingest, library,
@@ -18,17 +18,12 @@ use crate::state::Shared;
 use crate::theme::{self, color, space};
 use crate::transport::Transport;
 use crate::widgets::gallery;
-use contract::{self, Effect, Intent, Panel, StartupFacts};
+use contract::{self, AskView, Effect, Intent, Panel, StartupFacts};
 
 /// How long `logic` may spend on backend events before it hands the frame back.
 const DRAIN_BUDGET: Duration = Duration::from_millis(4);
 
 const GALLERY_SCENE: &str = "gallery";
-
-/// A panel keeps the name of its region while it is maximised, so what egui remembers of it,
-/// such as how far a list is scrolled, is the same before and after.
-const SOURCE_REGION: &str = "source";
-const GRAPH_REGION: &str = "concept_graph";
 
 type FilePicker = Box<dyn FnMut(&mut Vec<Intent>)>;
 
@@ -147,7 +142,7 @@ impl App {
             intents: &mut self.intents,
         };
         egui::Panel::top("top_bar")
-            .exact_size(layout::TOP_BAR)
+            .exact_size(rects.top_bar.height())
             .show_separator_line(false)
             .frame(egui::Frame::NONE)
             .show(ui, |ui| {
@@ -220,31 +215,15 @@ impl eframe::App for App {
 fn draw_tab(ui: &mut egui::Ui, rects: &ShellRects, locals: &mut Locals, cx: &mut PanelCx<'_>) {
     match cx.shared.tab {
         contract::Tab::Ask => match cx.shared.maximised {
-            Some(Panel::Source) => region(ui, SOURCE_REGION, rects.page, |ui| {
-                source::show(ui, &mut locals.source, cx);
-            }),
-            Some(Panel::ConceptGraph) => region(ui, GRAPH_REGION, rects.page, |ui| {
-                concept_graph::show(ui, &mut locals.concept_graph, cx);
-            }),
+            Some(Panel::Source) => draw_view(ui, AskView::Source, rects.page, locals, cx),
+            Some(Panel::ConceptGraph) => {
+                draw_view(ui, AskView::ConceptGraph, rects.page, locals, cx);
+            }
             None => {
-                region(ui, "ask_bar", rects.ask_bar, |ui| {
-                    ask_bar::show(ui, &mut locals.ask_bar, cx);
-                });
-                region(ui, "answer", rects.answer, |ui| {
-                    answer::show(ui, &mut locals.answer, cx);
-                });
-                region(ui, SOURCE_REGION, rects.source, |ui| {
-                    source::show(ui, &mut locals.source, cx);
-                });
-                region(ui, GRAPH_REGION, rects.concept_graph, |ui| {
-                    concept_graph::show(ui, &mut locals.concept_graph, cx);
-                });
-                region(ui, "retrieval_path", rects.retrieval_path, |ui| {
-                    retrieval_path::show(ui, &mut locals.retrieval_path, cx);
-                });
-                region(ui, "follow_up", rects.follow_up, |ui| {
-                    follow_up::show(ui, &mut locals.follow_up, cx);
-                });
+                let regions = rects.ask_regions(cx.shared.ask_view, cx.shared.side_view());
+                for (part, rect) in regions {
+                    draw_part(ui, part, rect, locals, cx);
+                }
             }
         },
         contract::Tab::Library => region(ui, "library", rects.page, |ui| {
@@ -255,6 +234,51 @@ fn draw_tab(ui: &mut egui::Ui, rects: &ShellRects, locals: &mut Locals, cx: &mut
         }),
         contract::Tab::Datasets => region(ui, "datasets", rects.page, |ui| {
             datasets::show(ui, &mut locals.datasets, cx);
+        }),
+    }
+}
+
+fn draw_part(
+    ui: &mut egui::Ui,
+    part: AskRegion,
+    rect: egui::Rect,
+    locals: &mut Locals,
+    cx: &mut PanelCx<'_>,
+) {
+    match part {
+        AskRegion::AskBar => region(ui, "ask_bar", rect, |ui| {
+            ask_bar::show(ui, &mut locals.ask_bar, cx);
+        }),
+        AskRegion::View(view) => draw_view(ui, view, rect, locals, cx),
+        AskRegion::SideTabs => region(ui, "side_tabs", rect, |ui| ask_nav::side_tabs(ui, cx)),
+        AskRegion::BottomNav => region(ui, "bottom_nav", rect, |ui| ask_nav::bottom_nav(ui, cx)),
+    }
+}
+
+/// A view keeps the name of its region in every form and while it is maximised, so what egui
+/// remembers of it, such as how far a list is scrolled, is the same before and after.
+fn draw_view(
+    ui: &mut egui::Ui,
+    view: AskView,
+    rect: egui::Rect,
+    locals: &mut Locals,
+    cx: &mut PanelCx<'_>,
+) {
+    match view {
+        AskView::Answer => region(ui, "answer", rect, |ui| {
+            answer::show(ui, &mut locals.answer, cx);
+        }),
+        AskView::Source => region(ui, "source", rect, |ui| {
+            source::show(ui, &mut locals.source, cx);
+        }),
+        AskView::ConceptGraph => region(ui, "concept_graph", rect, |ui| {
+            concept_graph::show(ui, &mut locals.concept_graph, cx);
+        }),
+        AskView::RetrievalPath => region(ui, "retrieval_path", rect, |ui| {
+            retrieval_path::show(ui, &mut locals.retrieval_path, cx);
+        }),
+        AskView::FollowUp => region(ui, "follow_up", rect, |ui| {
+            follow_up::show(ui, &mut locals.follow_up, cx);
         }),
     }
 }

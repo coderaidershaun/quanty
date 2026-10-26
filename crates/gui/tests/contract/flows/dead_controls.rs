@@ -3,15 +3,15 @@
 use std::collections::{HashMap, HashSet};
 
 use backend::fake::{self, Fake};
-use contract::{Chord, Command, Intent, KeyName, SHORTCUTS};
+use contract::{AskView, Chord, Command, Intent, KeyName, SHORTCUTS, Tab};
 use eframe::egui;
 use eframe::egui::accesskit::{Action, NodeId, Role};
 use egui_kittest::kittest::{AccessKitNode, By, NodeT as _, Queryable as _};
-use gui::app::layout::DEFAULT_WINDOW;
+use gui::app::layout::{DEFAULT_WINDOW, SMALLEST_WINDOW, TABLET_WINDOW};
 use gui::testkit;
 
 use super::recording::{self, Seen};
-use super::{Window, is_open_tab, node, press};
+use super::{Window, click_in, is_open_tab, node, panels, press, shared};
 
 /// Names that no node of the app may have, because each is a part that is not built.
 const ABSENT_NAMES: [&str; 7] = [
@@ -417,9 +417,64 @@ fn every_key_and_control_of(scene: &str) {
     assert_each_health_check_follows_an_ask(scene, &seen);
 }
 
+/// The names of the tabs inside `area`, from the left.
+fn tab_names_in(harness: &Window, area: egui::Rect) -> Vec<String> {
+    let mut tabs: Vec<_> = harness
+        .query_all_by_role(Role::Tab)
+        .filter(|tab| area.contains(tab.rect().center()))
+        .filter_map(|tab| Some((tab.rect().left(), tab.accesskit_node().label()?)))
+        .collect();
+    tabs.sort_by(|a, b| a.0.total_cmp(&b.0));
+    tabs.into_iter().map(|(_, name)| name).collect()
+}
+
+/// A tab is opened as its click would open it, because below the wide form the model choices
+/// stand over the tabs of the top bar.
+fn open_tab(harness: &mut Window, tab: Tab) {
+    harness.state_mut().push(Intent::OpenTab(tab));
+    testkit::settle(harness);
+}
+
+/// Every page draws at the smallest width, and every control that chooses a view of the Ask tab
+/// leads to one that is built, in the smallest window and in a tablet's.
+fn every_view_control_of(scene: &str) {
+    let mut harness = testkit::app(scene, SMALLEST_WINDOW);
+    testkit::settle(&mut harness);
+    for tab in Tab::ALL {
+        open_tab(&mut harness, tab);
+        assert_no_unbuilt_name_is_drawn(&harness, scene);
+    }
+    open_tab(&mut harness, Tab::Ask);
+    let bar = panels(SMALLEST_WINDOW)
+        .bottom_nav
+        .expect("the smallest window has a bottom navigation");
+    let names = tab_names_in(&harness, bar);
+    assert_eq!(names.len(), AskView::ALL.len(), "`{scene}`: {names:?}");
+    for (view, name) in AskView::ALL.into_iter().zip(&names) {
+        click_in(&mut harness, Role::Tab, name, bar);
+        assert_eq!(shared(&harness).ask_view, view, "`{scene}`: `{name}`");
+        assert_no_unbuilt_name_is_drawn(&harness, scene);
+    }
+
+    let mut harness = testkit::app(scene, TABLET_WINDOW);
+    testkit::settle(&mut harness);
+    open_tab(&mut harness, Tab::Ask);
+    let tabs = panels(TABLET_WINDOW)
+        .side_tabs
+        .expect("a tablet has a strip over the side panel");
+    let names = tab_names_in(&harness, tabs);
+    assert_eq!(names.len(), AskView::ALL.len() - 1, "`{scene}`: {names:?}");
+    for (view, name) in AskView::ALL.into_iter().skip(1).zip(&names) {
+        click_in(&mut harness, Role::Tab, name, tabs);
+        assert_eq!(shared(&harness).side_view(), view, "`{scene}`: `{name}`");
+        assert_no_unbuilt_name_is_drawn(&harness, scene);
+    }
+}
+
 #[test]
 fn nothing_in_the_app_leads_to_a_part_that_is_not_built() {
     for scene in fake::scenes().iter().filter(|scene| scene.rests) {
         every_key_and_control_of(scene.name);
+        every_view_control_of(scene.name);
     }
 }

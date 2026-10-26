@@ -1,6 +1,6 @@
-//! The small kit of widgets every panel is built from: buttons, inputs, tabs, rows of a list,
-//! cards, chips, notices, a spinner and the sheets that ask a question. Each one carries an
-//! accessible label.
+//! The small kit of widgets every panel is built from: buttons, inputs, tabs, a bar of views,
+//! rows of a list, cards, chips, notices, a spinner and the sheets that ask a question. Each one
+//! carries an accessible label.
 
 mod controls;
 mod frames;
@@ -11,8 +11,8 @@ mod messages;
 mod progress;
 
 pub use controls::{
-    Button, Dropdown, ListRow, Slider, Step, Stepper, Tab, TabStrip, TextInput, TextInputResponse,
-    paint_caret,
+    Button, Dropdown, ListRow, NavBar, NavItem, Slider, Step, Stepper, Tab, TabStrip, TextInput,
+    TextInputResponse, paint_caret,
 };
 pub use frames::{Card, CardResponse, PanelFrame, Surface, panel_frame, section_header, separator};
 pub use look::ControlSize;

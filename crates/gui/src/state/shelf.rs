@@ -52,12 +52,12 @@ fn is_media_listed(title: Option<&str>, catalogue: &Catalogue) -> bool {
 impl Shared {
     pub(super) fn open_media(&mut self, title: Option<String>, effects: &mut Vec<Effect>) {
         self.tab = Tab::Library;
-        self.open_item(Open::Media { title }, effects);
+        self.open_item(Some(Open::Media { title }), effects);
     }
 
     pub(super) fn open_document(&mut self, doc: DocId, effects: &mut Vec<Effect>) {
         self.tab = Tab::Library;
-        self.open_item(Open::Document(doc), effects);
+        self.open_item(Some(Open::Document(doc)), effects);
         self.open_view_contents(effects);
         self.open_view_insights(effects);
     }
@@ -68,14 +68,36 @@ impl Shared {
         self.open_view_insights(effects);
     }
 
-    /// The slots of the views belong to one document, so another item empties them.
-    fn open_item(&mut self, item: Open, effects: &mut Vec<Effect>) {
-        if self.shelf.open.as_ref() == Some(&item) {
+    /// The slots of the views belong to one document, so another item, or none, empties them.
+    fn open_item(&mut self, item: Option<Open>, effects: &mut Vec<Effect>) {
+        if self.shelf.open == item {
             return;
         }
         self.forget_contents(effects);
         self.forget_insights(effects);
-        self.shelf.open = Some(item);
+        self.shelf.open = item;
+    }
+
+    /// The Library's step of Back: a document gives way to its media, and a media to a shelf with
+    /// nothing open. A document that the catalogue does not list has no media to go back to.
+    /// Returns false when nothing was open.
+    pub(super) fn back_on_shelf(&mut self, effects: &mut Vec<Effect>) -> bool {
+        let Some(open) = &self.shelf.open else {
+            return false;
+        };
+        let media = match open {
+            Open::Document(doc) => self
+                .library
+                .catalogue
+                .ready()
+                .and_then(|catalogue| catalogue.media_of(*doc))
+                .map(|media| Open::Media {
+                    title: media.title.clone(),
+                }),
+            Open::Media { .. } => None,
+        };
+        self.open_item(media, effects);
+        true
     }
 
     /// Called when a catalogue has been read. `fallback` is the media that the open document
@@ -106,6 +128,8 @@ impl Shared {
             Some(title) if is_media_listed(title.as_deref(), catalogue) => Some(title),
             _ => catalogue.media.first().map(|media| media.title.clone()),
         };
+        // SMELL: these lines repeat `open_item` without its check for an unchanged item, so the
+        // rule that empties the views lives in two places.
         self.forget_contents(effects);
         self.forget_insights(effects);
         self.shelf.open = title.map(|title| Open::Media { title });

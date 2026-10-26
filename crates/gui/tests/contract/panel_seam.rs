@@ -2,18 +2,19 @@
 //! the state, answers with intents, and the test kit carries a click all the way to one. A panel
 //! also counts on a widget of the kit to keep its place while its state changes.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use contract::Intent;
 use eframe::egui;
 use egui::accesskit::Role;
+use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use gui::media::rich_text::{self, Clicked, RichText};
 use gui::state::Shared;
-use gui::testkit::{self, sample};
-use gui::theme::TextRole;
-use gui::widgets::Button;
+use gui::testkit::{self, Host, sample};
+use gui::theme::{TextRole, space};
+use gui::widgets::{Button, Tab, TabStrip};
 
 #[test]
 fn a_panel_gives_its_intents_and_never_changes_what_it_reads() {
@@ -115,4 +116,75 @@ fn beside_a_save(is_saving: bool) -> egui::Rect {
 #[test]
 fn a_button_that_loads_leaves_what_stands_beside_it_in_place() {
     assert_eq!(beside_a_save(true), beside_a_save(false));
+}
+
+const STRIP_TABS: [&str; 6] = [
+    "Overview", "Insights", "Formulas", "Figures", "Tables", "Concepts",
+];
+/// Far less than the six tabs need side by side.
+const STRIP_WIDTH: f32 = 220.0;
+
+/// egui puts scrolled content on whole pixels, so a tab can stand a fraction of a pixel out of
+/// the strip and still be wholly in view.
+fn is_in_view(strip: egui::Rect, tab: egui::Rect) -> bool {
+    strip.expand(0.5).contains_rect(tab)
+}
+
+/// Turns the plain mouse wheel over the strip until the tab lies wholly inside it.
+fn wheel_into_view(harness: &mut Harness<'_, Host>, strip: egui::Rect, name: &str, to_end: bool) {
+    let delta = if to_end { -120.0 } else { 120.0 };
+    for _ in 0..40 {
+        if harness
+            .query_all_by_role_and_label(Role::Tab, name)
+            .any(|tab| is_in_view(strip, tab.rect()))
+        {
+            return;
+        }
+        harness.hover_at(strip.center());
+        harness.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, delta),
+            phase: egui::TouchPhase::Move,
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run_ok();
+    }
+    panic!("the tab `{name}` never came into view");
+}
+
+#[test]
+fn a_tab_strip_narrower_than_its_tabs_scrolls_and_keeps_the_active_tab_in_view() {
+    let active = Rc::new(Cell::new(STRIP_TABS.len() - 1));
+    let shown = Rc::clone(&active);
+    let mut harness = testkit::panel([STRIP_WIDTH, 60.0], Shared::default(), move |ui, _| {
+        let tabs: Vec<Tab<'_>> = STRIP_TABS.iter().map(|label| Tab::new(label)).collect();
+        if let Some(index) = TabStrip::new(&tabs, shown.get()).show(ui) {
+            shown.set(index);
+        }
+    });
+    let strip = egui::Rect::from_min_size(
+        egui::pos2(space::LG, space::LG),
+        egui::vec2(STRIP_WIDTH, 60.0),
+    );
+    harness.run();
+    let last = STRIP_TABS[STRIP_TABS.len() - 1];
+    assert!(
+        is_in_view(strip, harness.get_by_role_and_label(Role::Tab, last).rect()),
+        "the active tab is in view as soon as the strip is drawn"
+    );
+
+    for (index, name) in STRIP_TABS.iter().enumerate() {
+        wheel_into_view(&mut harness, strip, name, index > active.get());
+        harness.get_by_role_and_label(Role::Tab, name).click();
+        harness.run();
+        assert_eq!(
+            active.get(),
+            index,
+            "the tab `{name}` was reached and chosen"
+        );
+        assert!(
+            is_in_view(strip, harness.get_by_role_and_label(Role::Tab, name).rect()),
+            "the chosen tab `{name}` stays in view"
+        );
+    }
 }

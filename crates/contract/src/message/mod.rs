@@ -43,6 +43,41 @@ impl Tab {
     pub const ALL: [Tab; 4] = [Tab::Ask, Tab::Library, Tab::Ingest, Tab::Datasets];
 }
 
+/// The views of the Ask tab. A small window shows one of them at a time, and a medium one shows
+/// the answer beside one of the others. A wide window shows them all, so it ignores the choice.
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Default,
+)]
+pub enum AskView {
+    #[default]
+    Answer,
+    Source,
+    ConceptGraph,
+    RetrievalPath,
+    FollowUp,
+}
+
+impl AskView {
+    /// In the order of the bottom navigation.
+    pub const ALL: [AskView; 5] = [
+        AskView::Answer,
+        AskView::Source,
+        AskView::ConceptGraph,
+        AskView::RetrievalPath,
+        AskView::FollowUp,
+    ];
+}
+
 /// The panels of the Ask tab that a person can maximise.
 #[derive(
     serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord,
@@ -63,6 +98,11 @@ pub enum Intent {
     /// put back.
     StopOrRestore,
     FocusAskBar,
+    /// Opens the Ask tab on that view.
+    ShowAskView(AskView),
+    /// One step back: a maximised panel of the Ask tab is put back, then the Ask tab returns to
+    /// its answer, then the Library goes up one level, then any other tab returns to Ask.
+    Back,
     CopyText(String),
     ShareAnswer,
     /// Starts an export whose download opens when the file is ready.

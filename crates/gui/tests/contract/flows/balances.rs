@@ -49,12 +49,14 @@ fn says_in_footer(harness: &Window, words: &str, window: [f32; 2]) -> bool {
         .any(|node| footer.contains(node.rect().center()))
 }
 
+const LINKS: [(&str, &str); 2] = [
+    ("Open the Google billing page", GOOGLE_PAGE),
+    ("Open Jev billing in the console", JEV_PAGE),
+];
+
 /// One entry for each account and its link, each entry saying `state`.
 fn assert_both_entries_say(harness: &Window, state: &str, scene: &str) {
-    for (entry, link) in [
-        ("Google Gemini:", "Open the Google billing page"),
-        ("Jev:", "Open the Jev console"),
-    ] {
+    for (entry, (link, _)) in ["Google Gemini:", "Jev:"].into_iter().zip(LINKS) {
         let entries = in_footer(harness, Role::Button, entry, DEFAULT_WINDOW);
         assert_eq!(
             entries.len(),
@@ -70,6 +72,23 @@ fn assert_both_entries_say(harness: &Window, state: &str, scene: &str) {
             "`{scene}` has no `{link}`"
         );
     }
+}
+
+/// A key that was taken leaves its account a dot and a billing link, with no words of state.
+fn assert_both_entries_are_links(harness: &Window, scene: &str) {
+    let footer = panels(DEFAULT_WINDOW).footer;
+    for (entry, (link, _)) in ["Google Gemini:", "Jev:"].into_iter().zip(LINKS) {
+        let entries = in_footer(harness, Role::Button, entry, DEFAULT_WINDOW);
+        assert!(entries.is_empty(), "`{scene}` has a `{entry}` entry");
+        assert!(
+            node_in(harness, Role::Button, link, footer).is_some(),
+            "`{scene}` has no `{link}`"
+        );
+    }
+    assert!(
+        !says_in_footer(harness, "balance not offered", DEFAULT_WINDOW),
+        "`{scene}` says the balance is not offered"
+    );
 }
 
 fn reads(seen: &Seen) -> usize {
@@ -88,7 +107,7 @@ fn every_tab_has_one_entry_for_each_account() {
     testkit::settle(&mut harness);
     for tab in Tab::ALL {
         open_tab(&mut harness, tab);
-        assert_both_entries_say(&harness, "balance not offered", &format!("{tab:?}"));
+        assert_both_entries_are_links(&harness, &format!("{tab:?}"));
     }
     open_tab(&mut harness, Tab::Ask);
     let graph = panels(DEFAULT_WINDOW).concept_graph;
@@ -96,7 +115,7 @@ fn every_tab_has_one_entry_for_each_account() {
         .expect("the Concept Graph has a Maximise button")
         .click();
     testkit::settle(&mut harness);
-    assert_both_entries_say(&harness, "balance not offered", "a maximised graph");
+    assert_both_entries_are_links(&harness, "a maximised graph");
 }
 
 fn opened(harness: &Window) -> Vec<String> {
@@ -125,10 +144,7 @@ fn opened_by(harness: &mut Window, act: impl FnOnce(&mut Window)) -> Vec<String>
 fn each_link_opens_the_page_of_its_provider() {
     let (mut harness, _) = recording::open("idle", DEFAULT_WINDOW);
     testkit::settle(&mut harness);
-    for (link, page) in [
-        ("Open the Google billing page", GOOGLE_PAGE),
-        ("Open the Jev console", JEV_PAGE),
-    ] {
+    for (link, page) in LINKS {
         let footer = panels(DEFAULT_WINDOW).footer;
         let urls = opened_by(&mut harness, |harness| {
             node_in(harness, Role::Button, link, footer)
@@ -149,11 +165,14 @@ fn a_phone_footer_is_one_row_that_opens_the_full_lines() {
     for tab in Tab::ALL {
         open_tab(&mut harness, tab);
         let mut parts = Vec::new();
-        for entry in ["Google Gemini:", "Jev:"] {
+        for entry in ["Google Gemini", "Jev"] {
             let found = in_footer(&harness, Role::Button, entry, PHONE_WINDOW);
             assert_eq!(found.len(), 1, "{tab:?}: {} `{entry}`", found.len());
             let name = found[0].accesskit_node().label().unwrap_or_default();
-            assert!(name.contains("balance not offered"), "{tab:?}: `{name}`");
+            assert_eq!(
+                name, entry,
+                "{tab:?}: a key that was taken has no words of state"
+            );
             parts.push((format!("{tab:?}: {entry}"), found[0].rect()));
         }
         let connection = in_footer(&harness, Role::Label, "Connected", PHONE_WINDOW);
@@ -162,17 +181,9 @@ fn a_phone_footer_is_one_row_that_opens_the_full_lines() {
         fit::assert_inside_and_apart(&parts, footer, screen);
     }
 
-    click_in(
-        &mut harness,
-        Role::Button,
-        "Google Gemini: balance not offered",
-        footer,
-    );
+    click_in(&mut harness, Role::Button, "Google Gemini", footer);
     testkit::save_png(&mut harness, "phone-footer-open");
-    for (link, page) in [
-        ("Open the Google billing page", GOOGLE_PAGE),
-        ("Open the Jev console", JEV_PAGE),
-    ] {
+    for (link, page) in LINKS {
         let urls = opened_by(&mut harness, |harness| {
             node_in(harness, Role::Button, link, screen)
                 .unwrap_or_else(|| panic!("no `{link}` is on screen"))
@@ -211,24 +222,25 @@ fn balances_are_read_at_start_after_a_paid_job_and_on_a_click_only() {
     start_a_build(&mut harness);
     assert_eq!(reads(&seen), 4, "one read after the build ended");
 
-    let footer = panels(DEFAULT_WINDOW).footer;
-    node_in(
-        &harness,
-        Role::Button,
-        "Google Gemini: balance not offered",
-        footer,
-    )
-    .expect("the Google entry is a button")
-    .click();
-    testkit::settle(&mut harness);
-    assert_eq!(reads(&seen), 5, "one read on a click");
-
     for _ in 0..50 {
         harness.step();
     }
     std::thread::sleep(Duration::from_millis(50));
     testkit::settle(&mut harness);
-    assert_eq!(reads(&seen), 5, "an app at rest reads nothing");
+    assert_eq!(reads(&seen), 4, "an app at rest reads nothing");
+
+    // A key that was taken is a link alone, so the click is on an entry that has a state.
+    let (mut harness, seen) = recording::open("balances-unread", DEFAULT_WINDOW);
+    testkit::settle(&mut harness);
+    assert_eq!(reads(&seen), 1, "one read at start");
+    let footer = panels(DEFAULT_WINDOW).footer;
+    click_in(
+        &mut harness,
+        Role::Button,
+        "Google Gemini: could not read",
+        footer,
+    );
+    assert_eq!(reads(&seen), 2, "one read on a click");
 
     let (mut harness, seen) = recording::open("searching", DEFAULT_WINDOW);
     // The start read must end first, so that it is counted before the ask is stopped.
@@ -324,8 +336,10 @@ fn spent_credit_is_shown_until_a_job_that_needs_the_provider_works() {
     assert!(name.contains("out of credit"), "{name}");
     assert!(says_in_footer(&harness, "clears this", DEFAULT_WINDOW));
     let jev = in_footer(&harness, Role::Button, "Jev:", DEFAULT_WINDOW);
-    let name = jev[0].accesskit_node().label().unwrap_or_default();
-    assert!(name.contains("balance not offered"), "{name}");
+    assert!(
+        jev.is_empty(),
+        "a Jev key that was taken has no entry of its own"
+    );
     let hint = FailureKind::EmbeddingOutOfCredit.hint();
     assert!(harness.query_all_by_label_contains(hint).next().is_some());
 

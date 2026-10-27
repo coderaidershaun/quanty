@@ -188,7 +188,7 @@ const OVERLAYS: [Overlay; 5] = [
                 .query_all_by_role(Role::Button)
                 .find(|button| {
                     let name = button.accesskit_node().label().unwrap_or_default();
-                    name.starts_with("Google Gemini:") && footer.contains(button.rect().center())
+                    name.starts_with("Google Gemini") && footer.contains(button.rect().center())
                 })
                 .expect("the slim footer has a row for each account")
                 .click();
@@ -315,7 +315,7 @@ fn open_the_footer_popup(harness: &mut Window) {
         .query_all_by_role(Role::Button)
         .find(|button| {
             let name = button.accesskit_node().label().unwrap_or_default();
-            name.starts_with("Google Gemini:") && footer.contains(button.rect().center())
+            name.starts_with("Google Gemini") && footer.contains(button.rect().center())
         })
         .expect("the slim footer has a row for each account")
         .click();
@@ -332,7 +332,7 @@ fn account_buttons_in_the_popup(harness: &Window) -> Vec<(String, Rect)> {
             let name = button.accesskit_node().label()?;
             let is_account = name.starts_with("Google Gemini:")
                 || name.starts_with("Jev:")
-                || name.starts_with("Open the ");
+                || name.starts_with("Open ");
             (is_account && !footer.contains(button.rect().center()))
                 .then(|| (name.to_string(), button.rect()))
         })

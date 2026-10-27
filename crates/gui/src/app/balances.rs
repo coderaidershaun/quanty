@@ -1,7 +1,8 @@
 //! What the footer shows of each paid account, and a link to the page that shows its credit: one
 //! line for each in a wide window, a slim row of short names in a smaller one, and the full lines
-//! that the row opens. No provider gives a balance for an API key, so no entry shows an amount.
-//! It draws static text with no spinner, so a window at rest asks for no repaint.
+//! that the row opens. No provider gives a balance for an API key, so no entry shows an amount,
+//! and an account whose key was taken is its billing link alone. It draws static text with no
+//! spinner, so a window at rest asks for no repaint.
 
 use eframe::egui;
 
@@ -12,7 +13,7 @@ use contract::{Balance, FailureKind, Intent, Provider, ReadFailure};
 
 /// The room kept at the right end of an entry for its link, so that a long hint is cut short
 /// before the link would pass the end of the entry.
-const LINK_ROOM: f32 = 104.0;
+const LINK_ROOM: f32 = 128.0;
 
 pub(super) fn show(ui: &mut egui::Ui, row: egui::Rect, cx: &mut PanelCx<'_>) {
     let width = (row.width() - space::LG) / 2.0;
@@ -33,11 +34,14 @@ fn entry(ui: &mut egui::Ui, provider: Provider, rect: egui::Rect, cx: &mut Panel
     ui.scope_builder(builder, |ui| {
         ui.spacing_mut().item_spacing.x = space::SM;
         dot(ui, tone(shown));
-        state_button(ui, provider, shown, ControlSize::Small, cx);
-        ui.scope(|ui| {
-            ui.set_max_width((ui.available_width() - LINK_ROOM).max(0.0));
-            ui.add(egui::Label::new(TextRole::Small.rich(ui, hint(provider, shown))).truncate());
-        });
+        if has_state(shown) {
+            state_button(ui, provider, shown, ControlSize::Small, cx);
+            ui.scope(|ui| {
+                ui.set_max_width((ui.available_width() - LINK_ROOM).max(0.0));
+                let words = TextRole::Small.rich(ui, hint(provider, shown));
+                ui.add(egui::Label::new(words).truncate());
+            });
+        }
         link_button(ui, provider, ControlSize::Small, cx);
     });
 }
@@ -76,7 +80,9 @@ pub(super) fn lines(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
             let shown = cx.shared.balances.shown(provider);
             ui.horizontal_wrapped(|ui| {
                 dot(ui, tone(shown));
-                state_button(ui, provider, shown, ControlSize::Medium, cx);
+                if has_state(shown) {
+                    state_button(ui, provider, shown, ControlSize::Medium, cx);
+                }
                 link_button(ui, provider, ControlSize::Medium, cx);
             });
             let words = hint(provider, shown);
@@ -102,8 +108,8 @@ fn state_button(
 
 fn link_button(ui: &mut egui::Ui, provider: Provider, size: ControlSize, cx: &mut PanelCx<'_>) {
     let (link, opens) = match provider {
-        Provider::Google => ("Billing", "Open the Google billing page"),
-        Provider::Jev => ("Console", "Open the Jev console"),
+        Provider::Google => ("Google billing", "Open the Google billing page"),
+        Provider::Jev => ("Jev billing", "Open Jev billing in the console"),
     };
     let button = Button::ghost(link)
         .icon(Icon::OPEN)
@@ -115,7 +121,16 @@ fn link_button(ui: &mut egui::Ui, provider: Provider, size: ControlSize, cx: &mu
 }
 
 fn account_label(provider: Provider, shown: Option<Balance>) -> String {
-    format!("{}: {}", name(provider), state(shown))
+    match state(shown) {
+        Some(state) => format!("{}: {state}", name(provider)),
+        None => name(provider).to_owned(),
+    }
+}
+
+/// A key that the provider took has nothing to say in words: the dot is green, and the credit is
+/// behind the link.
+fn has_state(shown: Option<Balance>) -> bool {
+    state(shown).is_some()
 }
 
 /// The slim row of a narrow window has room only for a short name.
@@ -133,17 +148,18 @@ fn name(provider: Provider) -> &'static str {
     }
 }
 
-/// `None` is the time before the first read has ended.
-fn state(shown: Option<Balance>) -> &'static str {
-    match shown {
+/// A shown `None` is the time before the first read has ended.
+fn state(shown: Option<Balance>) -> Option<&'static str> {
+    let words = match shown {
         None => "checking…",
-        Some(Balance::NotOffered) => "balance not offered",
+        Some(Balance::NotOffered) => return None,
         Some(Balance::KeyMissing) => "key missing",
         Some(Balance::KeyRefused) => "key refused",
         Some(Balance::OutOfCredit) => "out of credit",
         Some(Balance::LocationRefused) => "location refused",
         Some(Balance::Unread(_)) => "could not read",
-    }
+    };
+    Some(words)
 }
 
 fn tone(shown: Option<Balance>) -> Tone {
@@ -161,8 +177,7 @@ fn hint(provider: Provider, shown: Option<Balance>) -> String {
         return String::new();
     };
     let words = match (provider, shown) {
-        (Provider::Google, Balance::NotOffered) => "See it on the billing page",
-        (Provider::Jev, Balance::NotOffered) => "See it in the console",
+        (_, Balance::NotOffered) => return String::new(),
         (Provider::Google, Balance::KeyMissing) => FailureKind::EmbeddingKeyMissing.hint(),
         (Provider::Jev, Balance::KeyMissing) => FailureKind::ConverterKeyMissing.hint(),
         (_, Balance::KeyRefused) => "Make a new key, put it in .env, then start quanty again",

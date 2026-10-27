@@ -205,15 +205,14 @@ The percent is an estimate: it runs from the first page cut out to the last page
 
 ### The footer
 
-Every tab has a strip at the foot of the window with three entries. At the left, one for **Google Gemini**, the embedding key, and one for **Jev**, the converter key. Each entry says what is known about that account, and has a link to the page where you see and top up your credit: **Billing** opens the Google AI Studio billing page, and **Console** opens the Jev console.
+Every tab has a strip at the foot of the window with three entries. At the left, one for **Google Gemini**, the embedding key, and one for **Jev**, the converter key. Each entry has a link to the page where you see and top up your credit: **Google billing** opens the Google AI Studio billing page, and **Jev billing** opens the Jev console. A green dot and the link alone mean the provider took the key. Otherwise the entry says what is wrong.
 
 At the right end, the connection entry says **Connected**, **Reconnecting** or **Lost**. It describes the browser's connection to quanty. After reconnecting, the app checks health and refreshes the catalogue. A command sent while disconnected fails with "not connected to the server"; try it again once connected.
 
-It never shows an amount. Neither provider lets an API key read a balance. Google says that [you can only manage your Prepay credit balance in AI Studio](https://ai.google.dev/gemini-api/docs/billing), and [no method of its API](https://ai.google.dev/api/all-methods) returns one. The [API of Jev](https://api.typesafe.ai/openapi.json) has only `/v1/models` and `/v1/systemone`, and its [error table](https://docs.typesafe.ai/api/errors) has no credit error. So an entry says one of these instead:
+It never shows an amount. Neither provider lets an API key read a balance. Google says that [you can only manage your Prepay credit balance in AI Studio](https://ai.google.dev/gemini-api/docs/billing), and [no method of its API](https://ai.google.dev/api/all-methods) returns one. The [API of Jev](https://api.typesafe.ai/openapi.json) has only `/v1/models` and `/v1/systemone`, and its [error table](https://docs.typesafe.ai/api/errors) has no credit error. So when something is wrong, an entry says one of these instead:
 
 | It says | What it means |
 | --- | --- |
-| balance not offered | The provider took the key. See your credit on the page behind the link |
 | key missing | The key is not in `.env`. Add it, then start quanty again |
 | key refused | The provider did not take the key. Make a new one, put it in `.env`, then start quanty again |
 | location refused | Google refuses the address the server calls from, not the key. On a host with IPv6, set `EMBEDDING_GEMINI_IPV4_ONLY=true` in `.env` and start quanty again; see [troubleshooting](troubleshooting.md) |
@@ -221,7 +220,7 @@ It never shows an amount. Neither provider lets an API key read a balance. Googl
 | out of credit | A reply of that provider said the credit is spent. The next ask (Google) or ingest (Jev) that works clears it |
 | could not read | The provider could not be reached, did not answer in time, or answered with an unexpected status. Click the entry to try again |
 
-The footer reads at start, after each ask, ingest and dataset build ends, and when you click an entry. It never reads on a timer. A read costs nothing, and a read that fails or hangs holds nothing else up. The key is never shown.
+The footer reads at start, after each ask, ingest and dataset build ends, and when you click an entry that says something. It never reads on a timer. A read costs nothing, and a read that fails or hangs holds nothing else up. The key is never shown.
 
 ## Command line
 

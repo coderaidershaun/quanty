@@ -38,6 +38,7 @@ impl ClosedPorts {
             dataset_cache_folder: folder.path().join("dataset-cache"),
             gemini_api_key: Some(ApiKey::new("a-made-up-key")),
             jev_api_key: None,
+            gemini_ipv4_only: false,
         };
         ClosedPorts { config, folder }
     }

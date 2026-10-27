@@ -216,6 +216,8 @@ It never shows an amount. Neither provider lets an API key read a balance. Googl
 | balance not offered | The provider took the key. See your credit on the page behind the link |
 | key missing | The key is not in `.env`. Add it, then start quanty again |
 | key refused | The provider did not take the key. Make a new one, put it in `.env`, then start quanty again |
+| location refused | Google refuses the address the server calls from, not the key. On a host with IPv6, set `EMBEDDING_GEMINI_IPV4_ONLY=true` in `.env` and start quanty again; see [troubleshooting](troubleshooting.md) |
+
 | out of credit | A reply of that provider said the credit is spent. The next ask (Google) or ingest (Jev) that works clears it |
 | could not read | The provider could not be reached, did not answer in time, or answered with an unexpected status. Click the entry to try again |
 

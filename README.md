@@ -117,7 +117,7 @@ Run these commands from the root of this repository. The UI runs in your browser
 
 Use a dedicated **Ubuntu 24.04 LTS x86_64** host. The pinned FalkorDB module requires libraries absent from Ubuntu 22.04; other releases and architectures have not been verified. Quanty, Qdrant and Redis run on this host, and people and agents share one library. The stores stay on loopback; Caddy serves HTTPS on ports 80 and 443.
 
-This is the manual short form of [Run quanty on an Ubuntu server, no Docker](docs/server.md), which also covers the installer, backups, moving a library and unit failures. The versions and download commands were checked against vendor sources on 22 October 2026; these instructions have not been executed on Ubuntu. Run the blocks in order in the same Bash shell over SSH, so the generated secret variables remain available. Replace `quanty.example.com` with your hostname. Version variables are at the top of the blocks that install versioned tools; Redis and Caddy use their official stable apt packages.
+This is the path for any Linux host or web server, whether quanty is reached directly through Caddy as below, or through an app host such as Jet on the same machine, which registers quanty's loopback port and needs its [trusted integration mode](docs/server.md#trusted-app-host-integration) instead of a password. Either way, the stores, the keys, the model sign-ins and the network checks are the same. This is the manual short form of [Run quanty on an Ubuntu server, no Docker](docs/server.md), which also covers the installer, backups, moving a library and unit failures. The versions and download commands were checked against vendor sources on 22 October 2026; these instructions have not been executed on Ubuntu. Run the blocks in order in the same Bash shell over SSH, so the generated secret variables remain available. Replace `quanty.example.com` with your hostname. Version variables are at the top of the blocks that install versioned tools; Redis and Caddy use their official stable apt packages.
 
 1. **Create the user and folders.** The service account's home is `/srv/quanty`; keep its model sign-ins there.
 
@@ -288,6 +288,7 @@ This is the manual short form of [Run quanty on an Ubuntu server, no Docker](doc
    DATASET_DIR=/srv/quanty/datasets
    DATASET_CACHE_DIR=/srv/quanty/data/dataset-cache
    EMBEDDING_GEMINI_API_KEY=$EMBEDDING_GEMINI_API_KEY
+   EMBEDDING_GEMINI_IPV4_ONLY=
    CONVERTER_JEV_API_KEY=$CONVERTER_JEV_API_KEY
    LLM_PROVIDER=codex
    LLM_MODEL=gpt-6.1-sol
@@ -300,6 +301,19 @@ This is the manual short form of [Run quanty on an Ubuntu server, no Docker](doc
    ```
 
    Read the generated password and MCP token privately in the editor and save them. Keep `QUANTY_SESSION_KEY` through upgrades so sessions survive restarts. Saved model choices supersede the `LLM_*` defaults. The [reference](docs/reference.md) explains each setting and server flag.
+
+   **Check that Google serves this host.** Google judges the address a call comes from, and hosted servers often have an IPv6 address whose prefix Google places in a country it does not serve, while their IPv4 address is fine. Linux prefers IPv6, so every embedding call would fail with `User location is not supported for the API use.` Ask Google over each family with its free model read, while `EMBEDDING_GEMINI_API_KEY` is still in your shell:
+
+   ```bash
+   for family in 4 6; do
+     curl -$family -sS -o /dev/null -w "IPv$family %{http_code}\n" -H "x-goog-api-key: $EMBEDDING_GEMINI_API_KEY" \
+       https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2
+   done
+   unset EMBEDDING_GEMINI_API_KEY CONVERTER_JEV_API_KEY CLAUDE_CODE_OAUTH_TOKEN
+   ```
+
+   Both `200`: leave `EMBEDDING_GEMINI_IPV4_ONLY` empty. IPv4 `200` and IPv6 `400`: set `EMBEDDING_GEMINI_IPV4_ONLY=true` in `.env`, and quanty calls Gemini over IPv4 alone. IPv4 `400`: Google does not serve this host's country; pick another host, or use a key from a project with billing enabled. `IPv6 000` means the host has no IPv6, which is fine. The app's footer says **location refused** when this is the problem; [troubleshooting](docs/troubleshooting.md) has the row.
+
 
 7. **Install and start the quanty unit.** The supplied unit runs as `quanty`, reads `/srv/quanty/.env`, supplies the model tools' `PATH`, and binds to `127.0.0.1:7878`.
 

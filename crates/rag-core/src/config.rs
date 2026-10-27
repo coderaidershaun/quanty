@@ -46,6 +46,11 @@ pub struct Config {
     pub dataset_cache_folder: PathBuf,
     /// Not needed by every command, so a missing key is not an error here.
     pub gemini_api_key: Option<ApiKey>,
+    /// Call Gemini over IPv4 alone. Google refuses some IPv6 ranges with "User location is not
+    /// supported", and a host that has such an address prefers it, so this makes the embedder
+    /// leave by the host's IPv4 address instead. `EMBEDDING_GEMINI_IPV4_ONLY`, off unless set to
+    /// `true`, `1` or `yes`.
+    pub gemini_ipv4_only: bool,
     /// The key of the Jev API, which the converter asks whether a page holds math. Only
     /// `rag-ingest pdf` uses it, and only when a page is left to convert, so a missing key is
     /// not an error here.
@@ -118,6 +123,8 @@ impl Config {
             dataset_folder: or("DATASET_DIR", "datasets").into(),
             dataset_cache_folder: or("DATASET_CACHE_DIR", "data/dataset-cache").into(),
             gemini_api_key: setting("EMBEDDING_GEMINI_API_KEY").map(ApiKey::new),
+            gemini_ipv4_only: setting("EMBEDDING_GEMINI_IPV4_ONLY")
+                .is_some_and(|value| is_on(&value)),
             jev_api_key: setting("CONVERTER_JEV_API_KEY").map(ApiKey::new),
         })
     }
@@ -125,6 +132,14 @@ impl Config {
 
 fn process_environment(name: &str) -> Option<String> {
     std::env::var(name).ok()
+}
+
+/// The spellings of an on switch: `true`, `1` and `yes`, in any case. Anything else is off.
+fn is_on(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "true" | "1" | "yes"
+    )
 }
 
 fn non_blank(value: Option<String>) -> Option<String> {
@@ -158,5 +173,30 @@ fn dotenv_error(path: &Path, error: dotenvy::Error) -> ConfigError {
         _ => ConfigError::DotenvParse {
             path: path.to_path_buf(),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Config;
+
+    fn with_ipv4_only(value: Option<&str>) -> Config {
+        let environment = |name: &str| {
+            (name == "EMBEDDING_GEMINI_IPV4_ONLY")
+                .then(|| value.map(str::to_owned))
+                .flatten()
+        };
+        Config::from_sources(environment, None).expect("no file, so nothing to fail")
+    }
+
+    #[test]
+    fn the_ipv4_switch_is_off_unless_it_is_spelled_on() {
+        for on in ["true", "TRUE", " True ", "1", "yes", "Yes"] {
+            assert!(with_ipv4_only(Some(on)).gemini_ipv4_only, "{on:?}");
+        }
+        for off in ["false", "0", "no", "on", "ipv4", ""] {
+            assert!(!with_ipv4_only(Some(off)).gemini_ipv4_only, "{off:?}");
+        }
+        assert!(!with_ipv4_only(None).gemini_ipv4_only);
     }
 }

@@ -172,6 +172,7 @@ Edit `/srv/quanty/.env` privately. The installer supplies database secrets, a sh
 | `FALKORDB_GRAPH` | Graph name | `quanty` |
 | `CONTENT_DIR` | Converted content on this host | `content` |
 | `EMBEDDING_GEMINI_API_KEY` | Embedding key | none |
+| `EMBEDDING_GEMINI_IPV4_ONLY` | `true` makes Gemini calls leave over IPv4 alone; set it when the check in [section 8](#8-when-a-unit-fails) shows Google refusing the host's IPv6 address | off |
 | `CONVERTER_JEV_API_KEY` | Jev conversion key | none |
 | `LLM_PROVIDER`, `LLM_MODEL`, `LLM_THINKING` | Model defaults, superseded by saved choices | `codex`, `gpt-6.1-sol`, `medium` |
 
@@ -244,6 +245,20 @@ sudo journalctl -u quanty -u qdrant -u redis-server -u caddy -n 100 --no-pager
 
 Check database secrets, ownership and available disk space. For Redis, confirm version 8 or newer, `libgomp1`, the module path, and the writable-path override. For a model CLI, check its `PATH` and sign-in as `quanty`, then restart quanty after editing `.env`. For a 503 missing-bundle page, build Trunk before rebuilding the server. For HTTPS, check DNS and inbound ports 80/443. See [troubleshooting](troubleshooting.md) for login, connection and upload failures.
 
+**Google answers `User location is not supported for the API use.`** Google judges the address a call comes from, and a hosted Linux server often has an IPv6 address whose prefix Google places in a country it does not serve, while its IPv4 address is fine. glibc prefers IPv6, so every call fails. The ask then fails with that text, and the footer says **location refused**. Ask Google over each family with the free model read:
+
+```bash
+read -rsp 'Gemini API key: ' EMBEDDING_GEMINI_API_KEY; echo
+for family in 4 6; do
+  curl -$family -sS -o /dev/null -w "IPv$family %{http_code}\n" -H "x-goog-api-key: $EMBEDDING_GEMINI_API_KEY" \
+    https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2
+done
+unset EMBEDDING_GEMINI_API_KEY
+```
+
+Both `200`: the host is fine. IPv4 `200` and IPv6 `400`: set `EMBEDDING_GEMINI_IPV4_ONLY=true` in `/srv/quanty/.env` and restart quanty, and the embedder leaves over IPv4 alone. IPv4 `400`: the host's country is not served by Google; move the server, or use a key from a project with billing enabled. A host with no IPv6 reports `IPv6 000`, which is fine.
+
+
 ## Trusted app-host integration
 
 Build the browser with `cd crates/web-ui && trunk build --release`, then build
@@ -261,7 +276,12 @@ env -i PATH="$PATH" target/debug/quanty --home "$QUANTY_TEST_HOME" --listen 127.
   --fixture black-scholes --trusted-integration
 ```
 
-Register port `18878` in Jet. Leave any existing `7878` instance running.
+Register port `18878` in Jet. Leave any existing `7878` instance running. A real
+library behind an app host needs the same keys, stores and network as a direct
+deployment: in particular, run the two-family Google check of [section 8](#8-when-a-unit-fails)
+once, and set `EMBEDDING_GEMINI_IPV4_ONLY=true` in the library's `.env` when
+Google refuses the host's IPv6 address.
+
 `jet-app.json` declares the relative UI and MCP endpoints. The fixture exposes `fixture_page`, a local sample with a
 contained picture URL, and `search`, which takes a required `question` string
 and returns the same numbered figure for every question. Its `results` include

@@ -119,6 +119,19 @@ impl EmbedError {
             || body.contains("prepay credits are depleted")
     }
 
+    /// True when Google refuses the address the request came from, not the key: its HTTP 400 with
+    /// "User location is not supported". A host with an IPv6 address that Google places in a
+    /// country it does not serve gets this on every call, while its IPv4 address may be fine.
+    pub fn is_location_refused(&self) -> bool {
+        let Self::Rejected { status, body } = self else {
+            return false;
+        };
+        *status == 400
+            && body
+                .to_lowercase()
+                .contains("user location is not supported")
+    }
+
     /// True when Google does not accept the key: HTTP 401 or 403, or HTTP 400 with its message
     /// for an invalid key, because Google answers an invalid key with 400.
     pub fn is_key_refused(&self) -> bool {

@@ -26,7 +26,14 @@ impl Balances {
     pub fn shown(&self, provider: Provider) -> Option<Balance> {
         let read = self.found.map(|found| found.of(provider));
         match (read, self.out_of_credit.contains(&provider)) {
-            (Some(problem @ (Balance::KeyMissing | Balance::KeyRefused)), _) => Some(problem),
+            (
+                Some(
+                    problem
+                    @ (Balance::KeyMissing | Balance::KeyRefused | Balance::LocationRefused),
+                ),
+                _,
+            ) => Some(problem),
+
             (_, true) => Some(Balance::OutOfCredit),
             (read, false) => read,
         }

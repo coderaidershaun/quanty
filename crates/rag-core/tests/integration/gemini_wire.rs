@@ -66,27 +66,43 @@ async fn a_key_check_costs_nothing_and_tells_a_refused_key_from_spent_credit() {
     );
     assert_eq!(requests[0].api_key.as_deref(), Some("not-a-real-key"));
 
-    // Status, message, whether the key is refused, whether the credit is spent.
+    // Status, message, whether the key is refused, whether the credit is spent, whether Google
+    // refuses the address the call came from.
     let answers = [
         (
             400,
             "API key not valid. Please pass a valid API key.",
             true,
             false,
+            false,
         ),
-        (401, "stub", true, false),
-        (403, "stub", true, false),
-        (402, "Your prepayment credits are depleted.", false, true),
+        (401, "stub", true, false, false),
+        (403, "stub", true, false, false),
+        (
+            402,
+            "Your prepayment credits are depleted.",
+            false,
+            true,
+            false,
+        ),
         (
             429,
             "Your prepay credits are depleted. Add credit.",
             false,
             true,
+            false,
         ),
-        (429, "Resource has been exhausted.", false, false),
-        (503, "stub", false, false),
+        (429, "Resource has been exhausted.", false, false, false),
+        (503, "stub", false, false, false),
+        (
+            400,
+            "User location is not supported for the API use.",
+            false,
+            false,
+            true,
+        ),
     ];
-    for (status, message, is_key_refused, is_out_of_credit) in answers {
+    for (status, message, is_key_refused, is_out_of_credit, is_location_refused) in answers {
         let stub = GeminiStub::start_answering(vec![(status, message)]).await;
         let error = embedder_for(&stub).check_key().await.unwrap_err();
         assert!(
@@ -99,6 +115,12 @@ async fn a_key_check_costs_nothing_and_tells_a_refused_key_from_spent_credit() {
             is_out_of_credit,
             "{status} {message}"
         );
+        assert_eq!(
+            error.is_location_refused(),
+            is_location_refused,
+            "{status} {message}"
+        );
+
         assert_eq!(
             stub.requests().len(),
             1,

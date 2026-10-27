@@ -141,6 +141,11 @@ fn key_state(state: KeyState, provider: Provider) -> ServiceState {
             credit,
             "the provider reports that the account is out of credit",
         )),
+        KeyState::LocationRefused => ServiceState::Down(Failure::new(
+            FailureKind::EmbeddingLocationRefused,
+            "Google refuses the server's network location (User location is not supported)",
+        )),
+
         KeyState::Refused => ServiceState::Down(
             Failure::new(
                 FailureKind::Internal,

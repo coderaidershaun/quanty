@@ -46,8 +46,13 @@ pub trait Services: Send + Sync + 'static {
     /// Asks Google whether it accepts `key`. It costs nothing, and it cannot see spent credit. The
     /// real service makes its client when this is called and not when the future runs, so that a
     /// time limit on the future never covers it. The key is given by value because the future
-    /// would otherwise keep a borrow of the settings it was read from.
-    fn check_gemini_key(&self, key: ApiKey) -> impl Future<Output = Result<(), EmbedError>> + Send;
+    /// would otherwise keep a borrow of the settings it was read from. `ipv4_only` is the setting
+    /// of the same name, so the check leaves by the address the paid calls leave by.
+    fn check_gemini_key(
+        &self,
+        key: ApiKey,
+        ipv4_only: bool,
+    ) -> impl Future<Output = Result<(), EmbedError>> + Send;
 
     /// Asks Jev whether it accepts `key`. It costs nothing, and Jev documents no reply to it for
     /// spent credit.
@@ -88,8 +93,12 @@ impl Services for RealServices {
         ocr::convert_chapter_with_jev_key(job, jev_api_key, on_page).await
     }
 
-    fn check_gemini_key(&self, key: ApiKey) -> impl Future<Output = Result<(), EmbedError>> + Send {
-        let client = self.key_clients.gemini(&key);
+    fn check_gemini_key(
+        &self,
+        key: ApiKey,
+        ipv4_only: bool,
+    ) -> impl Future<Output = Result<(), EmbedError>> + Send {
+        let client = self.key_clients.gemini(&key, ipv4_only);
         async move { client?.check_key().await }
     }
 
@@ -231,8 +240,9 @@ impl<S: Services> LiveContext<S> {
     /// `None` when the settings have no key. The client is made when this is called, and the
     /// future is only the read, so a time limit around it never covers the making.
     pub fn check_gemini_key(&self) -> Option<impl Future<Output = Result<(), EmbedError>> + Send> {
-        let key = self.config().gemini_api_key.clone()?;
-        Some(self.services.check_gemini_key(key))
+        let config = self.config();
+        let key = config.gemini_api_key.clone()?;
+        Some(self.services.check_gemini_key(key, config.gemini_ipv4_only))
     }
 
     /// Asks Jev whether it accepts the key of the settings, so that no caller holds the key.

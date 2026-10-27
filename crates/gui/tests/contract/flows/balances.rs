@@ -430,8 +430,19 @@ fn the_note_of_spent_credit_comes_from_a_reply_and_goes_with_a_reply_that_worked
             jev: Balance::NotOffered,
         },
     );
-    search_ended(&mut state, Err(spent));
+    search_ended(&mut state, Err(spent.clone()));
     assert_eq!(shows(&state).0, Some(Balance::KeyRefused));
+
+    // So does an address that Google refuses: no credit is seen until a call gets through.
+    read_found(
+        &mut state,
+        BalanceReads {
+            google: Balance::LocationRefused,
+            jev: Balance::NotOffered,
+        },
+    );
+    search_ended(&mut state, Err(spent));
+    assert_eq!(shows(&state).0, Some(Balance::LocationRefused));
 }
 
 #[test]

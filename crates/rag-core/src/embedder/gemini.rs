@@ -2,6 +2,7 @@
 //! own, and tries again when the API is busy.
 
 use std::fmt;
+use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 
 use serde::Serialize;
@@ -25,23 +26,30 @@ pub struct GeminiEmbedder {
     api_key: ApiKey,
     base_url: String,
     first_retry_delay: Duration,
+    ipv4_only: bool,
 }
 
 impl GeminiEmbedder {
+    /// An embedder that connects over whichever address family the host prefers.
+    ///
     /// # Errors
     /// [`EmbedError::Transport`] when the HTTP client cannot be built.
     pub fn new(api_key: &ApiKey) -> Result<Self, EmbedError> {
-        let client = reqwest::Client::builder()
-            .timeout(REQUEST_TIMEOUT)
-            .build()?;
-        Ok(Self {
-            client,
-            api_key: api_key.clone(),
-            base_url: DEFAULT_BASE_URL.to_owned(),
-            first_retry_delay: DEFAULT_FIRST_RETRY_DELAY,
-        })
+        Self::build(api_key, false)
     }
 
+    /// An embedder that connects over IPv4 alone, for a host whose IPv6 address Google refuses
+    /// with "User location is not supported". Every socket is bound to `0.0.0.0`, so only the A
+    /// records of the API are used.
+    ///
+    /// # Errors
+    /// [`EmbedError::Transport`] when the HTTP client cannot be built.
+    pub fn ipv4_only(api_key: &ApiKey) -> Result<Self, EmbedError> {
+        Self::build(api_key, true)
+    }
+
+    /// [`GeminiEmbedder::ipv4_only`] when the config says so, else [`GeminiEmbedder::new`].
+    ///
     /// # Errors
     /// [`EmbedError::MissingApiKey`] when the config has no key.
     pub fn from_config(config: &Config) -> Result<Self, EmbedError> {
@@ -49,7 +57,21 @@ impl GeminiEmbedder {
             .gemini_api_key
             .as_ref()
             .ok_or(EmbedError::MissingApiKey)?;
-        Self::new(key)
+        Self::build(key, config.gemini_ipv4_only)
+    }
+
+    fn build(api_key: &ApiKey, ipv4_only: bool) -> Result<Self, EmbedError> {
+        let mut builder = reqwest::Client::builder().timeout(REQUEST_TIMEOUT);
+        if ipv4_only {
+            builder = builder.local_address(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+        }
+        Ok(Self {
+            client: builder.build()?,
+            api_key: api_key.clone(),
+            base_url: DEFAULT_BASE_URL.to_owned(),
+            first_retry_delay: DEFAULT_FIRST_RETRY_DELAY,
+            ipv4_only,
+        })
     }
 
     /// Points the embedder at another server, such as a stand-in in a test. `base_url` is
@@ -171,6 +193,7 @@ impl fmt::Debug for GeminiEmbedder {
         formatter
             .debug_struct("GeminiEmbedder")
             .field("base_url", &self.base_url)
+            .field("ipv4_only", &self.ipv4_only)
             .finish_non_exhaustive()
     }
 }

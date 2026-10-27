@@ -57,7 +57,7 @@ impl<S: Services> Services for KeyChecks<S> {
         self.inner.convert(job, jev_api_key, on_page)
     }
 
-    async fn check_gemini_key(&self, key: ApiKey) -> Result<(), EmbedError> {
+    async fn check_gemini_key(&self, key: ApiKey, _ipv4_only: bool) -> Result<(), EmbedError> {
         match self.gemini {
             Check::Accepted => Ok(()),
             Check::Rejected { status, body } => Err(EmbedError::Rejected {

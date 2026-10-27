@@ -26,6 +26,7 @@ const JEV_KEY: &str = "jev-key-that-must-never-show";
 const REQUEST: RequestId = RequestId(7);
 const DEPLETED: &str = "Your prepayment credits are depleted. Add credit in AI Studio.";
 const INVALID: &str = r#"{"error":{"code":400,"message":"API key not valid.","details":[{"reason":"API_KEY_INVALID"}]}}"#;
+const LOCATION: &str = r#"{"error":{"code":400,"message":"User location is not supported for the API use.","status":"FAILED_PRECONDITION"}}"#;
 
 fn rejected(status: u16, body: &'static str) -> Check {
     Check::Rejected { status, body }
@@ -69,6 +70,7 @@ fn reads(google: Balance, jev: Balance) -> BalanceReads {
 fn the_live_backend_names_what_each_provider_answered_and_never_shows_a_key() {
     every_answer_of_a_provider_has_its_words();
     spent_credit_fails_a_job_in_words_of_its_own();
+    a_refused_location_fails_a_job_in_words_of_its_own();
     a_key_is_never_shown_on_the_screen();
 }
 
@@ -107,6 +109,15 @@ fn every_answer_of_a_provider_has_its_words() {
                 Balance::Unread(ReadFailure::Unreachable),
             ),
         ),
+        // Google's 400 for the address the call came from is not the 400 for a bad key.
+        (
+            context(
+                rejected(400, LOCATION),
+                Check::Accepted,
+                Keys::InTheSettings,
+            ),
+            reads(Balance::LocationRefused, Balance::NotOffered),
+        ),
     ];
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -136,7 +147,22 @@ fn spent_credit_fails_a_job_in_words_of_its_own() {
     );
 }
 
+fn a_refused_location_fails_a_job_in_words_of_its_own() {
+    let google = EmbedError::Rejected {
+        status: 400,
+        body: LOCATION.to_owned(),
+    };
+    let failure = backend::live::IntoFailure::into_failure(google);
+    assert_eq!(failure.kind, FailureKind::EmbeddingLocationRefused);
+    assert!(
+        failure.hint.contains("EMBEDDING_GEMINI_IPV4_ONLY=true"),
+        "{}",
+        failure.hint
+    );
+}
+
 /// Every node of the window, with everything its accessibility data says, written out.
+
 fn everything_the_nodes_say(harness: &egui_kittest::Harness<'_, gui::app::App>) -> String {
     harness
         .query_all(By::new().predicate(|_| true))

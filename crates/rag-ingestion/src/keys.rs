@@ -20,6 +20,9 @@ pub enum KeyState {
     Refused,
     /// The provider says the prepaid credit is used up.
     OutOfCredit,
+    /// The provider refuses the address the server calls from, so it never judged the key. Only
+    /// Google says this.
+    LocationRefused,
     /// The provider accepted the key. It does not say how much credit is left.
     Accepted,
     /// The check could not tell.
@@ -54,6 +57,7 @@ impl KeyState {
             Ok(()) => KeyState::Accepted,
             Err(error) if error.is_out_of_credit() => KeyState::OutOfCredit,
             Err(error) if error.is_key_refused() => KeyState::Refused,
+            Err(error) if error.is_location_refused() => KeyState::LocationRefused,
             Err(EmbedError::Rejected { status, .. }) => {
                 KeyState::Unread(KeyReadFailure::Status(*status))
             }
@@ -119,15 +123,20 @@ pub struct KeyClients {
 impl KeyClients {
     /// The client for Google, made here the first time so that a time limit never covers it. A
     /// client that cannot be made is not kept. Two calls at the same moment may each make one, and
-    /// the first to finish is the one that stays.
+    /// the first to finish is the one that stays. It leaves over IPv4 alone when `ipv4_only`,
+    /// as the embedder of the paid calls does, so the check sees what they see.
     ///
     /// # Errors
     /// [`EmbedError::Transport`] when the HTTP client cannot be built.
-    pub fn gemini(&self, key: &ApiKey) -> Result<&GeminiEmbedder, EmbedError> {
+    pub fn gemini(&self, key: &ApiKey, ipv4_only: bool) -> Result<&GeminiEmbedder, EmbedError> {
         if let Some(client) = self.gemini.get() {
             return Ok(client);
         }
-        let client = GeminiEmbedder::new(key)?;
+        let client = if ipv4_only {
+            GeminiEmbedder::ipv4_only(key)?
+        } else {
+            GeminiEmbedder::new(key)?
+        };
         Ok(self.gemini.get_or_init(|| client))
     }
 
@@ -147,7 +156,11 @@ impl KeyClients {
     /// The clients are made when this is called, and the future that it returns is only the two
     /// timed reads. It never fails: a check that cannot tell is a state.
     pub fn check(&self, config: &Config) -> impl Future<Output = KeyStates> + Send {
-        let gemini = config.gemini_api_key.as_ref().map(|key| self.gemini(key));
+        let gemini = config
+            .gemini_api_key
+            .as_ref()
+            .map(|key| self.gemini(key, config.gemini_ipv4_only));
+
         let jev = config.jev_api_key.as_ref().map(|key| self.jev(key));
         read_key_states(
             gemini.map(|client| async move { client?.check_key().await }),

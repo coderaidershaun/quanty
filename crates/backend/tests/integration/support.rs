@@ -61,7 +61,7 @@ impl Services for StandInServices {
         ocr::convert::convert_chapter_with_progress(job, &*self.pages, on_page).await
     }
 
-    async fn check_gemini_key(&self, _key: ApiKey) -> Result<(), EmbedError> {
+    async fn check_gemini_key(&self, _key: ApiKey, _ipv4_only: bool) -> Result<(), EmbedError> {
         Ok(())
     }
 
@@ -133,7 +133,7 @@ impl Services for StandInsOnClosedPorts {
         ocr::convert::convert_chapter_with_progress(job, &*self.pages, on_page).await
     }
 
-    async fn check_gemini_key(&self, _key: ApiKey) -> Result<(), EmbedError> {
+    async fn check_gemini_key(&self, _key: ApiKey, _ipv4_only: bool) -> Result<(), EmbedError> {
         Ok(())
     }
 
@@ -180,6 +180,7 @@ pub fn closed_ports_config() -> Config {
         dataset_cache_folder: folder.join("dataset-cache"),
         gemini_api_key: Some(ApiKey::new("a-made-up-key")),
         jev_api_key: None,
+        gemini_ipv4_only: false,
     }
 }
 

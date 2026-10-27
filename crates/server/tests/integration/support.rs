@@ -142,6 +142,7 @@ pub fn closed_mcp_config(home: &std::path::Path) -> Config {
         dataset_cache_folder: home.join("dataset-cache"),
         gemini_api_key: None,
         jev_api_key: None,
+        gemini_ipv4_only: false,
     }
 }
 

@@ -631,6 +631,7 @@ Build `crates/web-ui` with `trunk build --release` before building `cargo build 
 | `FALKORDB_GRAPH` | Graph name | `quanty` |
 | `CONTENT_DIR` | Converted content folder | `content` |
 | `EMBEDDING_GEMINI_API_KEY`, `CONVERTER_JEV_API_KEY` | Embedding and conversion credentials | none |
+| `EMBEDDING_GEMINI_IPV4_ONLY` | `true`, `1` or `yes` makes every Gemini call leave over IPv4, for a host whose IPv6 address Google refuses with "User location is not supported" | off |
 | `LLM_PROVIDER`, `LLM_MODEL`, `LLM_THINKING` | Defaults before saved per-work choices | `codex`, `gpt-6.1-sol`, `medium` |
 
 Settings come from the environment, then the home folder's `.env`, then defaults. Model choices are saved by the server in `<home>/.quanty-model.json`. Other cache and output folders are listed in [`.env.example`](../.env.example). There is one library per server.
@@ -760,6 +761,8 @@ The one read that a provider allows with its key costs nothing, and it is the on
 | balance not offered | green | The check was taken. The provider has no way to read a balance, so the hint points to its page |
 | key missing | orange | The key is not in the settings, and nothing was called. The hint names the variable |
 | key refused | red | The check got 401 or 403, or Google's 400 for an invalid key (`API_KEY_INVALID`) |
+| location refused | red | Google's 400 with "User location is not supported": it refuses the address the server calls from, so the key was never judged. The hint names `EMBEDDING_GEMINI_IPV4_ONLY` |
+
 | out of credit | red | A reply said so: HTTP 402 from either provider, or from Google any status with the words "prepayment credits are depleted" or "prepay credits are depleted", because Google also sends them with 429 |
 | could not read | orange | The provider could not be reached, did not answer in 5 seconds, or answered another status. The hint says which, and that a click tries again |
 

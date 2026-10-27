@@ -121,6 +121,7 @@ fn embed(error: &EmbedError) -> Verdict {
     match error {
         EmbedError::MissingApiKey => Verdict::of(Kind::EmbeddingKeyMissing),
         error if error.is_out_of_credit() => Verdict::of(Kind::EmbeddingOutOfCredit),
+        error if error.is_location_refused() => Verdict::of(Kind::EmbeddingLocationRefused),
         EmbedError::Transport(_) | EmbedError::Rejected { .. } => {
             Verdict::of(Kind::EmbeddingFailed)
         }

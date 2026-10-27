@@ -39,6 +39,8 @@ pub enum FailureKind {
     Internal,
     EmbeddingOutOfCredit,
     ConverterOutOfCredit,
+    /// Google refuses the address the server calls from, not the key.
+    EmbeddingLocationRefused,
 }
 
 impl FailureKind {
@@ -96,6 +98,9 @@ impl FailureKind {
             }
             FailureKind::ConverterOutOfCredit => {
                 "Your Jev credit is used up. Add credit in the console linked at the foot of the window, then try again."
+            }
+            FailureKind::EmbeddingLocationRefused => {
+                "Google refuses the server's network location. If the server has an IPv6 address, set EMBEDDING_GEMINI_IPV4_ONLY=true in .env and start quanty again. If its IPv4 address is in a country Google does not serve, move the server or use a key with billing enabled."
             }
         }
     }

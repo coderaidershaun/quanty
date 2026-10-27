@@ -141,6 +141,7 @@ fn state(shown: Option<Balance>) -> &'static str {
         Some(Balance::KeyMissing) => "key missing",
         Some(Balance::KeyRefused) => "key refused",
         Some(Balance::OutOfCredit) => "out of credit",
+        Some(Balance::LocationRefused) => "location refused",
         Some(Balance::Unread(_)) => "could not read",
     }
 }
@@ -148,7 +149,7 @@ fn state(shown: Option<Balance>) -> &'static str {
 fn tone(shown: Option<Balance>) -> Tone {
     match shown {
         Some(Balance::NotOffered) => Tone::Success,
-        Some(Balance::KeyRefused | Balance::OutOfCredit) => Tone::Danger,
+        Some(Balance::KeyRefused | Balance::OutOfCredit | Balance::LocationRefused) => Tone::Danger,
         None | Some(Balance::KeyMissing | Balance::Unread(_)) => Tone::Warning,
     }
 }
@@ -165,6 +166,8 @@ fn hint(provider: Provider, shown: Option<Balance>) -> String {
         (Provider::Google, Balance::KeyMissing) => FailureKind::EmbeddingKeyMissing.hint(),
         (Provider::Jev, Balance::KeyMissing) => FailureKind::ConverterKeyMissing.hint(),
         (_, Balance::KeyRefused) => "Make a new key, put it in .env, then start quanty again",
+        (_, Balance::LocationRefused) => FailureKind::EmbeddingLocationRefused.hint(),
+
         (Provider::Google, Balance::OutOfCredit) => {
             "Google said so. Add credit; the next ask that works clears this"
         }

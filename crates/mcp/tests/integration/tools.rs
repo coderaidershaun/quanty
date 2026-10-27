@@ -342,4 +342,19 @@ async fn health_names_each_service_that_is_not_ready_and_says_why_a_key_cannot_b
         spent["keys"][1]["billing_page"],
         "https://console.typesafe.ai/"
     );
+
+    let refused_location = asked(KeyState::LocationRefused, KeyState::Accepted).await;
+
+    assert_eq!(refused_location["healthy"], false);
+    assert_eq!(refused_location["keys"][0]["state"], "location_refused");
+    let detail = refused_location["keys"][0]["detail"].as_str().unwrap();
+    assert!(
+        detail.contains("EMBEDDING_GEMINI_IPV4_ONLY=true"),
+        "{detail}"
+    );
+    let lines = refused_location["report"].as_str().unwrap();
+    assert!(
+        lines.contains("Gemini key: FAILED (location_refused)"),
+        "{lines}"
+    );
 }

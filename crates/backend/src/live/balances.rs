@@ -23,6 +23,8 @@ fn balance(state: KeyState) -> Balance {
         KeyState::Missing => Balance::KeyMissing,
         KeyState::Refused => Balance::KeyRefused,
         KeyState::OutOfCredit => Balance::OutOfCredit,
+        KeyState::LocationRefused => Balance::LocationRefused,
+
         KeyState::Accepted => Balance::NotOffered,
         KeyState::Unread(failure) => Balance::Unread(read_failure(failure)),
     }

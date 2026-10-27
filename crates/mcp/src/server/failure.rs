@@ -11,7 +11,7 @@ use rmcp::ErrorData;
 use rmcp::handler::server::tool::IntoCallToolResult;
 use rmcp::model::{CallToolResponse, CallToolResult, ContentBlock};
 
-use super::health::{GEMINI_BILLING_PAGE, JEV_CONSOLE_PAGE};
+use super::health::{GEMINI_BILLING_PAGE, JEV_CONSOLE_PAGE, LOCATION_REFUSED_DETAIL};
 use crate::datasets::DatasetToolError;
 use crate::ingest::PdfIngestError;
 use crate::insights::ExportToolError;
@@ -64,6 +64,11 @@ impl ToolError {
             text.push(' ');
             text.push_str(&credit);
         }
+        if self.is_location_refused() {
+            text.push(' ');
+            text.push_str(LOCATION_REFUSED_DETAIL);
+            text.push('.');
+        }
         if self.is_service_failure() {
             text.push(' ');
             text.push_str(HEALTH_HINT);
@@ -95,6 +100,22 @@ impl ToolError {
             next = error.source();
         }
         None
+    }
+
+    /// True when Google refused the address the server calls from, anywhere in the chain of
+    /// causes. The text then says what to do about the address, which is nothing a key can fix.
+    fn is_location_refused(&self) -> bool {
+        let mut next: Option<&(dyn Error + 'static)> = Some(self);
+        while let Some(error) = next {
+            if error
+                .downcast_ref::<EmbedError>()
+                .is_some_and(EmbedError::is_location_refused)
+            {
+                return true;
+            }
+            next = error.source();
+        }
+        false
     }
 
     fn is_service_failure(&self) -> bool {

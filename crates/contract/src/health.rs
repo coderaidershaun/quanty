@@ -74,9 +74,9 @@ impl Failure {
         match self.kind {
             FailureKind::QdrantDown => Some(Service::Qdrant),
             FailureKind::FalkorDbDown => Some(Service::FalkorDb),
-            FailureKind::EmbeddingKeyMissing | FailureKind::EmbeddingOutOfCredit => {
-                Some(Service::EmbeddingKey)
-            }
+            FailureKind::EmbeddingKeyMissing
+            | FailureKind::EmbeddingOutOfCredit
+            | FailureKind::EmbeddingLocationRefused => Some(Service::EmbeddingKey),
             FailureKind::ConverterKeyMissing | FailureKind::ConverterOutOfCredit => {
                 Some(Service::ConverterKey)
             }
@@ -131,8 +131,11 @@ pub enum Balance {
     KeyMissing,
     KeyRefused,
     OutOfCredit,
+    /// The provider refuses the address the server calls from, so the key was never judged.
+    LocationRefused,
     /// The key was taken, and the provider gives no way to read a balance with it.
     NotOffered,
+
     Unread(ReadFailure),
 }
 

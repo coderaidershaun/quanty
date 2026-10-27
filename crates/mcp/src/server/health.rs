@@ -13,6 +13,10 @@ pub(super) const GEMINI_BILLING_PAGE: &str = "https://aistudio.google.com/billin
 /// Where the credit of the Jev key is seen and added. Jev gives no balance to a key.
 pub(super) const JEV_CONSOLE_PAGE: &str = "https://console.typesafe.ai/";
 
+/// What to do when Google answers "User location is not supported": it refuses the address the
+/// server calls from, most often an IPv6 address, and never judged the key.
+pub(super) const LOCATION_REFUSED_DETAIL: &str = "Google refuses the server's network location, not the key. If the server has an IPv6 address, set EMBEDDING_GEMINI_IPV4_ONLY=true in .env and start the server again; if its IPv4 address is in a country Google does not serve, move the server or use a key with billing enabled";
+
 /// Whether the services that a tool needs are ready.
 #[derive(Serialize, JsonSchema)]
 pub(super) struct HealthResult {
@@ -56,6 +60,8 @@ enum KeyStateName {
     Refused,
     /// The provider says the prepaid credit is used up.
     OutOfCredit,
+    /// The provider refuses the address the server calls from, so the key was never judged.
+    LocationRefused,
     /// The check could not tell. `detail` says why.
     Unread,
 }
@@ -169,6 +175,10 @@ impl KeyView {
                     provider.account_page
                 ),
             ),
+            KeyState::LocationRefused => (
+                KeyStateName::LocationRefused,
+                LOCATION_REFUSED_DETAIL.to_owned(),
+            ),
             KeyState::Unread(failure) => (KeyStateName::Unread, unread_detail(failure)),
         };
         KeyView {
@@ -198,6 +208,7 @@ impl KeyStateName {
             KeyStateName::Missing => "missing",
             KeyStateName::Refused => "refused",
             KeyStateName::OutOfCredit => "out_of_credit",
+            KeyStateName::LocationRefused => "location_refused",
             KeyStateName::Unread => "unread",
         }
     }

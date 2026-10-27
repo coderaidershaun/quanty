@@ -5,7 +5,7 @@ use eframe::egui::{
     self, Align, Layout, Response, Stroke, WidgetInfo, WidgetType, text::LayoutJob, vec2,
 };
 
-use crate::theme::{Icon, TextRole, Tone, color, radius, size, space, stroke};
+use crate::theme::{self, Icon, TextRole, Tone, radius, size, space, stroke};
 use crate::widgets::controls::Button;
 use crate::widgets::{ControlSize, spinner};
 
@@ -76,7 +76,7 @@ impl<'a> Notice<'a> {
     }
 
     pub fn show(self, ui: &mut egui::Ui) -> NoticeResponse {
-        let swatch = self.tone.swatch();
+        let swatch = theme::palette(ui.ctx()).tone(self.tone);
         let mut action_clicked = false;
         let mut dismissed = false;
         let framed = egui::Frame::NONE
@@ -97,9 +97,9 @@ impl<'a> Notice<'a> {
                     };
                     ui.vertical(|ui| {
                         ui.set_width((ui.available_width() - after).max(0.0));
-                        ui.label(TextRole::BodyStrong.rich(self.title).color(swatch.text));
+                        ui.label(TextRole::BodyStrong.rich(ui, self.title).color(swatch.text));
                         if let Some(body) = self.body {
-                            ui.label(TextRole::Body.rich(body).color(swatch.text));
+                            ui.label(TextRole::Body.rich(ui, body).color(swatch.text));
                         }
                         if let Some(label) = self.action {
                             let button = Button::secondary(label).size(self.control_size);
@@ -262,8 +262,8 @@ impl<'a> Placeholder<'a> {
         let mut clicked = false;
         match part {
             Part::Icon => self.paint_icon(ui),
-            Part::Title => wrapped_label(ui, self.title_text(), text_width),
-            Part::Hint(hint) => wrapped_label(ui, TextRole::Small.rich(hint), text_width),
+            Part::Title => wrapped_label(ui, self.title_text(ui), text_width),
+            Part::Hint(hint) => wrapped_label(ui, TextRole::Small.rich(ui, hint), text_width),
             Part::Action(label) => {
                 let button = Button::secondary(label).size(self.action_size);
                 clicked = ui.add(button).clicked();
@@ -281,24 +281,26 @@ impl<'a> Placeholder<'a> {
         }
     }
 
-    fn title_text(&self) -> egui::RichText {
+    fn title_text(&self, ui: &egui::Ui) -> egui::RichText {
+        let palette = theme::palette(ui.ctx());
         let tint = if self.fill == Fill::Error {
-            Tone::Danger.swatch().text
+            palette.tone(Tone::Danger).text
         } else {
-            TextRole::Heading.color()
+            TextRole::Heading.color(palette)
         };
-        TextRole::Heading.rich(self.title).color(tint)
+        TextRole::Heading.rich(ui, self.title).color(tint)
     }
 
     fn paint_icon(&self, ui: &mut egui::Ui) {
+        let palette = theme::palette(ui.ctx());
         match self.fill {
             Fill::Loading => {
                 ui.add_space((PLACEHOLDER_ICON - size::ICON_MD) / 2.0);
                 spinner(ui, self.title);
                 ui.add_space((PLACEHOLDER_ICON - size::ICON_MD) / 2.0);
             }
-            Fill::Empty(icon) => paint_big_icon(ui, icon, color::TEXT_FAINT),
-            Fill::Error => paint_big_icon(ui, Icon::ERROR, Tone::Danger.swatch().text),
+            Fill::Empty(icon) => paint_big_icon(ui, icon, palette.text_faint),
+            Fill::Error => paint_big_icon(ui, Icon::ERROR, palette.tone(Tone::Danger).text),
         }
     }
 
@@ -326,7 +328,8 @@ fn paint_big_icon(ui: &mut egui::Ui, icon: Icon, tint: egui::Color32) {
 }
 
 fn text_height(ui: &egui::Ui, role: TextRole, text: &str, width: f32) -> f32 {
-    let mut job = LayoutJob::single_section(text.to_owned(), role.format(color::TEXT));
+    let mut job =
+        LayoutJob::single_section(text.to_owned(), role.format(egui::Color32::PLACEHOLDER));
     job.wrap.max_width = width;
     ui.painter().layout_job(job).size().y
 }

@@ -9,7 +9,7 @@ use crate::panels::PanelCx;
 use crate::panels::heights::Heights;
 use crate::panels::labels::TRY_AGAIN;
 use crate::panels::source::{kind_name, piece_body};
-use crate::theme::{Icon, Kind, TextRole, color};
+use crate::theme::{self, Icon, Kind, TextRole};
 use crate::widgets::{Card, Placeholder};
 use contract::{
     ChapterContents, ChapterItem, DocId, DocumentView, Failure, FailureKind, Intent, Loadable,
@@ -115,11 +115,12 @@ fn card(ui: &mut egui::Ui, doc: DocId, item: &ChapterItem, cx: &mut PanelCx<'_>)
         .action_size(width(ui).control_size())
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
-            ui.label(TextRole::Small.rich(&pages).color(color::TEXT_MUTED));
+            let pages_color = theme::palette(ui.ctx()).text_muted;
+            ui.label(TextRole::Small.rich(ui, &pages).color(pages_color));
             let mut body = piece.clone();
             if let Some(metadata) = &item.metadata {
-                ui.label(TextRole::BodyStrong.rich(&metadata.title));
-                ui.label(TextRole::Body.rich(&metadata.description));
+                ui.label(TextRole::BodyStrong.rich(ui, &metadata.title));
+                ui.label(TextRole::Body.rich(ui, &metadata.description));
                 if body
                     .name
                     .as_deref()

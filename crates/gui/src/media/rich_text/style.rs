@@ -4,7 +4,7 @@
 use eframe::egui::{Align, Color32, FontId, Stroke, text::TextFormat};
 
 use super::parse::SpanStyle;
-use crate::theme::{TextRole, color, radius, space, stroke};
+use crate::theme::{Palette, TextRole, radius, space, stroke};
 
 /// The size of a footnote mark, as a share of the size of the text beside it.
 const FOOT_SCALE: f32 = 0.72;
@@ -58,7 +58,7 @@ pub(super) struct TableLook {
     pub(super) pad_y: f32,
 }
 
-pub(super) fn text_look(role: TextRole) -> TextLook {
+pub(super) fn text_look(role: TextRole, palette: &Palette) -> TextLook {
     let font = role.font();
     TextLook {
         role,
@@ -68,16 +68,16 @@ pub(super) fn text_look(role: TextRole) -> TextLook {
         },
         foot_raise: font.size * FOOT_RAISE,
         cite_rise: font.size * CITE_RISE,
-        letter_spacing: role.format(role.color()).extra_letter_spacing,
+        letter_spacing: role.format(role.color(palette)).extra_letter_spacing,
         font,
         strong_font: role.strong_font(),
         italic_font: role.italic_font(),
         strong_italic_font: role.strong_italic_font(),
         code_font: role.code_font(),
-        color: role.color(),
-        strong_color: color::TEXT,
-        foot_color: color::TEXT_SECONDARY,
-        code_fill: color::WELL,
+        color: role.color(palette),
+        strong_color: palette.text,
+        foot_color: palette.text_secondary,
+        code_fill: palette.well,
         code_radius: radius::SM,
         code_pad: space::XXS,
         line_height: role.line_height(),
@@ -93,18 +93,18 @@ pub(super) fn text_look(role: TextRole) -> TextLook {
 /// The header of a table is set in capitals with a little room between the letters. The table
 /// upper-cases the words itself, because the role sets the font and the spacing but not the
 /// letters.
-pub(super) fn header_look() -> TextLook {
-    text_look(TextRole::Caps)
+pub(super) fn header_look(palette: &Palette) -> TextLook {
+    text_look(TextRole::Caps, palette)
 }
 
 /// The heavy line along the top and the bottom of a table.
-pub(super) fn heavy_rule() -> Stroke {
-    Stroke::new(stroke::HEAVY, color::RULE)
+pub(super) fn heavy_rule(palette: &Palette) -> Stroke {
+    Stroke::new(stroke::HEAVY, palette.rule)
 }
 
 /// The line under the header of a table.
-pub(super) fn header_rule() -> Stroke {
-    Stroke::new(stroke::BORDER, color::BORDER)
+pub(super) fn header_rule(palette: &Palette) -> Stroke {
+    Stroke::new(stroke::BORDER, palette.border)
 }
 
 pub(super) fn table_look() -> TableLook {

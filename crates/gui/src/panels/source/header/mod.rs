@@ -9,7 +9,7 @@ use eframe::egui;
 
 use super::row;
 use crate::panels::{PanelCx, PanelWidth};
-use crate::theme::{Icon, TextRole, color};
+use crate::theme::{self, Icon, TextRole};
 use crate::widgets::{Button, ControlSize, section_header};
 use contract::{Intent, Panel};
 use pager::PagerText;
@@ -64,7 +64,7 @@ pub(super) fn show(ui: &mut egui::Ui, cache: &mut Cache, cx: &mut PanelCx<'_>, w
         }
         Rows::One => {
             turn = row::show(ui, |ui| {
-                ui.label(TextRole::Heading.rich(TITLE));
+                ui.label(TextRole::Heading.rich(ui, TITLE));
                 let gap = ui.spacing().item_spacing.x;
                 let left =
                     ui.available_width() - cache.pager.width() - actions_width(cx, size, gap);
@@ -114,11 +114,12 @@ pub(super) fn show(ui: &mut egui::Ui, cache: &mut Cache, cx: &mut PanelCx<'_>, w
 
 fn measure(ui: &egui::Ui, cache: &Cache, cx: &PanelCx<'_>, size: ControlSize) -> Parts {
     let gap = ui.spacing().item_spacing;
+    let text = theme::palette(ui.ctx()).text;
     Parts {
         room: ui.available_size(),
         gap,
         size,
-        title: TextRole::Heading.galley(ui, TITLE, color::TEXT).size().x,
+        title: TextRole::Heading.galley(ui, TITLE, text).size().x,
         pager: cache.pager.width(),
         actions: actions_width(cx, size, gap.x),
     }

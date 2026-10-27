@@ -9,7 +9,7 @@ use eframe::egui::{
     text::LayoutJob,
 };
 
-use crate::theme::{TextRole, color, hairline, radius, size, space, stroke};
+use crate::theme::{self, Palette, TextRole, hairline, radius, size, space, stroke};
 use crate::widgets::look::{Look, focus_ring};
 
 /// The label alone is the accessible name, and a test or a screen reader reads the count as the
@@ -45,11 +45,11 @@ impl<'a> Tab<'a> {
     }
 }
 
-pub(super) fn tab_tint(is_active: bool, look: Look) -> Color32 {
+pub(super) fn tab_tint(palette: &Palette, is_active: bool, look: Look) -> Color32 {
     if is_active || look.hovered || look.pressed {
-        color::TEXT
+        palette.text
     } else {
-        color::TEXT_SECONDARY
+        palette.text_secondary
     }
 }
 
@@ -125,8 +125,9 @@ impl<'a> TabStrip<'a> {
                 };
                 (chosen, row.response.rect.bottom(), end)
             };
+        let palette = theme::palette(ui.ctx());
         let painter = ui.painter();
-        painter.hline(start..=end, bottom, hairline(painter, color::HAIRLINE));
+        painter.hline(start..=end, bottom, hairline(painter, palette.hairline));
         chosen
     }
 
@@ -135,7 +136,7 @@ impl<'a> TabStrip<'a> {
         let widths: f32 = self
             .tabs
             .iter()
-            .map(|tab| self.galley(ui, tab, metrics.role, color::TEXT).size().x)
+            .map(|tab| self.text_width(ui, tab, metrics.role))
             .sum();
         widths + metrics.gap * self.tabs.len().saturating_sub(1) as f32
     }
@@ -205,15 +206,15 @@ impl<'a> TabStrip<'a> {
         metrics: Metrics,
     ) -> egui::Response {
         let Metrics { role, height, .. } = metrics;
-        // The colour does not change the width, so any colour measures the text.
-        let measured = self.galley(ui, tab, role, color::TEXT);
+        let width = self.text_width(ui, tab, role);
         let (rect, response) =
-            ui.allocate_exact_size(egui::vec2(measured.size().x, height), egui::Sense::click());
+            ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
         crate::widgets::interactive_cursor(ui, &response);
         tab.announce(ui, &response, is_active);
         if ui.is_rect_visible(rect) {
             let look = self.forced.unwrap_or_else(|| Look::of(&response));
-            let tint = tab_tint(is_active, look);
+            let palette = theme::palette(ui.ctx());
+            let tint = tab_tint(palette, is_active, look);
             let painter = ui.painter();
             let galley = self.galley(ui, tab, role, tint);
             let top = rect.center().y - galley.size().y / 2.0;
@@ -221,13 +222,18 @@ impl<'a> TabStrip<'a> {
             if is_active {
                 let mut bar = rect;
                 bar.min.y = rect.bottom() - stroke::UNDERLINE;
-                painter.rect_filled(bar, 0.0, color::RULE);
+                painter.rect_filled(bar, 0.0, palette.rule);
             }
             if look.focused {
                 focus_ring(painter, rect, radius::SM);
             }
         }
         response
+    }
+
+    /// A colour does not change the width of text, so the galley that measures it has none.
+    fn text_width(&self, ui: &egui::Ui, tab: &Tab<'_>, role: TextRole) -> f32 {
+        self.galley(ui, tab, role, Color32::PLACEHOLDER).size().x
     }
 
     fn galley(
@@ -240,7 +246,8 @@ impl<'a> TabStrip<'a> {
         let mut job = LayoutJob::default();
         job.append(tab.label, 0.0, role.format(tint));
         if let Some(count) = tab.count {
-            let tint = if count == 0 { color::TEXT_MUTED } else { tint };
+            let muted = theme::palette(ui.ctx()).text_muted;
+            let tint = if count == 0 { muted } else { tint };
             job.append(&format!(" ({count})"), 0.0, role.format(tint));
         }
         ui.painter().layout_job(job)

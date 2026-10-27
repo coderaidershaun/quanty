@@ -7,7 +7,7 @@ use eframe::egui::{
 
 use super::content_salt;
 use super::rich_text::{Clicked, copy_is_chosen};
-use crate::theme::{TextRole, color, radius, space};
+use crate::theme::{self, TextRole, radius, space};
 
 const PADDING: f32 = space::SM;
 
@@ -30,7 +30,8 @@ pub fn show(ui: &mut Ui, code: &str, language: Option<&str>) -> Option<Clicked> 
         ui.spacing_mut().item_spacing.y = space::XS;
         if let Some(language) = language {
             ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                ui.label(TextRole::Small.rich(language).color(color::TEXT_MUTED));
+                let language_color = theme::palette(ui.ctx()).text_muted;
+                ui.label(TextRole::Small.rich(ui, language).color(language_color));
             });
         }
         listing(ui, code)
@@ -39,19 +40,20 @@ pub fn show(ui: &mut Ui, code: &str, language: Option<&str>) -> Option<Clicked> 
 }
 
 fn listing(ui: &mut Ui, code: &str) -> Option<Clicked> {
-    let galley = TextRole::Mono.galley(ui, code, color::TEXT);
+    let palette = theme::palette(ui.ctx());
+    let galley = TextRole::Mono.galley(ui, code, palette.text);
     let salt = content_salt(ui, util::hash(code));
     let room = vec2(ui.available_width(), galley.size().y + 2.0 * PADDING);
     let (outer, response) = ui.allocate_exact_size(room, Sense::click());
     // SMELL: a result card that the pointer rests on takes this same fill, so in that card the
     // shaded bed of the listing does not show. The block cannot tell what it is drawn on.
-    ui.painter().rect_filled(outer, radius::SM, color::WELL);
+    ui.painter().rect_filled(outer, radius::SM, palette.well);
     let mut inside = ui.new_child(UiBuilder::new().max_rect(outer.shrink(PADDING)));
     ScrollArea::horizontal()
         .id_salt(salt)
         .show(&mut inside, |ui| {
             let (rect, _) = ui.allocate_exact_size(galley.size(), Sense::hover());
-            ui.painter().galley(rect.min, galley, color::TEXT);
+            ui.painter().galley(rect.min, galley, palette.text);
         });
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Label, true, code));
     copy_is_chosen(&response, "Copy code").then(|| Clicked::CopyText(code.to_owned()))

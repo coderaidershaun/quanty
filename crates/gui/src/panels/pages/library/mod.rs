@@ -128,9 +128,9 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
             // What is said in place of a list puts itself in the middle of the room it is given,
             // so the frame takes the whole column first.
             ui.set_min_height(ui.available_height());
-            ui.label(TextRole::Title.rich(TITLE));
+            ui.label(TextRole::Title.rich(ui, TITLE));
             if shared.ingest.is_running() {
-                ui.label(TextRole::Small.rich(INGEST_RUNNING));
+                ui.label(TextRole::Small.rich(ui, INGEST_RUNNING));
             }
             ui.add_space(space::MD);
             nothing_listed(ui, &shared.library.catalogue, cx.intents);
@@ -277,7 +277,7 @@ fn open_page(
         ui.add_space(space::SM);
     }
     if cx.shared.ingest.is_running() {
-        ui.label(TextRole::Small.rich(INGEST_RUNNING));
+        ui.label(TextRole::Small.rich(ui, INGEST_RUNNING));
         ui.add_space(space::SM);
     }
     match open {

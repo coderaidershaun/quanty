@@ -3,7 +3,7 @@
 
 use eframe::egui::{self, Rect, Response};
 
-use crate::theme::{color, size, stroke};
+use crate::theme::{self, size, stroke};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ControlSize {
@@ -71,7 +71,7 @@ pub(crate) fn focus_ring(painter: &egui::Painter, rect: Rect, corner_radius: f32
     painter.rect_stroke(
         rect,
         corner_radius,
-        egui::Stroke::new(stroke::FOCUS, color::FOCUS),
+        egui::Stroke::new(stroke::FOCUS, theme::palette(painter.ctx()).focus),
         egui::StrokeKind::Outside,
     );
 }

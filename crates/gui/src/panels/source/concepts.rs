@@ -65,7 +65,7 @@ fn chips(ui: &mut egui::Ui, list: &[PageConcept], width: PanelWidth, cx: &mut Pa
                     let mut response = ui.add(chip);
                     if !concept.definition.is_empty() {
                         response = response.on_hover_ui(|ui| {
-                            ui.label(TextRole::Small.rich(&concept.definition));
+                            ui.label(TextRole::Small.rich(ui, &concept.definition));
                         });
                     }
                     if response.clicked() {

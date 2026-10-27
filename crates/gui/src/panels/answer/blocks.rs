@@ -48,7 +48,7 @@ fn blocks(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, answer: &Answer) {
     let mut heights = Heights::take(&mut pane.view.block_heights, BLOCK_ESTIMATE);
     heights.show(ui, 0, |ui| {
         narrow_to_measure(ui);
-        ui.label(TextRole::Title.rich(title));
+        ui.label(TextRole::Title.rich(ui, title));
     });
     for (place, block) in answer.blocks.iter().enumerate() {
         let index = place + 1;
@@ -57,7 +57,7 @@ fn blocks(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, answer: &Answer) {
                 heights.show(ui, index, |ui| {
                     narrow_to_measure(ui);
                     ui.add_space(space::SM);
-                    ui.label(TextRole::Heading.rich(text));
+                    ui.label(TextRole::Heading.rich(ui, text));
                 });
             }
             AnswerBlock::Paragraph { text, cites } => {

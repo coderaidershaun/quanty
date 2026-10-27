@@ -184,7 +184,7 @@ fn slider(ui: &mut egui::Ui, state: &mut State) {
             state.demo.zoom = value;
             state.last_activated = Some("Slider");
         }
-        ui.label(TextRole::Label.rich(format!("{:.0}%", state.demo.zoom * 100.0)));
+        ui.label(TextRole::Label.rich(ui, format!("{:.0}%", state.demo.zoom * 100.0)));
     });
 }
 

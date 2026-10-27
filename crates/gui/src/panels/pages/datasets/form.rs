@@ -7,7 +7,7 @@ use crate::panels::PanelWidth;
 use crate::panels::labels::caption;
 use crate::panels::pages::STACK_BELOW;
 use crate::state::Library;
-use crate::theme::{TextRole, space};
+use crate::theme::{self, TextRole, space};
 use crate::widgets::{ControlSize, Dropdown, Step, Stepper, TextInput, paint_caret};
 use contract::{DatasetRequest, DocId};
 
@@ -255,9 +255,10 @@ fn pick_held_out(ui: &mut egui::Ui, draft: &mut DatasetRequest, choices: &Choice
 
 fn widest_label_width(ui: &egui::Ui, offered: &[(DocId, String)]) -> f32 {
     let body = TextRole::Body;
+    let color = body.color(theme::palette(ui.ctx()));
     offered
         .iter()
-        .map(|(_, label)| body.galley(ui, label, body.color()).size().x)
+        .map(|(_, label)| body.galley(ui, label, color).size().x)
         .fold(0.0, f32::max)
 }
 
@@ -289,7 +290,7 @@ fn pick_count(ui: &mut egui::Ui, counter: &Counter, value: &mut u32) -> bool {
                     // The size given above is only the most the cell may take, so its width is
                     // also set as the least.
                     ui.set_min_width(CAPTION_WIDTH);
-                    ui.label(TextRole::Label.rich(counter.caption));
+                    ui.label(TextRole::Label.rich(ui, counter.caption));
                 },
             );
             stepper(ui, counter, *value, width.control_size())

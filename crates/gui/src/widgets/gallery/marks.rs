@@ -102,7 +102,7 @@ fn markers(ui: &mut egui::Ui) {
     ui.horizontal_wrapped(|ui| {
         for tone in Tone::ALL {
             dot(ui, tone);
-            ui.label(TextRole::Small.rich(format!("{tone:?}")));
+            ui.label(TextRole::Small.rich(ui, format!("{tone:?}")));
         }
     });
 }

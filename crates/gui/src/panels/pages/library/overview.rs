@@ -7,7 +7,7 @@ use super::{Form, Local, can_edit, delete, tags_form, width};
 use crate::panels::labels::TAGS;
 use crate::panels::{PanelCx, PanelWidth};
 use crate::state::Busy;
-use crate::theme::{Icon, TextRole, color, space};
+use crate::theme::{self, Icon, TextRole, space};
 use crate::widgets::{Button, Chip, Notice};
 use contract::{Document, Intent};
 
@@ -48,10 +48,11 @@ pub(super) fn show(
 
 /// The document's own tags. The labels of its media are shown on the media.
 fn labels(ui: &mut egui::Ui, document: &Document) {
+    let muted = theme::palette(ui.ctx()).text_muted;
     ui.horizontal_wrapped(|ui| {
-        ui.label(TextRole::Label.rich(TAGS).color(color::TEXT_MUTED));
+        ui.label(TextRole::Label.rich(ui, TAGS).color(muted));
         if document.tags.is_empty() {
-            ui.label(TextRole::Body.rich(NO_TAGS).color(color::TEXT_MUTED));
+            ui.label(TextRole::Body.rich(ui, NO_TAGS).color(muted));
         }
         for tag in &document.tags {
             ui.add(Chip::stamp(tag));

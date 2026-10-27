@@ -58,11 +58,11 @@ pub(super) fn line(ui: &mut egui::Ui, written: Written<'_>) {
         Written::Writing => {
             ui.horizontal_wrapped(|ui| {
                 widgets::spinner(ui, "Writing the answer");
-                ui.label(TextRole::BodyStrong.rich("Writing the answer"));
-                ui.label(
-                    TextRole::Small
-                        .rich("It can take up to two minutes. The results below are ready now."),
-                );
+                ui.label(TextRole::BodyStrong.rich(ui, "Writing the answer"));
+                ui.label(TextRole::Small.rich(
+                    ui,
+                    "It can take up to two minutes. The results below are ready now.",
+                ));
             });
         }
         Written::Failed(failure) => {

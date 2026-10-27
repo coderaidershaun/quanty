@@ -11,7 +11,7 @@ use crate::app::App;
 use crate::media::Media;
 use crate::panels::PanelCx;
 use crate::state::Shared;
-use crate::theme::{self, color};
+use crate::theme;
 use backend::Handler;
 use backend::fake::Fake;
 use contract::{Intent, StartupFacts};
@@ -38,7 +38,8 @@ impl eframe::App for Host {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let window = ui.max_rect();
-        ui.painter().rect_filled(window, 0.0, color::DESK);
+        ui.painter()
+            .rect_filled(window, 0.0, theme::palette(ui.ctx()).desk);
         let gutter = egui::Vec2::splat(theme::space::LG);
         let rect = egui::Rect::from_min_size(window.min + gutter, self.panel_size);
         let builder = egui::UiBuilder::new()

@@ -89,7 +89,7 @@ pub(super) fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     if !matches!(local.media, MediaChoice::New(_)) {
         caption(ui, MEDIA);
         if offers.is_empty() {
-            ui.label(TextRole::Small.rich(why_no_media_is_offered(catalogue)));
+            ui.label(TextRole::Small.rich(ui, why_no_media_is_offered(catalogue)));
         }
     }
     match &local.media {

@@ -7,7 +7,7 @@ use eframe::egui::{
     self, Color32, Galley, Rect, Response, Sense, Stroke, StrokeKind, WidgetInfo, WidgetType, vec2,
 };
 
-use crate::theme::{Icon, TextRole, Tone, color, radius, space, stroke};
+use crate::theme::{self, Icon, Palette, TextRole, Tone, radius, space, stroke};
 use crate::widgets::ControlSize;
 use crate::widgets::look::{Look, focus_ring};
 use crate::widgets::progress::paint_spinner;
@@ -182,28 +182,28 @@ impl<'a> Button<'a> {
             .max(self.min_width)
     }
 
-    fn colours(&self, look: Look) -> Colours {
+    fn colours(&self, palette: &Palette, look: Look) -> Colours {
         let quiet_fill = if look.pressed {
-            color::WELL_DEEP
+            palette.well_deep
         } else if look.hovered {
-            color::WELL
+            palette.well
         } else {
             Color32::TRANSPARENT
         };
         match self.variant {
             Variant::Primary => Colours {
                 fill: if look.pressed {
-                    color::INK_PRESSED
+                    palette.ink_pressed
                 } else if look.hovered {
-                    color::INK_HOVER
+                    palette.ink_hover
                 } else {
-                    color::INK
+                    palette.ink
                 },
                 edge: Stroke::NONE,
-                text: color::TEXT_ON_INK,
+                text: palette.text_on_ink,
             },
             Variant::Danger => {
-                let danger = Tone::Danger.swatch();
+                let danger = palette.tone(Tone::Danger);
                 let (fill, edge) = if look.pressed {
                     (danger.wash, Stroke::new(stroke::BORDER, danger.solid))
                 } else if look.hovered {
@@ -220,33 +220,33 @@ impl<'a> Button<'a> {
             Variant::Secondary | Variant::Ghost | Variant::IconOnly if self.is_selected => {
                 Colours {
                     fill: if look.hovered || look.pressed {
-                        color::WELL_DEEP
+                        palette.well_deep
                     } else {
-                        color::WELL
+                        palette.well
                     },
-                    edge: Stroke::new(stroke::EDGE, color::RULE),
-                    text: color::TEXT,
+                    edge: Stroke::new(stroke::EDGE, palette.rule),
+                    text: palette.text,
                 }
             }
             Variant::Secondary => Colours {
                 fill: quiet_fill,
-                edge: Stroke::new(stroke::BORDER, color::BORDER),
-                text: color::TEXT,
+                edge: Stroke::new(stroke::BORDER, palette.border),
+                text: palette.text,
             },
             Variant::Ghost | Variant::IconOnly => Colours {
                 fill: quiet_fill,
                 edge: Stroke::NONE,
                 text: if look.hovered || look.pressed {
-                    color::TEXT
+                    palette.text
                 } else {
-                    color::TEXT_SECONDARY
+                    palette.text_secondary
                 },
             },
         }
     }
 
     fn paint(&self, ui: &egui::Ui, rect: Rect, look: Look, text: Option<Arc<Galley>>) {
-        let colours = self.colours(look);
+        let colours = self.colours(theme::palette(ui.ctx()), look);
         let painter = ui.painter();
         painter.rect(
             rect,
@@ -294,7 +294,7 @@ impl egui::Widget for Button<'_> {
     fn ui(self, ui: &mut egui::Ui) -> Response {
         let height = self.height.unwrap_or_else(|| self.size.height());
         let text = (self.variant != Variant::IconOnly)
-            .then(|| TextRole::Label.galley(ui, self.label, color::TEXT));
+            .then(|| TextRole::Label.galley(ui, self.label, Color32::PLACEHOLDER));
         let width = match &text {
             None => height,
             Some(galley) => self.width_for_text(galley.size().x, height),

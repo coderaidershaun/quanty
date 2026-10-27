@@ -8,7 +8,7 @@ use crate::media::code;
 use crate::media::images;
 use crate::media::math::{self, MathRef};
 use crate::media::rich_text::{self, Clicked, RichText};
-use crate::theme::{TextRole, color};
+use crate::theme::{self, TextRole};
 use crate::widgets::Card;
 use contract::{Intent, PagePiece, PieceKind};
 
@@ -96,7 +96,8 @@ fn after_marker(
 ) -> Option<Clicked> {
     ui.horizontal_top(|ui| {
         if let Some(marker) = marker {
-            ui.label(words.role.rich(marker).color(color::TEXT_SECONDARY));
+            let marker_color = theme::palette(ui.ctx()).text_secondary;
+            ui.label(words.role.rich(ui, marker).color(marker_color));
         }
         rich_text::show(ui, media, words)
     })
@@ -105,7 +106,7 @@ fn after_marker(
 
 fn note(ui: &mut egui::Ui, line: Option<&str>) {
     if let Some(line) = line {
-        ui.label(TextRole::Caption.rich(line));
+        ui.label(TextRole::Caption.rich(ui, line));
     }
 }
 

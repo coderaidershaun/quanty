@@ -12,7 +12,7 @@ use super::atom::{Atom, AtomKind, Formula, LineMetrics, Measured, MeasuredLine, 
 use super::parse::Parsed;
 use super::style::{TextLook, text_look};
 use crate::media::math::Math;
-use crate::theme::TextRole;
+use crate::theme::{self, TextRole};
 use crate::widgets::CitationChip;
 
 /// The width of the stand-in for a formula that is not typeset yet: this much of the em of
@@ -47,7 +47,7 @@ pub(super) fn measure(
     math: &mut Math,
     wait: WaitFor,
 ) -> Measured {
-    let small = text_look(TextRole::Small);
+    let small = text_look(TextRole::Small, theme::palette(ui.ctx()));
     let (mut pieces, formulas) = split_into_pieces(parsed, look, &small, math);
     // Chips with no text before them still need a line to stand on.
     if pieces.is_empty() && !cites.is_empty() {
@@ -219,9 +219,9 @@ fn stand_in_width(latex: &str, em: f32) -> f32 {
 
 fn metrics_of(ui: &Ui, look: &TextLook) -> LineMetrics {
     let ascent_and_height = |font: &egui::FontId| {
-        let galley = ui
-            .painter()
-            .layout_no_wrap("x".to_owned(), font.clone(), Color32::WHITE);
+        let galley =
+            ui.painter()
+                .layout_no_wrap("x".to_owned(), font.clone(), Color32::PLACEHOLDER);
         galley
             .rows
             .first()

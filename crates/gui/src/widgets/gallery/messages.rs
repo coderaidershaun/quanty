@@ -69,7 +69,7 @@ pub(super) fn progress(ui: &mut egui::Ui) {
     section(ui, "Progress");
     ui.horizontal(|ui| {
         spinner(ui, "Working");
-        ui.label(TextRole::Small.rich("Working"));
+        ui.label(TextRole::Small.rich(ui, "Working"));
     });
     column(ui, 360.0, 0.0, |ui| {
         progress_bar(ui, "Reading the page", 0.4);

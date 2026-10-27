@@ -38,7 +38,7 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
         ui.set_min_size(ui.available_size());
         ui.spacing_mut().item_spacing.y = space::SM;
         widgets::section_header(ui, guidance::TITLE, |ui| {
-            ui.label(TextRole::Small.rich(guidance::CAPTION));
+            ui.label(TextRole::Small.rich(ui, guidance::CAPTION));
         });
         let Some(guidance) = guidance::guidance(ask) else {
             widgets::Placeholder::empty(Icon::SEND, guidance::NOTHING_YET)

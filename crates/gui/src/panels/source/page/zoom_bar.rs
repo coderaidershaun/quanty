@@ -60,7 +60,7 @@ pub(super) fn show(
     let mut action = None;
     ui.spacing_mut().slider_width = SLIDER_WIDTH;
     if has_slider {
-        ui.label(TextRole::Small.rich("Zoom"));
+        ui.label(TextRole::Small.rich(ui, "Zoom"));
     }
     let can_zoom_out = step_zoom(zoom, ZoomStep::Out) < zoom;
     let zoom_out = Button::icon_only(Icon::MINUS, "Zoom out").size(size);
@@ -71,7 +71,7 @@ pub(super) fn show(
     if has_slider && let Some(value) = Slider::new("Zoom", zoom.log2(), range).show(ui) {
         action = Some(ZoomAction::To(value.exp2()));
     }
-    ui.label(TextRole::Small.rich(percent.text(zoom)));
+    ui.label(TextRole::Small.rich(ui, percent.text(zoom)));
     let can_zoom_in = step_zoom(zoom, ZoomStep::In) > zoom;
     let zoom_in = Button::icon_only(Icon::PLUS, "Zoom in").size(size);
     if ui.add_enabled(can_zoom_in, zoom_in).clicked() {

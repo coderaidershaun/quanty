@@ -8,7 +8,7 @@ use super::blocks::narrow_to_measure;
 use super::listing::Row;
 use super::pane::{Copied, Pane};
 use crate::media::{images, math, rich_text};
-use crate::theme::{Icon, TextRole, color, radius, size, space};
+use crate::theme::{self, Icon, TextRole, radius, size, space};
 use crate::widgets::{Button, CitationChip, ControlSize, focus_ring};
 use contract::ResultItem;
 
@@ -150,10 +150,11 @@ fn centred_caption(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem
 /// does not fit beside its label takes the whole column, and the label stands under it at the
 /// right, as a printed book sets an equation that is too long for its line.
 fn centred_formula(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem) {
+    let palette = theme::palette(ui.ctx());
     let label = item.label.as_deref();
     let gutter = label.map_or(0.0, |label| {
         TextRole::Body
-            .galley(ui, label, color::TEXT_SECONDARY)
+            .galley(ui, label, palette.text_secondary)
             .size()
             .x
             + space::MD
@@ -167,7 +168,7 @@ fn centred_formula(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem
     {
         math::show(ui, pane.cx.media, &formula);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-            ui.label(TextRole::Body.rich(label).color(color::TEXT_SECONDARY));
+            ui.label(TextRole::Body.rich(ui, label).color(palette.text_secondary));
         });
         return;
     }
@@ -185,7 +186,7 @@ fn centred_formula(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem
             egui::pos2(outer.right() - gutter, shown.rect.top()),
             egui::pos2(outer.right(), shown.rect.bottom()),
         );
-        let text = TextRole::Body.rich(label).color(color::TEXT_SECONDARY);
+        let text = TextRole::Body.rich(ui, label).color(palette.text_secondary);
         ui.put(at, egui::Label::new(text));
     }
 }
@@ -199,7 +200,8 @@ fn formula_caption(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem
     // SMELL: rich text cannot measure the caption before drawing it, so this width repeats how it
     // sets the words with the numeral right after them. If that changes, the line is a little off
     // centre; the button still goes where the caption really ends.
-    let words = role.galley(ui, FORMULA_CAPTION, role.color()).size().x;
+    let caption_color = role.color(theme::palette(ui.ctx()));
+    let words = role.galley(ui, FORMULA_CAPTION, caption_color).size().x;
     let caption_width = words + CitationChip::new(item.number).size(ui).x;
 
     let (_, line) = ui.allocate_space(egui::vec2(ui.available_width(), button_side));

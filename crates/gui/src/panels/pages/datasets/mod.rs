@@ -48,7 +48,7 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
             .auto_shrink([false, true])
             .max_height(height)
             .show(ui, |ui| {
-                ui.label(TextRole::Title.rich(TITLE));
+                ui.label(TextRole::Title.rich(ui, TITLE));
                 ui.add_space(space::MD);
                 let is_changed = ui
                     .add_enabled_ui(!cx.shared.datasets.is_running(), |ui| {

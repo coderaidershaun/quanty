@@ -107,7 +107,7 @@ impl ModelPicker {
             response.on_disabled_hover_text(BUSY_HINT);
             cx.intents.extend(inner);
             if let Some(error) = error {
-                ui.label(TextRole::Small.rich("The model choice could not be saved."))
+                ui.label(TextRole::Small.rich(ui, "The model choice could not be saved."))
                     .on_hover_text(&error.hint);
             }
         });
@@ -136,7 +136,7 @@ impl ModelPicker {
     ) {
         let error = cx.shared.model_choice_errors.get(&work);
         let sheet = widgets::modal(ctx, egui::Id::new("model choices"), SHEET_WIDTH, |ui| {
-            ui.label(TextRole::Heading.rich("Model choices"));
+            ui.label(TextRole::Heading.rich(ui, "Model choices"));
             ui.add_space(space::SM);
             let changed = ui
                 .add_enabled_ui(is_idle, |ui| self.dropdowns(ui, work, ControlSize::Medium))
@@ -145,7 +145,7 @@ impl ModelPicker {
             // A touch screen has no hover, so the sheet shows in plain view what the bar shows
             // on hover. The hint of a failed save already says that the choice was not saved.
             if let Some(error) = error {
-                ui.label(TextRole::Small.rich(&error.hint));
+                ui.label(TextRole::Small.rich(ui, &error.hint));
             }
             busy_line(ui, is_idle);
             ui.add_space(space::SM);
@@ -209,7 +209,7 @@ impl ModelPicker {
 /// The line that says why the choices wait, while they wait. While they do not, the line's room
 /// stays empty, so that Done does not move under a finger when a running operation ends.
 fn busy_line(ui: &mut egui::Ui, is_idle: bool) {
-    let words = egui::WidgetText::from(TextRole::Small.rich(BUSY_HINT));
+    let words = egui::WidgetText::from(TextRole::Small.rich(ui, BUSY_HINT));
     let galley = words.into_galley(ui, None, ui.available_width(), egui::TextStyle::Body);
     if is_idle {
         ui.allocate_space(galley.size());

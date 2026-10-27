@@ -4,7 +4,7 @@ use eframe::egui::text::LayoutJob;
 use eframe::egui::{self, Color32, Sense, StrokeKind, WidgetInfo, WidgetType};
 
 use super::guidance::{self, Guidance, Message};
-use crate::theme::{TextRole, color, hairline, radius, size, space, stroke};
+use crate::theme::{self, TextRole, hairline, radius, size, space, stroke};
 use crate::widgets;
 
 /// A panel narrower than this, as on a phone, wraps each suggested question to at most three
@@ -64,25 +64,26 @@ fn question_row(ui: &mut egui::Ui, question: &str, has_row_above: bool) -> egui:
     let (rect, response) = ui.allocate_exact_size(egui::vec2(width, height), Sense::click());
     crate::widgets::interactive_cursor(ui, &response);
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), question));
+    let palette = theme::palette(ui.ctx());
     let is_hovered = response.hovered();
     let ink = if is_hovered {
-        color::TEXT
+        palette.text
     } else {
-        TextRole::Caption.color()
+        TextRole::Caption.color(palette)
     };
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
         if response.is_pointer_button_down_on() {
-            painter.rect_filled(rect, radius::SM, color::WELL_DEEP);
+            painter.rect_filled(rect, radius::SM, palette.well_deep);
         } else if is_hovered {
-            painter.rect_filled(rect, radius::SM, color::WELL);
+            painter.rect_filled(rect, radius::SM, palette.well);
         }
         if has_row_above {
-            let line = hairline(painter, color::HAIRLINE);
+            let line = hairline(painter, palette.hairline);
             painter.hline(rect.x_range(), rect.top() + line.width / 2.0, line);
         }
         if response.has_focus() {
-            let ring = egui::Stroke::new(stroke::FOCUS, color::FOCUS);
+            let ring = egui::Stroke::new(stroke::FOCUS, palette.focus);
             painter.rect_stroke(rect, radius::SM, ring, StrokeKind::Inside);
         }
         let top = rect.center().y - galley.size().y / 2.0;
@@ -118,13 +119,13 @@ fn show_message(ui: &mut egui::Ui, message: &Message<'_>) {
         Message::Waiting(text) => {
             ui.horizontal(|ui| {
                 widgets::spinner(ui, guidance::WAITING_LABEL);
-                ui.label(TextRole::Small.rich(*text));
+                ui.label(TextRole::Small.rich(ui, *text));
             });
         }
         Message::Line { text, hint } => {
-            ui.label(TextRole::Small.rich(*text));
+            ui.label(TextRole::Small.rich(ui, *text));
             if let Some(hint) = hint {
-                ui.label(TextRole::Small.rich(*hint));
+                ui.label(TextRole::Small.rich(ui, *hint));
             }
         }
         Message::Notice { title, body } => {

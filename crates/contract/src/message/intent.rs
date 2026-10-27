@@ -147,4 +147,6 @@ pub enum Intent {
         choice: choices::ModelSettings,
     },
     OpenBillingPage(Provider),
+    /// Turns the window to its other palette, dark or light.
+    SwitchScheme,
 }

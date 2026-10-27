@@ -5,7 +5,7 @@ use std::sync::Arc;
 use eframe::egui::text::{LayoutJob, TextFormat};
 use eframe::egui::{self, Color32, FontFamily, FontId};
 
-use super::color;
+use super::Palette;
 use super::fonts::{
     SANS_MEDIUM, SANS_SEMIBOLD, SERIF, SERIF_DISPLAY, SERIF_ITALIC, SERIF_SEMIBOLD,
     SERIF_SEMIBOLD_ITALIC,
@@ -46,15 +46,15 @@ impl TextRole {
         }
     }
 
-    pub const fn color(self) -> Color32 {
+    pub const fn color(self, palette: &Palette) -> Color32 {
         match self {
-            TextRole::Title | TextRole::Heading => color::TEXT_HEADING,
-            TextRole::Caption | TextRole::Small | TextRole::Caps => color::TEXT_SECONDARY,
+            TextRole::Title | TextRole::Heading => palette.text_heading,
+            TextRole::Caption | TextRole::Small | TextRole::Caps => palette.text_secondary,
             TextRole::Body
             | TextRole::BodyStrong
             | TextRole::Label
             | TextRole::Micro
-            | TextRole::Mono => color::TEXT,
+            | TextRole::Mono => palette.text,
         }
     }
 
@@ -101,10 +101,10 @@ impl TextRole {
         }
     }
 
-    pub fn rich(self, text: impl Into<String>) -> egui::RichText {
+    pub fn rich(self, ui: &egui::Ui, text: impl Into<String>) -> egui::RichText {
         egui::RichText::new(text)
             .font(self.font())
-            .color(self.color())
+            .color(self.color(super::palette(ui.ctx())))
             .line_height(Some(self.line_height()))
             .extra_letter_spacing(self.letter_spacing())
     }

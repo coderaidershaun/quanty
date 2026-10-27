@@ -9,7 +9,7 @@ use super::place::{Placed, place};
 use super::plan::{Plan, is_concept, plan};
 use super::seats::{Metrics, Sizes};
 use super::view::View;
-use crate::theme::{Kind, TextRole, Tone, color, radius, size, space};
+use crate::theme::{self, Kind, Palette, TextRole, Tone, radius, size, space};
 use contract::{ConceptGraph, ConceptId, EdgeKind, GraphNode, NodeId};
 
 /// These are the heights of a node with two lines of text and of a node with a single line.
@@ -97,6 +97,8 @@ pub(super) struct TextOpts {
     /// The first line of a selected node takes the rubric red, the colour of the thread from a
     /// claim to its source.
     pub is_selected: bool,
+    /// The colours of the text. The widths of the text never depend on them.
+    pub palette: &'static Palette,
 }
 
 impl TextOpts {
@@ -135,9 +137,9 @@ pub(super) fn node_text(node: &GraphNode, opts: TextOpts) -> NodeText {
     let is_result = !is_concept(node.kind);
     let roomy = opts.density == Density::Roomy;
     let ink = if opts.is_selected {
-        Tone::Rubric.swatch().text
+        opts.palette.tone(Tone::Rubric).text
     } else {
-        color::TEXT
+        opts.palette.text
     };
     let name = opts.plain(TextRole::Label, ink);
     if is_result && roomy {
@@ -147,7 +149,7 @@ pub(super) fn node_text(node: &GraphNode, opts: TextOpts) -> NodeText {
         };
         let first = job(&node.label, name, limit);
         let second = node.detail.as_deref().map(|detail| {
-            let format = opts.plain(TextRole::Small, color::TEXT_SECONDARY);
+            let format = opts.plain(TextRole::Small, opts.palette.text_secondary);
             job(detail, format, limit)
         });
         return NodeText { first, second };
@@ -170,6 +172,7 @@ pub(super) fn node_text(node: &GraphNode, opts: TextOpts) -> NodeText {
 /// The text is measured at full size and not selected. Selected text differs only in colour, so
 /// it takes the same room.
 fn node_widths(ui: &egui::Ui, nodes: &[&GraphNode], density: Density) -> Vec<f32> {
+    let palette = theme::palette(ui.ctx());
     nodes
         .iter()
         .enumerate()
@@ -180,6 +183,7 @@ fn node_widths(ui: &egui::Ui, nodes: &[&GraphNode], density: Density) -> Vec<f32
                 scale: 1.0,
                 fade: 1.0,
                 is_selected: false,
+                palette,
             };
             let text = node_text(node, opts);
             let width = |job| ui.painter().layout_job(job).size().x;
@@ -216,7 +220,7 @@ fn label_widths(ui: &egui::Ui, link_words: &[String]) -> Vec<f32> {
     link_words
         .iter()
         .map(|words| {
-            let galley = LINK_TEXT.galley(ui, words, color::TEXT_SECONDARY);
+            let galley = LINK_TEXT.galley(ui, words, Color32::PLACEHOLDER);
             galley.size().x.ceil()
         })
         .collect()

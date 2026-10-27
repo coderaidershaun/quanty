@@ -15,7 +15,7 @@ use crate::panels::{
     retrieval_path, source,
 };
 use crate::state::Shared;
-use crate::theme::{self, color, space};
+use crate::theme::{self, Scheme, space};
 use crate::transport::Transport;
 use crate::widgets::{self, gallery};
 use contract::{self, AskView, Effect, Intent, Panel, StartupFacts};
@@ -98,6 +98,13 @@ impl App {
         self.intents.push(intent);
     }
 
+    /// Chooses the palette at once, for the host before the first frame and for tests between
+    /// frames. A person's choice during a frame goes through `Intent::SwitchScheme`.
+    pub fn set_scheme(&mut self, scheme: Scheme) {
+        self.shared.scheme = scheme;
+        theme::set_scheme(&self.ctx, scheme);
+    }
+
     pub fn with_file_picker(mut self, pick: impl FnMut(&mut Vec<Intent>) + 'static) -> App {
         self.file_picker = Box::new(pick);
         self
@@ -160,7 +167,8 @@ impl App {
     fn draw(&mut self, ui: &mut egui::Ui) {
         let window = ui.max_rect();
         // The test renderer ignores the clear colour, so the window paints its own background.
-        ui.painter().rect_filled(window, 0.0, color::DESK);
+        ui.painter()
+            .rect_filled(window, 0.0, theme::palette(ui.ctx()).desk);
         if self.shared.health.facts.fixture.as_deref() == Some(GALLERY_SCENE) {
             egui::CentralPanel::no_frame().show(ui, |ui| {
                 region(ui, "gallery", window.shrink(space::LG), |ui| {
@@ -225,10 +233,16 @@ impl eframe::App for App {
             self.apply(ui.ctx());
             ui.ctx().request_repaint();
         }
+        // A palette that changes in the middle of a pass would draw one frame in two palettes. So
+        // the choice reaches the window here, at the end of a pass, whoever queued it.
+        if theme::scheme(ui.ctx()) != self.shared.scheme {
+            theme::set_scheme(ui.ctx(), self.shared.scheme);
+            ui.ctx().request_repaint();
+        }
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        theme::clear_color()
+        theme::palette(&self.ctx).desk.to_normalized_gamma_f32()
     }
 }
 

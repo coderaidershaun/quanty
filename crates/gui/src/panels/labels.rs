@@ -17,11 +17,11 @@ pub(super) const START_OFF_WHILE_DELETING: &str = "A delete is on its way. Start
 
 pub(super) fn caption(ui: &mut egui::Ui, text: &str) {
     ui.add_space(space::SM);
-    ui.label(TextRole::Label.rich(text));
+    ui.label(TextRole::Label.rich(ui, text));
 }
 
 pub(super) fn detail(ui: &mut egui::Ui, failure: &Failure) {
-    ui.label(TextRole::Small.rich(&failure.detail));
+    ui.label(TextRole::Small.rich(ui, &failure.detail));
 }
 
 /// One rule for every list a person types, authors and tags alike: commas between the items,

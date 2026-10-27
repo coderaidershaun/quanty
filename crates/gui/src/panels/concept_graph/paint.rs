@@ -11,7 +11,7 @@ use super::scene::{
     node_text, scaled_font,
 };
 use super::view::View;
-use crate::theme::{Kind, Tone, color, radius, size, space, stroke};
+use crate::theme::{self, Kind, Palette, Tone, radius, size, space, stroke};
 use contract::{ConceptGraph, GraphNode};
 
 const RING_OFFSET: f32 = space::XXS;
@@ -40,6 +40,7 @@ pub(super) fn paint(ui: &egui::Ui, drawing: &Drawing<'_>, states: &[NodeState]) 
     let pen = Pen {
         painter: ui.painter_at(drawing.canvas),
         drawing,
+        palette: theme::palette(ui.ctx()),
         lit,
         canvas_centre: drawing.canvas.center(),
     };
@@ -53,6 +54,7 @@ pub(super) fn paint(ui: &egui::Ui, drawing: &Drawing<'_>, states: &[NodeState]) 
 struct Pen<'a> {
     painter: Painter,
     drawing: &'a Drawing<'a>,
+    palette: &'static Palette,
     /// The node under the pointer, or else the node with the keyboard.
     lit: Option<usize>,
     canvas_centre: Pos2,
@@ -108,11 +110,14 @@ impl Pen<'_> {
 
     fn link(&self, index: usize, link: &Link) {
         let (colour, width) = if self.is_lit_link(link) {
-            (color::RULE, stroke::EDGE)
+            (self.palette.rule, stroke::EDGE)
         } else if self.lit.is_some() {
-            (color::TEXT_SECONDARY.gamma_multiply(DIM), stroke::BORDER)
+            (
+                self.palette.text_secondary.gamma_multiply(DIM),
+                stroke::BORDER,
+            )
         } else {
-            (color::TEXT_SECONDARY, stroke::BORDER)
+            (self.palette.text_secondary, stroke::BORDER)
         };
         let line = Stroke::new(width, colour);
         let route = self.drawing.scene.placed.routes[index];
@@ -174,9 +179,9 @@ impl Pen<'_> {
                 continue;
             }
             let colour = if is_lit {
-                color::TEXT
+                self.palette.text
             } else {
-                color::TEXT_SECONDARY
+                self.palette.text_secondary
             };
             let font = scaled_font(LINK_TEXT, self.scale());
             let galley = self
@@ -185,7 +190,8 @@ impl Pen<'_> {
             let rect = self.on_canvas(spot.rect);
             if !spot.at_rest {
                 let backing = rect.expand2(egui::vec2(space::XS, 0.0));
-                self.painter.rect_filled(backing, radius::SM, color::DESK);
+                self.painter
+                    .rect_filled(backing, radius::SM, self.palette.desk);
             }
             self.painter
                 .galley(rect.center() - galley.size() / 2.0, galley, colour);
@@ -215,7 +221,7 @@ impl Pen<'_> {
         self.glyph_and_text(&view);
         if state.has_focus {
             let radius = self.radius(&view);
-            let ring = Stroke::new(stroke::FOCUS, color::FOCUS);
+            let ring = Stroke::new(stroke::FOCUS, self.palette.focus);
             let outside = view.rect.expand(RING_OFFSET);
             self.painter
                 .rect_stroke(outside, radius + RING_OFFSET, ring, StrokeKind::Outside);
@@ -227,22 +233,22 @@ impl Pen<'_> {
     }
 
     fn body(&self, view: &NodeView<'_>) {
-        let swatch = Kind::from(view.node.kind).tone().swatch();
+        let swatch = self.palette.tone(Kind::from(view.node.kind).tone());
         let radius = self.radius(view);
         let fill = if view.fade < 1.0 {
             // A faded node mixes paper into the desk instead of turning see-through, so it still
             // hides the words of a lit link that fall under it.
-            color::DESK.lerp_to_gamma(color::SHEET, DIM)
+            self.palette.desk.lerp_to_gamma(self.palette.sheet, DIM)
         } else if view.state.is_hovered {
-            color::WELL
+            self.palette.well
         } else {
-            color::SHEET
+            self.palette.sheet
         };
         self.painter.rect_filled(view.rect, radius, fill);
         let (outline, width) = if view.state.is_selected {
-            (Tone::Rubric.swatch().solid, stroke::EDGE)
+            (self.palette.tone(Tone::Rubric).solid, stroke::EDGE)
         } else if view.place == 0 {
-            (color::RULE, stroke::EDGE)
+            (self.palette.rule, stroke::EDGE)
         } else {
             (swatch.solid, stroke::BORDER)
         };
@@ -258,7 +264,8 @@ impl Pen<'_> {
             view.rect.left() + (PAD_LEFT + size::GLYPH / 2.0) * scale,
             view.rect.center().y,
         );
-        let ink = kind.tone().swatch().text.gamma_multiply(view.fade);
+        let swatch = self.palette.tone(kind.tone());
+        let ink = swatch.text.gamma_multiply(view.fade);
         kind.icon()
             .paint(&self.painter, glyph, size::GLYPH * scale, ink);
 
@@ -268,6 +275,7 @@ impl Pen<'_> {
             scale,
             fade: view.fade,
             is_selected: view.state.is_selected,
+            palette: self.palette,
         };
         let NodeText { first, second } = node_text(view.node, opts);
         let first = self.painter.layout_job(first);
@@ -277,10 +285,10 @@ impl Pen<'_> {
         let top = view.rect.center().y - height / 2.0;
         let below = top + first.size().y;
         self.painter
-            .galley(egui::pos2(left, top), first, color::TEXT);
+            .galley(egui::pos2(left, top), first, self.palette.text);
         if let Some(second) = second {
             self.painter
-                .galley(egui::pos2(left, below), second, color::TEXT_SECONDARY);
+                .galley(egui::pos2(left, below), second, self.palette.text_secondary);
         }
     }
 }

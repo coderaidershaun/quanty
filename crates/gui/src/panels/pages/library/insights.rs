@@ -91,7 +91,7 @@ fn saved_part(
     doc: DocId,
     saved: &ChapterInsights,
 ) {
-    let written_by = TextRole::Small.rich(format!("Written by {}", saved.model));
+    let written_by = TextRole::Small.rich(ui, format!("Written by {}", saved.model));
     let panel = width(ui);
     let size = panel.control_size();
     if panel == PanelWidth::Narrow {
@@ -150,7 +150,7 @@ fn export_menu(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, catalogue: &Catalogue, s
 
 fn section_title(ui: &mut egui::Ui, title: &str) {
     ui.add_space(space::LG);
-    ui.label(TextRole::Heading.rich(title));
+    ui.label(TextRole::Heading.rich(ui, title));
     ui.add_space(space::SM);
 }
 

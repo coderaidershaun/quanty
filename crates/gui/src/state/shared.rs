@@ -8,6 +8,7 @@ use super::{
     AskSession, Balances, Contents, DatasetJob, ExportJob, Health, IngestJob, Insights, Library,
     Shelf, SourceNav,
 };
+use crate::theme::Scheme;
 use contract::{
     AskView, Command, DocId, Effect, Event, Failure, Intent, Loadable, Notice, NoticeId,
     NoticeKind, Panel, RequestId, StartupFacts, Tab,
@@ -54,6 +55,8 @@ pub struct Shared {
     pub notices: Vec<Notice>,
     pub health: Health,
     pub balances: Balances,
+    /// The palette the person chose.
+    pub scheme: Scheme,
     pub model_choice_errors: BTreeMap<choices::WorkKind, Failure>,
     model_choice_requests: BTreeMap<choices::WorkKind, RequestId>,
     next_request: u64,
@@ -142,6 +145,7 @@ impl Shared {
             Intent::OpenBillingPage(provider) => {
                 effects.push(Effect::OpenUrl(provider.billing_page().to_owned()));
             }
+            Intent::SwitchScheme => self.scheme = self.scheme.other(),
         }
         self.read_after_a_paid_job(before, effects);
     }

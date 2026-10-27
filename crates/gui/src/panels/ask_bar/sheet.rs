@@ -59,7 +59,7 @@ impl Local {
                 size: ControlSize::Medium,
             };
             ui.spacing_mut().item_spacing.y = space::SM;
-            ui.label(TextRole::Heading.rich(heading));
+            ui.label(TextRole::Heading.rich(ui, heading));
             for filter in in_the_sheet(rects) {
                 self.choices
                     .show_one(ui, filter, room, &mut self.draft.filters);

@@ -6,7 +6,7 @@ use eframe::egui;
 use crate::media::Media;
 use crate::panels::PanelWidth;
 use crate::state::SourceNav;
-use crate::theme::{Icon, Tone, size, space};
+use crate::theme::{self, Icon, Tone, size, space};
 use crate::widgets::{Tab, TabStrip};
 use contract::{DocId, Intent, PagePiece, PageView, PieceKind};
 
@@ -188,7 +188,7 @@ fn warn_after(ui: &mut egui::Ui, strip: egui::Rect, warning: &str) {
         ),
         egui::Vec2::splat(size::GLYPH),
     );
-    let ink = Tone::Danger.swatch().text;
+    let ink = theme::palette(ui.ctx()).tone(Tone::Danger).text;
     Icon::WARNING.paint(ui.painter(), glyph.center(), size::GLYPH, ink);
     let hover = ui.interact(glyph, ui.id().with("concepts failed"), egui::Sense::hover());
     hover.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, warning));

@@ -18,3 +18,4 @@ The app uses WebGPU with wgpu's WebGL fallback, same-origin cookies, and no serv
 The browser's back button, the phone back gesture and Alt+Left go back inside the app while it can, then leave the page as before.
 Cmd/Ctrl+`[` and `]` turn the source page, so the browser does not also go back or forward.
 The canvas stays inside a phone's safe area, so the notch and the home bar cover nothing; the page itself does not zoom.
+The app opens dark. The person's light or dark choice is kept in the browser's local storage, and the page colour around the canvas follows it.

@@ -2,7 +2,6 @@
 
 use eframe::egui::{self, Align2, Color32, FontId, Painter, Pos2};
 
-use super::color;
 use super::fonts::ICONS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -69,6 +68,8 @@ icons! {
     PATH = PATH,
     FOLLOW_UP = CHAT_CIRCLE_TEXT,
     BROKEN_IMAGE = IMAGE_BROKEN,
+    SUN = SUN,
+    MOON = MOON,
 }
 
 impl Icon {
@@ -91,9 +92,9 @@ impl Icon {
         );
     }
 
-    pub fn rich(self, size: f32) -> egui::RichText {
+    pub fn rich(self, ui: &egui::Ui, size: f32) -> egui::RichText {
         egui::RichText::new(self.0)
             .font(Icon::font(size))
-            .color(color::TEXT_SECONDARY)
+            .color(super::palette(ui.ctx()).text_secondary)
     }
 }

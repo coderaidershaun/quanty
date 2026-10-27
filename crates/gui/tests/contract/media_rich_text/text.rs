@@ -1,6 +1,9 @@
 //! Checks blocks of stored text: they are read as the pipeline writes them, laid out once more
 //! when their formulas settle, and copied as their stored source.
 
+use std::cell::Cell;
+use std::rc::Rc;
+
 use contract::Intent;
 use eframe::egui;
 use egui_kittest::Harness;
@@ -8,14 +11,14 @@ use egui_kittest::kittest::Queryable;
 use gui::media::math::{MathImage, MathRef, MathState};
 use gui::media::rich_text::{self, RichText};
 use gui::testkit::{self, Host};
-use gui::theme::TextRole;
+use gui::theme::{self, Palette, Scheme, TextRole};
 
 use super::{LAST_HEADER, Painted, TABLE, painted, route, squeezed};
 
-fn pictures(harness: &Harness<'_, Host>) -> Vec<(egui::TextureId, egui::Rect)> {
-    fn collect(shape: &egui::Shape, found: &mut Vec<(egui::TextureId, egui::Rect)>) {
+fn meshes<'a>(harness: &'a Harness<'_, Host>) -> Vec<&'a egui::Mesh> {
+    fn collect<'a>(shape: &'a egui::Shape, found: &mut Vec<&'a egui::Mesh>) {
         match shape {
-            egui::Shape::Mesh(mesh) => found.push((mesh.texture_id, mesh.calc_bounds())),
+            egui::Shape::Mesh(mesh) => found.push(mesh),
             egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| collect(shape, found)),
             _ => {}
         }
@@ -25,6 +28,13 @@ fn pictures(harness: &Harness<'_, Host>) -> Vec<(egui::TextureId, egui::Rect)> {
         collect(&clipped.shape, &mut found);
     }
     found
+}
+
+fn pictures(harness: &Harness<'_, Host>) -> Vec<(egui::TextureId, egui::Rect)> {
+    meshes(harness)
+        .into_iter()
+        .map(|mesh| (mesh.texture_id, mesh.calc_bounds()))
+        .collect()
 }
 
 /// The texture has a clear margin around the box, and the picture may be drawn smaller than it
@@ -277,5 +287,93 @@ fn a_block_is_laid_out_once_more_when_its_formulas_settle() {
         harness.get_by_label(PLAIN).rect(),
         settled,
         "the text stays where it is"
+    );
+}
+
+/// The meshes that paint a formula of body text, which is tinted with the colour of the text.
+fn formula_meshes<'a>(
+    harness: &'a mut Harness<'_, Host>,
+    formulas: &[&str],
+) -> Vec<&'a egui::Mesh> {
+    let textures: Vec<egui::TextureId> = formulas
+        .iter()
+        .map(|latex| {
+            match harness
+                .state_mut()
+                .media
+                .math
+                .get(&MathRef::inline(latex, TextRole::Body))
+            {
+                MathState::Ready(image) => image.texture,
+                other => panic!("`{latex}` should be typeset by now, and it is {other:?}"),
+            }
+        })
+        .collect();
+    meshes(harness)
+        .into_iter()
+        .filter(|mesh| textures.contains(&mesh.texture_id))
+        .collect()
+}
+
+fn is_inked_in(mesh: &egui::Mesh, ink: egui::Color32) -> bool {
+    mesh.vertices.iter().all(|vertex| vertex.color == ink)
+}
+
+#[test]
+fn a_formula_after_a_switch_is_inked_in_the_new_palette() {
+    const FIRST: &str = r"The price \(S\) moves with the rate.";
+    const SECOND: &str = r"A line asked for later has \(\sigma\) in it.";
+    let second_is_asked = Rc::new(Cell::new(false));
+    let asked = Rc::clone(&second_is_asked);
+    let mut harness = testkit::panel([480.0, 240.0], testkit::asked("q"), move |ui, cx| {
+        let blocks: &[&str] = if asked.get() {
+            &[FIRST, SECOND]
+        } else {
+            &[FIRST]
+        };
+        for markdown in blocks {
+            let text = RichText::new(markdown, TextRole::Body);
+            route(rich_text::show(ui, cx.media, &text), cx.intents);
+            ui.add_space(12.0);
+        }
+    });
+
+    theme::set_scheme(&harness.ctx, Scheme::Light);
+    harness.run();
+    harness.state_mut().media.run_pending();
+    harness.run();
+    let light = formula_meshes(&mut harness, &["S"]);
+    assert!(
+        !light.is_empty(),
+        "the formula is painted in the light palette"
+    );
+    assert!(
+        light
+            .iter()
+            .all(|mesh| is_inked_in(mesh, Palette::LIGHT.text)),
+        "a formula is inked in the text colour of the light palette"
+    );
+
+    theme::set_scheme(&harness.ctx, Scheme::Dark);
+    second_is_asked.set(true);
+    harness.run();
+    harness.state_mut().media.run_pending();
+    harness.run();
+    let dark = formula_meshes(&mut harness, &["S", r"\sigma"]);
+    assert!(
+        dark.len() >= 2,
+        "the formula of the first block and the formula of the second block are painted, and {} are",
+        dark.len()
+    );
+    assert!(
+        dark.iter()
+            .all(|mesh| is_inked_in(mesh, Palette::DARK.text)),
+        "every formula is inked in the text colour of the dark palette"
+    );
+    assert!(
+        !dark
+            .iter()
+            .any(|mesh| is_inked_in(mesh, Palette::LIGHT.text)),
+        "no formula keeps the ink of the light palette"
     );
 }

@@ -8,7 +8,7 @@ use eframe::egui::{
     pos2, text::LayoutJob,
 };
 
-use crate::theme::{Icon, Kind, TextRole, Tone, color, radius, size, space, stroke};
+use crate::theme::{self, Icon, Kind, Palette, TextRole, Tone, radius, size, space, stroke};
 use crate::widgets::look::{Look, focus_ring};
 
 pub struct CitationChip {
@@ -39,7 +39,7 @@ impl CitationChip {
 
     /// The room the chip needs, to reserve in a flow of text.
     pub fn size(&self, ui: &egui::Ui) -> egui::Vec2 {
-        let text = TextRole::Micro.galley(ui, &self.number.to_string(), color::TEXT);
+        let text = TextRole::Micro.galley(ui, &self.number.to_string(), Color32::PLACEHOLDER);
         egui::vec2(text.size().x + 2.0 * space::XS, size::CITATION)
     }
 
@@ -58,7 +58,7 @@ impl CitationChip {
         });
         if ui.is_rect_visible(rect) {
             let look = self.forced.unwrap_or_else(|| Look::of(&response));
-            let rubric = Tone::Rubric.swatch();
+            let rubric = theme::palette(ui.ctx()).tone(Tone::Rubric);
             let (fill, text) = if self.is_selected {
                 (rubric.solid, rubric.on_solid)
             } else if look.hovered {
@@ -161,28 +161,29 @@ impl<'a> Chip<'a> {
         }
     }
 
-    fn ink(&self) -> Color32 {
+    fn ink(&self, palette: &Palette) -> Color32 {
         self.kind
-            .map_or(color::TEXT, |kind| kind.tone().swatch().text)
+            .map_or(palette.text, |kind| palette.tone(kind.tone()).text)
     }
 
     fn paint(&self, ui: &egui::Ui, rect: Rect, look: Look) {
+        let palette = theme::palette(ui.ctx());
         let painter = ui.painter();
         let (fill, edge) = if self.is_selected {
             // Red marks the thread from a claim to its source, so only a kind chip takes it. A
             // plain chip is a choice, selected as a button is.
             let outline = match self.kind {
-                Some(_) => Tone::Rubric.swatch().solid,
-                None => color::RULE,
+                Some(_) => palette.tone(Tone::Rubric).solid,
+                None => palette.rule,
             };
-            (color::WELL, Stroke::new(stroke::EDGE, outline))
+            (palette.well, Stroke::new(stroke::EDGE, outline))
         } else {
             let fill = if look.hovered {
-                color::WELL
+                palette.well
             } else {
                 Color32::TRANSPARENT
             };
-            (fill, Stroke::new(stroke::BORDER, color::HAIRLINE))
+            (fill, Stroke::new(stroke::BORDER, palette.hairline))
         };
         painter.rect(rect, radius::SM, fill, edge, StrokeKind::Inside);
         if look.focused {
@@ -190,7 +191,8 @@ impl<'a> Chip<'a> {
         }
         if let Some(kind) = self.kind {
             let centre = pos2(rect.left() + space::SM + size::GLYPH / 2.0, rect.center().y);
-            kind.icon().paint(painter, centre, size::GLYPH, self.ink());
+            kind.icon()
+                .paint(painter, centre, size::GLYPH, self.ink(palette));
         }
     }
 }
@@ -198,7 +200,7 @@ impl<'a> Chip<'a> {
 impl egui::Widget for Chip<'_> {
     fn ui(self, ui: &mut egui::Ui) -> Response {
         let (before, after, badge) = self.padding();
-        let ink = self.ink();
+        let ink = self.ink(theme::palette(ui.ctx()));
         let mut job = LayoutJob::single_section(self.label.to_owned(), TextRole::Small.format(ink));
         job.wrap.max_rows = 1;
         job.wrap.overflow_character = Some('…');
@@ -282,13 +284,14 @@ impl<'a> Badge<'a> {
     }
 
     fn galley(&self, ui: &egui::Ui) -> Arc<Galley> {
-        TextRole::Caps.galley(ui, &self.text.to_uppercase(), self.tone.swatch().text)
+        let ink = theme::palette(ui.ctx()).tone(self.tone).text;
+        TextRole::Caps.galley(ui, &self.text.to_uppercase(), ink)
     }
 }
 
 impl egui::Widget for Badge<'_> {
     fn ui(self, ui: &mut egui::Ui) -> Response {
-        let ink = self.tone.swatch().text;
+        let ink = theme::palette(ui.ctx()).tone(self.tone).text;
         let galley = self.galley(ui);
         let icon_room = self.icon_room();
         let side = egui::vec2(icon_room + galley.size().x, size::BADGE);
@@ -347,22 +350,23 @@ impl egui::Widget for StepMarker {
             WidgetInfo::labeled(WidgetType::Label, true, format!("Step {}", self.number))
         });
         if ui.is_rect_visible(rect) {
+            let palette = theme::palette(ui.ctx());
             let painter = ui.painter();
             let ring = size::STEP / 2.0 - stroke::BORDER / 2.0;
             let text = match self.state {
                 StepState::Pending => {
-                    let outline = Stroke::new(stroke::BORDER, color::BORDER);
+                    let outline = Stroke::new(stroke::BORDER, palette.border);
                     painter.circle_stroke(rect.center(), ring, outline);
-                    color::TEXT_FAINT
+                    palette.text_faint
                 }
                 StepState::Done => {
-                    let outline = Stroke::new(stroke::BORDER, color::RULE);
+                    let outline = Stroke::new(stroke::BORDER, palette.rule);
                     painter.circle_stroke(rect.center(), ring, outline);
-                    color::TEXT
+                    palette.text
                 }
                 StepState::Active => {
-                    painter.circle_filled(rect.center(), size::STEP / 2.0, color::INK);
-                    color::TEXT_ON_INK
+                    painter.circle_filled(rect.center(), size::STEP / 2.0, palette.ink);
+                    palette.text_on_ink
                 }
             };
             painter.text(
@@ -382,8 +386,9 @@ pub fn dot(ui: &mut egui::Ui, tone: Tone) -> Response {
     let (rect, response) =
         ui.allocate_exact_size(egui::Vec2::splat(size::DOT), egui::Sense::hover());
     if ui.is_rect_visible(rect) {
+        let solid = theme::palette(ui.ctx()).tone(tone).solid;
         ui.painter()
-            .circle_filled(rect.center(), size::DOT / 2.0, tone.swatch().solid);
+            .circle_filled(rect.center(), size::DOT / 2.0, solid);
     }
     response
 }

@@ -1,11 +1,11 @@
 //! The title row of the panel, with the maximise and reset buttons and the count of nodes left
 //! out, and the legend that tells what each colour stands for.
 
-use eframe::egui::{self, Align, Layout, Sense, UiBuilder, Vec2};
+use eframe::egui::{self, Align, Color32, Layout, Sense, UiBuilder, Vec2};
 
 use super::scene::{LEGEND_HEIGHT, Picture, legend_kinds};
 use crate::panels::{PanelCx, PanelWidth};
-use crate::theme::{Icon, Kind, TextRole, color, size, space};
+use crate::theme::{self, Icon, Kind, TextRole, size, space};
 use crate::widgets::{Button, ControlSize, section_header};
 use contract::{ConceptGraph, Panel};
 
@@ -83,7 +83,7 @@ impl Areas {
                 reset_clicked = ui.add_enabled(can_reset, reset).clicked();
                 let not_drawn = picture.and_then(|picture| picture.scene.not_drawn.as_ref());
                 if let Some(not_drawn) = not_drawn {
-                    ui.label(TextRole::Small.rich(&not_drawn.count))
+                    ui.label(TextRole::Small.rich(ui, &not_drawn.count))
                         .on_hover_text(&not_drawn.hover);
                 }
             });
@@ -101,7 +101,7 @@ fn kinds_per_line(ui: &egui::Ui, kinds: impl Iterator<Item = Kind>, room: f32) -
     let mut lines = Vec::new();
     let mut used = 0.0;
     for kind in kinds {
-        let text = TextRole::Small.galley(ui, word(kind), color::TEXT);
+        let text = TextRole::Small.galley(ui, word(kind), Color32::PLACEHOLDER);
         let width = size::GLYPH + space::XS + text.size().x;
         match lines.last_mut() {
             Some(count) if used + LEGEND_ITEM_GAP + width <= room => {
@@ -119,6 +119,7 @@ fn kinds_per_line(ui: &egui::Ui, kinds: impl Iterator<Item = Kind>, room: f32) -
 
 /// The widgets have no legend entry, so it is made here from the colours and sizes of the theme.
 fn legend(ui: &mut egui::Ui, rect: egui::Rect, kinds: &[Kind]) {
+    let palette = theme::palette(ui.ctx());
     let mut rest = kinds.iter();
     let mut top = rect.top();
     for count in kinds_per_line(ui, kinds.iter().copied(), rect.width()) {
@@ -137,11 +138,11 @@ fn legend(ui: &mut egui::Ui, rect: egui::Rect, kinds: &[Kind]) {
                     // the rest.
                     ui.add_space(LEGEND_ITEM_GAP - space::XS);
                 }
-                let ink = kind.tone().swatch().text;
+                let ink = palette.tone(kind.tone()).text;
                 let (glyph, _) = ui.allocate_exact_size(Vec2::splat(size::GLYPH), Sense::hover());
                 kind.icon()
                     .paint(ui.painter(), glyph.center(), size::GLYPH, ink);
-                ui.label(TextRole::Small.rich(word(*kind)).color(ink));
+                ui.label(TextRole::Small.rich(ui, word(*kind)).color(ink));
             }
         });
         top += LEGEND_HEIGHT + LEGEND_LINE_GAP;

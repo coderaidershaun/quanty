@@ -5,14 +5,15 @@ use eframe::egui;
 use super::room_for_bar;
 use crate::panels::source::tabs::{SourceTab, TabCx};
 use crate::panels::source::{piece, row};
-use crate::theme::{TextRole, Tone, color, radius, space};
+use crate::theme::{self, TextRole, Tone, radius, space};
 
 const NOTE: &str = "This document has no page pictures. This is its text.";
 
 pub(super) fn show(ui: &mut egui::Ui, cx: &mut TabCx<'_>) {
     let (area, bar) = room_for_bar(ui.available_rect_before_wrap(), cx.width);
     row::show_at(ui, bar, |ui| {
-        let note = TextRole::Small.rich(NOTE).color(color::TEXT_MUTED);
+        let note_color = theme::palette(ui.ctx()).text_muted;
+        let note = TextRole::Small.rich(ui, NOTE).color(note_color);
         ui.add(egui::Label::new(note).truncate());
     });
     if piece::is_scrolled_by_person(ui) {
@@ -24,6 +25,7 @@ pub(super) fn show(ui: &mut egui::Ui, cx: &mut TabCx<'_>) {
 
 fn list_of_pieces(ui: &mut egui::Ui, cx: &mut TabCx<'_>) {
     let page = cx.page;
+    let marked_fill = theme::palette(ui.ctx()).tone(Tone::Rubric).wash;
     egui::ScrollArea::vertical()
         .id_salt(cx.scroll_id(SourceTab::Page))
         .auto_shrink([false, false])
@@ -33,7 +35,7 @@ fn list_of_pieces(ui: &mut egui::Ui, cx: &mut TabCx<'_>) {
                     .target_piece
                     .is_some_and(|target| target.number == piece.number);
                 let fill = if is_marked {
-                    Tone::Rubric.swatch().wash
+                    marked_fill
                 } else {
                     egui::Color32::TRANSPARENT
                 };

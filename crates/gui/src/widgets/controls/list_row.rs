@@ -3,7 +3,7 @@
 
 use eframe::egui::{self, Response, Sense, WidgetInfo, WidgetType, pos2, text::LayoutJob, vec2};
 
-use crate::theme::{Icon, TextRole, color, radius, size, space, stroke};
+use crate::theme::{self, Icon, TextRole, radius, size, space, stroke};
 use crate::widgets::look::{ControlSize, Look, focus_ring};
 
 pub struct ListRow<'a> {
@@ -73,11 +73,12 @@ impl<'a> ListRow<'a> {
 
     /// Paints the row, and says whether its text had to be cut.
     fn paint(&self, ui: &egui::Ui, rect: egui::Rect, look: Look) -> bool {
+        let palette = theme::palette(ui.ctx());
         let painter = ui.painter();
         let fill = if look.pressed {
-            color::WELL_DEEP
+            palette.well_deep
         } else if self.is_selected || look.hovered {
-            color::WELL
+            palette.well
         } else {
             egui::Color32::TRANSPARENT
         };
@@ -85,7 +86,7 @@ impl<'a> ListRow<'a> {
         if self.is_selected {
             let mut bar = rect;
             bar.max.x = bar.min.x + 2.0 * stroke::EDGE;
-            painter.rect_filled(bar, radius::SM, color::RULE);
+            painter.rect_filled(bar, radius::SM, palette.rule);
         }
         if look.focused {
             focus_ring(painter, rect, radius::SM);
@@ -94,20 +95,20 @@ impl<'a> ListRow<'a> {
         let mut left = rect.left() + space::SM + self.indent;
         if let Some(glyph) = self.glyph {
             let centre = pos2(left + size::GLYPH / 2.0, rect.center().y);
-            glyph.paint(painter, centre, size::GLYPH, color::TEXT_SECONDARY);
+            glyph.paint(painter, centre, size::GLYPH, palette.text_secondary);
             left += size::GLYPH + space::SM;
         }
         let mut right = rect.right() - space::SM;
         if let Some(count) = self.count {
             let small = TextRole::Small;
-            let galley = small.galley(ui, &count.to_string(), color::TEXT_MUTED);
+            let galley = small.galley(ui, &count.to_string(), palette.text_muted);
             right -= galley.size().x;
             let top = rect.center().y - galley.size().y / 2.0;
-            painter.galley(pos2(right, top), galley, color::TEXT_MUTED);
+            painter.galley(pos2(right, top), galley, palette.text_muted);
             right -= space::SM;
         }
-        let mut job =
-            LayoutJob::single_section(self.label.to_owned(), self.role.format(self.role.color()));
+        let ink = self.role.color(palette);
+        let mut job = LayoutJob::single_section(self.label.to_owned(), self.role.format(ink));
         job.wrap.max_rows = 1;
         job.wrap.break_anywhere = true;
         job.wrap.overflow_character = Some('…');
@@ -116,7 +117,7 @@ impl<'a> ListRow<'a> {
         let galley = painter.layout_job(job);
         let is_elided = galley.elided;
         let top = rect.center().y - galley.size().y / 2.0;
-        painter.galley(pos2(left, top), galley, self.role.color());
+        painter.galley(pos2(left, top), galley, ink);
         is_elided
     }
 }

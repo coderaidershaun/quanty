@@ -36,7 +36,7 @@ fn entry(ui: &mut egui::Ui, provider: Provider, rect: egui::Rect, cx: &mut Panel
         state_button(ui, provider, shown, ControlSize::Small, cx);
         ui.scope(|ui| {
             ui.set_max_width((ui.available_width() - LINK_ROOM).max(0.0));
-            ui.add(egui::Label::new(TextRole::Small.rich(hint(provider, shown))).truncate());
+            ui.add(egui::Label::new(TextRole::Small.rich(ui, hint(provider, shown))).truncate());
         });
         link_button(ui, provider, ControlSize::Small, cx);
     });
@@ -81,7 +81,7 @@ pub(super) fn lines(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
             });
             let words = hint(provider, shown);
             if !words.is_empty() {
-                ui.add(egui::Label::new(TextRole::Small.rich(words)).wrap());
+                ui.add(egui::Label::new(TextRole::Small.rich(ui, words)).wrap());
             }
         }
     });

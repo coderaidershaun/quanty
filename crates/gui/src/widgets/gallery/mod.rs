@@ -58,11 +58,14 @@ pub fn show(ui: &mut egui::Ui, state: &mut State) {
     egui::ScrollArea::vertical()
         .auto_shrink(false)
         .show(ui, |ui| {
-            ui.label(TextRole::Title.rich("Gallery"));
-            ui.label(TextRole::Body.rich(format!(
-                "Last used: {}",
-                state.last_activated.unwrap_or("nothing yet")
-            )));
+            ui.label(TextRole::Title.rich(ui, "Gallery"));
+            ui.label(TextRole::Body.rich(
+                ui,
+                format!(
+                    "Last used: {}",
+                    state.last_activated.unwrap_or("nothing yet")
+                ),
+            ));
             ui.horizontal_top(|ui| {
                 let height = ui.available_height();
                 column(ui, TOKENS_WIDTH, height, tokens::show);
@@ -102,7 +105,7 @@ fn column(ui: &mut egui::Ui, width: f32, height: f32, add_contents: impl FnOnce(
 
 fn section(ui: &mut egui::Ui, title: &str) {
     ui.add_space(space::LG);
-    ui.label(TextRole::Heading.rich(title));
+    ui.label(TextRole::Heading.rich(ui, title));
 }
 
 /// A wrapped row of nested layouts does not wrap by itself, so the rows are cut here.

@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use eframe::egui::{self, Color32, Rect, Response, WidgetInfo, WidgetType};
 
-use crate::theme::{color, motion, size};
+use crate::theme::{self, motion, size};
 
 const DOTS: usize = 8;
 const DOT_RADIUS: f32 = 1.5;
@@ -21,7 +21,7 @@ pub fn spinner(ui: &mut egui::Ui, label: &str) -> Response {
     let side = egui::Vec2::splat(size::ICON_MD);
     let (rect, response) = ui.allocate_exact_size(side, egui::Sense::hover());
     response.widget_info(|| WidgetInfo::labeled(WidgetType::ProgressIndicator, true, label));
-    paint_spinner(ui, rect, color::TEXT);
+    paint_spinner(ui, rect, theme::palette(ui.ctx()).text);
     response
 }
 
@@ -61,10 +61,11 @@ pub fn progress_bar(ui: &mut egui::Ui, label: &str, fraction: f32) -> Response {
         ..WidgetInfo::labeled(WidgetType::ProgressIndicator, true, label)
     });
     if ui.is_rect_visible(rect) {
-        ui.painter().rect_filled(rect, 0.0, color::HAIRLINE);
+        let palette = theme::palette(ui.ctx());
+        ui.painter().rect_filled(rect, 0.0, palette.hairline);
         let mut filled = rect;
         filled.set_width(rect.width() * fraction);
-        ui.painter().rect_filled(filled, 0.0, color::INK);
+        ui.painter().rect_filled(filled, 0.0, palette.ink);
     }
     response
 }
@@ -78,7 +79,8 @@ pub fn indeterminate_bar(ui: &mut egui::Ui, label: &str) -> Response {
     if !ui.is_rect_visible(rect) {
         return response;
     }
-    ui.painter().rect_filled(rect, 0.0, color::HAIRLINE);
+    let palette = theme::palette(ui.ctx());
+    ui.painter().rect_filled(rect, 0.0, palette.hairline);
     let phase = ui.input(|input| (input.time / SLIDE).fract()) as f32;
     let width = rect.width();
     let left = rect.left() + (phase * (1.0 + LIT_SHARE) - LIT_SHARE) * width;
@@ -86,7 +88,7 @@ pub fn indeterminate_bar(ui: &mut egui::Ui, label: &str) -> Response {
         left.max(rect.left())..=(left + LIT_SHARE * width).min(rect.right()),
         rect.y_range(),
     );
-    ui.painter().rect_filled(lit, 0.0, color::INK);
+    ui.painter().rect_filled(lit, 0.0, palette.ink);
     ask_for_the_next_step(ui);
     response
 }

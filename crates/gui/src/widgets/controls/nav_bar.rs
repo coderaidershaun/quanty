@@ -4,7 +4,7 @@
 use eframe::egui::{self, Rect, Sense, pos2, vec2};
 
 use super::tabs::{Tab, tab_tint};
-use crate::theme::{Icon, TextRole, color, hairline, radius, size, space, stroke};
+use crate::theme::{self, Icon, TextRole, hairline, radius, size, space, stroke};
 use crate::widgets::look::{Look, focus_ring};
 
 /// One place the bar leads to. The label is the accessible name.
@@ -28,9 +28,10 @@ impl<'a> NavBar<'a> {
     /// item the person chose. Never the active one.
     pub fn show(self, ui: &mut egui::Ui) -> Option<usize> {
         let (_, bar) = ui.allocate_space(ui.available_size());
+        let palette = theme::palette(ui.ctx());
         let painter = ui.painter();
-        painter.rect_filled(bar, 0.0, color::DESK);
-        let line = hairline(painter, color::HAIRLINE);
+        painter.rect_filled(bar, 0.0, palette.desk);
+        let line = hairline(painter, palette.hairline);
         painter.hline(bar.x_range(), bar.top() + line.width / 2.0, line);
 
         let cell_width = bar.width() / self.items.len().max(1) as f32;
@@ -52,7 +53,8 @@ impl<'a> NavBar<'a> {
         Tab::new(item.label).announce(ui, &response, is_active);
         if ui.is_rect_visible(cell) {
             let look = Look::of(&response);
-            let tint = tab_tint(is_active, look);
+            let palette = theme::palette(ui.ctx());
+            let tint = tab_tint(palette, is_active, look);
             let galley = TextRole::Small.galley(ui, item.label, tint);
             let pair_height = size::ICON_LG + space::XXS + galley.size().y;
             let top = cell.center().y - pair_height / 2.0;
@@ -65,7 +67,7 @@ impl<'a> NavBar<'a> {
             if is_active {
                 let mut mark = cell;
                 mark.max.y = cell.top() + stroke::UNDERLINE;
-                painter.rect_filled(mark, 0.0, color::RULE);
+                painter.rect_filled(mark, 0.0, palette.rule);
             }
             if look.focused {
                 focus_ring(painter, cell, radius::SM);

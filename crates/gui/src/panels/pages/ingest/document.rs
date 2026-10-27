@@ -9,7 +9,7 @@ use super::{Local, Missing};
 use crate::panels::PanelWidth;
 use crate::panels::labels::{caption, list_of};
 use crate::panels::pages::STACK_BELOW;
-use crate::theme::{TextRole, color, space};
+use crate::theme::{self, TextRole, space};
 use crate::widgets::{Button, Chip, TextInput, TextInputResponse};
 use contract::{Category, DocumentName, IngestRequest, Intent};
 
@@ -236,9 +236,10 @@ fn file_row(ui: &mut egui::Ui, pdf: Option<&contract::UploadedPdf>, intents: &mu
         if ui.add(Button::secondary("Choose a PDF")).clicked() {
             intents.push(Intent::PickPdf);
         }
+        let palette = theme::palette(ui.ctx());
         let (words, tint) = match pdf.map(file_name_of) {
-            Some(name) => (name, color::TEXT),
-            None => ("No file chosen".to_owned(), color::TEXT_MUTED),
+            Some(name) => (name, palette.text),
+            None => ("No file chosen".to_owned(), palette.text_muted),
         };
         // No line height is set: a line taller than the font leaves the words above the middle
         // of the row.

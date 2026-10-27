@@ -40,19 +40,22 @@ pub(super) fn show(
                 job.name
             ),
         };
-        ui.label(TextRole::Small.rich(message));
-        ui.label(TextRole::Small.rich("Reload this page after it ends to enable another start."));
+        ui.label(TextRole::Small.rich(ui, message));
+        ui.label(TextRole::Small.rich(
+            ui,
+            "Reload this page after it ends to enable another start.",
+        ));
     }
     match &cx.shared.ingest {
         // A draft that is complete is checked in this frame, so it needs no words.
         IngestJob::Idle => {
             if let Err(missing) = draft {
-                ui.label(TextRole::Small.rich(missing.hint()));
+                ui.label(TextRole::Small.rich(ui, missing.hint()));
             }
         }
         IngestJob::Checking { .. } => {
             widgets::indeterminate_bar(ui, CHECKING);
-            ui.label(TextRole::Small.rich(CHECKING));
+            ui.label(TextRole::Small.rich(ui, CHECKING));
         }
         IngestJob::Checked { request, preflight } if preflight.blockers.is_empty() => {
             checked_line(ui, preflight);
@@ -75,10 +78,10 @@ pub(super) fn show(
                 cx.intents.push(Intent::StartIngest);
             }
             ui.add_space(space::SM);
-            ui.label(TextRole::Small.rich(COST));
+            ui.label(TextRole::Small.rich(ui, COST));
         }
         IngestJob::Checked { preflight, .. } => {
-            ui.label(TextRole::BodyStrong.rich(preflight.name.label()));
+            ui.label(TextRole::BodyStrong.rich(ui, preflight.name.label()));
             for blocker in &preflight.blockers {
                 Notice::error(&blocker.hint).show(ui);
                 detail(ui, blocker);
@@ -104,7 +107,7 @@ pub(super) fn show(
         } => {
             finished(ui, local, cx.intents, request, result);
             if result.is_err() {
-                ui.label(TextRole::Small.rich(spent_sentence(spent)));
+                ui.label(TextRole::Small.rich(ui, spent_sentence(spent)));
             }
         }
     }
@@ -156,7 +159,7 @@ fn checked_line(ui: &mut egui::Ui, preflight: &Preflight) {
         line.push_str(". ");
         line.push_str(&words);
     }
-    ui.label(TextRole::Body.rich(line));
+    ui.label(TextRole::Body.rich(ui, line));
 }
 
 fn stage_words(stage: Option<IngestStage>) -> String {
@@ -204,7 +207,7 @@ fn running(ui: &mut egui::Ui, progress: Option<&IngestProgress>) {
         None => widgets::indeterminate_bar(ui, &words),
     };
     ui.add_space(space::SM);
-    ui.label(TextRole::Small.rich(KEEP_OPEN));
+    ui.label(TextRole::Small.rich(ui, KEEP_OPEN));
 }
 
 fn finished(
@@ -246,10 +249,10 @@ fn finished(
                 .body(&failure.hint)
                 .show(ui);
             detail(ui, failure);
-            ui.label(
-                TextRole::Small
-                    .rich("Pages that are converted are kept and are not paid for twice."),
-            );
+            ui.label(TextRole::Small.rich(
+                ui,
+                "Pages that are converted are kept and are not paid for twice.",
+            ));
         }
     }
     ui.add_space(space::MD);

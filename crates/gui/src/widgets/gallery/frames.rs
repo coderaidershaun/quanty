@@ -26,7 +26,7 @@ pub(super) fn cards(ui: &mut egui::Ui, state: &mut State) {
             column(ui, width, 0.0, |ui| {
                 let card = Card::new().tag(kind, tag).action(Icon::COPY, action);
                 let shown = card.show(ui, |ui| {
-                    ui.label(TextRole::Body.rich(format!("A card for {kind:?} text.")));
+                    ui.label(TextRole::Body.rich(ui, format!("A card for {kind:?} text.")));
                 });
                 if shown.action_clicked {
                     state.last_activated = Some("Card::action");
@@ -52,8 +52,8 @@ pub(super) fn cards(ui: &mut egui::Ui, state: &mut State) {
                         .selected(is_selected)
                         .preview(look);
                     let shown = card.show(ui, |ui| {
-                        ui.label(TextRole::BodyStrong.rich(label));
-                        ui.label(TextRole::Small.rich("The whole card is a button."));
+                        ui.label(TextRole::BodyStrong.rich(ui, label));
+                        ui.label(TextRole::Small.rich(ui, "The whole card is a button."));
                     });
                     used(state, &shown.response, "Card::clickable");
                 });
@@ -70,8 +70,8 @@ pub(super) fn surfaces(ui: &mut egui::Ui) {
             column(ui, width, 0.0, |ui| {
                 panel_frame(surface).show(ui, |ui| {
                     ui.set_min_width(ui.available_width());
-                    ui.label(TextRole::Heading.rich(name));
-                    ui.label(TextRole::Body.rich(format!("A panel drawn on the {name}.")));
+                    ui.label(TextRole::Heading.rich(ui, name));
+                    ui.label(TextRole::Body.rich(ui, format!("A panel drawn on the {name}.")));
                 });
             });
         }

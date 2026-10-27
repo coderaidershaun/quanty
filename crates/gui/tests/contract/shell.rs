@@ -1,13 +1,16 @@
-//! Checks the window around the panels: what Back does in a wide window and with a sheet open, and
-//! how the top bar fits every form.
+//! Checks the window around the panels: what Back does in a wide window and with a sheet open, how
+//! the top bar fits every form, and the switch between the dark and the light palette.
 
 use contract::{AskView, Intent, Tab};
 use eframe::egui;
 use eframe::egui::Rect;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
-use gui::app::layout::{DEFAULT_WINDOW, PHONE_LANDSCAPE_WINDOW, PHONE_WINDOW, TABLET_WINDOW};
+use gui::app::layout::{
+    DEFAULT_WINDOW, Form, MIN_WINDOW, PHONE_LANDSCAPE_WINDOW, PHONE_WINDOW, TABLET_WINDOW,
+};
 use gui::testkit;
+use gui::theme::{self, Palette, Scheme, size};
 
 use crate::flows::fit;
 use crate::flows::{Wheel, Window, click_in, has, node_in, panels, scroll_to, shared};
@@ -24,6 +27,10 @@ const TABS: [(Tab, &str); 4] = [
 const MEDIUM_WITH_ROOM: [f32; 2] = [1000.0, 700.0];
 
 const NOTES: &str = "Quanty Sample Notes";
+
+/// The name of the switch while the window is dark, and while it is light.
+const SWITCH_TO_LIGHT: &str = "Switch to light mode";
+const SWITCH_TO_DARK: &str = "Switch to dark mode";
 
 #[test]
 fn a_wide_window_has_nothing_to_go_back_to_after_a_citation() {
@@ -54,7 +61,9 @@ fn a_wide_window_has_nothing_to_go_back_to_after_a_citation() {
 }
 
 /// Every part of the top bar that is on screen lies inside the bar and the window, and no two
-/// overlap. The model control is one button or the two dropdowns, and the Library has none.
+/// overlap. The model control is one button or the two dropdowns, and the Library has none. The
+/// switch between the palettes stands in the bar of a wide or a medium window, and a medium one
+/// is finger-sized. A compact window has it in the footer's popup, not in the bar.
 fn assert_top_bar_fits(harness: &Window, window: [f32; 2], tab: Tab) {
     let bar = panels(window).top_bar;
     let find = |role, name: &'static str| {
@@ -67,6 +76,30 @@ fn assert_top_bar_fits(harness: &Window, window: [f32; 2], tab: Tab) {
         parts.push(found);
     }
     parts.extend(find(Role::Label, "Quanty"));
+    let switch = find(Role::Button, SWITCH_TO_LIGHT);
+    match Form::of(egui::Vec2::from(window)) {
+        Form::Wide => {
+            assert!(
+                switch.is_some(),
+                "{window:?}: no switch is in the bar {bar:?}"
+            );
+        }
+        Form::Medium => {
+            let (_, rect) = switch
+                .as_ref()
+                .unwrap_or_else(|| panic!("{window:?}: no switch is in the bar {bar:?}"));
+            assert!(
+                rect.height() >= size::CONTROL_MD,
+                "{window:?}: the switch is {} tall, and a finger needs {}",
+                rect.height(),
+                size::CONTROL_MD
+            );
+        }
+        Form::Compact => {
+            assert!(switch.is_none(), "{window:?}: a compact bar has the switch");
+        }
+    }
+    parts.extend(switch);
     let model_control: Vec<(String, Rect)> = [
         (Role::Button, "Model choices"),
         (Role::ComboBox, "Model"),
@@ -99,6 +132,8 @@ fn the_top_bar_fits_every_form() {
         TABLET_WINDOW,
         [360.0, 640.0],
         MEDIUM_WITH_ROOM,
+        DEFAULT_WINDOW,
+        MIN_WINDOW,
     ] {
         let mut harness = testkit::app("idle", window);
         testkit::settle(&mut harness);
@@ -246,4 +281,153 @@ fn back_closes_the_sheet_on_top_and_does_nothing_else() {
     assert!(has(&harness, Role::ComboBox, "Model"), "the sheet stays");
     go_back(&mut harness);
     assert!(!has(&harness, Role::ComboBox, "Model"), "then the sheet");
+}
+
+/// How far the pixel of the renderer may be from the colour of the palette: the conversion from
+/// the colour space of the screen can round by one.
+const COLOUR_ROUNDING: i16 = 1;
+
+#[test]
+fn the_app_opens_dark_when_nothing_was_chosen() {
+    let mut harness = testkit::app("idle", DEFAULT_WINDOW);
+    testkit::settle(&mut harness);
+    assert_eq!(shared(&harness).scheme, Scheme::Dark);
+    assert_eq!(theme::scheme(&harness.ctx), Scheme::Dark);
+
+    // The gutter at the corner of the window holds nothing but the desk.
+    let scale = harness.ctx.pixels_per_point();
+    let frame = harness.render().expect("the test renderer draws the frame");
+    let corner = (4.0 * scale) as u32;
+    let drawn = frame.get_pixel(corner, corner).0;
+    let desk = Palette::DARK.desk.to_array();
+    for channel in 0..3 {
+        assert!(
+            (i16::from(drawn[channel]) - i16::from(desk[channel])).abs() <= COLOUR_ROUNDING,
+            "the corner of the window is {drawn:?}, and the dark desk is {desk:?}"
+        );
+    }
+}
+
+/// Opens the footer's popup with a tap on the slim row, as a person does on a phone.
+fn open_the_footer_popup(harness: &mut Window) {
+    let footer = panels(PHONE_WINDOW).footer;
+    harness
+        .query_all_by_role(Role::Button)
+        .find(|button| {
+            let name = button.accesskit_node().label().unwrap_or_default();
+            name.starts_with("Google Gemini:") && footer.contains(button.rect().center())
+        })
+        .expect("the slim footer has a row for each account")
+        .click();
+    testkit::settle(harness);
+}
+
+/// The buttons of the footer's popup besides the switch: the two accounts and their links, which
+/// stand above the slim row.
+fn account_buttons_in_the_popup(harness: &Window) -> Vec<(String, Rect)> {
+    let footer = panels(PHONE_WINDOW).footer;
+    harness
+        .query_all_by_role(Role::Button)
+        .filter_map(|button| {
+            let name = button.accesskit_node().label()?;
+            let is_account = name.starts_with("Google Gemini:")
+                || name.starts_with("Jev:")
+                || name.starts_with("Open the ");
+            (is_account && !footer.contains(button.rect().center()))
+                .then(|| (name.to_string(), button.rect()))
+        })
+        .collect()
+}
+
+fn assert_scheme(harness: &Window, scheme: Scheme, when: &str) {
+    assert_eq!(shared(harness).scheme, scheme, "{when}: the choice");
+    assert_eq!(theme::scheme(&harness.ctx), scheme, "{when}: what is drawn");
+}
+
+/// The switch, wherever the window keeps it, found by the name it has for the scheme drawn.
+fn press_the_switch(harness: &mut Window, window: [f32; 2], name: &str) {
+    click_in(harness, Role::Button, name, fit::window_rect(window));
+}
+
+fn press_escape(harness: &mut Window) {
+    harness.key_press(egui::Key::Escape);
+    harness.step();
+    testkit::settle(harness);
+}
+
+#[test]
+fn the_switch_stands_in_the_chrome_on_every_tab_and_flips_the_palette() {
+    // A phone keeps the switch in the footer's popup, and every tab can open that popup.
+    let mut harness = testkit::app("black-scholes", PHONE_WINDOW);
+    testkit::settle(&mut harness);
+    let screen = fit::window_rect(PHONE_WINDOW);
+    for (_, tab) in TABS {
+        click_in(&mut harness, Role::Tab, tab, panels(PHONE_WINDOW).top_bar);
+        open_the_footer_popup(&mut harness);
+        let switch = node_in(&harness, Role::Button, SWITCH_TO_LIGHT, screen)
+            .unwrap_or_else(|| panic!("{tab}: the footer popup has no switch"))
+            .rect();
+        assert!(
+            screen.contains_rect(switch),
+            "{tab}: the switch {switch:?} is outside the window"
+        );
+        assert!(
+            switch.height() >= size::CONTROL_MD,
+            "{tab}: the switch is {} tall, and a finger needs {}",
+            switch.height(),
+            size::CONTROL_MD
+        );
+        for (name, other) in account_buttons_in_the_popup(&harness) {
+            let both = switch.intersect(other);
+            assert!(
+                both.width() <= 0.5 || both.height() <= 0.5,
+                "{tab}: the switch {switch:?} covers `{name}` {other:?}"
+            );
+        }
+        go_back(&mut harness);
+        assert!(!is_a_popup_open(&harness), "{tab}: Back closes the popup");
+    }
+
+    // A click turns the palette over, a second click turns it back, and neither Back nor Escape
+    // turns it, in a wide window, a medium one and a phone.
+    for window in [DEFAULT_WINDOW, TABLET_WINDOW, PHONE_WINDOW] {
+        let mut harness = testkit::app("black-scholes", window);
+        testkit::settle(&mut harness);
+        let is_phone = window == PHONE_WINDOW;
+        if is_phone {
+            open_the_footer_popup(&mut harness);
+        }
+        assert_scheme(&harness, Scheme::Dark, &format!("{window:?} at the start"));
+
+        press_the_switch(&mut harness, window, SWITCH_TO_LIGHT);
+        assert_scheme(
+            &harness,
+            Scheme::Light,
+            &format!("{window:?} after a click"),
+        );
+        assert!(
+            has(&harness, Role::Button, SWITCH_TO_DARK),
+            "{window:?}: the switch is not named for the way back"
+        );
+
+        press_the_switch(&mut harness, window, SWITCH_TO_DARK);
+        assert_scheme(
+            &harness,
+            Scheme::Dark,
+            &format!("{window:?} after two clicks"),
+        );
+        assert!(
+            has(&harness, Role::Button, SWITCH_TO_LIGHT),
+            "{window:?}: the switch is not named for the way forward"
+        );
+
+        go_back(&mut harness);
+        assert_scheme(&harness, Scheme::Dark, &format!("{window:?} after Back"));
+        if is_phone {
+            assert!(!is_a_popup_open(&harness), "Back closes the popup");
+            open_the_footer_popup(&mut harness);
+        }
+        press_escape(&mut harness);
+        assert_scheme(&harness, Scheme::Dark, &format!("{window:?} after Escape"));
+    }
 }

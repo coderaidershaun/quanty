@@ -4,7 +4,7 @@ use eframe::egui::{
     self, Align, Color32, Response, Sense, Stroke, StrokeKind, WidgetInfo, WidgetType, pos2, vec2,
 };
 
-use crate::theme::{Icon, Kind, TextRole, Tone, color, radius, size, space, stroke};
+use crate::theme::{self, Icon, Kind, TextRole, Tone, radius, size, space, stroke};
 use crate::widgets::controls::Button;
 use crate::widgets::look::{ControlSize, Look, focus_ring};
 
@@ -121,8 +121,9 @@ impl<'a> Card<'a> {
     ) -> (R, bool) {
         // The width of the outline never changes, so that selecting a card does not move what
         // is below it. The heavier outline of a selected card is drawn over it.
+        let palette = theme::palette(ui.ctx());
         let mut frame = egui::Frame::NONE
-            .stroke(Stroke::new(stroke::BORDER, color::HAIRLINE))
+            .stroke(Stroke::new(stroke::BORDER, palette.hairline))
             .corner_radius(radius::SM)
             .inner_margin(MARGIN)
             .begin(ui);
@@ -142,16 +143,16 @@ impl<'a> Card<'a> {
             (Some(_), None) => Look::of(&ui.response()),
         };
         frame.frame.fill = if look.pressed {
-            color::WELL_DEEP
+            palette.well_deep
         } else if look.hovered {
-            color::WELL
+            palette.well
         } else {
             Color32::TRANSPARENT
         };
         let outer = frame.content_ui.min_rect() + frame.frame.total_margin();
         frame.end(ui);
         if self.is_selected {
-            let edge = Stroke::new(stroke::EDGE, Tone::Rubric.swatch().solid);
+            let edge = Stroke::new(stroke::EDGE, palette.tone(Tone::Rubric).solid);
             ui.painter()
                 .rect_stroke(outer, radius::SM, edge, StrokeKind::Inside);
         }
@@ -181,7 +182,7 @@ impl<'a> Card<'a> {
 /// The text of the tag is a label of its own, so a test or a screen reader finds it. It is
 /// painted in capitals, and the name it answers to stays the text as it was given.
 fn paint_tag(ui: &mut egui::Ui, kind: Kind, text: &str) {
-    let ink = kind.tone().swatch().text;
+    let ink = theme::palette(ui.ctx()).tone(kind.tone()).text;
     let galley = TextRole::Caps.galley(ui, &text.to_uppercase(), ink);
     let height = galley.size().y.max(size::GLYPH);
     let width = size::GLYPH + space::XS + galley.size().x;

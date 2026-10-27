@@ -15,29 +15,32 @@ use super::parse_table::{ParsedTable, parse_table};
 use super::style::text_look;
 use super::table::{self, Source, TableLayout};
 use crate::media::math::Math;
-use crate::theme::TextRole;
+use crate::theme::{self, Scheme, TextRole};
 
 /// A layout that was not drawn for this many polls is dropped.
 const UNDRAWN_POLLS: u64 = 2;
 /// Texts that were read are kept up to this many. The least recently used go first.
 const MAX_PARSED: usize = 1024;
 
-/// What a layout is for: the content, the width in whole points, and the display scale.
+/// What a layout is for: the content, the width in whole points, the display scale, and the
+/// scheme. A layout holds the colours it was made with, so a scheme that changes needs new ones.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct LayoutKey {
     content: u64,
     wrap: u32,
     scale: u32,
+    scheme: Scheme,
 }
 
 impl LayoutKey {
     /// A width with no limit, or one that is not a number, still makes a key: the first is
     /// kept as the largest whole number and the second as zero.
-    fn new(content: u64, wrap: f32, pixels_per_point: f32) -> LayoutKey {
+    fn new(content: u64, ui: &egui::Ui) -> LayoutKey {
         LayoutKey {
             content,
-            wrap: wrap.floor().max(0.0) as u32,
-            scale: pixels_per_point.to_bits(),
+            wrap: ui.available_width().floor().max(0.0) as u32,
+            scale: ui.ctx().pixels_per_point().to_bits(),
+            scheme: theme::scheme(ui.ctx()),
         }
     }
 
@@ -105,7 +108,7 @@ impl Layouts {
             text.markdown,
             text.cites,
         ));
-        let key = LayoutKey::new(content, ui.available_width(), ui.ctx().pixels_per_point());
+        let key = LayoutKey::new(content, ui);
         let view = paint::view_of(ui);
         if let Some(used) = self.flows.get_mut(&key) {
             used.last_used = self.polls;
@@ -114,7 +117,7 @@ impl Layouts {
             }
         }
         let parsed = self.read(content, text.markdown);
-        let look = text_look(text.role);
+        let look = text_look(text.role, key.scheme.palette());
         let measured = measure(ui, &parsed, text.cites, &look, math, WaitFor::OwnFormulas);
         let piece_width = alone_width(ui);
         let flow = Arc::new(break_lines(&measured, key.width(), &look, &piece_width));
@@ -137,7 +140,7 @@ impl Layouts {
     ) -> Option<Arc<TableLayout>> {
         let content = egui::util::hash((std::mem::discriminant(&role), markdown));
         let parsed = self.read_table(content, markdown)?;
-        let key = LayoutKey::new(content, ui.available_width(), ui.ctx().pixels_per_point());
+        let key = LayoutKey::new(content, ui);
         let view = paint::view_of(ui);
         if let Some(used) = self.tables.get_mut(&key) {
             used.last_used = self.polls;
@@ -150,6 +153,7 @@ impl Layouts {
             role,
             content,
             width: key.width(),
+            palette: key.scheme.palette(),
         };
         let layout = Arc::new(table::build(ui, math, &source));
         self.stats.layouts_built += 1;

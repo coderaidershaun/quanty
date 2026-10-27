@@ -7,7 +7,7 @@ use super::width;
 use crate::panels::PanelCx;
 use crate::panels::heights::Heights;
 use crate::panels::labels::TRY_AGAIN;
-use crate::theme::{Icon, TextRole, color, space};
+use crate::theme::{self, Icon, TextRole, space};
 use crate::widgets::Placeholder;
 use contract::{DocId, DocumentView, Failure, Intent, Loadable, PageConcept};
 
@@ -74,12 +74,13 @@ fn rows(ui: &mut egui::Ui, doc: DocId, list: &[PageConcept]) {
 }
 
 fn row(ui: &mut egui::Ui, concept: &PageConcept) {
-    ui.label(TextRole::BodyStrong.rich(&concept.name));
+    ui.label(TextRole::BodyStrong.rich(ui, &concept.name));
     if !concept.definition.is_empty() {
+        let definition_color = theme::palette(ui.ctx()).text_secondary;
         ui.label(
             TextRole::Body
-                .rich(&concept.definition)
-                .color(color::TEXT_SECONDARY),
+                .rich(ui, &concept.definition)
+                .color(definition_color),
         );
     }
     ui.add_space(space::SM);

@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Every `.rs` file under `folder`, in any order.
-fn rust_files(folder: &Path) -> Vec<PathBuf> {
+pub(super) fn rust_files(folder: &Path) -> Vec<PathBuf> {
     let mut found = Vec::new();
     let mut pending = vec![folder.to_path_buf()];
     while let Some(next) = pending.pop() {
@@ -22,11 +22,11 @@ fn rust_files(folder: &Path) -> Vec<PathBuf> {
     found
 }
 
-fn manifest_folder() -> PathBuf {
+pub(super) fn manifest_folder() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-fn read(path: &Path) -> String {
+pub(super) fn read(path: &Path) -> String {
     fs::read_to_string(path)
         .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()))
 }

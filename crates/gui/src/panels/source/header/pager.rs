@@ -4,7 +4,7 @@
 use eframe::egui;
 
 use crate::state::SourceNav;
-use crate::theme::{TextRole, color};
+use crate::theme::{self, TextRole};
 use crate::widgets::{ControlSize, Step, Stepper};
 use contract::DocId;
 
@@ -104,12 +104,13 @@ impl Pager<'_> {
             .next("Next page", self.can_go_on)
             .show(ui);
         if let Some(label) = self.label {
+            let palette = theme::palette(ui.ctx());
             let ink = if self.is_turning {
-                color::TEXT_MUTED
+                palette.text_muted
             } else {
-                color::TEXT_SECONDARY
+                palette.text_secondary
             };
-            ui.label(TextRole::Small.rich(label).color(ink));
+            ui.label(TextRole::Small.rich(ui, label).color(ink));
         }
         step.map(|step| match step {
             Step::Previous => -1,

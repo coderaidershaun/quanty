@@ -4,7 +4,7 @@
 use eframe::egui;
 
 use crate::panels::labels::spent_text;
-use crate::theme::{TextRole, color};
+use crate::theme::{self, TextRole};
 use contract::Usage;
 
 /// The words of the stage, with what was spent so far at the right end of their line when both
@@ -12,29 +12,28 @@ use contract::Usage;
 pub(super) fn stage_row(ui: &mut egui::Ui, words: &str, spent: Option<&Usage>) {
     let spent = spent.and_then(spent_so_far);
     let spent = spent.as_deref();
-    let words_width = TextRole::BodyStrong
-        .galley(ui, words, TextRole::BodyStrong.color())
-        .size()
-        .x;
+    let palette = theme::palette(ui.ctx());
+    let words_color = TextRole::BodyStrong.color(palette);
+    let words_width = TextRole::BodyStrong.galley(ui, words, words_color).size().x;
     let gap_and_spent_width = spent.map_or(0.0, |spent| {
         let width = TextRole::Small
-            .galley(ui, spent, color::TEXT_MUTED)
+            .galley(ui, spent, palette.text_muted)
             .size()
             .x;
         ui.spacing().item_spacing.x + width
     });
     if words_width + gap_and_spent_width > ui.available_width() {
-        ui.label(TextRole::BodyStrong.rich(words));
+        ui.label(TextRole::BodyStrong.rich(ui, words));
         if let Some(spent) = spent {
-            ui.label(TextRole::Small.rich(spent).color(color::TEXT_MUTED));
+            ui.label(TextRole::Small.rich(ui, spent).color(palette.text_muted));
         }
         return;
     }
     ui.horizontal(|ui| {
-        ui.label(TextRole::BodyStrong.rich(words));
+        ui.label(TextRole::BodyStrong.rich(ui, words));
         if let Some(spent) = spent {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(TextRole::Small.rich(spent).color(color::TEXT_MUTED));
+                ui.label(TextRole::Small.rich(ui, spent).color(palette.text_muted));
             });
         }
     });

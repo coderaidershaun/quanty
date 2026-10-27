@@ -131,7 +131,7 @@ pub(super) fn show(
     fit: ShelfFit,
     cx: &mut PanelCx<'_>,
 ) {
-    ui.label(TextRole::Title.rich(TITLE));
+    ui.label(TextRole::Title.rich(ui, TITLE));
     ui.add_space(space::MD);
     let has_text = !local.find.is_empty();
     let mut find = TextInput::new(FIND, &mut local.find)

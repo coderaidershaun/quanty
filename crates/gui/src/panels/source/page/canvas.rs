@@ -2,14 +2,14 @@
 //! zoom keys, keeps the page in the viewport, and paints the page with the cited figure framed.
 
 use eframe::egui::{
-    self, Color32, CornerRadius, CursorIcon, Key, Modifiers, Sense, Stroke, StrokeKind, Vec2,
-    WidgetInfo, WidgetType,
+    self, CornerRadius, CursorIcon, Key, Modifiers, Sense, Stroke, StrokeKind, Vec2, WidgetInfo,
+    WidgetType,
 };
 
 use super::view::{self, View, Viewport, ZoomStep};
 use super::zoom_bar::ZoomAction;
 use crate::media::images::Picture;
-use crate::theme::{Tone, color, radius, shadow, stroke};
+use crate::theme::{self, Tone, radius, shadow, stroke};
 use contract::PageBox;
 
 #[derive(Debug, Clone, Copy)]
@@ -56,15 +56,16 @@ pub(super) fn show(ui: &mut egui::Ui, view: &mut View, shown: &Shown<'_>) {
     }
 
     let painter = ui.painter_at(area);
-    painter.rect_filled(area, radius::SM, color::WELL);
-    painter.add(shadow::SHEET.as_shape(page, CornerRadius::ZERO));
-    painter.rect_filled(page, CornerRadius::ZERO, color::PAGE);
-    shown.picture.paint(&painter, page, Color32::WHITE);
+    let palette = theme::palette(ui.ctx());
+    painter.rect_filled(area, radius::SM, palette.well);
+    painter.add(shadow::sheet(palette).as_shape(page, CornerRadius::ZERO));
+    painter.rect_filled(page, CornerRadius::ZERO, palette.page);
+    shown.picture.paint(&painter, page, theme::UNTINTED);
     if let Some(figure) = shown.figure {
         let seen = view::box_rect(page, figure.cut).intersect(area);
         if seen.is_positive() {
-            painter.rect_filled(seen, CornerRadius::ZERO, color::PAGE_HIGHLIGHT);
-            let outline = Stroke::new(stroke::EDGE, Tone::Rubric.swatch().solid);
+            painter.rect_filled(seen, CornerRadius::ZERO, palette.page_highlight);
+            let outline = Stroke::new(stroke::EDGE, palette.tone(Tone::Rubric).solid);
             painter.rect_stroke(seen, CornerRadius::ZERO, outline, StrokeKind::Inside);
             let mark = ui.interact(seen, response.id.with("highlight"), Sense::hover());
             mark.widget_info(|| {

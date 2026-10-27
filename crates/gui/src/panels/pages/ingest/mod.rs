@@ -279,7 +279,7 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
             .auto_shrink([false, true])
             .max_height(height)
             .show(ui, |ui| {
-                ui.label(TextRole::Title.rich("Add media"));
+                ui.label(TextRole::Title.rich(ui, "Add media"));
                 ui.add_space(space::MD);
                 ui.add_enabled_ui(!cx.shared.ingest.is_running(), |ui| {
                     media::show(ui, local, cx);

@@ -110,9 +110,9 @@ impl<'a> Canvas<'a> {
         for (response, index) in responses.into_iter().zip(&scene.plan.nodes) {
             let node = &graph.nodes[*index];
             response.on_hover_ui(|ui| {
-                ui.label(TextRole::BodyStrong.rich(&node.label));
+                ui.label(TextRole::BodyStrong.rich(ui, &node.label));
                 if let Some(detail) = &node.detail {
-                    ui.label(TextRole::Small.rich(detail));
+                    ui.label(TextRole::Small.rich(ui, detail));
                 }
             });
         }

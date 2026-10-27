@@ -31,7 +31,7 @@ pub(super) fn show(ui: &mut egui::Ui, draft: &DatasetRequest, cx: &mut PanelCx<'
         DatasetJob::Idle => {
             start_button(ui, START, draft, cx);
             ui.add_space(space::SM);
-            ui.label(TextRole::Small.rich(COST));
+            ui.label(TextRole::Small.rich(ui, COST));
         }
         DatasetJob::Running { progress, .. } => running(ui, progress.as_ref()),
         DatasetJob::Finished { result, .. } => finished(ui, draft, cx, result),
@@ -96,7 +96,7 @@ fn running(ui: &mut egui::Ui, progress: Option<&DatasetProgress>) {
         None => widgets::indeterminate_bar(ui, &words),
     };
     ui.add_space(space::SM);
-    ui.label(TextRole::Small.rich(KEEP_OPEN));
+    ui.label(TextRole::Small.rich(ui, KEEP_OPEN));
 }
 
 fn finished(

@@ -5,7 +5,7 @@ use eframe::egui;
 
 use super::picture::{ImageFailure, ImageState, Picture};
 use crate::media::Media;
-use crate::theme::{Icon, color, radius, size};
+use crate::theme::{self, Icon, radius, size};
 use crate::widgets::{Placeholder, spinner};
 use contract::ImageRef;
 
@@ -42,8 +42,9 @@ fn ready(ui: &mut egui::Ui, picture: Picture, alt: &str, room: egui::Vec2) -> eg
         let (rect, response) = ui.allocate_exact_size(shown, egui::Sense::click());
         response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Image, true, alt));
         if ui.is_rect_visible(rect) {
-            ui.painter().rect_filled(rect, 0.0, color::PAGE);
-            picture.paint(ui.painter(), rect, egui::Color32::WHITE);
+            ui.painter()
+                .rect_filled(rect, 0.0, theme::palette(ui.ctx()).page);
+            picture.paint(ui.painter(), rect, theme::UNTINTED);
         }
         response
     })
@@ -52,7 +53,8 @@ fn ready(ui: &mut egui::Ui, picture: Picture, alt: &str, room: egui::Vec2) -> eg
 
 fn waiting(ui: &mut egui::Ui, alt: &str, room: egui::Vec2) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(room, egui::Sense::click());
-    ui.painter().rect_filled(rect, radius::SM, color::WELL);
+    ui.painter()
+        .rect_filled(rect, radius::SM, theme::palette(ui.ctx()).well);
     let middle = egui::Layout::centered_and_justified(egui::Direction::TopDown);
     let mut inside = ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(middle));
     spinner(&mut inside, &format!("Loading picture: {alt}"));
@@ -71,7 +73,8 @@ fn failed(
         ImageFailure::Unreadable => "Picture cannot be read",
     };
     let (rect, response) = ui.allocate_exact_size(room, egui::Sense::click());
-    ui.painter().rect_filled(rect, radius::SM, color::WELL);
+    let palette = theme::palette(ui.ctx());
+    ui.painter().rect_filled(rect, radius::SM, palette.well);
     if room.y < Placeholder::MIN_HEIGHT {
         // A box this small has no room for the Retry button. The failure stays until a caller
         // forgets it, or the picture is shown in a bigger box and Retry is clicked there.
@@ -79,7 +82,7 @@ fn failed(
             ui.painter(),
             rect.center(),
             size::ICON_LG,
-            color::TEXT_MUTED,
+            palette.text_muted,
         );
         response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, title));
         return (response.on_hover_text(title), false);

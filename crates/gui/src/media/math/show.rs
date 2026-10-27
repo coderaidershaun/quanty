@@ -7,7 +7,7 @@ use eframe::egui::{
 
 use super::image::{Display, MathImage, MathRef, MathState};
 use crate::media::{Media, content_salt};
-use crate::theme::{TextRole, color, radius};
+use crate::theme::{self, TextRole, radius};
 use crate::widgets::spinner;
 
 const BLOCK_WAITING_HEIGHT_EM: f32 = 2.4;
@@ -46,7 +46,8 @@ fn waiting(ui: &mut Ui, display: Display, em: f32) -> Response {
     }
     let size = vec2(ui.available_width(), BLOCK_WAITING_HEIGHT_EM * em);
     let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
-    ui.painter().rect_filled(rect, radius::MD, color::WELL);
+    let well = theme::palette(ui.ctx()).well;
+    ui.painter().rect_filled(rect, radius::MD, well);
     let centred = UiBuilder::new()
         .max_rect(rect)
         .layout(Layout::centered_and_justified(Direction::TopDown));
@@ -57,7 +58,8 @@ fn waiting(ui: &mut Ui, display: Display, em: f32) -> Response {
 fn at_own_size(ui: &mut Ui, image: &MathImage) -> Response {
     let (rect, response) = ui.allocate_exact_size(image.size(), Sense::hover());
     let baseline_left = rect.left_top() + vec2(0.0, image.ascent);
-    image.paint(ui.painter(), baseline_left, 1.0, color::TEXT);
+    let ink = theme::palette(ui.ctx()).text;
+    image.paint(ui.painter(), baseline_left, 1.0, ink);
     response
 }
 
@@ -73,18 +75,20 @@ fn fitted(ui: &mut Ui, image: &MathImage, latex: &str) -> Response {
         rect.center().x - size.x / 2.0,
         rect.top() + image.ascent * scale,
     );
-    image.paint(ui.painter(), baseline_left, scale, color::TEXT);
+    let ink = theme::palette(ui.ctx()).text;
+    image.paint(ui.painter(), baseline_left, scale, ink);
     response
 }
 
 fn scrolled(ui: &mut Ui, image: &MathImage, latex: &str) -> Response {
     let scrolling = ScrollArea::horizontal().id_salt(content_salt(ui, egui::util::hash(latex)));
+    let ink = theme::palette(ui.ctx()).text;
     scrolling
         .show(ui, |ui| {
             let (rect, response) =
                 ui.allocate_exact_size(image.size() * SMALLEST_SCALE, Sense::hover());
             let baseline_left = rect.left_top() + vec2(0.0, image.ascent * SMALLEST_SCALE);
-            image.paint(ui.painter(), baseline_left, SMALLEST_SCALE, color::TEXT);
+            image.paint(ui.painter(), baseline_left, SMALLEST_SCALE, ink);
             response
         })
         .inner
@@ -94,19 +98,18 @@ fn scrolled(ui: &mut Ui, image: &MathImage, latex: &str) -> Response {
 /// is the formula's own.
 fn source(ui: &mut Ui, display: Display, latex: &str) -> Response {
     let font = TextRole::Mono.font();
+    let muted = theme::palette(ui.ctx()).text_muted;
     let galley = match display {
         Display::Block => {
             let text = latex.to_owned();
-            ui.painter()
-                .layout(text, font, color::TEXT_MUTED, ui.available_width())
+            ui.painter().layout(text, font, muted, ui.available_width())
         }
         Display::Inline => {
             let one_line = latex.replace(['\n', '\r'], " ");
-            ui.painter()
-                .layout_no_wrap(one_line, font, color::TEXT_MUTED)
+            ui.painter().layout_no_wrap(one_line, font, muted)
         }
     };
     let (rect, response) = ui.allocate_exact_size(galley.size(), Sense::hover());
-    ui.painter().galley(rect.min, galley, color::TEXT_MUTED);
+    ui.painter().galley(rect.min, galley, muted);
     response
 }

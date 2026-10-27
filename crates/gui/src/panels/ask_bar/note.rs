@@ -7,7 +7,7 @@ use eframe::egui;
 use super::layout::slot;
 use crate::panels::labels::TRY_AGAIN;
 use crate::state::Shared;
-use crate::theme::{TextRole, Tone, color};
+use crate::theme::{self, Palette, TextRole, Tone};
 use crate::widgets::{self, Button, ControlSize};
 use contract::{AskDraft, Failure, Intent, Loadable};
 
@@ -73,7 +73,7 @@ impl<'a> Note<'a> {
         size: ControlSize,
         intents: &mut Vec<Intent>,
     ) {
-        let (text, colour) = self.words();
+        let (text, colour) = self.words(theme::palette(ui.ctx()));
         slot(ui, "note", rect, |ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // The line is laid out right to left, so what comes after the text is drawn first.
@@ -89,8 +89,8 @@ impl<'a> Note<'a> {
                     }
                     Note::LibraryEmpty | Note::Blank => {}
                 }
-                let line =
-                    ui.add(egui::Label::new(TextRole::Small.rich(text).color(colour)).truncate());
+                let line = ui
+                    .add(egui::Label::new(TextRole::Small.rich(ui, text).color(colour)).truncate());
                 if let Note::LibraryFailed(failure) = self {
                     line.on_hover_text(&failure.detail);
                 }
@@ -98,15 +98,15 @@ impl<'a> Note<'a> {
         });
     }
 
-    fn words(self) -> (String, egui::Color32) {
+    fn words(self, palette: &Palette) -> (String, egui::Color32) {
         match self {
             Note::LibraryFailed(failure) => (
                 format!("{LIBRARY_FAILED}{}", failure.hint),
-                Tone::Warning.swatch().text,
+                palette.tone(Tone::Warning).text,
             ),
-            Note::LibraryLoading => (LIBRARY_LOADING.to_owned(), color::TEXT_MUTED),
-            Note::LibraryEmpty => (LIBRARY_EMPTY.to_owned(), color::TEXT_SECONDARY),
-            Note::Blank => (BLANK.to_owned(), color::TEXT_MUTED),
+            Note::LibraryLoading => (LIBRARY_LOADING.to_owned(), palette.text_muted),
+            Note::LibraryEmpty => (LIBRARY_EMPTY.to_owned(), palette.text_secondary),
+            Note::Blank => (BLANK.to_owned(), palette.text_muted),
         }
     }
 }

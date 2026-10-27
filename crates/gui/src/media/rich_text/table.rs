@@ -17,7 +17,7 @@ use super::style::{
 };
 use crate::media::content_salt;
 use crate::media::math::{Math, MathRef, MathState};
-use crate::theme::TextRole;
+use crate::theme::{self, Palette, TextRole};
 
 pub(super) const MAX_COLUMN_WIDTH: f32 = 360.0;
 
@@ -29,6 +29,7 @@ pub(super) struct Source<'a> {
     pub(super) content: u64,
     /// The room the table has, in points.
     pub(super) width: f32,
+    pub(super) palette: &'a Palette,
 }
 
 /// Every length is in points from its top left corner.
@@ -277,10 +278,11 @@ pub(super) fn build(ui: &Ui, math: &mut Math, source: &Source<'_>) -> TableLayou
         role,
         content,
         width,
+        palette,
     } = *source;
     let looks = RowLooks {
-        header: header_look(),
-        body: text_look(role),
+        header: header_look(palette),
+        body: text_look(role, palette),
     };
     let (measured, is_waiting) = measure_rows(ui, math, table, &looks);
 
@@ -379,11 +381,16 @@ fn draw(painter: &Painter, layout: &TableLayout, origin: Pos2, math: &mut Math) 
         }
     }
     let (left, right) = (origin.x, origin.x + layout.size.x);
-    let heavy = heavy_rule();
+    let palette = theme::palette(painter.ctx());
+    let heavy = heavy_rule(palette);
     let inset = heavy.width / 2.0;
     painter.hline(left..=right, origin.y + inset, heavy);
     painter.hline(left..=right, origin.y + layout.size.y - inset, heavy);
     if let Some(first_body_row) = layout.rows.iter().find(|row| !row.is_header) {
-        painter.hline(left..=right, origin.y + first_body_row.top, header_rule());
+        painter.hline(
+            left..=right,
+            origin.y + first_body_row.top,
+            header_rule(palette),
+        );
     }
 }

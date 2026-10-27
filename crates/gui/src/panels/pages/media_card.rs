@@ -7,7 +7,7 @@ use eframe::egui;
 
 use crate::panels::PanelWidth;
 use crate::panels::labels::{AUTHORS, LIST_PLACEHOLDER, TAGS, caption, list_of};
-use crate::theme::{Icon, TextRole, Tone, space};
+use crate::theme::{self, Icon, TextRole, Tone, space};
 use crate::widgets::{Badge, Button, Chip, ControlSize, Notice, TextInput};
 use contract::{Category, Failure, Media, MediaEdit, NewMedia};
 
@@ -91,21 +91,19 @@ pub(super) fn title_line<R>(
     category: Category,
     add_buttons: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
-    let title_width = TextRole::BodyStrong
-        .galley(ui, title, TextRole::BodyStrong.color())
-        .size()
-        .x;
+    let title_color = TextRole::BodyStrong.color(theme::palette(ui.ctx()));
+    let title_width = TextRole::BodyStrong.galley(ui, title, title_color).size().x;
     let title_and_badge_width =
         title_width + ui.spacing().item_spacing.x + category_badge(category).width(ui);
     let (_, inner) = egui::containers::Sides::new().shrink_left().show(
         ui,
         |ui| {
             if title_and_badge_width <= ui.available_width() {
-                ui.label(TextRole::BodyStrong.rich(title));
+                ui.label(TextRole::BodyStrong.rich(ui, title));
                 ui.add(category_badge(category));
             } else {
                 ui.vertical(|ui| {
-                    ui.label(TextRole::BodyStrong.rich(title));
+                    ui.label(TextRole::BodyStrong.rich(ui, title));
                     ui.add(category_badge(category));
                 });
             }
@@ -162,7 +160,7 @@ pub(super) fn labels_line(ui: &mut egui::Ui, media: &Media) {
     ui.horizontal_wrapped(|ui| {
         if !media.authors.is_empty() {
             let authors = media.authors.join(", ");
-            ui.label(TextRole::Caption.rich(authors));
+            ui.label(TextRole::Caption.rich(ui, authors));
         }
         for tag in &media.tags {
             ui.add(Chip::stamp(tag));
@@ -276,13 +274,11 @@ fn buttons(ui: &mut egui::Ui, purpose: Purpose, save: Save) -> Option<Pressed> {
             let is_cancel_pressed = ui
                 .add_enabled(!is_sent, Button::secondary(CANCEL))
                 .clicked();
-            let note_width = TextRole::Small
-                .galley(ui, note, TextRole::Small.color())
-                .size()
-                .x;
+            let note_color = TextRole::Small.color(theme::palette(ui.ctx()));
+            let note_width = TextRole::Small.galley(ui, note, note_color).size().x;
             let is_note_beside = note_width <= ui.available_width();
             if is_note_beside {
-                ui.add(egui::Label::new(TextRole::Small.rich(note)).truncate());
+                ui.add(egui::Label::new(TextRole::Small.rich(ui, note)).truncate());
             }
             let pressed = if is_save_pressed {
                 Some(Pressed::Save)
@@ -295,7 +291,7 @@ fn buttons(ui: &mut egui::Ui, purpose: Purpose, save: Save) -> Option<Pressed> {
         })
         .inner;
     if !is_note_beside {
-        ui.label(TextRole::Small.rich(note));
+        ui.label(TextRole::Small.rich(ui, note));
     }
     pressed
 }

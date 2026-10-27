@@ -8,7 +8,7 @@ use super::pane::Pane;
 use super::phase::AnswerTab;
 use crate::media::{code, images, math, rich_text};
 use crate::panels::heights::{Heights, Slot};
-use crate::theme::{Icon, Kind, TextRole, color, size, space};
+use crate::theme::{self, Icon, Kind, TextRole, size, space};
 use crate::widgets::{Badge, Card, CitationChip, Placeholder};
 use contract::{ItemKind, ResultItem};
 
@@ -142,19 +142,20 @@ fn card(
 // SMELL: these are the fills of a card and of the sheet under it, copied from the widget kit, so
 // a change to how a card is filled must be made here too.
 fn card_fill(card: &egui::Response) -> egui::Color32 {
+    let palette = theme::palette(&card.ctx);
     if card.is_pointer_button_down_on() {
-        color::WELL_DEEP
+        palette.well_deep
     } else if card.hovered() {
-        color::WELL
+        palette.well
     } else {
-        color::SHEET
+        palette.sheet
     }
 }
 
 /// The mark stands over a fade of the card's own fill, so a text that goes on past the box does
 /// not look as if it ended there. It is drawn after the card, so nothing covers it.
 fn mark_cut(ui: &mut egui::Ui, window: egui::Rect, fill: egui::Color32) {
-    let mark = TextRole::Body.rich(CUT_MARK);
+    let mark = TextRole::Body.rich(ui, CUT_MARK);
     let width = TextRole::Body.galley(ui, CUT_MARK, fill).size().x;
     let line = egui::Rect::from_min_max(
         egui::pos2(
@@ -213,19 +214,19 @@ fn head(
             egui::vec2(place_width, size::CHIP),
             egui::Layout::left_to_right(egui::Align::Center),
             |ui| {
-                ui.add(egui::Label::new(TextRole::Small.rich(&row.place)).truncate());
+                ui.add(egui::Label::new(TextRole::Small.rich(ui, &row.place)).truncate());
             },
         );
         ui.with_layout(at_right, |ui| {
             let score = TextRole::Label
-                .rich(&row.score)
-                .color(color::TEXT_SECONDARY);
+                .rich(ui, &row.score)
+                .color(theme::palette(ui.ctx()).text_secondary);
             ui.label(score).on_hover_ui(|ui| {
-                ui.label(TextRole::Small.rich(SCORE_HELP));
+                ui.label(TextRole::Small.rich(ui, SCORE_HELP));
             });
         });
     });
-    ui.label(TextRole::Small.rich(&row.reason));
+    ui.label(TextRole::Small.rich(ui, &row.reason));
     chip_clicked
 }
 
@@ -244,7 +245,7 @@ fn preview(
         }
         ItemKind::Formula => {
             if let Some(name) = &item.name {
-                ui.label(TextRole::Small.rich(name));
+                ui.label(TextRole::Small.rich(ui, name));
             }
             let formula = math::MathRef::block(&item.text);
             (math::show(ui, pane.cx.media, &formula).clicked(), None)

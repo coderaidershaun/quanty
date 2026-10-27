@@ -11,6 +11,7 @@ use wasm_bindgen::closure::Closure;
 
 use crate::back::{BackHistory, MoveStep};
 use crate::fetch::EhttpFetch;
+use crate::scheme::{self, PageScheme};
 use crate::transport::SocketTransport;
 use crate::upload;
 
@@ -52,6 +53,7 @@ async fn run(facts: StartupFacts) {
         failed("could not find the app canvas");
         return;
     };
+    let scheme = scheme::stored(&window);
     let result = eframe::WebRunner::new()
         .start(
             canvas,
@@ -67,13 +69,15 @@ async fn run(facts: StartupFacts) {
                     log::warn!("could not keep Cmd/Ctrl+[ and ] for the app: {error:?}");
                 }
                 let browser_back = BrowserBack::install(&window, &ctx);
-                let app = gui::app::App::new(creation, Box::new(transport), facts, vec![])
+                let mut app = gui::app::App::new(creation, Box::new(transport), facts, vec![])
                     .with_fetch(Box::new(EhttpFetch))
                     .with_file_picker(move |_| upload::pick(sender.clone(), ctx.clone()));
+                app.set_scheme(scheme);
                 Ok(Box::new(BrowserApp {
                     app,
                     intents,
                     browser_back,
+                    page_scheme: PageScheme::new(&window, scheme),
                 }))
             }),
         )
@@ -206,6 +210,7 @@ struct BrowserApp {
     app: gui::app::App,
     intents: Receiver<Intent>,
     browser_back: Option<BrowserBack>,
+    page_scheme: PageScheme,
 }
 
 impl BrowserApp {
@@ -238,6 +243,7 @@ impl eframe::App for BrowserApp {
         if let Some(browser_back) = &mut self.browser_back {
             browser_back.after_frame(&self.app);
         }
+        self.page_scheme.after_frame(self.app.shared().scheme);
     }
 
     fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {

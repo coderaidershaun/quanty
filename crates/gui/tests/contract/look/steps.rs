@@ -144,6 +144,7 @@ impl Row {
         }
         let mut harness =
             testkit::app_at_with_home(self.scene, self.window, PIXELS_PER_POINT, home);
+        harness.state_mut().set_scheme(self.scheme);
         match self.start {
             Start::AtTheStallOfItsBuild => wait_for_the_stall_of_the_build(&mut harness),
             _ => testkit::settle(&mut harness),
@@ -198,6 +199,7 @@ impl Row {
         // The pointer is painted in the picture until a frame has run without it.
         harness.remove_cursor();
         harness.run_ok();
+        testkit::save_png(&mut harness, self.picture);
         harness
             .try_snapshot_options(self.picture, options)
             .map_err(|error| format!("{}: {error}", self.picture))

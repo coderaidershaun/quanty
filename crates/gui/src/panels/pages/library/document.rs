@@ -8,7 +8,7 @@ use crate::panels::PanelCx;
 use crate::panels::labels::NO_MEDIA;
 use crate::panels::pages::media_card;
 use crate::state::Contents;
-use crate::theme::{TextRole, Tone, space};
+use crate::theme::{self, TextRole, Tone, space};
 use crate::widgets::{Tab, TabStrip};
 use contract::{Document, DocumentView, Intent, Media};
 
@@ -46,18 +46,15 @@ fn header(ui: &mut egui::Ui, media: Option<&Media>, document: &Document) {
             ..
         }) => media_card::title_line(ui, title, *category, |_| ()),
         Some(_) => {
-            ui.label(TextRole::BodyStrong.rich(NO_MEDIA));
+            ui.label(TextRole::BodyStrong.rich(ui, NO_MEDIA));
         }
         None => {}
     }
-    ui.label(TextRole::Heading.rich(document.name().label()));
-    ui.label(TextRole::Small.rich(facts(document)));
+    ui.label(TextRole::Heading.rich(ui, document.name().label()));
+    ui.label(TextRole::Small.rich(ui, facts(document)));
     if document.ingested_items.is_none() {
-        ui.label(
-            TextRole::Small
-                .rich(NOT_WHOLE)
-                .color(Tone::Warning.swatch().text),
-        );
+        let warning_color = theme::palette(ui.ctx()).tone(Tone::Warning).text;
+        ui.label(TextRole::Small.rich(ui, NOT_WHOLE).color(warning_color));
     }
 }
 

@@ -7,6 +7,7 @@ mod footer;
 pub mod layout;
 mod model_picker;
 mod region;
+mod scheme_switch;
 mod shell;
 mod shortcuts;
 mod top_bar;

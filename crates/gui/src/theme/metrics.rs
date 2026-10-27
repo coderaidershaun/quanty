@@ -55,14 +55,17 @@ pub mod stroke {
 /// A shadow means a physical sheet of paper, so only the scanned page, a popup, a menu and the
 /// sheet that asks a question cast one.
 pub mod shadow {
-    use eframe::egui::{Color32, Shadow};
+    use crate::theme::Palette;
+    use eframe::egui::Shadow;
 
-    pub const SHEET: Shadow = Shadow {
-        offset: [0, 2],
-        blur: 10,
-        spread: 0,
-        color: Color32::from_rgba_unmultiplied_const(0x10, 0x0F, 0x0F, 0x1F),
-    };
+    pub fn sheet(palette: &Palette) -> Shadow {
+        Shadow {
+            offset: [0, 2],
+            blur: 10,
+            spread: 0,
+            color: palette.shadow,
+        }
+    }
 }
 
 /// Seconds.

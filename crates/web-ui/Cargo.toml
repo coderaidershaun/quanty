@@ -16,7 +16,7 @@ rfd.workspace = true
 serde_json.workspace = true
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
-web-sys = { workspace = true, features = ["Document", "Element", "Event", "EventTarget", "History", "HtmlCanvasElement", "KeyboardEvent", "Location", "Url", "Window", "console"] }
+web-sys = { workspace = true, features = ["CssStyleDeclaration", "Document", "Element", "Event", "EventTarget", "History", "HtmlCanvasElement", "HtmlElement", "KeyboardEvent", "Location", "Node", "NodeList", "Storage", "Url", "Window", "console"] }
 web-time.workspace = true
 # eframe can fall back to WebGL only when wgpu enables it.
 wgpu = { workspace = true, features = ["webgl"] }

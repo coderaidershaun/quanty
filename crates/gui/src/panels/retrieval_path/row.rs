@@ -4,7 +4,7 @@
 use eframe::egui;
 
 use super::steps::{Progress, Step};
-use crate::theme::{self, TextRole, color, size, space};
+use crate::theme::{self, Palette, TextRole, size, space};
 use crate::widgets::{StepMarker, StepState};
 
 const TITLE: f32 = TextRole::Label.line_height();
@@ -50,11 +50,11 @@ pub(super) fn show(
                 egui::pos2(left, top + TITLE),
                 egui::pos2(rect.right(), top + TWO_LINES),
             );
-            let (_, line_color) = tints(step.progress);
+            let (_, line_color) = tints(step.progress, theme::palette(ui.ctx()));
             label_in(
                 ui,
                 line_rect,
-                TextRole::Small.rich(&step.line).color(line_color),
+                TextRole::Small.rich(ui, &step.line).color(line_color),
             );
         }
         Density::Compact => {
@@ -87,10 +87,10 @@ fn title_line(
         egui::pos2(rect.left(), start.y),
         egui::pos2(rect.right(), start.y + TITLE),
     );
-    let (title_color, line_color) = tints(step.progress);
+    let (title_color, line_color) = tints(step.progress, theme::palette(ui.ctx()));
     let title_right = match &step.count {
         Some(text) => {
-            let count = TextRole::Small.rich(text).color(line_color);
+            let count = TextRole::Small.rich(ui, text).color(line_color);
             count_in(ui, line, count).rect.left() - space::SM
         }
         None => rect.right(),
@@ -99,15 +99,15 @@ fn title_line(
     label_in(
         ui,
         title_rect,
-        TextRole::Label.rich(step.title).color(title_color),
+        TextRole::Label.rich(ui, step.title).color(title_color),
     )
 }
 
 /// The colours of the title and of the line under it.
-fn tints(progress: Progress) -> (egui::Color32, egui::Color32) {
+fn tints(progress: Progress, palette: &Palette) -> (egui::Color32, egui::Color32) {
     match progress {
-        Progress::NotReached => (color::TEXT_SECONDARY, color::TEXT_SECONDARY),
-        Progress::Waiting | Progress::Taken => (color::TEXT, color::TEXT_SECONDARY),
+        Progress::NotReached => (palette.text_secondary, palette.text_secondary),
+        Progress::Waiting | Progress::Taken => (palette.text, palette.text_secondary),
     }
 }
 
@@ -117,7 +117,8 @@ pub(super) fn connect(ui: &egui::Ui, upper: egui::Rect, lower: egui::Rect) {
     let to = lower.center().y - HALF_STEP - space::XS;
     if to - from >= space::XS {
         let painter = ui.painter();
-        painter.vline(x, from..=to, theme::hairline(painter, color::HAIRLINE));
+        let line = theme::hairline(painter, theme::palette(painter.ctx()).hairline);
+        painter.vline(x, from..=to, line);
     }
 }
 

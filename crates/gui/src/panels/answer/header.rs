@@ -7,7 +7,7 @@ use super::pane::Pane;
 use super::phase::AnswerTab;
 use super::share;
 use crate::panels::labels::spent_text;
-use crate::theme::{self, TextRole, color, size, space};
+use crate::theme::{self, TextRole, size, space};
 use crate::widgets::{self, TabStrip};
 use contract::Usage;
 
@@ -57,7 +57,7 @@ pub(super) fn show(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>) {
     // The strip draws its own line under its tabs, but fades it while the strip is switched off.
     // The line is drawn again here, whole, so it looks the same across the row in every state.
     let painter = ui.painter();
-    let line = theme::hairline(painter, color::HAIRLINE);
+    let line = theme::hairline(painter, theme::palette(ui.ctx()).hairline);
     painter.hline(row.left()..=row.right(), row.bottom(), line);
 }
 
@@ -65,7 +65,8 @@ pub(super) fn show(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>) {
 /// as it does in a narrow pane, so it never covers one.
 fn spent_label(ui: &mut egui::Ui, usage: &Usage, tabs_end: f32) {
     let small = TextRole::Small;
-    let galley = small.galley(ui, &spent_text(usage), small.color());
+    let color = small.color(theme::palette(ui.ctx()));
+    let galley = small.galley(ui, &spent_text(usage), color);
     let room = ui.available_rect_before_wrap().right() - tabs_end - space::SM;
     if galley.size().x <= room {
         ui.add(egui::Label::new(galley).selectable(false));

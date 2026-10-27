@@ -3,7 +3,7 @@
 
 use eframe::egui;
 
-use crate::theme::{TextRole, color, radius, shadow, space, stroke};
+use crate::theme::{self, TextRole, radius, shadow, space, stroke};
 use crate::widgets::controls::Button;
 
 const CONFIRM_WIDTH: f32 = 360.0;
@@ -54,16 +54,17 @@ pub fn modal<R>(
     width: f32,
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> egui::ModalResponse<R> {
+    let palette = theme::palette(ctx);
     let frame = egui::Frame::NONE
-        .fill(color::SHEET)
-        .stroke(egui::Stroke::new(stroke::BORDER, color::BORDER))
+        .fill(palette.sheet)
+        .stroke(egui::Stroke::new(stroke::BORDER, palette.border))
         .corner_radius(radius::MD)
         .inner_margin(space::XL)
-        .shadow(shadow::SHEET);
+        .shadow(shadow::sheet(palette));
     let sides = frame.total_margin();
     let room = ctx.content_rect().width() - sides.left - sides.right - 2.0 * space::LG;
     let sheet = egui::Modal::new(id)
-        .backdrop_color(color::SCRIM)
+        .backdrop_color(palette.scrim)
         .frame(frame)
         .show(ctx, |ui| {
             if take_the_close_request(ui) {
@@ -129,9 +130,10 @@ impl<'a> Confirm<'a> {
     pub fn show(self, ctx: &egui::Context) -> Option<Choice> {
         let mut choice = None;
         let sheet = modal(ctx, self.id, CONFIRM_WIDTH, |ui| {
-            ui.label(TextRole::Heading.rich(self.title));
+            ui.label(TextRole::Heading.rich(ui, self.title));
             if let Some(body) = self.body {
-                ui.label(TextRole::Body.rich(body).color(color::TEXT_SECONDARY));
+                let secondary = theme::palette(ui.ctx()).text_secondary;
+                ui.label(TextRole::Body.rich(ui, body).color(secondary));
             }
             ui.add_space(space::MD);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

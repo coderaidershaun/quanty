@@ -6,8 +6,9 @@ use eframe::egui::{self, Rect, pos2, vec2};
 
 use super::balances;
 use super::layout::{Form, ShellRects};
+use super::scheme_switch;
 use crate::panels::PanelCx;
-use crate::theme::{self, TextRole, color, space};
+use crate::theme::{self, TextRole, space};
 use crate::widgets;
 use contract::Connection;
 
@@ -23,14 +24,15 @@ pub(super) fn draw(
     cx: &mut PanelCx<'_>,
 ) {
     let footer = rects.footer;
+    let palette = theme::palette(ui.ctx());
     let painter = ui.painter();
-    let line = theme::hairline(painter, color::HAIRLINE);
+    let line = theme::hairline(painter, palette.hairline);
     painter.hline(footer.x_range(), footer.top() + line.width / 2.0, line);
     let row = footer.shrink2(vec2(rects.form.gutter(), 0.0));
     let text = connection_text(connection);
     match rects.form {
         Form::Wide => wide(ui, row, &text, cx),
-        Form::Medium | Form::Compact => slim(ui, row, &text, cx),
+        Form::Medium | Form::Compact => slim(ui, row, &text, rects.form, cx),
     }
 }
 
@@ -38,10 +40,10 @@ fn wide(ui: &mut egui::Ui, row: Rect, text: &str, cx: &mut PanelCx<'_>) {
     let connection = Rect::from_min_max(pos2(row.right() - CONNECTION_WIDTH, row.top()), row.max);
     let accounts = Rect::from_min_max(row.min, pos2(connection.left() - space::LG, row.bottom()));
     balances::show(ui, accounts, cx);
-    ui.put(connection, egui::Label::new(TextRole::Small.rich(text)));
+    ui.put(connection, egui::Label::new(TextRole::Small.rich(ui, text)));
 }
 
-fn slim(ui: &mut egui::Ui, row: Rect, text: &str, cx: &mut PanelCx<'_>) {
+fn slim(ui: &mut egui::Ui, row: Rect, text: &str, form: Form, cx: &mut PanelCx<'_>) {
     let builder = egui::UiBuilder::new()
         .id_salt("footer row")
         .max_rect(row)
@@ -50,7 +52,7 @@ fn slim(ui: &mut egui::Ui, row: Rect, text: &str, cx: &mut PanelCx<'_>) {
         .scope_builder(builder, |ui| {
             let is_tapped = balances::slim(ui, cx);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.add(egui::Label::new(TextRole::Small.rich(text)).truncate());
+                ui.add(egui::Label::new(TextRole::Small.rich(ui, text)).truncate());
             });
             is_tapped
         })
@@ -68,7 +70,12 @@ fn slim(ui: &mut egui::Ui, row: Rect, text: &str, cx: &mut PanelCx<'_>) {
     .show(|ui| {
         balances::lines(ui, cx);
         widgets::separator(ui);
-        ui.label(TextRole::Small.rich(text));
+        ui.label(TextRole::Small.rich(ui, text));
+        // A medium window has the switch in its top bar. A compact one has no room there.
+        if form == Form::Compact {
+            widgets::separator(ui);
+            scheme_switch::row(ui, cx);
+        }
     });
 }
 

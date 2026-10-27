@@ -8,14 +8,14 @@ use crate::flows::recording::{self, Seen};
 use crate::flows::{
     Window, click, copied_by, has, is_enabled, node, node_in, panels, says, shared,
 };
-use contract::{Command, NoticeKind};
+use contract::{Command, Intent, NoticeKind};
 use eframe::egui::Rect;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::NodeT as _;
 use export::Format;
 use gui::app::layout::{DEFAULT_WINDOW, PHONE_WINDOW};
 use gui::testkit;
-use gui::theme::size;
+use gui::theme::{self, Scheme, size};
 
 pub(super) fn downloaded_file(harness: &Window, seen: &Seen) -> std::path::PathBuf {
     let download = shared(harness)
@@ -55,6 +55,7 @@ fn each_export_writes_the_download_that_the_browser_opens() {
         (Format::Markdown, "Export as Markdown…", "# Black–Scholes"),
         (Format::Html, "Export as HTML…", "<!DOCTYPE html>"),
     ];
+    let mut dark_exports = Vec::new();
     for (at, (format, item, beginning)) in starts.into_iter().enumerate() {
         if at > 0 {
             click(&mut harness, Role::Button, "Share");
@@ -76,6 +77,7 @@ fn each_export_writes_the_download_that_the_browser_opens() {
             "the {} file starts with {beginning}",
             format.name()
         );
+        dark_exports.push(written);
         let notice = shared(&harness)
             .notices
             .first()
@@ -97,6 +99,28 @@ fn each_export_writes_the_download_that_the_browser_opens() {
     assert_eq!(
         seen.count(|command| matches!(command, Command::Export { .. })),
         3
+    );
+
+    harness.state_mut().push(Intent::SwitchScheme);
+    testkit::settle(&mut harness);
+    assert_eq!(shared(&harness).scheme, Scheme::Light);
+    assert_eq!(theme::scheme(&harness.ctx), Scheme::Light);
+    for ((format, item, _), dark) in starts.into_iter().zip(&dark_exports) {
+        click(&mut harness, Role::Button, "Share");
+        click(&mut harness, Role::Button, item);
+        let light = std::fs::read(downloaded_file(&harness, &seen)).expect("the file is written");
+        assert!(
+            light == *dark,
+            "the {} file written while the window is light ({} bytes) differs from the one written while it was dark ({} bytes)",
+            format.name(),
+            light.len(),
+            dark.len()
+        );
+    }
+    assert_eq!(
+        seen.count(|command| matches!(command, Command::Export { .. })),
+        6,
+        "each format was exported again"
     );
 }
 

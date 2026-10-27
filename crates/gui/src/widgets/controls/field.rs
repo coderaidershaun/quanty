@@ -3,10 +3,10 @@
 
 use std::ops::RangeInclusive;
 
-use eframe::egui::{self, Align, CornerRadius, Margin, Response, Stroke};
+use eframe::egui::{self, Align, Color32, CornerRadius, Margin, Response, Stroke};
 
 use super::Button;
-use crate::theme::{Icon, TextRole, color, radius, size, space, stroke};
+use crate::theme::{self, Icon, TextRole, radius, size, space, stroke};
 use crate::widgets::ControlSize;
 use crate::widgets::look::focus_ring;
 
@@ -86,11 +86,12 @@ impl<'a> TextInput<'a> {
         let inner_width = (outer_width - 2.0 * (space::MD + stroke::BORDER)).max(0.0);
         let inner_height = self.size.height() - 2.0 * stroke::BORDER;
         let label = self.label;
+        let palette = theme::palette(ui.ctx());
         // The frame makes room for its border when it begins, so the border gets its width
         // here, and only its colour changes once the focus is known.
         let mut frame = egui::Frame::NONE
-            .fill(color::SHEET)
-            .stroke(Stroke::new(stroke::BORDER, color::BORDER))
+            .fill(palette.sheet)
+            .stroke(Stroke::new(stroke::BORDER, palette.border))
             .corner_radius(radius::SM)
             .inner_margin(Margin::from(egui::vec2(space::MD, 0.0)))
             .begin(ui);
@@ -105,7 +106,7 @@ impl<'a> TextInput<'a> {
             .inner;
         let has_focus = response.has_focus();
         if has_focus {
-            frame.frame.stroke.color = color::RULE;
+            frame.frame.stroke.color = palette.rule;
         }
         let outer = frame.end(ui).rect;
         if has_focus {
@@ -139,7 +140,7 @@ impl<'a> TextInput<'a> {
                 ui.painter(),
                 rect.center(),
                 size::ICON_MD,
-                color::TEXT_SECONDARY,
+                theme::palette(ui.ctx()).text_secondary,
             );
         }
         let after = self
@@ -224,9 +225,10 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
 
     pub fn show(self, ui: &mut egui::Ui) -> Option<usize> {
         let chosen_text = self.selected.and_then(|index| self.options.get(index));
+        let muted = theme::palette(ui.ctx()).text_muted;
         let shown = match chosen_text {
             Some(option) => egui::RichText::new(option.as_ref()),
-            None => egui::RichText::new(self.placeholder).color(color::TEXT_MUTED),
+            None => egui::RichText::new(self.placeholder).color(muted),
         };
         let mut chosen = None;
         let response = ui
@@ -263,7 +265,7 @@ pub fn paint_caret(ui: &egui::Ui, rect: egui::Rect, _: &egui::style::WidgetVisua
         ui.painter(),
         rect.center(),
         size::ICON_SM,
-        color::TEXT_SECONDARY,
+        theme::palette(ui.ctx()).text_secondary,
     );
 }
 
@@ -288,18 +290,19 @@ impl<'a> Slider<'a> {
                 // The stock slider paints its rail and the knob at rest from the same field, so
                 // the knob is a rail-coloured disc with an ink ring, and it fills with ink while
                 // the pointer is on it. The rail has square ends, like a progress bar.
+                let palette = theme::palette(ui.ctx());
                 let visuals = ui.visuals_mut();
-                visuals.selection.bg_fill = color::INK;
-                visuals.widgets.inactive.bg_fill = color::HAIRLINE;
+                visuals.selection.bg_fill = palette.ink;
+                visuals.widgets.inactive.bg_fill = palette.hairline;
                 visuals.widgets.inactive.corner_radius = CornerRadius::ZERO;
-                visuals.widgets.hovered.bg_fill = color::INK_HOVER;
-                visuals.widgets.active.bg_fill = color::INK_PRESSED;
+                visuals.widgets.hovered.bg_fill = palette.ink_hover;
+                visuals.widgets.active.bg_fill = palette.ink_pressed;
                 for state in [
                     &mut visuals.widgets.inactive,
                     &mut visuals.widgets.hovered,
                     &mut visuals.widgets.active,
                 ] {
-                    state.fg_stroke = Stroke::new(stroke::FOCUS, color::INK);
+                    state.fg_stroke = Stroke::new(stroke::FOCUS, palette.ink);
                 }
                 ui.add(egui::Slider::new(&mut self.value, self.range).show_value(false))
             })
@@ -359,14 +362,18 @@ impl<'a> Stepper<'a> {
 
     pub fn show(self, ui: &mut egui::Ui) -> Option<Step> {
         let mut step = None;
+        let palette = theme::palette(ui.ctx());
         egui::Frame::NONE
-            .fill(color::SHEET)
-            .stroke(Stroke::new(stroke::BORDER, color::BORDER))
+            .fill(palette.sheet)
+            .stroke(Stroke::new(stroke::BORDER, palette.border))
             .corner_radius(radius::SM)
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 let side = self.size.height();
-                let text_width = TextRole::Body.galley(ui, self.text, color::TEXT).size().x;
+                let text_width = TextRole::Body
+                    .galley(ui, self.text, Color32::PLACEHOLDER)
+                    .size()
+                    .x;
                 let middle = egui::vec2(text_width.max(STEPPER_TEXT_WIDTH), side);
                 let whole = egui::vec2(side + middle.x + side, side);
                 // A row takes the direction of the layout around it, so in a right-to-left
@@ -397,7 +404,7 @@ impl<'a> Stepper<'a> {
                 // A label in a column wraps at the width it is given, and the room may be
                 // rounded to a hair less than the text.
                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-                ui.label(TextRole::Body.rich(self.text))
+                ui.label(TextRole::Body.rich(ui, self.text))
             },
         );
         let (label, is_enabled) = self.next;

@@ -102,9 +102,11 @@ impl Ruler {
     pub(super) fn by_part(ui: &Ui, parts: &[(String, TextFormat)]) -> Ruler {
         let (mut lefts, mut rights, mut x) = (Vec::new(), Vec::new(), 0.0);
         for (text, format) in parts {
-            let galley =
-                ui.painter()
-                    .layout_no_wrap(text.clone(), format.font_id.clone(), Color32::WHITE);
+            let galley = ui.painter().layout_no_wrap(
+                text.clone(),
+                format.font_id.clone(),
+                Color32::PLACEHOLDER,
+            );
             let width = galley.size().x;
             let chars = text.chars().count();
             for index in 0..chars {

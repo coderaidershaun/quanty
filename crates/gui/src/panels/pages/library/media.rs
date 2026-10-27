@@ -8,7 +8,7 @@ use crate::panels::PanelCx;
 use crate::panels::labels::NO_MEDIA;
 use crate::panels::pages::media_card::{self, Pencil};
 use crate::state::MediaDelete;
-use crate::theme::{TextRole, color, space};
+use crate::theme::{self, TextRole, space};
 use crate::widgets::Notice;
 use contract::{Failure, Media, is_same_name};
 
@@ -42,8 +42,11 @@ pub(super) fn show(ui: &mut egui::Ui, media: &Media, local: &mut Local, cx: &mut
             }
             ui.add_space(space::SM);
             match media.documents.len() {
-                0 => ui.label(TextRole::Small.rich(NO_DOCUMENT).color(color::TEXT_MUTED)),
-                count => ui.label(TextRole::Small.rich(documents_text(count))),
+                0 => {
+                    let note_color = theme::palette(ui.ctx()).text_muted;
+                    ui.label(TextRole::Small.rich(ui, NO_DOCUMENT).color(note_color))
+                }
+                count => ui.label(TextRole::Small.rich(ui, documents_text(count))),
             };
         });
 }
@@ -57,7 +60,7 @@ fn documents_text(count: usize) -> String {
 
 fn header(ui: &mut egui::Ui, media: &Media, local: &mut Local, cx: &PanelCx<'_>) {
     let Some(title) = media.title.as_deref() else {
-        ui.label(TextRole::BodyStrong.rich(NO_MEDIA));
+        ui.label(TextRole::BodyStrong.rich(ui, NO_MEDIA));
         return;
     };
     let is_open = matches!(&local.form, Some(Form::Media(draft)) if draft.is_for(title));

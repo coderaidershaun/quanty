@@ -2,7 +2,7 @@
 
 use eframe::egui::{self, FontId, Response};
 
-use crate::theme::{TextRole, color};
+use crate::theme::{self, TextRole};
 
 const WORDMARK_SIZE: f32 = 20.0;
 
@@ -14,6 +14,6 @@ pub fn logo(ui: &mut egui::Ui) -> Response {
     ui.label(
         egui::RichText::new("Quanty")
             .font(font)
-            .color(color::TEXT_HEADING),
+            .color(theme::palette(ui.ctx()).text_heading),
     )
 }

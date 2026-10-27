@@ -168,43 +168,43 @@ impl Palette {
     };
 
     pub const DARK: Palette = {
-        let text_on_ink = rgb(0x100F0F);
+        let text_on_ink = rgb(0x0B141B);
         Palette {
-            desk: rgb(0x100F0F),
-            sheet: rgb(0x1C1B1A),
-            well: rgb(0x282726),
-            well_deep: rgb(0x343331),
-            hairline: rgb(0x343331),
-            border: rgb(0x757470),
-            rule: rgb(0xCECDC3),
-            text: rgb(0xCECDC3),
-            text_heading: rgb(0xE6E4D9),
-            text_secondary: rgb(0xA8A69F),
-            text_muted: rgb(0x95938C),
-            text_faint: rgb(0x575653),
+            desk: rgb(0x0B141B),
+            sheet: rgb(0x111B23),
+            well: rgb(0x17232D),
+            well_deep: rgb(0x2B3A46),
+            hairline: rgb(0x242D35),
+            border: rgb(0x516979),
+            rule: rgb(0xE8EDF1),
+            text: rgb(0xE8EDF1),
+            text_heading: rgb(0xF3F7FA),
+            text_secondary: rgb(0xAEBCC5),
+            text_muted: rgb(0x8D9BA7),
+            text_faint: rgb(0x54626D),
             text_on_ink,
-            ink: rgb(0xCECDC3),
-            ink_hover: rgb(0xB7B5AC),
-            ink_pressed: rgb(0xE6E4D9),
+            ink: rgb(0x3D8BFF),
+            ink_hover: rgb(0x5C9DFF),
+            ink_pressed: rgb(0x1E79FF),
             page: rgb(0xFFFFFF),
-            focus: rgb(0x4385BE),
-            selection: rgb(0x163B66),
-            scrim: rgba(0x100F0F, 0x99),
-            page_highlight: rgba(0xD4574A, 0x1F),
+            focus: rgb(0x8CC4FF),
+            selection: rgb(0x1C375A),
+            scrim: rgba(0x0B141B, 0xB8),
+            page_highlight: rgba(0xFF5E53, 0x1F),
             shadow: rgba(0x000000, 0x66),
             tones: tones(
                 text_on_ink,
                 [
-                    [0xB7B5AC, 0xCECDC3, 0x282726, 0x6F6E69],
-                    [0xD4574A, 0xE8705F, 0x3E1715, 0xAF3029],
-                    [0x4385BE, 0x66A0C8, 0x12253B, 0x205EA6],
-                    [0x8B7EC8, 0xA699D0, 0x261C39, 0x5E409D],
-                    [0x3AA99F, 0x5ABDAC, 0x122F2C, 0x24837B],
-                    [0xD0A215, 0xDFB431, 0x3A2D04, 0xAD8301],
-                    [0xCE5D97, 0xE47DA8, 0x39172B, 0xA02F6F],
-                    [0x879A39, 0xA0AF54, 0x252D09, 0x66800B],
-                    [0xDA702C, 0xEC8B49, 0x40200D, 0xBC5215],
-                    [0xD4574A, 0xE8705F, 0x3E1715, 0xAF3029],
+                    [0xAEBCC5, 0xE8EDF1, 0x17232D, 0x34444E],
+                    [0xFF5E53, 0xFF7B72, 0x372A30, 0x704143],
+                    [0x3D8BFF, 0x8CC4FF, 0x182D46, 0x224677],
+                    [0xA371F7, 0xD2A8FF, 0x282945, 0x483C74],
+                    [0x39C5CF, 0x76E3EA, 0x17363F, 0x205C64],
+                    [0xE6BC83, 0xE6BC83, 0x333532, 0x625847],
+                    [0xDB61A2, 0xF778BA, 0x312637, 0x5E3653],
+                    [0x3DDC97, 0x3DDC97, 0x183A36, 0x22644F],
+                    [0xE6BC83, 0xE6BC83, 0x333532, 0x625847],
+                    [0xFF7B72, 0xFF7B72, 0x372A30, 0x704143],
                 ],
             ),
         }
@@ -212,5 +212,136 @@ impl Palette {
 
     pub const fn tone(&self, tone: Tone) -> Swatch {
         self.tones[tone as usize]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const GROUND: Color32 = rgb(0x0B141B);
+    const SURFACE: Color32 = rgb(0x111B23);
+    const SURFACE_2: Color32 = rgb(0x17232D);
+    const FG: Color32 = rgb(0xE8EDF1);
+    const MUTED: Color32 = rgb(0x8D9BA7);
+    const ON_USER: Color32 = rgb(0xF3F7FA);
+    const SECONDARY_TEXT: Color32 = rgb(0xAEBCC5);
+    const CONTROL_BORDER: Color32 = rgb(0x34444E);
+    const SWITCH_TRACK: Color32 = rgb(0x2B3A46);
+    const ACCENT: Color32 = rgb(0x3D8BFF);
+    const LINK: Color32 = rgb(0x8CC4FF);
+    const FOCUS: Color32 = rgb(0x8CC4FF);
+    const DANGER: Color32 = rgb(0xFF7B72);
+    const OK: Color32 = rgb(0x3DDC97);
+    const AMBER: Color32 = rgb(0xE6BC83);
+
+    /// Jet's danger red is 2.5:1 on the white scanned page, and the outline of the cited figure
+    /// needs 3:1, so Rubric's solid is the same red a little darker.
+    const RUBRIC_SOLID: u32 = 0xFF5E53;
+
+    /// A colour drawn at `alpha` over `SURFACE`, as one opaque colour: how Jet's washes and
+    /// outlines look on its sheet.
+    fn over_surface(colour: Color32, alpha: f64) -> Color32 {
+        let flatten = |over: u8, under: u8| {
+            (f64::from(under) + (f64::from(over) - f64::from(under)) * alpha).round() as u8
+        };
+        Color32::from_rgb(
+            flatten(colour.r(), SURFACE.r()),
+            flatten(colour.g(), SURFACE.g()),
+            flatten(colour.b(), SURFACE.b()),
+        )
+    }
+
+    /// Every dark colour taken from Jet's style sheet is checked against its Jet colour. Colours
+    /// that Jet does not have, such as the solids and texts of Purple, Verdigris and Madder, are
+    /// left out, but those tones still make their washes and edges the way Jet does.
+    #[test]
+    fn the_dark_palette_takes_jets_colours() {
+        let dark = Palette::DARK;
+        let ink = dark.tone(Tone::Ink);
+        let rubric = dark.tone(Tone::Rubric);
+        let indigo = dark.tone(Tone::Indigo);
+        let purple = dark.tone(Tone::Purple);
+        let verdigris = dark.tone(Tone::Verdigris);
+        let ochre = dark.tone(Tone::Ochre);
+        let madder = dark.tone(Tone::Madder);
+        let success = dark.tone(Tone::Success);
+        let warning = dark.tone(Tone::Warning);
+        let danger = dark.tone(Tone::Danger);
+        let line = over_surface(Color32::WHITE, 0.08);
+
+        let rows = [
+            ("desk", dark.desk, GROUND),
+            ("sheet", dark.sheet, SURFACE),
+            ("well", dark.well, SURFACE_2),
+            ("well_deep", dark.well_deep, SWITCH_TRACK),
+            ("hairline", dark.hairline, line),
+            // Jet's control border is 1.7:1 on the sheet, and the outline of a control needs
+            // 3:1, so this is the same hue and saturation, lighter.
+            ("border", dark.border, rgb(0x516979)),
+            ("rule", dark.rule, FG),
+            ("text", dark.text, FG),
+            ("text_heading", dark.text_heading, ON_USER),
+            ("text_secondary", dark.text_secondary, SECONDARY_TEXT),
+            ("text_muted", dark.text_muted, MUTED),
+            ("text_on_ink", dark.text_on_ink, GROUND),
+            ("ink", dark.ink, ACCENT),
+            ("focus", dark.focus, FOCUS),
+            ("selection", dark.selection, over_surface(ACCENT, 0.25)),
+            // Jet's veil is the ground colour at .72 opacity, and .72 of 255 is 184.
+            ("scrim", dark.scrim, rgba(0x0B141B, 184)),
+            (
+                "page_highlight",
+                dark.page_highlight,
+                rgba(RUBRIC_SOLID, 0x1F),
+            ),
+            // Jet's shadow is black at .4 opacity, and .4 of 255 is 102.
+            ("shadow", dark.shadow, rgba(0x000000, 102)),
+            ("Ink solid", ink.solid, SECONDARY_TEXT),
+            ("Ink text", ink.text, FG),
+            ("Ink wash", ink.wash, SURFACE_2),
+            ("Ink edge", ink.edge, CONTROL_BORDER),
+            ("Rubric solid", rubric.solid, rgb(RUBRIC_SOLID)),
+            ("Rubric text", rubric.text, DANGER),
+            ("Rubric wash", rubric.wash, over_surface(DANGER, 0.16)),
+            ("Rubric edge", rubric.edge, over_surface(DANGER, 0.4)),
+            ("Indigo solid", indigo.solid, ACCENT),
+            ("Indigo text", indigo.text, LINK),
+            ("Indigo wash", indigo.wash, over_surface(ACCENT, 0.16)),
+            ("Indigo edge", indigo.edge, over_surface(ACCENT, 0.38)),
+            ("Purple wash", purple.wash, over_surface(purple.solid, 0.16)),
+            ("Purple edge", purple.edge, over_surface(purple.solid, 0.38)),
+            (
+                "Verdigris wash",
+                verdigris.wash,
+                over_surface(verdigris.solid, 0.16),
+            ),
+            (
+                "Verdigris edge",
+                verdigris.edge,
+                over_surface(verdigris.solid, 0.38),
+            ),
+            ("Ochre solid", ochre.solid, AMBER),
+            ("Ochre text", ochre.text, AMBER),
+            ("Ochre wash", ochre.wash, over_surface(AMBER, 0.16)),
+            ("Ochre edge", ochre.edge, over_surface(AMBER, 0.38)),
+            ("Madder wash", madder.wash, over_surface(madder.solid, 0.16)),
+            ("Madder edge", madder.edge, over_surface(madder.solid, 0.38)),
+            ("Success solid", success.solid, OK),
+            ("Success text", success.text, OK),
+            ("Success wash", success.wash, over_surface(OK, 0.16)),
+            ("Success edge", success.edge, over_surface(OK, 0.38)),
+            ("Warning solid", warning.solid, AMBER),
+            ("Warning text", warning.text, AMBER),
+            ("Warning wash", warning.wash, over_surface(AMBER, 0.16)),
+            ("Warning edge", warning.edge, over_surface(AMBER, 0.38)),
+            ("Danger solid", danger.solid, DANGER),
+            ("Danger text", danger.text, DANGER),
+            ("Danger wash", danger.wash, over_surface(DANGER, 0.16)),
+            ("Danger edge", danger.edge, over_surface(DANGER, 0.4)),
+        ];
+        for (name, ours, expected) in rows {
+            assert_eq!(ours, expected, "{name}");
+        }
     }
 }

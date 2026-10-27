@@ -18,6 +18,6 @@
   "id": "./index.html",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#100f0f",
-  "theme_color": "#100f0f"
+  "background_color": "#0b141b",
+  "theme_color": "#0b141b"
 }

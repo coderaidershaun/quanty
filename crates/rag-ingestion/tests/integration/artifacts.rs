@@ -173,6 +173,34 @@ async fn chapter_artifacts_persist_and_resume() {
 }
 
 #[tokio::test]
+async fn artifact_requests_above_the_old_budget_can_finish() {
+    use rag_ingestion::{ArtifactState, assess_artifacts};
+
+    let folder = chapter();
+    std::fs::write(
+        folder.path().join("page-num-1/text.md"),
+        "é".repeat(450_000),
+    )
+    .unwrap();
+    assert_eq!(
+        assess_artifacts(folder.path()).state,
+        ArtifactState::Missing
+    );
+    let llm = StandInLlm::replying_to_questions(|question, _| {
+        let bytes = question.input.len() + question.schema.len() + question.system_prompt.len();
+        assert!(bytes > 100_000 && bytes <= 1_000_000, "{bytes}");
+        Ok(answer(question))
+    });
+    let summary = ArtifactWriter::new(llm.clone())
+        .write_missing(folder.path())
+        .await
+        .unwrap();
+    assert_eq!(summary.written, 1);
+    assert_eq!(llm.calls(), 1);
+    assert_eq!(assess_artifacts(folder.path()).state, ArtifactState::Ready);
+}
+
+#[tokio::test]
 async fn invalid_or_oversized_artifact_requests_cannot_finish() {
     use rag_ingestion::{ArtifactError, ArtifactState, assess_artifacts};
     let folder = chapter();
@@ -210,10 +238,11 @@ async fn invalid_or_oversized_artifact_requests_cannot_finish() {
     }
     let retry_too_large = StandInLlm::replying_to_questions(|question, _| {
         assert!(
-            question.input.len() + question.schema.len() + question.system_prompt.len() <= 100_000
+            question.input.len() + question.schema.len() + question.system_prompt.len()
+                <= 1_000_000
         );
         let mut value = answer(question);
-        value["artifacts"][0]["id"] = json!("unknown".repeat(20_000));
+        value["artifacts"][0]["id"] = json!("unknown".repeat(200_000));
         Ok(value)
     });
     let mut reported = rag_core::UsageTally::default();
@@ -256,7 +285,11 @@ async fn invalid_or_oversized_artifact_requests_cannot_finish() {
         .unwrap_err();
     assert!(error.stops_the_run());
     assert_eq!(systemic.calls(), 1);
-    std::fs::write(folder.path().join("page-num-1/text.md"), "é".repeat(60_000)).unwrap();
+    std::fs::write(
+        folder.path().join("page-num-1/text.md"),
+        "é".repeat(600_000),
+    )
+    .unwrap();
     let llm = StandInLlm::replying_to_questions(|q, _| Ok(answer(q)));
     assert_eq!(
         assess_artifacts(folder.path()).state,
@@ -273,7 +306,7 @@ async fn invalid_or_oversized_artifact_requests_cannot_finish() {
     std::fs::write(no_targets.path().join("page-num-1/page.json"),json!({"format-version":1,"page-position":1,"pieces":[{"number":2,"kind":"text","file":"text.md"}]}).to_string()).unwrap();
     std::fs::write(
         no_targets.path().join("page-num-1/text.md"),
-        "x".repeat(120_000),
+        "x".repeat(1_200_000),
     )
     .unwrap();
     assert_eq!(

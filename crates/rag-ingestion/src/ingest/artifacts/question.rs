@@ -8,7 +8,7 @@ use serde::Deserialize;
 pub(super) const PROMPT: &str = include_str!("prompts/metadata.md");
 pub(super) const SCHEMA: &str = include_str!("prompts/metadata.schema.json");
 /// Conservative local UTF-8 budget, not a provider token count.
-pub(super) const MAX_BYTES: usize = 100_000;
+pub(super) const MAX_BYTES: usize = 1_000_000;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

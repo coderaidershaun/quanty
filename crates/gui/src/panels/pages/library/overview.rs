@@ -3,12 +3,12 @@
 
 use eframe::egui;
 
-use super::{Form, Local, can_edit, delete, is_narrow, tags_form};
-use crate::panels::PanelCx;
+use super::{Form, Local, can_edit, delete, tags_form, width};
 use crate::panels::labels::TAGS;
+use crate::panels::{PanelCx, PanelWidth};
 use crate::state::Busy;
 use crate::theme::{Icon, TextRole, color, space};
-use crate::widgets::{Button, Chip, ControlSize, Notice};
+use crate::widgets::{Button, Chip, Notice};
 use contract::{Document, Intent};
 
 const NO_TAGS: &str = "No tags";
@@ -68,12 +68,8 @@ fn buttons(
     local: &mut Local,
     cx: &mut PanelCx<'_>,
 ) {
-    let is_narrow = is_narrow(ui);
-    let size = if is_narrow {
-        ControlSize::Medium
-    } else {
-        ControlSize::Small
-    };
+    let panel = width(ui);
+    let size = panel.control_size();
     let row = |ui: &mut egui::Ui| {
         let copy = Button::ghost(COPY_ID).icon(Icon::COPY).size(size);
         if ui.add(copy).clicked() {
@@ -110,7 +106,7 @@ fn buttons(
             local.question = Some(delete::Question::of_document(document));
         }
     };
-    if is_narrow {
+    if panel == PanelWidth::Narrow {
         ui.horizontal_wrapped(row);
     } else {
         ui.horizontal(row);

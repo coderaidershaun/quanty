@@ -20,6 +20,8 @@
   <sub>The app in the browser on its built-in <code>black-scholes</code> fixture: sample data, no store, no model, no cost. The screenshot awaits an update by the owner.</sub>
 </p>
 
+The browser UI also works on phones and tablets. On a phone it shows one view at a time, and a bar along the bottom moves between the Answer, its Source, the Graph, the Path and Follow up. On a tablet the Answer stands beside one side panel. The back gesture, or the browser's Back button, steps back inside the app.
+
 ## Why quanty
 
 On their own, LLMs cannot be trusted to automate post-trade analysis research: they hallucinate math and are not (yet) masters of quantitative trading end to end. A quant research team can instead give its agents a trusted knowledge base that it owns as its IP and moat.

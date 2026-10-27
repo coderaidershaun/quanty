@@ -13,12 +13,8 @@ use contract::{self, Intent};
 
 const TABS_WIDTH: f32 = 300.0;
 const LOGO_WIDTH: f32 = 120.0;
-// SMELL: the layout of the panels and the footer keep their own copies of these gutters, so a
-// change to the edge of the window must be made in each of them. One shared constant would end it.
-const GUTTER: f32 = space::LG;
+/// The space between the logo, the tabs and the model choices, in every form.
 const GAP: f32 = space::MD;
-/// A compact window is narrow, so it spends less on the space at the edges of the bar.
-const COMPACT_GUTTER: f32 = space::SM;
 
 /// Where each part of the top bar stands.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -35,13 +31,8 @@ pub(super) struct Places {
 /// logo shows only when it fits, and the dropdowns become one button unless a medium window has
 /// the room for them.
 pub(super) fn places(bar: Rect, form: Form) -> Places {
-    let gutter = if form == Form::Compact {
-        COMPACT_GUTTER
-    } else {
-        GUTTER
-    };
-    let left = bar.left() + gutter;
-    let right = bar.right() - gutter;
+    let left = bar.left() + form.gutter();
+    let right = bar.right() - form.gutter();
     let centre = bar.center();
     let control_top = centre.y - size::CONTROL_MD / 2.0;
     let dropdowns = Rect::from_min_max(

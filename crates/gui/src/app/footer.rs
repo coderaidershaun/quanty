@@ -26,7 +26,7 @@ pub(super) fn draw(
     let painter = ui.painter();
     let line = theme::hairline(painter, color::HAIRLINE);
     painter.hline(footer.x_range(), footer.top() + line.width / 2.0, line);
-    let row = footer.shrink2(vec2(space::LG, 0.0));
+    let row = footer.shrink2(vec2(rects.form.gutter(), 0.0));
     let text = connection_text(connection);
     match rects.form {
         Form::Wide => wide(ui, row, &text, cx),

@@ -3,13 +3,14 @@
 //! can be read and tapped.
 
 use contract::{AnswerBlock, ItemKind};
+use eframe::egui::Rect;
 use eframe::egui::accesskit::Role;
-use eframe::egui::{Pos2, Rect, Vec2};
 use egui_kittest::kittest::Queryable as _;
 use gui::app::layout::{PHONE_WINDOW, SMALLEST_WINDOW};
 use gui::testkit;
 use gui::theme::size;
 
+use crate::flows::fit;
 use crate::flows::{Window, click_in, node_in, panels, shared};
 
 #[test]
@@ -81,8 +82,8 @@ fn assert_nothing_runs_past(harness: &Window, answer: Rect) {
     for clipped in &harness.output().shapes {
         let clip = clipped.clip_rect;
         let bounds = clipped.shape.visual_bounding_rect();
-        let is_the_panes_own =
-            answer.expand(0.5).contains_rect(clip) && (clip.left() - answer.left()).abs() <= 0.5;
+        let is_the_panes_own = answer.expand(fit::SLACK).contains_rect(clip)
+            && (clip.left() - answer.left()).abs() <= fit::SLACK;
         if !is_the_panes_own || !bounds.is_finite() || bounds.width() < 0.0 || bounds.height() < 0.0
         {
             continue;
@@ -92,7 +93,7 @@ fn assert_nothing_runs_past(harness: &Window, answer: Rect) {
             "{:.100} runs past the pane {answer:?}",
             format!("{:?}", clipped.shape)
         );
-        if clip.top() > answer.top() + 0.5 {
+        if clip.top() > answer.top() + fit::SLACK {
             of_the_body += 1;
         }
     }
@@ -129,7 +130,7 @@ fn assert_figure_text_stands_under_its_picture(harness: &Window, answer: Rect) {
     for label in in_card(Role::Label) {
         let top = label.rect().top();
         assert!(
-            top < picture.top() - 0.5 || top >= picture.bottom() - 0.5,
+            top < picture.top() - fit::SLACK || top >= picture.bottom() - fit::SLACK,
             "a label at {:?} stands beside the picture {picture:?}",
             label.rect()
         );
@@ -143,6 +144,10 @@ fn a_phone_shows_each_suggested_question_whole_and_asks_it() {
     let rects = panels(PHONE_WINDOW);
     let nav = rects.bottom_nav.expect("a phone has a bottom navigation");
     click_in(&mut harness, Role::Tab, "Follow up", nav);
+    let send = node_in(&harness, Role::Button, "Ask follow-up", rects.follow_up)
+        .expect("the question box has a send button")
+        .rect();
+    fit::assert_finger_sized("Ask follow-up", send, size::CONTROL_MD);
 
     let answer = shared(&harness)
         .ask
@@ -150,29 +155,25 @@ fn a_phone_shows_each_suggested_question_whole_and_asks_it() {
         .ready()
         .expect("an answer")
         .clone();
-    let panel = rects.follow_up.expand(0.5);
-    let screen = Rect::from_min_size(Pos2::ZERO, Vec2::from(PHONE_WINDOW)).expand(0.5);
     let rows: Vec<Rect> = answer
         .follow_ups
         .iter()
         .map(|question| node_in(&harness, Role::Button, question, rects.follow_up))
         .map(|row| row.expect("a row for the suggestion").rect())
         .collect();
-    for (question, row) in answer.follow_ups.iter().zip(&rows) {
-        assert!(
-            panel.contains_rect(*row) && screen.contains_rect(*row),
-            "`{question}` {row:?}"
-        );
-        assert!(
-            row.height() >= size::CONTROL_MD,
-            "`{question}` is {} tall",
-            row.height()
-        );
+    let parts: Vec<(String, Rect)> = answer
+        .follow_ups
+        .iter()
+        .cloned()
+        .zip(rows.clone())
+        .collect();
+    fit::assert_inside_and_apart(&parts, rects.follow_up, fit::window_rect(PHONE_WINDOW));
+    for (question, row) in &parts {
+        fit::assert_finger_sized(question, *row, size::CONTROL_MD);
     }
     assert!(
-        rows.windows(2)
-            .all(|pair| pair[0].bottom() <= pair[1].top() + 0.5),
-        "the rows do not overlap: {rows:?}"
+        rows.is_sorted_by(|above, below| above.top() < below.top()),
+        "the rows stand from the top down in the order of the suggestions: {rows:?}"
     );
     testkit::save_png(&mut harness, "phone-follow-up-rows");
 

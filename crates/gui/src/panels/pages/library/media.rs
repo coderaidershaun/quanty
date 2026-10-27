@@ -3,13 +3,13 @@
 
 use eframe::egui;
 
-use super::{Form, Local, can_edit, delete, is_narrow, media_form};
+use super::{Form, Local, can_edit, delete, media_form, width};
 use crate::panels::PanelCx;
 use crate::panels::labels::NO_MEDIA;
 use crate::panels::pages::media_card::{self, Pencil};
 use crate::state::MediaDelete;
 use crate::theme::{TextRole, color, space};
-use crate::widgets::{ControlSize, Notice};
+use crate::widgets::Notice;
 use contract::{Failure, Media, is_same_name};
 
 const NO_DOCUMENT: &str = "No document yet. Add one on the Ingest tab.";
@@ -71,19 +71,19 @@ fn header(ui: &mut egui::Ui, media: &Media, local: &mut Local, cx: &PanelCx<'_>)
     let library = &cx.shared.library;
     let name = format!("Delete media {title}");
     // The width is measured here and not in the title line, which has only what its title leaves.
+    let size = width(ui).control_size();
     let delete = delete::DeleteButton {
         name: &name,
         is_busy: is_being_deleted(title, &library.media_delete),
-        size: if is_narrow(ui) {
-            ControlSize::Medium
-        } else {
-            ControlSize::Small
-        },
+        size,
     };
     let (is_delete_pressed, is_pencil_pressed) =
         media_card::title_line(ui, title, media.category, |ui| {
             let is_delete_pressed = delete.show(ui, cx.shared);
-            (is_delete_pressed, media_card::pencil(ui, title, pencil))
+            (
+                is_delete_pressed,
+                media_card::pencil(ui, title, pencil, size),
+            )
         });
     if is_delete_pressed && let Some(catalogue) = library.catalogue.ready() {
         local.question = Some(delete::Question::of_media(title, catalogue));

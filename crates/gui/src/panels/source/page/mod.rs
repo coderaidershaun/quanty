@@ -7,12 +7,12 @@ mod zoom_bar;
 
 use eframe::egui;
 
-use super::PanelWidth;
 use super::row;
 use super::states::whole_area;
 use super::tabs::TabCx;
 use crate::media::Media;
 use crate::media::images::{self, ImageState, Picture};
+use crate::panels::PanelWidth;
 use crate::theme::space;
 use crate::widgets::Placeholder;
 use canvas::{Figure, Shown};

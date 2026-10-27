@@ -4,12 +4,12 @@
 
 use eframe::egui;
 
-use super::is_narrow;
+use super::width;
 use crate::media::math::{self, MathRef};
 use crate::media::rich_text::{self, Clicked, DollarBlock, RichText, dollar_blocks};
-use crate::panels::PanelCx;
 use crate::panels::exporting;
 use crate::panels::labels::{COPY_COMMAND, TRY_AGAIN};
+use crate::panels::{PanelCx, PanelWidth};
 use crate::theme::{Icon, TextRole, space};
 use crate::widgets::{Button, Chip, ControlSize, Placeholder};
 use contract::{
@@ -65,6 +65,7 @@ fn not_written(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, doc: DocId) {
     let placeholder = Placeholder::empty(Icon::INSIGHT, NOT_WRITTEN)
         .hint(&hint)
         .action(COPY_COMMAND)
+        .action_size(width(ui).control_size())
         .show(ui);
     if placeholder.action_clicked {
         cx.intents.push(Intent::CopyText(command));
@@ -75,6 +76,7 @@ fn failed(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, failure: &Failure) {
     let placeholder = Placeholder::error(UNREADABLE)
         .hint(&failure.hint)
         .action(TRY_AGAIN)
+        .action_size(width(ui).control_size())
         .show(ui);
     if placeholder.action_clicked {
         cx.intents
@@ -90,15 +92,17 @@ fn saved_part(
     saved: &ChapterInsights,
 ) {
     let written_by = TextRole::Small.rich(format!("Written by {}", saved.model));
-    if is_narrow(ui) {
+    let panel = width(ui);
+    let size = panel.control_size();
+    if panel == PanelWidth::Narrow {
         // The label may wrap, so the button gets a line of its own, tall enough for a finger.
         ui.label(written_by);
-        export_menu(ui, cx, catalogue, ControlSize::Medium);
+        export_menu(ui, cx, catalogue, size);
     } else {
         ui.horizontal(|ui| {
             ui.label(written_by);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                export_menu(ui, cx, catalogue, ControlSize::Small);
+                export_menu(ui, cx, catalogue, size);
             });
         });
     }
@@ -138,7 +142,7 @@ fn export_menu(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, catalogue: &Catalogue, s
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| {
             let request = |format| shared.insights.export_request(catalogue, format);
-            if exporting::items(ui, cx, request) {
+            if exporting::items(ui, cx, size, request) {
                 ui.close();
             }
         });
@@ -154,9 +158,10 @@ fn section_title(ui: &mut egui::Ui, title: &str) {
 fn insight_paragraph(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, doc: DocId, insight: &Insight) {
     blocks(ui, cx, &dollar_blocks(&insight.text));
     ui.add_space(space::XS);
+    let chip_height = width(ui).chip_height();
     ui.horizontal_wrapped(|ui| {
         for page in &insight.pages {
-            let chip = ui.add(Chip::plain(&format!("Page {page}")));
+            let chip = ui.add(Chip::plain(&format!("Page {page}")).min_height(chip_height));
             let hover = format!("Open page {page} in the Source panel of the Ask tab");
             if chip.on_hover_text(hover).clicked() {
                 cx.intents.push(Intent::OpenSource {

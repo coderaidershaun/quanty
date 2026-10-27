@@ -17,7 +17,7 @@ use crate::panels::{
 use crate::state::Shared;
 use crate::theme::{self, color, space};
 use crate::transport::Transport;
-use crate::widgets::gallery;
+use crate::widgets::{self, gallery};
 use contract::{self, AskView, Effect, Intent, Panel, StartupFacts};
 
 /// How long `logic` may spend on backend events before it hands the frame back.
@@ -38,9 +38,9 @@ pub struct App {
     effects: Vec<Effect>,
     file_picker: FilePicker,
     model_picker: super::model_picker::ModelPicker,
-    /// The form of the window when it was last drawn. It is wide until the first frame, and no
-    /// input comes before that frame.
-    form: Form,
+    /// The rectangles of the frame drawn last. They are those of a wide window until the first
+    /// frame, and no input comes before that frame.
+    rects: ShellRects,
 }
 
 impl App {
@@ -75,12 +75,23 @@ impl App {
             effects: Vec::new(),
             file_picker: Box::new(|_| {}),
             model_picker,
-            form: Form::Wide,
+            rects: layout::shell(
+                egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::Vec2::from(layout::DEFAULT_WINDOW),
+                ),
+                ask_bar::NoteRow::Absent,
+            ),
         }
     }
 
     pub fn shared(&self) -> &Shared {
         &self.shared
+    }
+
+    /// The rectangles of every part of the window in the frame drawn last.
+    pub fn shell_rects(&self) -> ShellRects {
+        self.rects
     }
 
     pub fn push(&mut self, intent: Intent) {
@@ -101,12 +112,14 @@ impl App {
         self.backend.is_idle() && self.shared.is_at_rest() && self.media.is_idle()
     }
 
-    /// Whether a Back would change what the window shows. Only a compact window shows one view of
-    /// the Ask tab at a time; a wider one keeps the Answer beside the others, so a Back that only
-    /// returns to the Answer changes nothing there.
+    /// Whether a Back would change what the window shows. An open sheet or popup is closed first,
+    /// in every window. Only a compact window shows one view of the Ask tab at a time; a wider one
+    /// keeps the Answer beside the others, so a Back that only returns to the Answer changes
+    /// nothing there.
     pub fn can_go_back(&self) -> bool {
-        self.shared.can_go_back()
-            && (self.form == Form::Compact || !self.shared.goes_back_to_the_answer())
+        widgets::is_sheet_or_popup_open(&self.ctx)
+            || (self.shared.can_go_back()
+                && (self.rects.form == Form::Compact || !self.shared.goes_back_to_the_answer()))
     }
 
     /// An event from the backend can ask for something too, so this runs once even when no
@@ -115,8 +128,14 @@ impl App {
         loop {
             let mut intents = std::mem::take(&mut self.intents);
             for intent in intents.drain(..) {
-                if matches!(intent, Intent::Back) && !self.can_go_back() {
-                    continue;
+                if matches!(intent, Intent::Back) {
+                    if widgets::is_sheet_or_popup_open(ctx) {
+                        widgets::close_the_top_sheet(ctx);
+                        continue;
+                    }
+                    if !self.can_go_back() {
+                        continue;
+                    }
                 }
                 self.shared.apply_intent(intent, &mut self.effects);
             }
@@ -150,8 +169,8 @@ impl App {
             });
             return;
         }
-        let rects = layout::shell(window);
-        self.form = rects.form;
+        let rects = layout::shell(window, ask_bar::note_row(&self.shared));
+        self.rects = rects;
         let mut cx = PanelCx {
             shared: &self.shared,
             media: &mut self.media,
@@ -198,6 +217,7 @@ impl eframe::App for App {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.draw(ui);
+        widgets::forget_the_close_request(ui.ctx());
         // egui may lay a frame out twice, and only the first pass gets the input. So the intents
         // are applied after every pass. Never clear them when a pass is thrown away: that would
         // lose the click.

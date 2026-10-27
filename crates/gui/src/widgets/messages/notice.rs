@@ -15,6 +15,7 @@ pub struct Notice<'a> {
     icon: Icon,
     body: Option<&'a str>,
     action: Option<&'a str>,
+    control_size: ControlSize,
     is_dismissable: bool,
 }
 
@@ -32,6 +33,7 @@ impl<'a> Notice<'a> {
             icon,
             body: None,
             action: None,
+            control_size: ControlSize::Small,
             is_dismissable: false,
         }
     }
@@ -67,6 +69,12 @@ impl<'a> Notice<'a> {
         self
     }
 
+    /// The size of the action and of the dismiss button, `Small` unless a finger presses them.
+    pub fn control_size(mut self, size: ControlSize) -> Self {
+        self.control_size = size;
+        self
+    }
+
     pub fn show(self, ui: &mut egui::Ui) -> NoticeResponse {
         let swatch = self.tone.swatch();
         let mut action_clicked = false;
@@ -83,7 +91,7 @@ impl<'a> Notice<'a> {
                     self.icon
                         .paint(ui.painter(), icon_rect.center(), size::ICON_LG, swatch.text);
                     let after = if self.is_dismissable {
-                        size::CONTROL_SM + ui.spacing().item_spacing.x
+                        self.control_size.height() + ui.spacing().item_spacing.x
                     } else {
                         0.0
                     };
@@ -94,12 +102,14 @@ impl<'a> Notice<'a> {
                             ui.label(TextRole::Body.rich(body).color(swatch.text));
                         }
                         if let Some(label) = self.action {
-                            let button = Button::secondary(label).size(ControlSize::Small);
+                            let button = Button::secondary(label).size(self.control_size);
                             action_clicked = ui.add(button).clicked();
                         }
                     });
                     if self.is_dismissable {
-                        dismissed = ui.add(Button::icon_only(Icon::CLOSE, "Dismiss")).clicked();
+                        let dismiss =
+                            Button::icon_only(Icon::CLOSE, "Dismiss").size(self.control_size);
+                        dismissed = ui.add(dismiss).clicked();
                     }
                 });
             });
@@ -148,6 +158,7 @@ pub struct Placeholder<'a> {
     title: &'a str,
     hint: Option<&'a str>,
     action: Option<&'a str>,
+    action_size: ControlSize,
 }
 
 pub struct PlaceholderResponse {
@@ -156,7 +167,8 @@ pub struct PlaceholderResponse {
 }
 
 impl<'a> Placeholder<'a> {
-    /// A placeholder is at least this high, so it stays readable in a small panel.
+    /// A placeholder with its icon is at least this high, so it stays readable in a small panel.
+    /// A room too low for the whole stack gets the words alone, so none of them is cut off.
     pub const MIN_HEIGHT: f32 = 120.0;
 
     fn with_fill(fill: Fill, title: &'a str) -> Self {
@@ -165,6 +177,7 @@ impl<'a> Placeholder<'a> {
             title,
             hint: None,
             action: None,
+            action_size: ControlSize::Small,
         }
     }
 
@@ -190,27 +203,37 @@ impl<'a> Placeholder<'a> {
         self
     }
 
+    /// The size of the action button, `Small` unless a finger presses it.
+    pub fn action_size(mut self, size: ControlSize) -> Self {
+        self.action_size = size;
+        self
+    }
+
     pub fn show(self, ui: &mut egui::Ui) -> PlaceholderResponse {
         let area = ui.available_size();
-        let height = if area.y.is_finite() {
-            area.y.max(Self::MIN_HEIGHT)
-        } else {
-            Self::MIN_HEIGHT
-        };
         let width = if area.x.is_finite() {
             area.x
         } else {
             PLACEHOLDER_TEXT_WIDTH
         };
         let text_width = width.min(PLACEHOLDER_TEXT_WIDTH);
-        let top = ((height - self.content_height(ui, text_width)) / 2.0).max(0.0);
+        // A spinner says that work is on its way, so it stays.
+        let has_icon = !area.y.is_finite()
+            || self.fill == Fill::Loading
+            || area.y >= self.content_height(ui, text_width, true);
+        let height = match (area.y.is_finite(), has_icon) {
+            (false, _) => Self::MIN_HEIGHT,
+            (true, true) => area.y.max(Self::MIN_HEIGHT),
+            (true, false) => area.y.max(self.content_height(ui, text_width, false)),
+        };
+        let top = ((height - self.content_height(ui, text_width, has_icon)) / 2.0).max(0.0);
         let mut action_clicked = false;
         let centred = ui.allocate_ui_with_layout(
             vec2(width, height),
             Layout::top_down(Align::Center),
             |ui| {
                 ui.add_space(top);
-                for part in self.parts() {
+                for part in self.parts(has_icon) {
                     action_clicked |= self.show_part(ui, part, text_width);
                 }
             },
@@ -224,10 +247,11 @@ impl<'a> Placeholder<'a> {
         }
     }
 
-    fn parts(&self) -> Vec<Part<'a>> {
+    fn parts(&self, has_icon: bool) -> Vec<Part<'a>> {
+        let icon = has_icon.then_some(Part::Icon);
         let hint = self.hint.map(Part::Hint);
         let action = self.action.map(Part::Action);
-        [Some(Part::Icon), Some(Part::Title), hint, action]
+        [icon, Some(Part::Title), hint, action]
             .into_iter()
             .flatten()
             .collect()
@@ -241,7 +265,7 @@ impl<'a> Placeholder<'a> {
             Part::Title => wrapped_label(ui, self.title_text(), text_width),
             Part::Hint(hint) => wrapped_label(ui, TextRole::Small.rich(hint), text_width),
             Part::Action(label) => {
-                let button = Button::secondary(label).size(ControlSize::Small);
+                let button = Button::secondary(label).size(self.action_size);
                 clicked = ui.add(button).clicked();
             }
         }
@@ -253,7 +277,7 @@ impl<'a> Placeholder<'a> {
             Part::Icon => PLACEHOLDER_ICON,
             Part::Title => text_height(ui, TextRole::Heading, self.title, text_width),
             Part::Hint(hint) => text_height(ui, TextRole::Small, hint, text_width),
-            Part::Action(_) => ControlSize::Small.height(),
+            Part::Action(_) => self.action_size.height(),
         }
     }
 
@@ -278,9 +302,9 @@ impl<'a> Placeholder<'a> {
         }
     }
 
-    fn content_height(&self, ui: &egui::Ui, text_width: f32) -> f32 {
+    fn content_height(&self, ui: &egui::Ui, text_width: f32, has_icon: bool) -> f32 {
         let gap = ui.spacing().item_spacing.y;
-        let parts = self.parts();
+        let parts = self.parts(has_icon);
         let stacked: f32 = parts
             .iter()
             .map(|part| self.height_of(ui, *part, text_width))

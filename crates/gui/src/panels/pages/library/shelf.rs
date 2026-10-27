@@ -136,7 +136,8 @@ pub(super) fn show(
     let has_text = !local.find.is_empty();
     let mut find = TextInput::new(FIND, &mut local.find)
         .icon(Icon::SEARCH)
-        .placeholder(FIND_HINT);
+        .placeholder(FIND_HINT)
+        .size(fit.find_size());
     if has_text {
         find = find.trailing(Icon::CLOSE, CLEAR);
     }

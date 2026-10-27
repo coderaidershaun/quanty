@@ -12,15 +12,15 @@ use contract::{
 };
 use eframe::egui;
 use eframe::egui::accesskit::Role;
-use eframe::egui::{Pos2, Rect, Vec2};
 use egui_kittest::Node;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::{DEFAULT_WINDOW, PHONE_WINDOW};
 use gui::state::Shared;
 use gui::testkit::{self, run_until};
 
+use super::fit;
 use super::recording::{self, Seen};
-use super::{Window, click, click_in, is_enabled, node_in, panels, shared};
+use super::{Window, click, click_in, is_enabled, node_in, open_tab, panels, shared};
 
 const GOOGLE_PAGE: &str = "https://aistudio.google.com/billing";
 const JEV_PAGE: &str = "https://console.typesafe.ai/";
@@ -87,12 +87,10 @@ fn every_tab_has_one_entry_for_each_account() {
     let (mut harness, _) = recording::open("idle", DEFAULT_WINDOW);
     testkit::settle(&mut harness);
     for tab in Tab::ALL {
-        harness.state_mut().push(Intent::OpenTab(tab));
-        testkit::settle(&mut harness);
+        open_tab(&mut harness, tab);
         assert_both_entries_say(&harness, "balance not offered", &format!("{tab:?}"));
     }
-    harness.state_mut().push(Intent::OpenTab(Tab::Ask));
-    testkit::settle(&mut harness);
+    open_tab(&mut harness, Tab::Ask);
     let graph = panels(DEFAULT_WINDOW).concept_graph;
     node_in(&harness, Role::Button, "Maximise", graph)
         .expect("the Concept Graph has a Maximise button")
@@ -147,37 +145,21 @@ fn a_phone_footer_is_one_row_that_opens_the_full_lines() {
     let (mut harness, _) = recording::open("idle", PHONE_WINDOW);
     testkit::settle(&mut harness);
     let footer = panels(PHONE_WINDOW).footer;
-    let screen = Rect::from_min_size(Pos2::ZERO, Vec2::from(PHONE_WINDOW));
+    let screen = fit::window_rect(PHONE_WINDOW);
     for tab in Tab::ALL {
-        harness.state_mut().push(Intent::OpenTab(tab));
-        testkit::settle(&mut harness);
+        open_tab(&mut harness, tab);
         let mut parts = Vec::new();
         for entry in ["Google Gemini:", "Jev:"] {
             let found = in_footer(&harness, Role::Button, entry, PHONE_WINDOW);
             assert_eq!(found.len(), 1, "{tab:?}: {} `{entry}`", found.len());
             let name = found[0].accesskit_node().label().unwrap_or_default();
             assert!(name.contains("balance not offered"), "{tab:?}: `{name}`");
-            parts.push((entry, found[0].rect()));
+            parts.push((format!("{tab:?}: {entry}"), found[0].rect()));
         }
         let connection = in_footer(&harness, Role::Label, "Connected", PHONE_WINDOW);
         assert_eq!(connection.len(), 1, "{tab:?}: the connection is not shown");
-        parts.push(("Connected", connection[0].rect()));
-
-        for (name, rect) in &parts {
-            assert!(
-                footer.contains_rect(*rect) && screen.contains_rect(*rect),
-                "{tab:?}: `{name}` {rect:?} is outside the footer {footer:?}"
-            );
-        }
-        for (index, (name, rect)) in parts.iter().enumerate() {
-            for (other_name, other) in &parts[index + 1..] {
-                let overlap = rect.intersect(*other);
-                assert!(
-                    overlap.width() <= 0.0 || overlap.height() <= 0.0,
-                    "{tab:?}: `{name}` {rect:?} overlaps `{other_name}` {other:?}"
-                );
-            }
-        }
+        parts.push((format!("{tab:?}: Connected"), connection[0].rect()));
+        fit::assert_inside_and_apart(&parts, footer, screen);
     }
 
     click_in(
@@ -368,6 +350,9 @@ fn spent_credit_is_shown_until_a_job_that_needs_the_provider_works() {
     let hint = FailureKind::ConverterOutOfCredit.hint();
     assert!(harness.query_all_by_label_contains(hint).next().is_some());
 }
+
+// SMELL: this file is over 400 lines. The checks from here down drive the shared state alone, with
+// no window, and are the part to move out first.
 
 /// The request that the shared state sent for the read it was asked for.
 fn read_request(effects: &[Effect]) -> RequestId {

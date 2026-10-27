@@ -2,8 +2,8 @@
 
 use eframe::egui;
 
-use crate::panels::PanelCx;
 use crate::panels::labels::TRY_AGAIN;
+use crate::panels::{PanelCx, PanelWidth};
 use crate::theme::Icon;
 use crate::widgets::{Button, ControlSize, Placeholder, PlaceholderResponse};
 use contract::{Failure, FailureKind, Intent, Loadable};
@@ -11,12 +11,12 @@ use contract::{Failure, FailureKind, Intent, Loadable};
 /// In a room lower than this a placeholder sits in a scroll area, so none of it is cut off.
 const MIN_ROOM: f32 = 200.0;
 
-pub(super) fn show(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
+pub(super) fn show(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, width: PanelWidth) {
     match &cx.shared.source.page {
         Loadable::Loading => {
             whole_area(ui, Placeholder::loading("Opening the page"));
         }
-        Loadable::Failed(failure) => failed(ui, failure, cx),
+        Loadable::Failed(failure) => failed(ui, failure, width.control_size(), cx),
         Loadable::Idle | Loadable::Ready(_) => nothing_open(ui, cx),
     }
 }
@@ -26,6 +26,8 @@ fn nothing_open(ui: &mut egui::Ui, cx: &PanelCx<'_>) {
         Some(catalogue) if catalogue.documents().next().is_none() => {
             "The library is empty. Add a PDF on the Ingest tab to read it here."
         }
+        // SMELL: a short and narrow panel folds the pickers behind the "Choose the document"
+        // button, so there the media to choose stands above only once that button is pressed.
         Some(_) => "Select a result, or choose a media above, to see the page it stands on.",
         None => "Select a result to see the page it stands on.",
     };
@@ -35,18 +37,18 @@ fn nothing_open(ui: &mut egui::Ui, cx: &PanelCx<'_>) {
     );
 }
 
-fn failed(ui: &mut egui::Ui, failure: &Failure, cx: &mut PanelCx<'_>) {
+fn failed(ui: &mut egui::Ui, failure: &Failure, size: ControlSize, cx: &mut PanelCx<'_>) {
     let title = match failure.kind {
         FailureKind::SourceMissing => "The page was not found",
         _ => "The page could not be opened",
     };
     let placeholder = Placeholder::error(title).hint(&failure.hint);
     let is_retry_clicked = if ui.available_height() >= MIN_ROOM {
-        let shown = whole_area(ui, placeholder.action(TRY_AGAIN));
+        let shown = whole_area(ui, placeholder.action(TRY_AGAIN).action_size(size));
         shown.response.on_hover_text(&failure.detail);
         shown.action_clicked
     } else {
-        retry_below_scrolling_text(ui, placeholder, &failure.detail)
+        retry_below_scrolling_text(ui, placeholder, &failure.detail, size)
     };
     if let (true, Some(target)) = (is_retry_clicked, cx.shared.source.target) {
         cx.intents.push(Intent::OpenSource {
@@ -63,9 +65,10 @@ fn retry_below_scrolling_text(
     ui: &mut egui::Ui,
     placeholder: Placeholder<'_>,
     detail: &str,
+    size: ControlSize,
 ) -> bool {
     ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
-        let retry = Button::secondary(TRY_AGAIN).size(ControlSize::Small);
+        let retry = Button::secondary(TRY_AGAIN).size(size);
         let is_clicked = ui.add(retry).clicked();
         whole_area(ui, placeholder).response.on_hover_text(detail);
         is_clicked

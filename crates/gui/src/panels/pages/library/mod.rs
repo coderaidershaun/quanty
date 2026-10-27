@@ -15,9 +15,9 @@ mod tags_form;
 
 use eframe::egui;
 
-use crate::panels::PanelCx;
 use crate::panels::labels::{NO_MEDIA, TRY_AGAIN};
 use crate::panels::seam::{column, framed};
+use crate::panels::{PanelCx, PanelWidth};
 use crate::state::{Library, Open, Shared};
 use crate::theme::{Icon, TextRole, space};
 use crate::widgets::{ControlSize, ListRow, Placeholder};
@@ -150,6 +150,7 @@ fn nothing_listed(ui: &mut egui::Ui, catalogue: &Loadable<Catalogue>, intents: &
             let retry = Placeholder::error(FAILED)
                 .hint(&failure.hint)
                 .action(TRY_AGAIN)
+                .action_size(width(ui).control_size())
                 .show(ui);
             if retry.action_clicked {
                 intents.push(Intent::RefreshCatalogue);
@@ -179,6 +180,15 @@ impl ShelfFit {
     fn row_size(self) -> ControlSize {
         match self {
             ShelfFit::Full => ControlSize::Small,
+            ShelfFit::Narrow | ShelfFit::Alone => ControlSize::Large,
+        }
+    }
+
+    /// The find box is tall where the rows are, so that its Clear button can be pressed by a
+    /// finger.
+    fn find_size(self) -> ControlSize {
+        match self {
+            ShelfFit::Full => ControlSize::Medium,
             ShelfFit::Narrow | ShelfFit::Alone => ControlSize::Large,
         }
     }
@@ -305,8 +315,8 @@ fn back_row(ui: &mut egui::Ui, label: &str, intents: &mut Vec<Intent>) {
 
 /// Whether the room left in this ui is too narrow for a row of buttons. Call it where the whole
 /// width of the page is left, not inside a part that has less, such as the end of a title line.
-fn is_narrow(ui: &egui::Ui) -> bool {
-    ui.available_width() < NARROW_BELOW
+fn width(ui: &egui::Ui) -> PanelWidth {
+    PanelWidth::of(ui, NARROW_BELOW)
 }
 
 /// What the page shows. A document comes with its media, for the line that names it.

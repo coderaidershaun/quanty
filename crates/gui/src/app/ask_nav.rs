@@ -8,14 +8,6 @@ use crate::theme::Icon;
 use crate::widgets::{NavBar, NavItem, Tab, TabStrip};
 use contract::{AskView, Intent};
 
-/// The views that can stand beside the Answer.
-const SIDE_VIEWS: [AskView; 4] = [
-    AskView::Source,
-    AskView::ConceptGraph,
-    AskView::RetrievalPath,
-    AskView::FollowUp,
-];
-
 fn label(view: AskView) -> &'static str {
     match view {
         AskView::Answer => "Answer",
@@ -40,17 +32,17 @@ pub(super) fn side_tabs(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
     // The strip draws its line on the bottom edge of its room, where the clip would cut half of it
     // off, so the clip is grown by one point.
     ui.set_clip_rect(ui.clip_rect().expand2(egui::vec2(0.0, 1.0)));
-    let tabs: Vec<Tab<'_>> = SIDE_VIEWS
+    let tabs: Vec<Tab<'_>> = AskView::SIDE
         .iter()
         .map(|view| Tab::new(label(*view)))
         .collect();
-    let active = SIDE_VIEWS
+    let active = AskView::SIDE
         .iter()
         .position(|view| *view == cx.shared.side_view())
         .unwrap_or_default();
     let chosen = TabStrip::new(&tabs, active)
         .show(ui)
-        .and_then(|index| SIDE_VIEWS.get(index));
+        .and_then(|index| AskView::SIDE.get(index));
     if let Some(view) = chosen {
         cx.intents.push(Intent::ShowAskView(*view));
     }

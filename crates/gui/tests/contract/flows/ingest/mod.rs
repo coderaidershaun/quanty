@@ -13,11 +13,7 @@ use eframe::egui::accesskit::Role;
 use gui::testkit;
 
 use super::recording::{self, Seen};
-use super::{Window, click, press};
-
-pub(super) fn is_preflight(command: &Command) -> bool {
-    matches!(command, Command::Preflight { .. })
-}
+use super::{Window, click, is_preflight, press};
 
 fn is_ingest(command: &Command) -> bool {
     matches!(command, Command::Ingest { .. })

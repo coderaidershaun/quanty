@@ -11,7 +11,7 @@ use eframe::egui::accesskit::Role;
 use gui::app::layout::DEFAULT_WINDOW;
 use gui::testkit;
 
-use super::{
+use crate::flows::{
     COMMAND, Window, are_stacked_in_order, click, click_in, has, is_enabled, node, panels, press,
     says, shared,
 };

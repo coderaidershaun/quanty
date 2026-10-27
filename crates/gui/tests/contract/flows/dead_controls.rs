@@ -11,7 +11,7 @@ use gui::app::layout::{DEFAULT_WINDOW, SMALLEST_WINDOW, TABLET_WINDOW};
 use gui::testkit;
 
 use super::recording::{self, Seen};
-use super::{Window, click_in, is_open_tab, node, panels, press, shared};
+use super::{Window, click_in, is_open_tab, node, open_tab, panels, press, shared};
 
 /// Names that no node of the app may have, because each is a part that is not built.
 const ABSENT_NAMES: [&str; 7] = [
@@ -428,13 +428,6 @@ fn tab_names_in(harness: &Window, area: egui::Rect) -> Vec<String> {
     tabs.into_iter().map(|(_, name)| name).collect()
 }
 
-/// A tab is opened as its click would open it, because below the wide form the model choices
-/// stand over the tabs of the top bar.
-fn open_tab(harness: &mut Window, tab: Tab) {
-    harness.state_mut().push(Intent::OpenTab(tab));
-    testkit::settle(harness);
-}
-
 /// Every page draws at the smallest width, and every control that chooses a view of the Ask tab
 /// leads to one that is built, in the smallest window and in a tablet's.
 fn every_view_control_of(scene: &str) {
@@ -463,8 +456,8 @@ fn every_view_control_of(scene: &str) {
         .side_tabs
         .expect("a tablet has a strip over the side panel");
     let names = tab_names_in(&harness, tabs);
-    assert_eq!(names.len(), AskView::ALL.len() - 1, "`{scene}`: {names:?}");
-    for (view, name) in AskView::ALL.into_iter().skip(1).zip(&names) {
+    assert_eq!(names.len(), AskView::SIDE.len(), "`{scene}`: {names:?}");
+    for (view, name) in AskView::SIDE.into_iter().zip(&names) {
         click_in(&mut harness, Role::Tab, name, tabs);
         assert_eq!(shared(&harness).side_view(), view, "`{scene}`: `{name}`");
         assert_no_unbuilt_name_is_drawn(&harness, scene);

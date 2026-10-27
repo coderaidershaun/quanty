@@ -11,7 +11,9 @@ use gui::app::layout::{DEFAULT_WINDOW, MIN_WINDOW};
 use gui::state::SourceTarget;
 use gui::testkit;
 
-use super::{Wheel, Window, click, has, is_open_tab, node, panels, press, says, scroll_to, shared};
+use crate::flows::{
+    Wheel, Window, click, has, is_open_tab, node, panels, press, says, scroll_to, shared,
+};
 
 fn result(harness: &Window, number: usize) -> ResultItem {
     shared(harness)

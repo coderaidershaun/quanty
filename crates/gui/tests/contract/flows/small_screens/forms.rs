@@ -2,21 +2,22 @@
 //! can be scrolled into view, lies inside the column from side to side, and covers no other
 //! control or text, and the journeys of the forms still work with the pointer.
 
-use contract::{Category, Command, DatasetRequest, DocId, IngestStage, Intent, NewMedia, Tab};
+use contract::{Category, Command, DatasetRequest, DocId, IngestStage, NewMedia, Tab};
 use eframe::egui::accesskit::Role;
-use eframe::egui::{Key, Modifiers, Pos2, Rect, Vec2, pos2};
+use eframe::egui::{Key, Modifiers, Rect, pos2};
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::{PHONE_WINDOW, SMALLEST_WINDOW, TABLET_WINDOW};
 use gui::state::{DatasetJob, IngestJob, Shared};
 use gui::testkit::{self, run_until};
+use gui::theme::size;
 use uuid::Uuid;
 
-// SMELL: these helpers live in the Datasets and Ingest journeys, but two files of this folder now
-// use them, so they belong in the module that holds every journey.
-use super::datasets::{CHAPTER_2, DRY_RUN, is_at_its_stall, sent_builds};
-use super::ingest::is_preflight;
-use super::recording::{self, Seen};
-use super::{Window, click, node, panels, press, says, shared, type_into};
+use crate::flows::fit::{self, SLACK};
+use crate::flows::recording::{self, Seen};
+use crate::flows::{
+    CHAPTER_2, DRY_RUN, Window, click, is_at_its_stall, is_preflight, node, open_tab, panels,
+    press, says, sent_builds, shared, type_into,
+};
 
 /// What a form is made of: its controls and its texts.
 const SEEN: [Role; 5] = [
@@ -26,8 +27,6 @@ const SEEN: [Role; 5] = [
     Role::CheckBox,
     Role::Label,
 ];
-/// A rect may stick out of another by this much and still lie within it.
-const SLACK: f32 = 0.5;
 
 const ADD_MEDIA: &str = "Add media";
 const BUILD_A_DATASET: &str = "Build a training dataset";
@@ -90,11 +89,6 @@ fn open(scene: &str, window: [f32; 2]) -> (Window, Seen) {
     (harness, seen)
 }
 
-fn open_the_tab(harness: &mut Window, tab: Tab) {
-    harness.state_mut().push(Intent::OpenTab(tab));
-    testkit::settle(harness);
-}
-
 /// Where the content of the column shows. The column is centred in the page and as tall as the
 /// page, so its margins are those of the title. Measure it on a page that is not scrolled yet.
 fn inside_of_the_column(harness: &Window, window: [f32; 2], title: &str) -> Rect {
@@ -109,16 +103,13 @@ fn inside_of_the_column(harness: &Window, window: [f32; 2], title: &str) -> Rect
     )
 }
 
-fn the_whole_window(window: [f32; 2]) -> Rect {
-    Rect::from_min_size(Pos2::ZERO, Vec2::from(window))
-}
-
 fn shares_height(rect: Rect, inside: Rect) -> bool {
     rect.bottom() > inside.top() + SLACK && rect.top() < inside.bottom() - SLACK
 }
 
-fn lies_within_sideways(rect: Rect, inside: Rect) -> bool {
-    rect.left() >= inside.left() - SLACK && rect.right() <= inside.right() + SLACK
+/// The column from side to side with no limit above or below, because a form scrolls.
+fn strip_of(inside: Rect) -> Rect {
+    Rect::from_x_y_ranges(inside.x_range(), f32::NEG_INFINITY..=f32::INFINITY)
 }
 
 /// A node that is off screen has its rect all the same, so the page is scrolled until it shows.
@@ -130,7 +121,7 @@ fn bring_into_view(harness: &mut Window, role: Role, name: &str) {
 /// Every control and text that shows in `inside` lies within it from side to side, and no two of
 /// them overlap. A notice is a label around labels, so none may show where this is used.
 fn assert_nothing_overlaps(harness: &Window, inside: Rect) {
-    let mut shown: Vec<(Role, String, Rect)> = Vec::new();
+    let mut shown: Vec<(String, Rect)> = Vec::new();
     for role in SEEN {
         for found in harness.query_all_by_role(role) {
             let rect = found.rect();
@@ -140,25 +131,11 @@ fn assert_nothing_overlaps(harness: &Window, inside: Rect) {
                     .label()
                     .or_else(|| found.value())
                     .unwrap_or_default();
-                shown.push((role, name, rect));
+                shown.push((format!("{role:?} {name}"), rect));
             }
         }
     }
-    for (role, name, rect) in &shown {
-        assert!(
-            lies_within_sideways(*rect, inside),
-            "{role:?} `{name}` at {rect:?} sticks out of the column {inside:?}"
-        );
-    }
-    for (place, (role, name, rect)) in shown.iter().enumerate() {
-        for (other_role, other_name, other) in &shown[place + 1..] {
-            let both = rect.intersect(*other);
-            assert!(
-                both.width() <= SLACK || both.height() <= SLACK,
-                "{role:?} `{name}` at {rect:?} overlaps {other_role:?} `{other_name}` at {other:?}"
-            );
-        }
-    }
+    fit::assert_inside_and_apart(&shown, strip_of(inside), Rect::EVERYTHING);
 }
 
 /// A check of what shows proves nothing about a node that is still scrolled away, so each one
@@ -178,10 +155,8 @@ fn walk(harness: &mut Window, inside: Rect, controls: &[(Role, &str)]) {
     for &(role, name) in controls {
         bring_into_view(harness, role, name);
         let rect = assert_in_view(harness, inside, role, name);
-        assert!(
-            lies_within_sideways(rect, inside),
-            "{role:?} `{name}` at {rect:?} is wider than the column {inside:?}"
-        );
+        let part = (format!("{role:?} {name}"), rect);
+        fit::assert_inside_and_apart(&[part], strip_of(inside), Rect::EVERYTHING);
         assert_nothing_overlaps(harness, inside);
     }
 }
@@ -189,6 +164,14 @@ fn walk(harness: &mut Window, inside: Rect, controls: &[(Role, &str)]) {
 fn click_in_view(harness: &mut Window, role: Role, name: &str) {
     bring_into_view(harness, role, name);
     click(harness, role, name);
+}
+
+/// The chips and steppers of a form in a narrow column are as tall as a finger.
+fn assert_finger_sized_in_view(harness: &mut Window, controls: &[(Role, &str)]) {
+    for &(role, name) in controls {
+        bring_into_view(harness, role, name);
+        fit::assert_finger_sized(name, node(harness, role, name).rect(), size::CONTROL_MD);
+    }
 }
 
 fn type_in_view(harness: &mut Window, name: &str, text: &str) {
@@ -200,7 +183,7 @@ fn type_in_view(harness: &mut Window, name: &str, text: &str) {
 fn click_a_row_in_the_window(harness: &mut Window, window: [f32; 2], role: Role, name: &str) {
     let rect = node(harness, role, name).rect();
     assert!(
-        the_whole_window(window).contains_rect(rect),
+        fit::window_rect(window).contains_rect(rect),
         "the row `{name}` at {rect:?} is not inside the window"
     );
     click(harness, role, name);
@@ -217,6 +200,10 @@ fn a_checked_chapter_is_started_at_a_phone() {
 
     let inside = inside_of_the_column(&harness, PHONE_WINDOW, ADD_MEDIA);
     walk(&mut harness, inside, INGEST_READY);
+    assert_finger_sized_in_view(
+        &mut harness,
+        &[(Role::Button, "Chapter"), (Role::Button, "Other part")],
+    );
 
     let number = node(&harness, Role::TextInput, "Chapter number").rect();
     let name = node(&harness, Role::TextInput, "Chapter name").rect();
@@ -239,13 +226,20 @@ fn a_checked_chapter_is_started_at_a_phone() {
 
 fn a_new_media_is_typed_and_saved_at_a_phone() {
     let (mut harness, seen) = open("idle", PHONE_WINDOW);
-    // The model choices stand over the tabs of the top bar, so the tab is opened as a click would.
-    open_the_tab(&mut harness, Tab::Ingest);
+    open_tab(&mut harness, Tab::Ingest);
     let inside = inside_of_the_column(&harness, PHONE_WINDOW, ADD_MEDIA);
 
     click(&mut harness, Role::ComboBox, "Media");
     click_a_row_in_the_window(&mut harness, PHONE_WINDOW, Role::Button, ROW_OF_A_NEW_MEDIA);
     walk(&mut harness, inside, NEW_MEDIA);
+    assert_finger_sized_in_view(
+        &mut harness,
+        &[
+            (Role::Button, "Book"),
+            (Role::Button, "Paper"),
+            (Role::Button, "Other"),
+        ],
+    );
     // Beside the buttons the note would be cut short, so it stands whole under them.
     let buttons = node(&harness, Role::Button, "Save media").rect();
     let note = node(&harness, Role::Label, NOTE_OF_A_NEW_MEDIA).rect();
@@ -297,16 +291,30 @@ fn the_ingest_form_works_on_a_phone() {
     a_new_media_is_typed_and_saved_at_a_phone();
 }
 
+// SMELL: this file is over 400 lines. The Datasets journey and the tests of a tablet and of the
+// smallest window from here down are the part to move out first, so that this file keeps the
+// Ingest journeys and the checks that both use.
 #[test]
 fn the_datasets_form_works_on_a_phone() {
     let (mut harness, seen) = open("datasets-ready", PHONE_WINDOW);
     testkit::save_png(&mut harness, "phone-datasets-ready");
     let inside = inside_of_the_column(&harness, PHONE_WINDOW, BUILD_A_DATASET);
     walk(&mut harness, inside, DATASETS_READY);
+    assert_finger_sized_in_view(
+        &mut harness,
+        &[
+            (Role::Button, "Fewer rewrites per section"),
+            (Role::Button, "More rewrites per section"),
+            (Role::Button, "Fewer questions per section"),
+            (Role::Button, "More questions per section"),
+            (Role::Button, "Fewer SFT examples at most"),
+            (Role::Button, "More SFT examples at most"),
+        ],
+    );
 
     // While every media is chosen, the rows of the list are the longest: a media and a chapter.
     click_in_view(&mut harness, Role::ComboBox, "Hold out");
-    let window = the_whole_window(PHONE_WINDOW);
+    let window = fit::window_rect(PHONE_WINDOW);
     let rows: Vec<(String, Rect)> = harness
         .query_all_by_role(Role::CheckBox)
         .map(|row| (row.accesskit_node().label().unwrap_or_default(), row.rect()))

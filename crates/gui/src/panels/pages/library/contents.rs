@@ -4,6 +4,7 @@
 
 use eframe::egui;
 
+use super::width;
 use crate::panels::PanelCx;
 use crate::panels::heights::Heights;
 use crate::panels::labels::TRY_AGAIN;
@@ -66,6 +67,7 @@ fn failed(ui: &mut egui::Ui, failure: &Failure, view: DocumentView, intents: &mu
     let shown = Placeholder::error(title)
         .hint(&failure.hint)
         .action(TRY_AGAIN)
+        .action_size(width(ui).control_size())
         .show(ui);
     shown.response.on_hover_text(&failure.detail);
     if shown.action_clicked {
@@ -110,6 +112,7 @@ fn card(ui: &mut egui::Ui, doc: DocId, item: &ChapterItem, cx: &mut PanelCx<'_>)
     let shown = Card::new()
         .tag(Kind::from(piece.kind), tag)
         .action(Icon::OPEN, &read)
+        .action_size(width(ui).control_size())
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.label(TextRole::Small.rich(&pages).color(color::TEXT_MUTED));

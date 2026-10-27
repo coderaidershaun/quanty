@@ -8,8 +8,8 @@
 use contract::AskView;
 use eframe::egui::{Pos2, Rect, Vec2, vec2};
 use gui::app::layout::{
-    self, AskRegion, DEFAULT_WINDOW, Form, MIN_WINDOW, PHONE_LANDSCAPE_WINDOW, PHONE_WINDOW,
-    SMALLEST_WINDOW, TABLET_WINDOW,
+    self, AskRegion, DEFAULT_WINDOW, Form, MIN_WINDOW, NoteRow, PHONE_LANDSCAPE_WINDOW,
+    PHONE_WINDOW, SMALLEST_WINDOW, TABLET_WINDOW,
 };
 use proptest::prelude::*;
 use proptest::test_runner::{Config, TestRunner};
@@ -43,13 +43,6 @@ enum Part {
     /// The page of Library, Ingest and Datasets, and of a maximised panel.
     Page,
     Ask(AskRegion),
-}
-
-/// The Ask views other than the Answer, which can sit beside it.
-fn side_views() -> impl Iterator<Item = AskView> {
-    AskView::ALL
-        .into_iter()
-        .filter(|view| *view != AskView::Answer)
 }
 
 /// What the shell draws on a screen, as the rectangle of each part.
@@ -134,21 +127,33 @@ fn problems_of(
     found
 }
 
-/// Every way the shell can be drawn in a window of that size.
+/// Every way the shell can be drawn in a window of that size, with a note on the Ask bar and
+/// without one.
 fn problems(size: Vec2) -> Vec<String> {
     let window = Rect::from_min_size(Pos2::ZERO, size);
-    let rects = layout::shell(window);
     let form = Form::of(size);
     let mut found = Vec::new();
-    if rects.form != form {
-        found.push(format!("the shell is laid out as {:?}", rects.form));
-    }
-    let asks = AskView::ALL
-        .into_iter()
-        .flat_map(|view| side_views().map(move |side| Some((view, side))));
-    for ask in std::iter::once(None).chain(asks) {
-        let parts = drawn(&rects, ask);
-        found.extend(problems_of(window, form, ask, &parts));
+    for note in [NoteRow::Absent, NoteRow::Shown] {
+        let rects = layout::shell(window, note);
+        if rects.form != form {
+            found.push(format!(
+                "{note:?}: the shell is laid out as {:?}",
+                rects.form
+            ));
+        }
+        let asks = AskView::ALL.into_iter().flat_map(|view| {
+            AskView::SIDE
+                .into_iter()
+                .map(move |side| Some((view, side)))
+        });
+        for ask in std::iter::once(None).chain(asks) {
+            let parts = drawn(&rects, ask);
+            found.extend(
+                problems_of(window, form, ask, &parts)
+                    .into_iter()
+                    .map(|problem| format!("{note:?}: {problem}")),
+            );
+        }
     }
     found
 }

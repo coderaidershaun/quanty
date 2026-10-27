@@ -126,8 +126,13 @@ impl<'a> TextInput<'a> {
     /// The row inside the frame: the leading icon, the text, and the trailing button if there is
     /// one. Returns the response of the text and that of the button.
     fn show_row(self, ui: &mut egui::Ui, height: f32) -> (Response, Option<Response>) {
-        // A small box is lower than the smallest button, so the trailing button shrinks to fit.
-        let trailing_side = height.min(size::CONTROL_SM);
+        // A small box is lower than the smallest button, so the trailing button shrinks to fit. A
+        // large box has room for a button that a finger can press.
+        let tallest_button = match self.size {
+            ControlSize::Large => size::CONTROL_MD,
+            ControlSize::Small | ControlSize::Medium => size::CONTROL_SM,
+        };
+        let trailing_side = height.min(tallest_button);
         if let Some(icon) = self.leading {
             let (_, rect) = ui.allocate_space(egui::Vec2::splat(size::ICON_MD));
             icon.paint(

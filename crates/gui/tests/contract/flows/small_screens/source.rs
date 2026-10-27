@@ -1,6 +1,6 @@
 //! The Source, the Graph and the Path on a phone of 390 points and on one of 360.
 
-use contract::{AskView, Intent};
+use contract::{AskView, Intent, Panel};
 use eframe::egui::accesskit::Role;
 use eframe::egui::{Key, Modifiers, Rect, pos2, vec2};
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
@@ -11,14 +11,17 @@ use gui::theme::space;
 use gui::widgets::Surface;
 
 use super::{
-    Body, CONCEPTS_WARNING, GRAPH_BUTTONS, GRAPH_TITLE, LEGEND_WORDS, PATH_TITLE, SLACK,
-    SOURCE_TABS, SOURCE_TITLE, assert_fits, assert_tall_enough, content, figure_mark, graph_nodes,
+    Body, CONCEPTS_WARNING, GRAPH_BUTTONS, GRAPH_TITLE, LEGEND_WORDS, PATH_TITLE, SOURCE_TABS,
+    SOURCE_TITLE, assert_fits, assert_tall_enough, content, figure_mark, graph_nodes,
     legend_bottom, open_citation, phone_panel, scroll_to_top, show_source_tab, show_view,
 };
-use crate::flows::{Window, has, is_enabled, node, panels, press, shared};
+use crate::flows::fit::SLACK;
+use crate::flows::{Window, click, has, is_enabled, node, panels, press, shared};
 
 /// A small Android phone, which is as narrow as any screen must work.
 const NARROW_PHONE: [f32; 2] = [360.0, 740.0];
+/// The one concept that the sample page 5 has.
+const CONCEPT: &str = "Volatility";
 
 fn assert_the_page_is_fitted(harness: &Window) {
     assert!(has(harness, Role::Label, "100%"), "a page opens at 100%");
@@ -83,6 +86,9 @@ fn the_source_fits_a_phone_on_every_tab() {
             show_source_tab(&mut harness, source, tab);
             testkit::save_png(&mut harness, &format!("{name}-source-{tab}"));
             assert_fits(&phone_panel(&harness, SOURCE_TITLE), source, Body::Scrolls);
+            if tab == "Concepts" {
+                assert_tall_enough(&harness, source, &[(Role::Button, CONCEPT)]);
+            }
         }
 
         harness.state_mut().push(Intent::SelectResult(1));
@@ -92,6 +98,48 @@ fn the_source_fits_a_phone_on_every_tab() {
         assert_fits(&phone_panel(&harness, SOURCE_TITLE), source, Body::Scrolls);
     }
     a_warning_about_the_concepts_stays_inside_the_source();
+    a_page_that_is_gone_offers_a_try_again_that_a_finger_can_hit();
+    maximising_the_source_can_be_undone_with_back();
+}
+
+/// A maximised panel takes the room of the bottom navigation too, so Back is the way out of it.
+fn maximising_the_source_can_be_undone_with_back() {
+    let mut harness = testkit::app("black-scholes", PHONE_WINDOW);
+    testkit::settle(&mut harness);
+    let rects = panels(PHONE_WINDOW);
+    open_citation(&mut harness, &rects, 8);
+    assert!(
+        has(&harness, Role::Tab, "Answer"),
+        "the bottom navigation shows"
+    );
+
+    click(&mut harness, Role::Button, "Maximise");
+    assert_eq!(shared(&harness).maximised, Some(Panel::Source));
+    assert!(
+        !has(&harness, Role::Tab, "Answer"),
+        "the bottom navigation is gone"
+    );
+    let page = content(rects.page, Surface::Sheet);
+    let zoom_bar = node(&harness, Role::Button, "Zoom in").rect();
+    assert!(
+        (zoom_bar.bottom() - page.bottom()).abs() <= SLACK,
+        "the Source fills the page room {page:?}, and its zoom bar ends at {}",
+        zoom_bar.bottom()
+    );
+    assert!(
+        harness.state().can_go_back(),
+        "Back leaves the maximised view"
+    );
+
+    harness.state_mut().push(Intent::Back);
+    testkit::settle(&mut harness);
+    assert_eq!(shared(&harness).maximised, None);
+    assert_eq!(shared(&harness).ask_view, AskView::Source);
+    assert!(
+        has(&harness, Role::Tab, "Answer"),
+        "the bottom navigation is back"
+    );
+    assert!(has(&harness, Role::Label, SOURCE_TITLE));
 }
 
 fn a_warning_about_the_concepts_stays_inside_the_source() {
@@ -108,6 +156,20 @@ fn a_warning_about_the_concepts_stays_inside_the_source() {
         "the warning {warning:?} is inside {source:?}"
     );
     testkit::save_png(&mut harness, "phone-source-warning");
+
+    show_source_tab(&mut harness, source, "Concepts");
+    assert_tall_enough(&harness, source, &[(Role::Button, "Try again")]);
+}
+
+fn a_page_that_is_gone_offers_a_try_again_that_a_finger_can_hit() {
+    let mut harness = testkit::app("source-missing", PHONE_WINDOW);
+    testkit::settle(&mut harness);
+    harness
+        .state_mut()
+        .push(Intent::ShowAskView(AskView::Source));
+    testkit::settle(&mut harness);
+    let source = content(panels(PHONE_WINDOW).source, Surface::Sheet);
+    assert_tall_enough(&harness, source, &[(Role::Button, "Try again")]);
 }
 
 /// Presses Tab until a node of the graph other than `other_than` has the keyboard, and returns its

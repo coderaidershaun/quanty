@@ -1,9 +1,11 @@
 //! The small tokens that sit in text and beside it: citation numbers, kind chips, badges, step
 //! markers and the legend dot.
 
+use std::sync::Arc;
+
 use eframe::egui::{
-    self, Align2, Color32, Rect, Response, Stroke, StrokeKind, WidgetInfo, WidgetType, pos2,
-    text::LayoutJob,
+    self, Align2, Color32, Galley, Rect, Response, Stroke, StrokeKind, WidgetInfo, WidgetType,
+    pos2, text::LayoutJob,
 };
 
 use crate::theme::{Icon, Kind, TextRole, Tone, color, radius, size, space, stroke};
@@ -94,6 +96,7 @@ pub struct Chip<'a> {
     is_selected: bool,
     is_stamp: bool,
     max_width: f32,
+    min_height: f32,
     forced: Option<Look>,
 }
 
@@ -112,6 +115,7 @@ impl<'a> Chip<'a> {
             is_selected: false,
             is_stamp: false,
             max_width: f32::INFINITY,
+            min_height: size::CHIP,
             forced: None,
         }
     }
@@ -134,6 +138,12 @@ impl<'a> Chip<'a> {
 
     pub fn max_width(mut self, width: f32) -> Self {
         self.max_width = width;
+        self
+    }
+
+    /// The chip is drawn and pressed at least this tall, for a chip that a finger presses.
+    pub fn min_height(mut self, height: f32) -> Self {
+        self.min_height = height;
         self
     }
 
@@ -195,7 +205,10 @@ impl egui::Widget for Chip<'_> {
         job.wrap.max_width = (self.max_width - before - badge - after).max(0.0);
         job.break_on_newline = false;
         let galley = ui.painter().layout_job(job);
-        let side = egui::vec2(before + badge + galley.size().x + after, size::CHIP);
+        let side = egui::vec2(
+            before + badge + galley.size().x + after,
+            size::CHIP.max(self.min_height),
+        );
         let sense = if self.is_stamp {
             egui::Sense::hover()
         } else {
@@ -254,17 +267,30 @@ impl<'a> Badge<'a> {
         self.icon = Some(icon);
         self
     }
+
+    /// How wide the badge is when it is drawn, to decide where to put it before it is.
+    pub fn width(&self, ui: &egui::Ui) -> f32 {
+        self.icon_room() + self.galley(ui).size().x
+    }
+
+    fn icon_room(&self) -> f32 {
+        if self.icon.is_some() {
+            size::GLYPH + space::XS
+        } else {
+            0.0
+        }
+    }
+
+    fn galley(&self, ui: &egui::Ui) -> Arc<Galley> {
+        TextRole::Caps.galley(ui, &self.text.to_uppercase(), self.tone.swatch().text)
+    }
 }
 
 impl egui::Widget for Badge<'_> {
     fn ui(self, ui: &mut egui::Ui) -> Response {
         let ink = self.tone.swatch().text;
-        let galley = TextRole::Caps.galley(ui, &self.text.to_uppercase(), ink);
-        let icon_room = if self.icon.is_some() {
-            size::GLYPH + space::XS
-        } else {
-            0.0
-        };
+        let galley = self.galley(ui);
+        let icon_room = self.icon_room();
         let side = egui::vec2(icon_room + galley.size().x, size::BADGE);
         let (rect, response) = ui.allocate_exact_size(side, egui::Sense::hover());
         response.widget_info(|| WidgetInfo::labeled(WidgetType::Label, true, self.text));

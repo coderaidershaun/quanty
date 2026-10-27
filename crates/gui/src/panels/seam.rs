@@ -8,9 +8,43 @@ use super::{
 };
 use crate::media::Media;
 use crate::state::Shared;
-use crate::theme::Icon;
+use crate::theme::{Icon, size};
 use crate::widgets::{Button, ControlSize, Surface, panel_frame};
 use contract::{Intent, Panel};
+
+/// Whether a panel is narrow, judged by its own width and not by the window's. A narrow panel
+/// stacks its controls and makes the main ones tall enough for a finger.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PanelWidth {
+    Narrow,
+    Roomy,
+}
+
+impl PanelWidth {
+    /// The width left in `ui` against the width under which this panel is narrow.
+    pub(super) fn of(ui: &egui::Ui, narrow_below: f32) -> PanelWidth {
+        if ui.available_width() < narrow_below {
+            PanelWidth::Narrow
+        } else {
+            PanelWidth::Roomy
+        }
+    }
+
+    pub(super) fn control_size(self) -> ControlSize {
+        match self {
+            PanelWidth::Narrow => ControlSize::Medium,
+            PanelWidth::Roomy => ControlSize::Small,
+        }
+    }
+
+    /// The height of a chip that a finger presses, for `Chip::min_height`.
+    pub(super) fn chip_height(self) -> f32 {
+        match self {
+            PanelWidth::Narrow => size::CONTROL_MD,
+            PanelWidth::Roomy => size::CHIP,
+        }
+    }
+}
 
 /// The app applies the pushed `intents` after the frame.
 pub struct PanelCx<'a> {

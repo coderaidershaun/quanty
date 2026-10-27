@@ -159,8 +159,9 @@ fn card(ui: &mut egui::Ui, media: &Media, pencil: Pencil) -> bool {
     ui.add_space(space::SM);
     let title = media.title.as_deref().unwrap_or_default();
     let shown = Card::new().show(ui, |ui| {
+        let size = media_card::pencil_size(ui);
         let is_pressed = media_card::title_line(ui, title, media.category, |ui| {
-            media_card::pencil(ui, title, pencil)
+            media_card::pencil(ui, title, pencil, size)
         });
         media_card::labels_line(ui, media);
         is_pressed

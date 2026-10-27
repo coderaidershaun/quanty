@@ -3,11 +3,14 @@
 //! before the answer is written. On a phone Share stands beside the tabs of the answer, which can
 //! all be reached.
 
-use super::recording::{self, Seen};
-use super::{Window, click, copied_by, has, is_enabled, node, node_in, panels, says, shared};
+use crate::flows::fit;
+use crate::flows::recording::{self, Seen};
+use crate::flows::{
+    Window, click, copied_by, has, is_enabled, node, node_in, panels, says, shared,
+};
 use contract::{Command, NoticeKind};
+use eframe::egui::Rect;
 use eframe::egui::accesskit::Role;
-use eframe::egui::{Pos2, Rect, Vec2};
 use egui_kittest::kittest::NodeT as _;
 use export::Format;
 use gui::app::layout::{DEFAULT_WINDOW, PHONE_WINDOW};
@@ -149,10 +152,10 @@ fn nothing_is_exported_before_the_answer_is_written() {
 
 #[test]
 fn a_phone_reaches_every_answer_tab_and_shares_from_beside_them() {
-    let mut harness = testkit::app("black-scholes", PHONE_WINDOW);
+    let (mut harness, seen) = recording::open("black-scholes", PHONE_WINDOW);
     testkit::settle(&mut harness);
     let answer = panels(PHONE_WINDOW).answer;
-    let screen = Rect::from_min_size(Pos2::ZERO, Vec2::from(PHONE_WINDOW));
+    let screen = fit::window_rect(PHONE_WINDOW);
     let share = node_in(&harness, Role::Button, "Share", answer)
         .expect("Share is in the answer pane")
         .rect();
@@ -160,11 +163,7 @@ fn a_phone_reaches_every_answer_tab_and_shares_from_beside_them() {
         screen.contains_rect(share),
         "Share {share:?} is on the screen"
     );
-    assert!(
-        share.height() >= size::CONTROL_MD,
-        "Share is {} tall",
-        share.height()
-    );
+    fit::assert_finger_sized("Share", share, size::CONTROL_MD);
 
     // A tab that has slid out of the strip stands past the pane, so a tab is found at any place
     // along the row.
@@ -174,7 +173,8 @@ fn a_phone_reaches_every_answer_tab_and_shares_from_beside_them() {
         testkit::settle(&mut harness);
         let rect = tab_in(&harness, tab, row).rect();
         assert!(
-            answer.expand(0.5).contains_rect(rect) && rect.right() <= share.left() + 0.5,
+            answer.expand(fit::SLACK).contains_rect(rect)
+                && rect.right() <= share.left() + fit::SLACK,
             "`{tab}` {rect:?} is not in the pane and before Share {share:?}"
         );
         tab_in(&harness, tab, row).click();
@@ -187,6 +187,11 @@ fn a_phone_reaches_every_answer_tab_and_shares_from_beside_them() {
     click(&mut harness, Role::Button, "Share");
     for item in ["Copy as Markdown", "Export as PDF…"] {
         assert!(has(&harness, Role::Button, item), "the menu has {item}");
+        fit::assert_finger_sized(
+            item,
+            node(&harness, Role::Button, item).rect(),
+            size::CONTROL_MD,
+        );
     }
     testkit::save_png(&mut harness, "phone-share-menu");
     let copies = copied_by(&mut harness, |harness| {
@@ -197,6 +202,20 @@ fn a_phone_reaches_every_answer_tab_and_shares_from_beside_them() {
         .answer_markdown()
         .expect("an answer to share");
     assert_eq!(copies, [markdown], "Share copies the answer as Markdown");
+
+    // The menu stays open after a copy, so its Export is pressed with no second press on Share,
+    // which would close the menu.
+    std::fs::write(seen.home().join("data"), "exports cannot be made here").unwrap();
+    click(&mut harness, Role::Button, "Export as PDF…");
+    assert!(says(&harness, "Could not export the answer as PDF"));
+    let dismiss = node_in(&harness, Role::Button, "Dismiss", answer)
+        .expect("the strip of a failed export has a Dismiss in the answer pane")
+        .rect();
+    assert!(
+        screen.contains_rect(dismiss),
+        "Dismiss {dismiss:?} is on the screen"
+    );
+    fit::assert_finger_sized("Dismiss", dismiss, size::CONTROL_MD);
 }
 
 fn tab_in<'a>(harness: &'a Window, name: &'a str, row: Rect) -> egui_kittest::Node<'a> {

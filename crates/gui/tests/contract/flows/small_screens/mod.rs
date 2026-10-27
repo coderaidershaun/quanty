@@ -1,8 +1,15 @@
-//! The Source, Concept Graph and Retrieval Path views on phones, a tablet and cramped windows:
-//! every control lies inside its panel and apart from the others, the main controls are tall
-//! enough for a finger, and a finger moves the page and the graph.
+//! The app on phones, a tablet and in cramped windows: every control lies inside its panel and
+//! apart from the others, the main controls are tall enough for a finger, and a finger moves the
+//! page and the graph. The Answer and Follow up views are in `answer`, the Ask bar in `ask_bar`,
+//! the views of the Ask tab and Back in `ask_views`, the Ingest and Datasets forms in `forms`, the
+//! Source, Graph and Path in `source`, the finger gestures in `touch`, and the smallest windows in
+//! `windows`.
 
-mod phone;
+mod answer;
+mod ask_bar;
+mod ask_views;
+mod forms;
+mod source;
 mod touch;
 mod windows;
 
@@ -11,16 +18,13 @@ use eframe::egui::accesskit::Role;
 use eframe::egui::{self, Rect};
 use egui_kittest::Node;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
-use gui::app::layout::ShellRects;
+use gui::app::layout::{Form, ShellRects};
 use gui::theme::{size, space};
 use gui::widgets::{Surface, panel_frame};
 
+use super::fit::{self, SLACK};
 use super::{Wheel, Window, click_in, has, node, scroll_to, shared};
 
-/// Rects are kept to half a point, so a control may be that far out of place and still fit.
-const SLACK: f32 = 0.5;
-/// A finger needs 32 points, less the half point that a rect is rounded by.
-const FINGER_HEIGHT: f32 = size::CONTROL_MD - SLACK;
 const CONTROL_ROLES: [Role; 8] = [
     Role::Button,
     Role::ComboBox,
@@ -98,6 +102,16 @@ fn panel_root<'a>(harness: &'a Window, title: &'a str, rival: (Role, &'a str)) -
     panic!("`{title}` and `{}` are in no common container", rival.1)
 }
 
+/// The Source panel, in a window whose parts are at `rects`: a phone has the bottom navigation
+/// beside it, and a tablet has the Answer.
+fn source_panel<'a>(harness: &'a Window, rects: &ShellRects) -> Node<'a> {
+    let rival = match rects.form {
+        Form::Compact => (Role::Tab, "Answer"),
+        Form::Medium | Form::Wide => (Role::Tab, "Results"),
+    };
+    panel_root(harness, SOURCE_TITLE, rival)
+}
+
 /// The panel of the one view that a phone draws. The bottom navigation, with its Answer tab, is
 /// another part of the window.
 fn phone_panel<'a>(harness: &'a Window, title: &'a str) -> Node<'a> {
@@ -134,18 +148,23 @@ fn sticks_out(control: &Control, room: Rect, body: Body) -> bool {
 }
 
 fn overlaps(a: Rect, b: Rect) -> bool {
-    let both = a.intersect(b);
     let is_nested = a.expand(SLACK).contains_rect(b) || b.expand(SLACK).contains_rect(a);
-    both.width() > SLACK && both.height() > SLACK && !is_nested
+    fit::overlaps(a, b) && !is_nested
 }
 
 /// Every control under `root` lies inside `content`, and no two of them overlap. A control inside
 /// another, such as a citation chip in its paragraph, is not an overlap.
 fn assert_fits(root: &Node<'_>, content: Rect, body: Body) {
-    let found = controls(root);
+    assert_controls_fit(controls(root), content, body);
+}
+
+fn assert_controls_fit(found: Vec<Control>, content: Rect, body: Body) {
     // A tree that stops nesting the controls of a panel in a container would leave nothing to
     // check, and the test would pass without looking at the panel.
-    assert!(!found.is_empty(), "no control lies under {root:?}");
+    assert!(
+        !found.is_empty(),
+        "no control was found to fit in {content:?}"
+    );
     let room = content.expand(SLACK);
     let mut faults: Vec<String> = found
         .iter()
@@ -171,18 +190,23 @@ fn assert_fits(root: &Node<'_>, content: Rect, body: Body) {
     );
 }
 
+/// The controls above the strip of tabs are the header's: they lie inside the panel and apart.
+fn assert_header_fits(harness: &Window, root: &Node<'_>, content: Rect) {
+    let strip_top = node(harness, Role::Tab, "Page").rect().top();
+    let header = controls(root)
+        .into_iter()
+        .filter(|control| control.rect.bottom() <= strip_top + SLACK)
+        .collect();
+    assert_controls_fit(header, content, Body::Fixed);
+}
+
 fn assert_tall_enough(harness: &Window, content: Rect, names: &[(Role, &str)]) {
     for (role, name) in names {
         let found = harness
             .query_all_by_role_and_label(*role, name)
             .find(|node| content.contains(node.rect().center()))
             .unwrap_or_else(|| panic!("no {role:?} named `{name}` is in {content:?}"));
-        assert!(
-            found.rect().height() >= FINGER_HEIGHT,
-            "{role:?} `{name}` is {} tall, and a finger needs {}",
-            found.rect().height(),
-            size::CONTROL_MD
-        );
+        fit::assert_finger_sized(name, found.rect(), size::CONTROL_MD);
     }
 }
 

@@ -3,23 +3,23 @@
 
 mod pager;
 mod pickers;
+mod rows;
 
 use eframe::egui;
 
-use super::{PanelWidth, row};
-use crate::panels::PanelCx;
-use crate::theme::Icon;
+use super::row;
+use crate::panels::{PanelCx, PanelWidth};
+use crate::theme::{Icon, TextRole, color};
 use crate::widgets::{Button, ControlSize, section_header};
 use contract::{Intent, Panel};
 use pager::PagerText;
 use pickers::Lists;
+use rows::{Parts, Rows};
 
 const TITLE: &str = "Source in Context";
 const OPEN_IN_LIBRARY: &str = "Open in Library";
 const OPEN_IN_LIBRARY_OFF: &str = "The library does not list this document yet.";
-/// The panel's inner height from which a roomy header has three rows. Below it the pager moves up
-/// beside the title and the two pickers share a row, so the page keeps its room.
-const FOLD_BELOW: f32 = 440.0;
+const CHOOSE_THE_DOCUMENT: &str = "Choose the document";
 /// The part of a row that the media picker takes when the document picker is beside it.
 const MEDIA_SHARE: f32 = 0.5;
 
@@ -27,27 +27,15 @@ const MEDIA_SHARE: f32 = 0.5;
 pub(super) struct Cache {
     lists: Lists,
     pager: PagerText,
-}
-
-/// How the header is laid out: the title with its buttons, the media picker, the document picker
-/// and the pager, in two, three or four rows. A narrow panel has no room for two controls side by
-/// side, so each of its rows holds one.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Rows {
-    Two,
-    Three,
-    Four,
+    /// Whether a folded header shows the two pickers.
+    is_choosing: bool,
 }
 
 pub(super) fn show(ui: &mut egui::Ui, cache: &mut Cache, cx: &mut PanelCx<'_>, width: PanelWidth) {
     let shared = cx.shared;
     cache.lists.refresh(shared);
-    let rows = match width {
-        PanelWidth::Narrow => Rows::Four,
-        PanelWidth::Roomy if ui.available_height() >= FOLD_BELOW => Rows::Three,
-        PanelWidth::Roomy => Rows::Two,
-    };
     let size = width.control_size();
+    let rows = Rows::pick(width, &measure(ui, cache, cx, size));
     let [media, document] = cache.lists.pickers(shared);
     let (mut opened_media, mut opened_document, mut turn) = (None, None, None);
     match rows {
@@ -74,15 +62,40 @@ pub(super) fn show(ui: &mut egui::Ui, cache: &mut Cache, cx: &mut PanelCx<'_>, w
                 opened_document = document.show(ui, ui.available_width(), size);
             });
         }
-        Rows::Four => {
+        Rows::One => {
+            turn = row::show(ui, |ui| {
+                ui.label(TextRole::Heading.rich(TITLE));
+                let gap = ui.spacing().item_spacing.x;
+                let left =
+                    ui.available_width() - cache.pager.width() - actions_width(cx, size, gap);
+                // The gap after the title is spent already, so three are left: between the
+                // pickers, before the pager and before the buttons.
+                let picker = (left - 3.0 * gap) / 2.0;
+                opened_media = media.show(ui, picker, size);
+                opened_document = document.show(ui, picker, size);
+                let step = cache.pager.show(ui, &shared.source, size);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    actions(ui, cx, size);
+                });
+                step
+            });
+        }
+        Rows::Four | Rows::Folded => {
             // A row takes its height from the control height of the style, so that height is
             // raised to the height of these controls.
             ui.scope(|ui| {
                 ui.spacing_mut().interact_size.y = size.height();
-                section_header(ui, TITLE, |ui| actions(ui, cx, size));
-                let room = ui.available_width();
-                opened_media = media.show(ui, room, size);
-                opened_document = document.show(ui, room, size);
+                section_header(ui, TITLE, |ui| {
+                    actions(ui, cx, size);
+                    if rows == Rows::Folded {
+                        choose_the_document(ui, &mut cache.is_choosing, size);
+                    }
+                });
+                if rows == Rows::Four || cache.is_choosing {
+                    let room = ui.available_width();
+                    opened_media = media.show(ui, room, size);
+                    opened_document = document.show(ui, room, size);
+                }
                 turn = row::show(ui, |ui| cache.pager.show(ui, &shared.source, size));
             });
         }
@@ -96,6 +109,38 @@ pub(super) fn show(ui: &mut egui::Ui, cache: &mut Cache, cx: &mut PanelCx<'_>, w
     }
     if let Some(delta) = turn {
         cx.intents.push(Intent::TurnPage(delta));
+    }
+}
+
+fn measure(ui: &egui::Ui, cache: &Cache, cx: &PanelCx<'_>, size: ControlSize) -> Parts {
+    let gap = ui.spacing().item_spacing;
+    Parts {
+        room: ui.available_size(),
+        gap,
+        size,
+        title: TextRole::Heading.galley(ui, TITLE, color::TEXT).size().x,
+        pager: cache.pager.width(),
+        actions: actions_width(cx, size, gap.x),
+    }
+}
+
+/// How wide the buttons of `actions` are together.
+fn actions_width(cx: &PanelCx<'_>, size: ControlSize, gap: f32) -> f32 {
+    let count = if cx.shared.source.target.is_some() {
+        2.0
+    } else {
+        1.0
+    };
+    count * size.height() + (count - 1.0) * gap
+}
+
+/// The button of a folded header that shows or hides the two pickers.
+fn choose_the_document(ui: &mut egui::Ui, is_choosing: &mut bool, size: ControlSize) {
+    let button = Button::icon_only(Icon::DOCUMENT, CHOOSE_THE_DOCUMENT)
+        .size(size)
+        .selected(*is_choosing);
+    if ui.add(button).clicked() {
+        *is_choosing = !*is_choosing;
     }
 }
 

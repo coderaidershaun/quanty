@@ -3,7 +3,9 @@
 
 use eframe::egui;
 
+use crate::panels::PanelWidth;
 use crate::panels::labels::caption;
+use crate::panels::pages::STACK_BELOW;
 use crate::state::Library;
 use crate::theme::{TextRole, space};
 use crate::widgets::{ControlSize, Dropdown, Step, Stepper, TextInput, paint_caret};
@@ -21,8 +23,6 @@ const DRY_RUN: &str = "Dry run (export, check and plan only; asks no model)";
 const FIELD_WIDTH: f32 = 360.0;
 /// The captions of the steppers are given this much room, so the three steppers line up.
 const CAPTION_WIDTH: f32 = 200.0;
-/// Below this width of the form, the caption of a stepper stands over it.
-const STACK_BELOW: f32 = 480.0;
 /// What a row of the Hold out list takes besides its words: the box to tick and the margins.
 const ROW_FRAME: f32 = 40.0;
 
@@ -277,9 +277,10 @@ fn held_out_summary(held: &[DocId], offered: &[(DocId, String)]) -> String {
 /// The caption in a cell of fixed width, then the stepper, or the stepper under its caption in a
 /// narrow form. True when the value changed.
 fn pick_count(ui: &mut egui::Ui, counter: &Counter, value: &mut u32) -> bool {
-    let step = if ui.available_width() < STACK_BELOW {
+    let width = PanelWidth::of(ui, STACK_BELOW);
+    let step = if width == PanelWidth::Narrow {
         caption(ui, counter.caption);
-        stepper(ui, counter, *value)
+        stepper(ui, counter, *value, width.control_size())
     } else {
         ui.horizontal(|ui| {
             ui.allocate_ui(
@@ -291,7 +292,7 @@ fn pick_count(ui: &mut egui::Ui, counter: &Counter, value: &mut u32) -> bool {
                     ui.label(TextRole::Label.rich(counter.caption));
                 },
             );
-            stepper(ui, counter, *value)
+            stepper(ui, counter, *value, width.control_size())
         })
         .inner
     };
@@ -303,8 +304,9 @@ fn pick_count(ui: &mut egui::Ui, counter: &Counter, value: &mut u32) -> bool {
     true
 }
 
-fn stepper(ui: &mut egui::Ui, counter: &Counter, value: u32) -> Option<Step> {
+fn stepper(ui: &mut egui::Ui, counter: &Counter, value: u32, size: ControlSize) -> Option<Step> {
     Stepper::new(&value.to_string())
+        .size(size)
         .previous(counter.fewer, value > 0)
         .next(counter.more, value < counter.max)
         .show(ui)

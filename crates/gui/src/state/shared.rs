@@ -37,6 +37,8 @@ pub struct Shared {
     pub ask_view: AskView,
     /// The last view other than the Answer that was chosen. `None` until one is.
     side_view: Option<AskView>,
+    /// The Source view was opened from the Library, so Back returns there.
+    pub(super) source_from_library: bool,
     pub cues: Cues,
     pub ask: AskSession,
     pub source: SourceNav,
@@ -96,8 +98,11 @@ impl Shared {
             Intent::StepResult(delta) => self.step_result(delta, effects),
             Intent::FocusConcept(concept) => self.ask.focused_concept = concept,
             Intent::OpenSource { doc, page, piece } => {
+                // Choosing another page inside the Source view keeps where it was opened from.
+                let from_library = self.tab == Tab::Library || self.returns_to_library();
                 self.open_source(doc, page, piece, effects);
                 self.show_ask_view(AskView::Source);
+                self.source_from_library = from_library;
             }
             Intent::TurnPage(delta) => self.turn_page(delta, effects),
             Intent::ReloadSource => self.reload_source(effects),
@@ -288,6 +293,7 @@ impl Shared {
     fn open_tab(&mut self, tab: Tab) {
         self.tab = tab;
         self.maximised = None;
+        self.source_from_library = false;
     }
 
     /// The view that a medium window shows beside the Answer. Never the Answer.
@@ -309,6 +315,7 @@ impl Shared {
     fn back_step(&self) -> Option<BackStep> {
         match self.tab {
             Tab::Ask if self.maximised.is_some() => Some(BackStep::Restore),
+            Tab::Ask if self.returns_to_library() => Some(BackStep::ReturnToLibrary),
             Tab::Ask if self.ask_view != AskView::Answer => Some(BackStep::ShowAnswer),
             Tab::Ask => None,
             Tab::Library => Some(BackStep::UpTheShelf),
@@ -316,10 +323,17 @@ impl Shared {
         }
     }
 
-    /// Any view other than the Answer also becomes the side view.
+    /// Whether the Source view that shows is the one the Library opened.
+    fn returns_to_library(&self) -> bool {
+        self.tab == Tab::Ask && self.ask_view == AskView::Source && self.source_from_library
+    }
+
+    /// Any view other than the Answer also becomes the side view. A view that is chosen is not the
+    /// Library's any more.
     fn show_ask_view(&mut self, view: AskView) {
         self.ask_view = view;
-        if view != AskView::Answer {
+        self.source_from_library = false;
+        if AskView::SIDE.contains(&view) {
             self.side_view = Some(view);
         }
     }
@@ -333,12 +347,13 @@ impl Shared {
         }
     }
 
-    /// Undoes one step, the first that applies: a maximised panel of the Ask tab is put back, the
-    /// Ask tab returns to its Answer, the Library goes up one level, any other tab returns to the
-    /// Ask tab.
+    /// Undoes one step, the first that applies: a maximised panel of the Ask tab is put back, a
+    /// Source view that the Library opened returns to the Library, the Ask tab returns to its
+    /// Answer, the Library goes up one level, any other tab returns to the Ask tab.
     fn back(&mut self, effects: &mut Vec<Effect>) {
         match self.back_step() {
             Some(BackStep::Restore) => self.maximised = None,
+            Some(BackStep::ReturnToLibrary) => self.open_tab(Tab::Library),
             Some(BackStep::ShowAnswer) => self.ask_view = AskView::Answer,
             Some(BackStep::UpTheShelf) => {
                 if !self.back_on_shelf(effects) {
@@ -364,6 +379,7 @@ impl Shared {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BackStep {
     Restore,
+    ReturnToLibrary,
     ShowAnswer,
     UpTheShelf,
     OpenAsk,

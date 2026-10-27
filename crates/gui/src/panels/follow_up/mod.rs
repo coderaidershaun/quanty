@@ -6,10 +6,13 @@ mod guidance;
 
 use eframe::egui;
 
-use crate::panels::PanelCx;
+use crate::panels::{PanelCx, PanelWidth};
 use crate::theme::{Icon, TextRole, space};
 use crate::widgets;
 use contract::{AskDraft, Intent};
+
+/// A panel narrower than this gives its question box room for a finger on the send button.
+const NARROW_BELOW: f32 = 380.0;
 
 #[derive(Debug, Default)]
 pub struct Local {
@@ -26,6 +29,10 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
             ..Local::default()
         };
     }
+    let box_size = match PanelWidth::of(ui, NARROW_BELOW) {
+        PanelWidth::Narrow => widgets::ControlSize::Large,
+        PanelWidth::Roomy => widgets::ControlSize::Medium,
+    };
     let mut asked = None;
     widgets::panel_frame(widgets::Surface::Desk).show(ui, |ui| {
         ui.set_min_size(ui.available_size());
@@ -39,7 +46,7 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
                 .show(ui);
             return;
         };
-        let typed = ask_box(ui, &mut local.draft);
+        let typed = ask_box(ui, &mut local.draft, box_size);
         let clicked = egui::ScrollArea::vertical()
             .id_salt(("follow_up", ask.generation))
             .auto_shrink([false, false])
@@ -56,12 +63,12 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     }
 }
 
-fn ask_box(ui: &mut egui::Ui, draft: &mut String) -> Option<String> {
+fn ask_box(ui: &mut egui::Ui, draft: &mut String, size: widgets::ControlSize) -> Option<String> {
     let outcome = widgets::TextInput::new(guidance::BOX_LABEL, draft)
         .id_salt("follow_up")
         .placeholder(guidance::BOX_HINT)
         .trailing(Icon::SEND, guidance::SEND_LABEL)
-        .size(widgets::ControlSize::Medium)
+        .size(size)
         .show(ui);
     outcome.response.on_hover_text(guidance::BOX_HOVER);
     let question = draft.trim();

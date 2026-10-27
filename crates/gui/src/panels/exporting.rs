@@ -4,7 +4,7 @@
 use eframe::egui;
 use export::Format;
 
-use super::PanelCx;
+use super::{PanelCx, PanelWidth};
 use crate::theme::{Icon, size, space};
 use crate::widgets::{Button, ControlSize, Notice};
 use contract::{ExportPlace, ExportRequest, Intent, NoticeKind};
@@ -15,12 +15,16 @@ pub(crate) const ITEM_WIDTH: f32 = 6.0 * size::CONTROL_LG;
 
 const BUSY: &str = "A file is being exported.";
 
-/// One item for each kind of file. `request` builds what the panel asks to export, and gives
-/// `None` when there is nothing to export. Gives back whether an item was chosen, so that the
-/// caller can close its menu.
+/// A strip narrower than this makes its buttons tall enough for a finger.
+const NARROW_BELOW: f32 = 480.0;
+
+/// One item for each kind of file, `size` tall. `request` builds what the panel asks to export,
+/// and gives `None` when there is nothing to export. Gives back whether an item was chosen, so
+/// that the caller can close its menu.
 pub(crate) fn items(
     ui: &mut egui::Ui,
     cx: &mut PanelCx<'_>,
+    size: ControlSize,
     request: impl Fn(Format) -> Option<ExportRequest>,
 ) -> bool {
     let is_busy = cx.shared.is_exporting();
@@ -29,7 +33,7 @@ pub(crate) fn items(
         let label = format!("Export as {}\u{2026}", format.name());
         let item = Button::ghost(&label)
             .icon(Icon::DOCUMENT)
-            .size(ControlSize::Small)
+            .size(size)
             .min_width(ITEM_WIDTH)
             .start_aligned();
         let response = ui.add_enabled(!is_busy, item).on_disabled_hover_text(BUSY);
@@ -53,7 +57,13 @@ pub(crate) fn strip(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, place: ExportPlace)
         NoticeKind::Done => Notice::success(&notice.title),
         NoticeKind::Failed => Notice::error(&notice.title),
     };
-    if strip.body(&notice.detail).dismissable().show(ui).dismissed {
+    let size = PanelWidth::of(ui, NARROW_BELOW).control_size();
+    let shown = strip
+        .body(&notice.detail)
+        .dismissable()
+        .control_size(size)
+        .show(ui);
+    if shown.dismissed {
         cx.intents.push(Intent::DismissNotice(notice.id));
     }
 }

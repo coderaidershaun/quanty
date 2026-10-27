@@ -1,13 +1,16 @@
-//! Checks the window around the panels: what Back does in a wide window, and how the top bar
-//! fits every form.
+//! Checks the window around the panels: what Back does in a wide window and with a sheet open, and
+//! how the top bar fits every form.
 
 use contract::{AskView, Intent, Tab};
+use eframe::egui;
+use eframe::egui::Rect;
 use eframe::egui::accesskit::Role;
-use eframe::egui::{Pos2, Rect, Vec2};
+use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::{DEFAULT_WINDOW, PHONE_LANDSCAPE_WINDOW, PHONE_WINDOW, TABLET_WINDOW};
 use gui::testkit;
 
-use crate::flows::{Wheel, Window, click_in, node_in, panels, scroll_to, shared};
+use crate::flows::fit;
+use crate::flows::{Wheel, Window, click_in, has, node_in, panels, scroll_to, shared};
 
 /// The top-bar tabs, in the order they stand in the bar.
 const TABS: [(Tab, &str); 4] = [
@@ -19,6 +22,8 @@ const TABS: [(Tab, &str); 4] = [
 
 /// A medium window wide enough to keep both dropdowns in the bar.
 const MEDIUM_WITH_ROOM: [f32; 2] = [1000.0, 700.0];
+
+const NOTES: &str = "Quanty Sample Notes";
 
 #[test]
 fn a_wide_window_has_nothing_to_go_back_to_after_a_citation() {
@@ -52,18 +57,17 @@ fn a_wide_window_has_nothing_to_go_back_to_after_a_citation() {
 /// overlap. The model control is one button or the two dropdowns, and the Library has none.
 fn assert_top_bar_fits(harness: &Window, window: [f32; 2], tab: Tab) {
     let bar = panels(window).top_bar;
-    let screen = Rect::from_min_size(Pos2::ZERO, Vec2::from(window));
     let find = |role, name: &'static str| {
-        node_in(harness, role, name, bar).map(|node| (name, node.rect()))
+        node_in(harness, role, name, bar).map(|node| (name.to_owned(), node.rect()))
     };
-    let mut parts: Vec<(&str, Rect)> = Vec::new();
+    let mut parts: Vec<(String, Rect)> = Vec::new();
     for (_, name) in TABS {
         let found = find(Role::Tab, name)
             .unwrap_or_else(|| panic!("{window:?}: no tab `{name}` is in the bar {bar:?}"));
         parts.push(found);
     }
     parts.extend(find(Role::Label, "Quanty"));
-    let model_control: Vec<(&str, Rect)> = [
+    let model_control: Vec<(String, Rect)> = [
         (Role::Button, "Model choices"),
         (Role::ComboBox, "Model"),
         (Role::ComboBox, "Thinking level"),
@@ -71,7 +75,10 @@ fn assert_top_bar_fits(harness: &Window, window: [f32; 2], tab: Tab) {
     .into_iter()
     .filter_map(|(role, name)| find(role, name))
     .collect();
-    let names: Vec<&str> = model_control.iter().map(|(name, _)| *name).collect();
+    let names: Vec<&str> = model_control
+        .iter()
+        .map(|(name, _)| name.as_str())
+        .collect();
     if tab == Tab::Library {
         assert!(names.is_empty(), "{window:?}: {names:?} on the Library");
     } else {
@@ -81,25 +88,7 @@ fn assert_top_bar_fits(harness: &Window, window: [f32; 2], tab: Tab) {
         );
     }
     parts.extend(model_control);
-
-    // SMELL: the footer test of a phone and the bottom navigation test repeat this check that
-    // parts lie inside their room and apart. One helper beside the other shared test helpers would
-    // serve all three.
-    for (name, rect) in &parts {
-        assert!(
-            bar.contains_rect(*rect) && screen.contains_rect(*rect),
-            "{window:?}: `{name}` {rect:?} is outside the bar {bar:?}"
-        );
-    }
-    for (index, (name, rect)) in parts.iter().enumerate() {
-        for (other_name, other) in &parts[index + 1..] {
-            let overlap = rect.intersect(*other);
-            assert!(
-                overlap.width() <= 0.0 || overlap.height() <= 0.0,
-                "{window:?}: `{name}` {rect:?} overlaps `{other_name}` {other:?}"
-            );
-        }
-    }
+    fit::assert_inside_and_apart(&parts, bar, fit::window_rect(window));
 }
 
 #[test]
@@ -126,4 +115,135 @@ fn the_top_bar_fits_every_form() {
             assert_top_bar_fits(&harness, window, tab);
         }
     }
+}
+
+fn tap(harness: &mut Window, role: Role, name: &str) {
+    click_in(harness, role, name, fit::window_rect(PHONE_WINDOW));
+}
+
+fn is_a_popup_open(harness: &Window) -> bool {
+    egui::Popup::is_any_open(&harness.ctx)
+}
+
+fn is_a_sheet_open(harness: &Window) -> bool {
+    harness
+        .ctx
+        .memory(|memory| memory.top_modal_layer())
+        .is_some()
+}
+
+/// A sheet or popup of a phone, how a person opens it, and how a test sees that it is open.
+struct Overlay {
+    name: &'static str,
+    open: fn(&mut Window),
+    is_shown: fn(&Window) -> bool,
+}
+
+const OVERLAYS: [Overlay; 5] = [
+    Overlay {
+        name: "the model sheet",
+        open: |harness| tap(harness, Role::Button, "Model choices"),
+        is_shown: |harness| has(harness, Role::ComboBox, "Model"),
+    },
+    Overlay {
+        name: "the footer popup",
+        open: |harness| {
+            let footer = panels(PHONE_WINDOW).footer;
+            harness
+                .query_all_by_role(Role::Button)
+                .find(|button| {
+                    let name = button.accesskit_node().label().unwrap_or_default();
+                    name.starts_with("Google Gemini:") && footer.contains(button.rect().center())
+                })
+                .expect("the slim footer has a row for each account")
+                .click();
+            testkit::settle(harness);
+        },
+        is_shown: is_a_popup_open,
+    },
+    Overlay {
+        name: "the Filters sheet",
+        open: |harness| tap(harness, Role::Button, "Filters"),
+        is_shown: |harness| has(harness, Role::Button, "Done"),
+    },
+    Overlay {
+        name: "the delete sheet",
+        open: |harness| {
+            tap(harness, Role::Tab, "Library");
+            tap(harness, Role::Button, NOTES);
+            tap(harness, Role::Button, "About this media");
+            tap(harness, Role::Button, &format!("Delete media {NOTES}"));
+        },
+        is_shown: |harness| has(harness, Role::Label, &format!("Delete the media {NOTES}?")),
+    },
+    Overlay {
+        name: "the Share menu",
+        open: |harness| tap(harness, Role::Button, "Share"),
+        is_shown: |harness| has(harness, Role::Button, "Copy as Markdown"),
+    },
+];
+
+fn go_back(harness: &mut Window) {
+    harness.state_mut().push(Intent::Back);
+    testkit::settle(harness);
+}
+
+#[test]
+fn back_closes_the_sheet_on_top_and_does_nothing_else() {
+    for overlay in OVERLAYS {
+        let mut harness = testkit::app("black-scholes", PHONE_WINDOW);
+        testkit::settle(&mut harness);
+        (overlay.open)(&mut harness);
+        assert!(
+            (overlay.is_shown)(&harness),
+            "{} did not open",
+            overlay.name
+        );
+        let before = shared(&harness).clone();
+        assert!(
+            harness.state().can_go_back(),
+            "{}: Back has a sheet to close",
+            overlay.name
+        );
+
+        go_back(&mut harness);
+        assert!(
+            !(overlay.is_shown)(&harness),
+            "{} is still open after Back",
+            overlay.name
+        );
+        assert!(
+            !is_a_popup_open(&harness) && !is_a_sheet_open(&harness),
+            "{}: something is still open",
+            overlay.name
+        );
+        assert_eq!(
+            *shared(&harness),
+            before,
+            "{}: Back changed more than the sheet",
+            overlay.name
+        );
+    }
+
+    // A window that shows every view at once has a sheet to close too.
+    let mut harness = testkit::app("black-scholes", DEFAULT_WINDOW);
+    testkit::settle(&mut harness);
+    let screen = fit::window_rect(DEFAULT_WINDOW);
+    click_in(&mut harness, Role::Button, "Share", screen);
+    assert!(harness.state().can_go_back(), "the menu is open");
+    go_back(&mut harness);
+    assert!(!has(&harness, Role::Button, "Copy as Markdown"));
+    assert!(!harness.state().can_go_back(), "nothing else is left");
+
+    // A list that is open inside the model sheet closes first, and the sheet stays.
+    let mut harness = testkit::app("black-scholes", PHONE_WINDOW);
+    testkit::settle(&mut harness);
+    tap(&mut harness, Role::Button, "Model choices");
+    tap(&mut harness, Role::ComboBox, "Model");
+    assert!(is_a_popup_open(&harness), "the list of models is open");
+    go_back(&mut harness);
+    assert!(!is_a_popup_open(&harness), "Back closed the list");
+    assert!(has(&harness, Role::ComboBox, "Model"), "the sheet stays");
+    go_back(&mut harness);
+    assert!(!has(&harness, Role::ComboBox, "Model"), "then the sheet");
 }

@@ -230,6 +230,8 @@ fn a_document_is_deleted_from_its_page_once_its_sheet_is_confirmed() {
     the_confirm_sends_one_delete_and_the_document_is_gone(&mut harness, &seen, doc);
 }
 
+// SMELL: this file is over 400 lines. The delete of a media and the deletes that fail, from here
+// down, are the part to move out first, so that this file keeps the delete of a document.
 fn each_titled_media_page_has_its_own_delete_button_and_the_ingest_card_has_none(
     harness: &mut Window,
 ) {

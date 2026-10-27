@@ -6,7 +6,9 @@
 use eframe::egui;
 
 use super::{Local, Missing};
+use crate::panels::PanelWidth;
 use crate::panels::labels::{caption, list_of};
+use crate::panels::pages::STACK_BELOW;
 use crate::theme::{TextRole, color, space};
 use crate::widgets::{Button, Chip, TextInput, TextInputResponse};
 use contract::{Category, DocumentName, IngestRequest, Intent};
@@ -20,8 +22,6 @@ const CHAPTER_NAME: &str = "Chapter name";
 const TITLE: &str = "Title";
 const OWN_TAGS: &str = "Tags for this PDF";
 const NUMBER_WIDTH: f32 = 120.0;
-/// Below this width of the form, the number and the name of a chapter stand one under the other.
-const STACK_BELOW: f32 = 480.0;
 
 /// What a book's PDF is: one of its chapters, or a part such as its index or its glossary.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -218,9 +218,12 @@ fn name_box(ui: &mut egui::Ui, typed: &mut DocumentFields) -> TextInputResponse 
 
 fn part_chips(ui: &mut egui::Ui, part: &mut BookPart) {
     caption(ui, PART_OF_THE_BOOK);
+    let chip_height = PanelWidth::of(ui, STACK_BELOW).chip_height();
     ui.horizontal_wrapped(|ui| {
         for (choice, label) in [(BookPart::Chapter, CHAPTER), (BookPart::Other, OTHER_PART)] {
-            let chip = Chip::plain(label).selected(choice == *part);
+            let chip = Chip::plain(label)
+                .selected(choice == *part)
+                .min_height(chip_height);
             if ui.add(chip).clicked() {
                 *part = choice;
             }

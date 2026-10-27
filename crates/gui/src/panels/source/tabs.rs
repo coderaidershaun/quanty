@@ -3,8 +3,8 @@
 
 use eframe::egui;
 
-use super::PanelWidth;
 use crate::media::Media;
+use crate::panels::PanelWidth;
 use crate::state::SourceNav;
 use crate::theme::{Icon, Tone, size, space};
 use crate::widgets::{Tab, TabStrip};

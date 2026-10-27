@@ -39,18 +39,23 @@ pub(super) fn show(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>) {
         .add_enabled(has_answer, button)
         .on_disabled_hover_text("There is no answer to share yet.");
     let ask = pane.ask;
+    let size = if pane.is_narrow {
+        ControlSize::Medium
+    } else {
+        ControlSize::Small
+    };
     egui::Popup::menu(&response)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| {
-            copy_item(ui, pane);
-            if exporting::items(ui, pane.cx, |format| ask.export_request(format)) {
+            copy_item(ui, pane, size);
+            if exporting::items(ui, pane.cx, size, |format| ask.export_request(format)) {
                 ui.close();
             }
         });
 }
 
 /// The menu stays open after a copy, and the item reads "Copied" until the pointer leaves it.
-fn copy_item(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>) {
+fn copy_item(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, size: ControlSize) {
     let is_copied = pane.view.copied == Some(Copied::Answer);
     let (label, icon) = if is_copied {
         ("Copied", Icon::CHECK)
@@ -59,7 +64,7 @@ fn copy_item(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>) {
     };
     let item = Button::ghost(label)
         .icon(icon)
-        .size(ControlSize::Small)
+        .size(size)
         .min_width(exporting::ITEM_WIDTH)
         .start_aligned();
     let response = ui.add(item);

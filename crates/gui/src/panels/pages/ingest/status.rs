@@ -6,11 +6,11 @@ use eframe::egui;
 use super::{Local, Missing};
 use crate::panels::PanelCx;
 use crate::panels::labels::{
-    COPY_COMMAND, START_OFF_WHILE_DELETING, TRY_AGAIN, cost_text, detail, spent_text,
-    tokens_by_model,
+    COPY_COMMAND, START_OFF_WHILE_DELETING, TRY_AGAIN, cost_text, detail, tokens_by_model,
 };
+use crate::panels::pages::progress::stage_row;
 use crate::state::IngestJob;
-use crate::theme::{TextRole, color, space};
+use crate::theme::{TextRole, space};
 use crate::widgets::{self, Button, Notice};
 use contract::{
     ChapterInsights, ChapterState, DocId, Failure, IngestOutcome, IngestProgress, IngestReport,
@@ -197,7 +197,7 @@ fn stage_words(stage: Option<IngestStage>) -> String {
 fn running(ui: &mut egui::Ui, progress: Option<&IngestProgress>) {
     let stage = progress.map(|progress| progress.stage);
     let words = stage_words(stage);
-    stage_row(ui, &words, progress.and_then(spent_so_far).as_deref());
+    stage_row(ui, &words, progress.map(|progress| &progress.spent));
     ui.add_space(space::XS);
     match stage.and_then(IngestStage::share_done) {
         Some(share) => widgets::progress_bar(ui, &words, share),
@@ -205,43 +205,6 @@ fn running(ui: &mut egui::Ui, progress: Option<&IngestProgress>) {
     };
     ui.add_space(space::SM);
     ui.label(TextRole::Small.rich(KEEP_OPEN));
-}
-
-/// The words of the stage, with what was spent so far at the right end of their line when both
-/// fit on it, and under them when they do not.
-// SMELL: the Datasets page keeps its own copy of this row and of the words of what was spent, so
-// a change to one must be made in both.
-fn stage_row(ui: &mut egui::Ui, words: &str, spent: Option<&str>) {
-    let words_width = TextRole::BodyStrong
-        .galley(ui, words, TextRole::BodyStrong.color())
-        .size()
-        .x;
-    let gap_and_spent_width = spent.map_or(0.0, |spent| {
-        let width = TextRole::Small
-            .galley(ui, spent, color::TEXT_MUTED)
-            .size()
-            .x;
-        ui.spacing().item_spacing.x + width
-    });
-    if words_width + gap_and_spent_width > ui.available_width() {
-        ui.label(TextRole::BodyStrong.rich(words));
-        if let Some(spent) = spent {
-            ui.label(TextRole::Small.rich(spent).color(color::TEXT_MUTED));
-        }
-        return;
-    }
-    ui.horizontal(|ui| {
-        ui.label(TextRole::BodyStrong.rich(words));
-        if let Some(spent) = spent {
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(TextRole::Small.rich(spent).color(color::TEXT_MUTED));
-            });
-        }
-    });
-}
-
-fn spent_so_far(progress: &IngestProgress) -> Option<String> {
-    (progress.spent.tokens() > 0).then(|| format!("{} so far", spent_text(&progress.spent)))
 }
 
 fn finished(

@@ -6,7 +6,7 @@ use eframe::egui;
 use super::Local;
 use super::filters::{Filter, Room};
 use super::layout::{PICKER_WIDTH, Rects, slot};
-use crate::theme::{TextRole, space, stroke};
+use crate::theme::{TextRole, space};
 use crate::widgets::{self, Button, ControlSize};
 
 /// Twice as wide as a list on the bar, so a long title or name shows more of itself in the sheet.
@@ -53,15 +53,11 @@ impl Local {
 
     /// Done closes the sheet, and so do a click beside it and Escape.
     fn show_sheet(&mut self, ctx: &egui::Context, rects: &Rects, heading: &str) {
-        // SMELL: the kit keeps the margin and the outline of its sheet to itself, so they are
-        // repeated here. If the kit changes them, the sheet can be cut off at the sides of a phone.
-        let side = 2.0 * (space::LG + space::XL + stroke::BORDER);
-        let room = Room {
-            width: SHEET_WIDTH.min(ctx.content_rect().width() - side),
-            size: ControlSize::Medium,
-        };
-        let sheet = widgets::modal(ctx, egui::Id::new("ask bar filters"), |ui| {
-            ui.set_width(room.width);
+        let sheet = widgets::modal(ctx, egui::Id::new("ask bar filters"), SHEET_WIDTH, |ui| {
+            let room = Room {
+                width: ui.available_width(),
+                size: ControlSize::Medium,
+            };
             ui.spacing_mut().item_spacing.y = space::SM;
             ui.label(TextRole::Heading.rich(heading));
             for filter in in_the_sheet(rects) {

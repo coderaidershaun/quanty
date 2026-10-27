@@ -191,7 +191,12 @@ pub fn settle_within(harness: &mut Harness<'_, App>, limit: Duration) {
         // is idle.
         harness.run_ok();
         if harness.state().is_idle() {
-            return;
+            // The last task may have ended after the last frame was drawn. One more run takes in
+            // what it sent.
+            harness.run_ok();
+            if harness.state().is_idle() {
+                return;
+            }
         }
         assert!(
             started.elapsed() < limit,

@@ -21,6 +21,7 @@ pub use marks::{Badge, Chip, CitationChip, StepMarker, StepState, dot, logo};
 pub use messages::{
     Choice, Confirm, Notice, NoticeResponse, Placeholder, PlaceholderResponse, modal,
 };
+pub(crate) use messages::{close_the_top_sheet, forget_the_close_request, is_sheet_or_popup_open};
 pub use progress::{indeterminate_bar, progress_bar, spinner};
 
 pub(crate) fn interactive_cursor(ui: &eframe::egui::Ui, response: &eframe::egui::Response) {

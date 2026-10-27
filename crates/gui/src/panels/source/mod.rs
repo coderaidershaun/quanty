@@ -12,10 +12,10 @@ mod tabs;
 
 use eframe::egui;
 
-use crate::panels::PanelCx;
+use crate::panels::{PanelCx, PanelWidth};
 use crate::state::SourceTarget;
 use crate::theme::space;
-use crate::widgets::{ControlSize, Surface, panel_frame};
+use crate::widgets::{Surface, panel_frame};
 use contract::Loadable;
 use follow::marked_piece;
 use tabs::{SourceTab, TabCx};
@@ -26,30 +26,6 @@ pub(super) use piece::{body as piece_body, kind_name};
 /// tall enough for a finger. The panel of the smallest wide window is 386 points inside and a
 /// phone's is at most 341, so a wide window is never narrow.
 const NARROW_BELOW: f32 = 380.0;
-
-/// Whether the panel is narrow, judged by its own width and not by the window's.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PanelWidth {
-    Narrow,
-    Roomy,
-}
-
-impl PanelWidth {
-    fn of(ui: &egui::Ui) -> PanelWidth {
-        if ui.available_width() < NARROW_BELOW {
-            PanelWidth::Narrow
-        } else {
-            PanelWidth::Roomy
-        }
-    }
-
-    fn control_size(self) -> ControlSize {
-        match self {
-            PanelWidth::Narrow => ControlSize::Medium,
-            PanelWidth::Roomy => ControlSize::Small,
-        }
-    }
-}
 
 #[derive(Debug, Default)]
 pub struct Local {
@@ -72,7 +48,7 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     panel_frame(Surface::Sheet).show(ui, |ui| {
         ui.set_min_size(ui.available_size());
         ui.spacing_mut().item_spacing = egui::vec2(space::SM, space::SM);
-        let width = PanelWidth::of(ui);
+        let width = PanelWidth::of(ui, NARROW_BELOW);
         header::show(ui, &mut local.header, cx, width);
         let is_anything_open = !matches!(shared.source.page, Loadable::Idle);
         let list = tabs::tab_list(&shared.source, &local.index);
@@ -101,8 +77,8 @@ fn body(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>, width: Panel
         page::prefetch(&mut *cx.media, page);
     }
     match (local.tab, page) {
-        (SourceTab::Concepts, _) => concepts::show(ui, cx),
-        (_, None) => states::show(ui, cx),
+        (SourceTab::Concepts, _) => concepts::show(ui, cx, width),
+        (_, None) => states::show(ui, cx, width),
         (tab, Some(page)) => {
             let mut tab_cx = TabCx {
                 page,

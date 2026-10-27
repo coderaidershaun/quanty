@@ -3,6 +3,7 @@
 
 use eframe::egui;
 
+use super::width;
 use crate::panels::PanelCx;
 use crate::panels::heights::Heights;
 use crate::panels::labels::TRY_AGAIN;
@@ -44,6 +45,7 @@ fn failed(ui: &mut egui::Ui, failure: &Failure, intents: &mut Vec<Intent>) {
     let shown = Placeholder::error(FAILED)
         .hint(&failure.hint)
         .action(TRY_AGAIN)
+        .action_size(width(ui).control_size())
         .show(ui);
     shown.response.on_hover_text(&failure.detail);
     if shown.action_clicked {

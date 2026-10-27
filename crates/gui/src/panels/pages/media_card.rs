@@ -5,8 +5,9 @@
 
 use eframe::egui;
 
+use crate::panels::PanelWidth;
 use crate::panels::labels::{AUTHORS, LIST_PLACEHOLDER, TAGS, caption, list_of};
-use crate::theme::{Icon, TextRole, Tone, size, space};
+use crate::theme::{Icon, TextRole, Tone, space};
 use crate::widgets::{Badge, Button, Chip, ControlSize, Notice, TextInput};
 use contract::{Category, Failure, Media, MediaEdit, NewMedia};
 
@@ -19,6 +20,10 @@ const CANCEL: &str = "Cancel";
 const NEW_NOTE: &str =
     "A saved media stays in this list with its authors and tags, also before its first PDF.";
 const EDIT_NOTE: &str = "The title names the media's folder, so it cannot change.";
+
+/// A card narrower than this makes its pencil and the chips of its form tall enough for a
+/// finger.
+const NARROW_BELOW: f32 = 480.0;
 
 /// What the form of a media holds as typed. For an edit, the title is the library's own.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -91,7 +96,7 @@ pub(super) fn title_line<R>(
         .size()
         .x;
     let title_and_badge_width =
-        title_width + ui.spacing().item_spacing.x + badge_width(ui, category);
+        title_width + ui.spacing().item_spacing.x + category_badge(category).width(ui);
     let (_, inner) = egui::containers::Sides::new().shrink_left().show(
         ui,
         |ui| {
@@ -110,15 +115,21 @@ pub(super) fn title_line<R>(
     inner
 }
 
+/// The size of the pencil of a card that has all its width left in `ui`. Ask before the title
+/// line, which has only the width that its title leaves.
+pub(super) fn pencil_size(ui: &egui::Ui) -> ControlSize {
+    PanelWidth::of(ui, NARROW_BELOW).control_size()
+}
+
 /// The pencil of a title line. Returns true when it was pressed.
-pub(super) fn pencil(ui: &mut egui::Ui, title: &str, pencil: Pencil) -> bool {
+pub(super) fn pencil(ui: &mut egui::Ui, title: &str, pencil: Pencil, size: ControlSize) -> bool {
     if pencil == Pencil::Hidden {
         return false;
     }
     let name = format!("Edit {title}");
     let button = Button::secondary(EDIT)
         .icon(Icon::EDIT)
-        .size(ControlSize::Small)
+        .size(size)
         .accessible_name(&name);
     ui.add_enabled(pencil == Pencil::On, button).clicked()
 }
@@ -130,18 +141,6 @@ pub(super) fn category_icon(category: Category) -> Icon {
         Category::Paper => Icon::DOCUMENT,
         Category::Other => Icon::FOLDER,
     }
-}
-
-// SMELL: this repeats the rule by which the badge sizes itself, because the badge cannot be asked
-// for its width before it is drawn. When the badge changes, this must change with it, or a title
-// line decides on a wrong width.
-fn badge_width(ui: &egui::Ui, category: Category) -> f32 {
-    let words = category.label().to_uppercase();
-    let words_width = TextRole::Caps
-        .galley(ui, &words, TextRole::Caps.color())
-        .size()
-        .x;
-    size::GLYPH + space::XS + words_width
 }
 
 fn category_badge(category: Category) -> Badge<'static> {
@@ -237,9 +236,12 @@ pub(super) fn media_form(
 
 fn boxes(ui: &mut egui::Ui, fields: &mut MediaFields, purpose: Purpose) {
     caption(ui, CATEGORY);
+    let chip_height = PanelWidth::of(ui, NARROW_BELOW).chip_height();
     ui.horizontal_wrapped(|ui| {
         for category in Category::ALL {
-            let chip = Chip::plain(category.label()).selected(category == fields.category);
+            let chip = Chip::plain(category.label())
+                .selected(category == fields.category)
+                .min_height(chip_height);
             if ui.add(chip).clicked() {
                 fields.category = category;
             }

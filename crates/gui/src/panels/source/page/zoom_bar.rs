@@ -4,7 +4,7 @@
 use eframe::egui;
 
 use super::view::{MAX_ZOOM, MIN_ZOOM, View, Viewport, ZoomStep, step_zoom};
-use crate::panels::source::PanelWidth;
+use crate::panels::PanelWidth;
 use crate::theme::{Icon, TextRole};
 use crate::widgets::{Button, Slider};
 

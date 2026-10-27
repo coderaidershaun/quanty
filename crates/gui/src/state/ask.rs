@@ -48,6 +48,9 @@ impl AskSession {
         self.results().iter().find(|result| result.number == number)
     }
 
+    // SMELL: this file is over 400 lines. The answer written out for an export, from here down to
+    // `source_line`, is the part to move out first.
+
     /// `None` while there is no answer or it has no block.
     pub fn answer_markdown(&self) -> Option<String> {
         let answer = self.answer.ready()?;
@@ -330,6 +333,7 @@ impl Shared {
         };
         let (doc, page, piece) = (result.doc, result.page, result.piece);
         self.ask.selected_result = Some(number);
+        self.source_from_library = false;
         self.open_source(doc, page, piece, effects);
     }
 

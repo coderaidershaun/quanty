@@ -4,18 +4,19 @@
 
 use eframe::egui;
 
+use super::note::NoteRow;
 use crate::theme::{size, space, stroke};
 use crate::widgets::{Button, ControlSize};
 
 /// The sides are as wide as the outline and margin of a sheet, so the controls line up with the
 /// content of the sheets below.
 const SIDE: f32 = space::LG + stroke::BORDER;
-const TWO_ROWS: f32 = size::CONTROL_LG + space::SM + size::CONTROL_SM;
-// SMELL: the window's layout gives the bar of a compact window this height and a small margin
-// above and below, in a sum of its own. A change here must be made there too, or the rows leave
-// the bar on a phone.
-const THREE_ROWS: f32 =
-    size::CONTROL_LG + space::SM + size::CONTROL_MD + space::XS + size::CONTROL_SM;
+pub(crate) const TWO_ROWS: f32 = size::CONTROL_LG + space::SM + size::CONTROL_SM;
+/// The question and Ask over the mode and the one button for all the filters.
+const NARROW_ROWS: f32 = size::CONTROL_LG + space::SM + size::CONTROL_MD;
+/// The note stands on a row of its own under the rows of a narrow bar, as tall as the button that
+/// may stand in it for a finger.
+const NOTE_ROW: f32 = space::XS + size::CONTROL_MD;
 const ASK_WIDTH: f32 = Button::least_width(ControlSize::Large);
 pub(super) const PICKER_WIDTH: f32 = 4.5 * size::CONTROL_LG;
 /// The category list holds short words, so its slot is narrower and leaves the note more room.
@@ -52,21 +53,39 @@ pub(super) struct Rects {
     /// The button for the filters with no slot. `None` when all five stand on the bar.
     pub(super) more: Option<egui::Rect>,
     pub(super) more_size: ControlSize,
-    pub(super) note: egui::Rect,
+    /// `None` on a narrow bar that has no row for a note.
+    pub(super) note: Option<egui::Rect>,
+    /// The size of the button that a note may hold.
+    pub(super) note_size: ControlSize,
+}
+
+/// Whether a bar that wide is narrow, so that it stands in three rows.
+fn is_narrow(bar_width: f32) -> bool {
+    let width = bar_width - 2.0 * SIDE;
+    width < ASK_WIDTH + space::SM + PICKER_WIDTH + space::SM + QUESTION_LEAST
+}
+
+/// The height of the rows that `arrange` fills in a bar that wide, without the margin around them.
+/// The note stands beside the filters of a bar with two rows, so only a narrow bar gives it a row
+/// of its own.
+pub(crate) fn rows_height(bar_width: f32, note: NoteRow) -> f32 {
+    match (is_narrow(bar_width), note) {
+        (false, _) => TWO_ROWS,
+        (true, NoteRow::Absent) => NARROW_ROWS,
+        (true, NoteRow::Shown) => NARROW_ROWS + NOTE_ROW,
+    }
 }
 
 /// Places the controls in `bar`, the whole rectangle the window gives the bar.
-pub(super) fn arrange(bar: egui::Rect) -> Rects {
-    let width = bar.width() - 2.0 * SIDE;
-    let is_narrow = width < ASK_WIDTH + space::SM + PICKER_WIDTH + space::SM + QUESTION_LEAST;
-    let height = if is_narrow { THREE_ROWS } else { TWO_ROWS };
+pub(super) fn arrange(bar: egui::Rect, note: NoteRow) -> Rects {
+    let height = rows_height(bar.width(), note);
     let top = bar.top() + ((bar.height() - height) / 2.0).round();
     let content = egui::Rect::from_min_size(
         egui::pos2(bar.left() + SIDE, top),
-        egui::vec2(width, height),
+        egui::vec2(bar.width() - 2.0 * SIDE, height),
     );
-    if is_narrow {
-        three_rows(content)
+    if is_narrow(bar.width()) {
+        three_rows(content, note)
     } else {
         two_rows(content)
     }
@@ -127,12 +146,14 @@ fn two_rows(content: egui::Rect) -> Rects {
         filters,
         more,
         more_size: ControlSize::Small,
-        note,
+        note: Some(note),
+        note_size: ControlSize::Small,
     }
 }
 
-/// The question and Ask over the mode and the one button for all the filters, over the note.
-fn three_rows(content: egui::Rect) -> Rects {
+/// The question and Ask over the mode and the one button for all the filters, over the note when
+/// there is one.
+fn three_rows(content: egui::Rect, note: NoteRow) -> Rects {
     let first =
         egui::Rect::from_min_size(content.min, egui::vec2(content.width(), size::CONTROL_LG));
     let second = egui::Rect::from_min_size(
@@ -141,7 +162,7 @@ fn three_rows(content: egui::Rect) -> Rects {
     );
     let third = egui::Rect::from_min_size(
         egui::pos2(content.left(), second.bottom() + space::XS),
-        egui::vec2(content.width(), size::CONTROL_SM),
+        egui::vec2(content.width(), size::CONTROL_MD),
     );
     let ask = egui::Rect::from_min_max(
         egui::pos2(first.right() - ASK_WIDTH, first.top()),
@@ -165,7 +186,8 @@ fn three_rows(content: egui::Rect) -> Rects {
         filters: [None; FILTER_COUNT],
         more: Some(more),
         more_size: ControlSize::Medium,
-        note: third,
+        note: (note == NoteRow::Shown).then_some(third),
+        note_size: ControlSize::Medium,
     }
 }
 
@@ -203,15 +225,16 @@ pub(super) fn slot<R>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::layout::{ASK_BAR, ASK_BAR_COMPACT, ASK_BAR_MEDIUM};
 
     fn slots(rects: &Rects) -> Vec<(String, egui::Rect)> {
         let mut slots = vec![
             ("question".to_owned(), rects.question),
             ("mode".to_owned(), rects.mode),
             ("ask".to_owned(), rects.ask),
-            ("note".to_owned(), rects.note),
         ];
+        if let Some(note) = rects.note {
+            slots.push(("note".to_owned(), note));
+        }
         for (place, rect) in rects.filters.iter().enumerate() {
             if let Some(rect) = rect {
                 slots.push((format!("filter {place}"), *rect));
@@ -231,59 +254,70 @@ mod tests {
     #[test]
     fn every_slot_of_the_bar_lies_in_it_at_every_width() {
         for width in 344..=2528 {
-            // A short window of any width is compact. A window at least 720 points wide can also
-            // be medium or wide, and then its bar is at least 688 points wide.
-            let heights: &[f32] = if width >= 688 {
-                &[ASK_BAR_COMPACT, ASK_BAR_MEDIUM, ASK_BAR]
-            } else {
-                &[ASK_BAR_COMPACT]
-            };
-            for &height in heights {
-                let bar = egui::Rect::from_min_size(
-                    egui::pos2(16.0, 52.0),
-                    egui::vec2(width as f32, height),
-                );
-                let rects = arrange(bar);
-                let inside = egui::Rect::from_min_max(
-                    egui::pos2(bar.left() + SIDE, bar.top()),
-                    egui::pos2(bar.right() - SIDE, bar.bottom()),
-                );
-                let slots = slots(&rects);
-                for (name, rect) in &slots {
-                    assert!(
-                        inside.contains_rect(*rect) && rect.width() > 0.0 && rect.height() > 0.0,
-                        "at {width} x {height} the {name} slot {rect:?} is not inside {inside:?}"
+            for note in [NoteRow::Absent, NoteRow::Shown] {
+                let rows = rows_height(width as f32, note);
+                // A short window of any width is compact. A window at least 720 points wide can
+                // also be medium or wide, and then its bar is at least 688 points wide.
+                let heights: &[f32] = if width >= 688 {
+                    &[2.0 * space::SM + rows, 2.0 * space::MD + rows]
+                } else {
+                    &[2.0 * space::SM + rows]
+                };
+                for &height in heights {
+                    let bar = egui::Rect::from_min_size(
+                        egui::pos2(16.0, 52.0),
+                        egui::vec2(width as f32, height),
                     );
-                }
-                for (at, (first, a)) in slots.iter().enumerate() {
-                    for (second, b) in &slots[at + 1..] {
+                    let rects = arrange(bar, note);
+                    let inside = egui::Rect::from_min_max(
+                        egui::pos2(bar.left() + SIDE, bar.top()),
+                        egui::pos2(bar.right() - SIDE, bar.bottom()),
+                    );
+                    let slots = slots(&rects);
+                    for (name, rect) in &slots {
                         assert!(
-                            !overlap(*a, *b),
-                            "at {width} x {height} the {first} slot {a:?} covers the {second} slot {b:?}"
+                            inside.contains_rect(*rect)
+                                && rect.width() > 0.0
+                                && rect.height() > 0.0,
+                            "at {width} x {height} the {name} slot {rect:?} is not inside {inside:?}"
                         );
                     }
-                }
+                    for (at, (first, a)) in slots.iter().enumerate() {
+                        for (second, b) in &slots[at + 1..] {
+                            assert!(
+                                !overlap(*a, *b),
+                                "at {width} x {height} the {first} slot {a:?} covers the {second} slot {b:?}"
+                            );
+                        }
+                    }
 
-                let inline = rects.filters.iter().flatten().count();
-                assert!(
-                    rects.filters[..inline].iter().all(Option::is_some),
-                    "at {width} the filters on the bar are the first ones, in order"
-                );
-                assert_eq!(
-                    rects.more.is_some(),
-                    inline < FILTER_COUNT,
-                    "at {width} the button for the rest stands exactly when a filter has no slot"
-                );
-                if width >= 1148 {
-                    assert_eq!(
-                        inline, FILTER_COUNT,
-                        "a wide window (bar of 1148 or more) keeps all five filters on the bar"
-                    );
-                }
-                if width < 526 {
+                    let inline = rects.filters.iter().flatten().count();
                     assert!(
-                        rects.mode.top() > rects.question.bottom(),
-                        "at {width} the mode stands under the question"
+                        rects.filters[..inline].iter().all(Option::is_some),
+                        "at {width} the filters on the bar are the first ones, in order"
+                    );
+                    assert_eq!(
+                        rects.more.is_some(),
+                        inline < FILTER_COUNT,
+                        "at {width} the button for the rest stands exactly when a filter has no slot"
+                    );
+                    if width >= 1148 {
+                        assert_eq!(
+                            inline, FILTER_COUNT,
+                            "a wide window (bar of 1148 or more) keeps all five filters on the bar"
+                        );
+                    }
+                    if width < 526 {
+                        assert!(
+                            rects.mode.top() > rects.question.bottom(),
+                            "at {width} the mode stands under the question"
+                        );
+                    }
+                    assert_eq!(
+                        rects.note.is_some(),
+                        width >= 526 || note == NoteRow::Shown,
+                        "at {width} the note has a slot beside the filters or, on a narrow bar, \
+                         only while a note shows"
                     );
                 }
             }

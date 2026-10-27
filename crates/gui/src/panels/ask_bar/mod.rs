@@ -11,7 +11,10 @@ use eframe::egui;
 use crate::panels::PanelCx;
 use crate::state::Shared;
 use contract::AskDraft;
+pub(crate) use layout::{TWO_ROWS, rows_height};
 use note::Note;
+pub use note::NoteRow;
+pub(crate) use note::note_row;
 
 #[derive(Debug, Default)]
 pub struct Local {
@@ -47,11 +50,11 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
     // The bar has no frame of its own, because the top line of a frame on the desk would sit just
     // under the line of the top bar.
     let (bar, _) = ui.allocate_exact_size(ui.available_size(), egui::Sense::hover());
-    let rects = layout::arrange(bar);
+    let rects = layout::arrange(bar, note_row(cx.shared));
     local.show_question(ui, &rects, cx);
     local.choices.show(ui, &rects, &mut local.draft.filters);
     local.show_more_filters(ui, &rects);
-    if let Some(note) = Note::of(cx.shared, &local.draft) {
-        note.show(ui, rects.note, cx.intents);
+    if let (Some(note), Some(slot)) = (Note::of(cx.shared, &local.draft), rects.note) {
+        note.show(ui, slot, rects.note_size, cx.intents);
     }
 }

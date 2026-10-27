@@ -10,30 +10,23 @@ use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::{PHONE_WINDOW, SMALLEST_WINDOW, TABLET_WINDOW};
 use gui::state::Open;
 use gui::testkit;
+use gui::theme::size;
 use gui::widgets::{Surface, panel_frame};
 
 use super::{BLACK_SCHOLES, BOOK, NOTES, SAMPLE_PAGES, is_open_row};
+use crate::flows::fit;
 use crate::flows::{
-    Wheel, Window, click, click_in, has, is_open_tab, node, node_in, panels, says, scroll_to,
-    shared, type_into,
+    Wheel, Window, click, click_in, has, is_open_tab, node, node_in, open_tab, panels, says,
+    scroll_to, shared, type_into,
 };
 
 const ABOUT_MEDIA: &str = "About this media";
-/// A control that a finger presses is at least this tall, in points.
-const TOUCH: f32 = 32.0;
 
 fn open_library(window: [f32; 2]) -> Window {
     let mut harness = testkit::app("black-scholes", window);
     testkit::settle(&mut harness);
-    // Below the wide form the model picker stands over the tabs of the top bar, so the tab is
-    // opened by its intent.
-    harness.state_mut().push(Intent::OpenTab(Tab::Library));
-    testkit::settle(&mut harness);
+    open_tab(&mut harness, Tab::Library);
     harness
-}
-
-fn window_rect(window: [f32; 2]) -> Rect {
-    Rect::from_min_size(egui::Pos2::ZERO, egui::Vec2::from(window))
 }
 
 /// Where a control counts as in view: inside the frame of the page, which cuts off what lies
@@ -46,7 +39,7 @@ fn in_view(window: [f32; 2]) -> Rect {
         egui::pos2(page.left() + margin.left, page.top() + margin.top),
         egui::pos2(page.right() - margin.right, page.bottom() - margin.bottom),
     )
-    .expand(0.5)
+    .expand(fit::SLACK)
 }
 
 /// The rows of the shelf, the back row and the About row too: a list row is the one button that is
@@ -81,11 +74,16 @@ fn rect_in_view(harness: &Window, window: [f32; 2], role: Role, name: &str) -> R
 /// A button of the page that lies in view and is tall enough for a finger.
 fn assert_touchable(harness: &Window, window: [f32; 2], name: &str) {
     let rect = rect_in_view(harness, window, Role::Button, name);
-    assert!(
-        rect.height() >= TOUCH,
-        "`{name}` is only {} tall",
-        rect.height()
-    );
+    fit::assert_finger_sized(name, rect, size::CONTROL_MD);
+}
+
+/// The name of the first button that reads a listed piece on in the Source panel.
+fn read_on_name(harness: &Window) -> String {
+    harness
+        .query_all_by_role(Role::Button)
+        .filter_map(|button| button.accesskit_node().label())
+        .find(|name| name.starts_with("Read on"))
+        .expect("a listing of the chapter has a button that reads on")
 }
 
 /// Turns the mouse wheel one step down while the pointer rests at `at`.
@@ -128,17 +126,13 @@ fn assert_shelf_fills_the_page(harness: &Window, window: [f32; 2]) {
     );
     let rows = shelf_rows(harness);
     assert!(!rows.is_empty(), "the shelf lists rows");
-    for row in rows {
-        let rect = row.rect();
-        assert!(
-            page.contains_rect(rect),
-            "a row {rect:?} is outside {page:?}"
-        );
-        assert!(
-            rect.height() >= TOUCH,
-            "a row is only {} tall",
-            rect.height()
-        );
+    let parts: Vec<(String, Rect)> = rows
+        .iter()
+        .map(|row| (row.accesskit_node().label().unwrap_or_default(), row.rect()))
+        .collect();
+    fit::assert_inside_and_apart(&parts, page, fit::window_rect(window));
+    for (name, rect) in &parts {
+        fit::assert_finger_sized(name, *rect, size::CONTROL_MD);
     }
     let page_buttons = harness
         .query_all_by_role(Role::Button)
@@ -162,6 +156,7 @@ fn a_phone_shows_the_shelf_until_a_page_is_opened() {
 
     type_into(&mut harness, "Find", "black");
     assert_eq!(shelf_row_names(&harness), [NOTES, BLACK_SCHOLES]);
+    assert_touchable(&harness, PHONE_WINDOW, "Clear");
     click(&mut harness, Role::Button, "Clear");
 
     click(&mut harness, Role::Button, BOOK);
@@ -179,13 +174,9 @@ fn a_phone_shows_the_shelf_until_a_page_is_opened() {
         "the media page has a back row"
     );
     assert!(!has(&harness, Role::TextInput, "Find"));
-    rect_in_view(
-        &harness,
-        PHONE_WINDOW,
-        Role::Button,
-        &format!("Edit {BOOK}"),
-    );
-    assert_touchable(&harness, PHONE_WINDOW, &format!("Delete media {BOOK}"));
+    for name in [format!("Edit {BOOK}"), format!("Delete media {BOOK}")] {
+        assert_touchable(&harness, PHONE_WINDOW, &name);
+    }
     testkit::save_png(&mut harness, "phone-library-media");
 
     click_in(
@@ -194,7 +185,7 @@ fn a_phone_shows_the_shelf_until_a_page_is_opened() {
         &format!("Delete media {BOOK}"),
         page,
     );
-    let window = window_rect(PHONE_WINDOW);
+    let window = fit::window_rect(PHONE_WINDOW);
     for name in ["Delete media", "Cancel"] {
         let rect = node(&harness, Role::Button, name).rect();
         assert!(window.contains_rect(rect), "`{name}` {rect:?} is cut off");
@@ -233,8 +224,19 @@ fn a_phone_opens_every_view_of_a_chapter_and_goes_back_step_by_step() {
         assert_eq!(shared(&harness).shelf.view, view);
         assert!(is_open_tab(&harness, label), "`{label}` is the open view");
         rect_in_view(&harness, PHONE_WINDOW, Role::Tab, label);
-        if view == DocumentView::Insights {
-            assert_touchable(&harness, PHONE_WINDOW, "Export");
+        match view {
+            DocumentView::Insights => {
+                for name in ["Export", "Page 2"] {
+                    assert_touchable(&harness, PHONE_WINDOW, name);
+                }
+                click_in(&mut harness, Role::Button, "Export", page);
+                let item = node(&harness, Role::Button, "Export as PDF…").rect();
+                fit::assert_finger_sized("Export as PDF…", item, size::CONTROL_MD);
+                harness.key_press(egui::Key::Escape);
+                testkit::settle(&mut harness);
+            }
+            DocumentView::Code => assert_touchable(&harness, PHONE_WINDOW, &read_on_name(&harness)),
+            _ => {}
         }
         if matches!(
             view,
@@ -282,16 +284,20 @@ fn read_on_a_phone_opens_the_source_view_of_ask() {
     wheel_tab_into_view(&mut harness, PHONE_WINDOW, "Code");
     click_in(&mut harness, Role::Tab, "Code", page);
 
-    let read_on = harness
-        .query_all_by_role(Role::Button)
-        .find(|button| {
-            let name = button.accesskit_node().label();
-            name.is_some_and(|name| name.starts_with("Read on"))
-        })
-        .expect("a listing of the chapter has a button that reads on");
-    assert!(in_view(PHONE_WINDOW).contains_rect(read_on.rect()));
-    read_on.click();
-    testkit::settle(&mut harness);
+    let read_on = |harness: &mut Window| {
+        let button = harness
+            .query_all_by_role(Role::Button)
+            .find(|button| {
+                let name = button.accesskit_node().label();
+                name.is_some_and(|name| name.starts_with("Read on"))
+            })
+            .expect("a listing of the chapter has a button that reads on");
+        assert!(in_view(PHONE_WINDOW).contains_rect(button.rect()));
+        button.click();
+        testkit::settle(harness);
+    };
+    let library_page = shared(&harness).shelf.clone();
+    read_on(&mut harness);
     assert_eq!(shared(&harness).tab, Tab::Ask);
     assert_eq!(shared(&harness).ask_view, AskView::Source);
     let source = panels(PHONE_WINDOW).source;
@@ -300,20 +306,44 @@ fn read_on_a_phone_opens_the_source_view_of_ask() {
         "the Source view fills the phone"
     );
 
-    harness.state_mut().push(Intent::OpenTab(Tab::Library));
-    testkit::settle(&mut harness);
+    open_tab(&mut harness, Tab::Library);
     assert!(
         node_in(&harness, Role::Button, NOTES, page).is_some(),
         "the Library shows the chapter it had open"
     );
+
+    read_on(&mut harness);
+    assert!(
+        harness.state().can_go_back(),
+        "a Source view that was read on can go back"
+    );
+    harness.state_mut().push(Intent::Back);
+    testkit::settle(&mut harness);
+    assert_eq!(shared(&harness).tab, Tab::Library);
+    assert_eq!(
+        shared(&harness).shelf,
+        library_page,
+        "Back returns to the page that Read on left"
+    );
+    assert!(
+        node_in(&harness, Role::Button, NOTES, page).is_some(),
+        "the back row names the media again"
+    );
+    assert!(is_open_tab(&harness, "Code"), "the same view is open");
+    assert!(
+        harness.state().can_go_back(),
+        "a chapter is open, so the Library can go back"
+    );
 }
 
+// SMELL: this file is over 400 lines. The tests of a tablet and of the smallest window from here
+// down are the part to move out first, so that this file keeps the journeys of a phone.
 #[test]
 fn a_tablet_shows_the_shelf_beside_the_page() {
     let mut harness = open_library(TABLET_WINDOW);
     click(&mut harness, Role::Button, NOTES);
     click(&mut harness, Role::Button, BLACK_SCHOLES);
-    let window = window_rect(TABLET_WINDOW);
+    let window = fit::window_rect(TABLET_WINDOW);
 
     let mut shelf = vec![node(&harness, Role::TextInput, "Find").rect()];
     shelf.extend(shelf_rows(&harness).iter().map(Node::rect));
@@ -375,7 +405,7 @@ fn the_delete_sheet_fits_a_360_pt_window() {
         page,
     );
 
-    let window = window_rect(SMALLEST_WINDOW);
+    let window = fit::window_rect(SMALLEST_WINDOW);
     let sheet = harness.ctx.memory(|memory| {
         let layer = memory.top_modal_layer()?;
         memory.area_rect(layer.id)

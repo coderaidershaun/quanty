@@ -1,12 +1,13 @@
 //! Each work tab keeps its own model choice, and a phone reaches it through one button.
 
-use super::{click, has, node, node_in, shared};
+use super::{click, fit, has, node, node_in, open_tab, shared};
 use choices::WorkKind;
 use contract::{Command, Tab};
+use eframe::egui::Key;
 use eframe::egui::accesskit::Role;
-use eframe::egui::{Key, Pos2, Rect, Vec2};
 use gui::app::layout::{DEFAULT_WINDOW, PHONE_WINDOW};
-use gui::testkit;
+use gui::state::IngestJob;
+use gui::testkit::{self, run_until};
 
 #[test]
 fn each_tab_shows_and_changes_its_own_model() {
@@ -112,7 +113,7 @@ enum Close {
 fn a_phone_keeps_the_model_choices_behind_one_button() {
     let (mut harness, seen) = super::recording::open("idle", PHONE_WINDOW);
     testkit::settle(&mut harness);
-    let window = Rect::from_min_size(Pos2::ZERO, Vec2::from(PHONE_WINDOW));
+    let window = fit::window_rect(PHONE_WINDOW);
     assert!(
         !has(&harness, Role::ComboBox, "Model"),
         "the dropdowns are not in the bar of a phone"
@@ -175,5 +176,35 @@ fn a_phone_keeps_the_model_choices_behind_one_button() {
         has(&harness, Role::ComboBox, "Model")
             && node_in(&harness, Role::Label, hint, window).is_some(),
         "a touch screen cannot hover, so the open sheet shows `{hint}`"
+    );
+}
+
+/// Where the Done of the sheet stands on a phone, on the Ingest tab of a scene whose ingest never
+/// ends. A running ingest makes the sheet say why its choices wait.
+fn done_of_the_sheet(is_ingest_running: bool) -> eframe::egui::Rect {
+    let mut harness = testkit::app("ingest-running", PHONE_WINDOW);
+    testkit::settle(&mut harness);
+    open_tab(&mut harness, Tab::Ingest);
+    if is_ingest_running {
+        node(&harness, Role::Button, "Start ingest").scroll_to_me();
+        harness.run_ok();
+        node(&harness, Role::Button, "Start ingest").click();
+        run_until(&mut harness, "the ingest runs", |shared| {
+            matches!(shared.ingest, IngestJob::Running { .. })
+        });
+    }
+    // The ingest never ends, so the app is never idle again, and `click` would wait for ever.
+    node(&harness, Role::Button, "Model choices").click();
+    harness.run_ok();
+    node(&harness, Role::Button, "Done").rect()
+}
+
+#[test]
+fn the_sheet_of_model_choices_keeps_done_in_place_while_an_operation_ends() {
+    let while_an_ingest_runs = done_of_the_sheet(true);
+    let while_nothing_runs = done_of_the_sheet(false);
+    assert_eq!(
+        while_an_ingest_runs, while_nothing_runs,
+        "Done moves under a finger when the line that says why the choices wait comes or goes"
     );
 }

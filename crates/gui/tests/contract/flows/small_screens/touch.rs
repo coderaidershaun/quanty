@@ -9,9 +9,10 @@ use gui::testkit;
 use gui::widgets::Surface;
 
 use super::{
-    GRAPH_TITLE, SLACK, content, figure_mark, graph_nodes, legend_bottom, open_citation,
-    phone_panel, show_view,
+    GRAPH_TITLE, content, figure_mark, graph_nodes, legend_bottom, open_citation, phone_panel,
+    show_view,
 };
+use crate::flows::fit::SLACK;
 use crate::flows::{Window, click_in, has, is_enabled, node, panels, shared};
 
 const FRAME_SECONDS: f64 = 1.0 / 60.0;

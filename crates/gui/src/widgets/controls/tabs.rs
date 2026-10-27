@@ -69,6 +69,9 @@ pub struct TabStrip<'a> {
 }
 
 impl<'a> TabStrip<'a> {
+    /// How tall a compact strip is, so that a panel can keep room for it before it is drawn.
+    pub const COMPACT_HEIGHT: f32 = size::CONTROL_MD;
+
     pub fn new(tabs: &'a [Tab<'a>], active: usize) -> Self {
         TabStrip {
             tabs,
@@ -95,7 +98,7 @@ impl<'a> TabStrip<'a> {
             Metrics {
                 role: TextRole::Small,
                 gap: space::LG,
-                height: size::CONTROL_MD,
+                height: Self::COMPACT_HEIGHT,
             }
         } else {
             Metrics {

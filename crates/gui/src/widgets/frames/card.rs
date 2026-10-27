@@ -6,14 +6,14 @@ use eframe::egui::{
 
 use crate::theme::{Icon, Kind, TextRole, Tone, color, radius, size, space, stroke};
 use crate::widgets::controls::Button;
-use crate::widgets::look::{Look, focus_ring};
+use crate::widgets::look::{ControlSize, Look, focus_ring};
 
 const MARGIN: f32 = space::MD;
 
-#[derive(Default)]
 pub struct Card<'a> {
     tag: Option<(Kind, &'a str)>,
     action: Option<(Icon, &'a str)>,
+    action_size: ControlSize,
     is_selected: bool,
     clickable: Option<&'a str>,
     forced: Option<Look>,
@@ -25,6 +25,19 @@ pub struct CardResponse<R> {
     pub action_clicked: bool,
 }
 
+impl Default for Card<'_> {
+    fn default() -> Self {
+        Card {
+            tag: None,
+            action: None,
+            action_size: ControlSize::Small,
+            is_selected: false,
+            clickable: None,
+            forced: None,
+        }
+    }
+}
+
 impl<'a> Card<'a> {
     pub fn new() -> Self {
         Card::default()
@@ -34,8 +47,8 @@ impl<'a> Card<'a> {
     /// gap under it, the margins and the border.
     pub fn height_around_content(ui: &egui::Ui) -> f32 {
         let spacing = ui.spacing();
-        // The header is a row, and egui makes a row at least this high. The tag and the action
-        // button are no higher than that.
+        // The header is a row, and egui makes a row at least this high. The tag and an action
+        // button of the default size are no higher than that.
         let header = spacing.interact_size.y;
         header + spacing.item_spacing.y + 2.0 * (MARGIN + stroke::BORDER)
     }
@@ -48,6 +61,12 @@ impl<'a> Card<'a> {
     /// An icon button at the top right. `label` is its accessible name.
     pub fn action(mut self, icon: Icon, label: &'a str) -> Self {
         self.action = Some((icon, label));
+        self
+    }
+
+    /// The size of the action button, `Small` unless a finger presses it.
+    pub fn action_size(mut self, size: ControlSize) -> Self {
+        self.action_size = size;
         self
     }
 
@@ -150,7 +169,8 @@ impl<'a> Card<'a> {
             }
             if let Some((icon, label)) = self.action {
                 ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                    action_clicked = ui.add(Button::icon_only(icon, label)).clicked();
+                    let button = Button::icon_only(icon, label).size(self.action_size);
+                    action_clicked = ui.add(button).clicked();
                 });
             }
         });

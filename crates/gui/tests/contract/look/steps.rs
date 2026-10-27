@@ -1,5 +1,4 @@
-//! The look of the app at rest is kept as pictures on disk, and a change that moves a pixel by
-//! more than the tolerance fails here until a person looks at the new picture and approves it.
+//! How the app is brought to each resting state, and drawn once it is there.
 
 use std::time::{Duration, Instant};
 
@@ -8,17 +7,15 @@ use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::Queryable as _;
 use egui_kittest::{Harness, SnapshotOptions};
 use gui::app::App;
-use gui::app::layout::{DEFAULT_WINDOW, MIN_WINDOW};
 use gui::testkit;
 
-use super::flows::panels;
+use super::rows::{BOOK_ROW, CHAPTER_ROW, Row, Start};
+use crate::flows::panels;
 
 type Window = Harness<'static, App>;
 
 /// A kept picture is one pixel for each point, so that the folder stays small.
 const PIXELS_PER_POINT: f32 = 1.0;
-const TOLERANCE: f32 = 0.6;
-const FOLDER: &str = "tests/snapshots";
 
 /// The chip of the figure's result. Its click is what a person does to open the source.
 const FIGURE_CITATION: &str = "Citation 8";
@@ -30,254 +27,11 @@ const MAXIMISE: &str = "Maximise";
 const FIRST_MEDIA_PENCIL: &str = "Edit Hawkes Processes in Finance";
 /// The Delete button of the same media, whose sheet is on screen with no scroll.
 const FIRST_MEDIA_DELETE: &str = "Delete media Hawkes Processes in Finance";
-/// The row of a book on the shelf, and the row of its first chapter once the book is open.
-const BOOK_ROW: &str = "Option Volatility and Pricing";
-const CHAPTER_ROW: &str = "Chapter 1 · Sample Pages";
-/// The row of the sample notes, and the row of their second chapter once they are open.
-const NOTES_ROW: &str = "Quanty Sample Notes";
-const BLACK_SCHOLES_ROW: &str = "Chapter 2 · Black Scholes In Depth";
 /// The ingest of its scene stops for ever at page 3, so its bar rests there.
 const BAR_AT_PAGE_3: &str = "Converting the pages — 3 of 12 done, about 36%";
 /// The build of its scene stops for ever at the synthetic texts, so its bar rests there.
 const BUILD_AT_ITS_STALL: &str = "Writing the synthetic texts — 6 of 12, about 50%";
 const LIMIT: Duration = Duration::from_secs(5);
-
-enum Start {
-    AsItOpens,
-    AfterAClickOnTheFigureCitation,
-    AfterAClickOnShare,
-    /// The save dialog is stood in by a path in a folder that does not exist, so the export
-    /// fails the same way on every machine.
-    AfterAnExportThatFails,
-    AfterAClickOnStartIngest,
-    AfterAStartThatNeverEnds,
-    AfterANewMediaIsTyped,
-    AfterAClickOnTheLibraryTab,
-    /// The Library tab, a media row, one of its chapter rows, then a view of the chapter.
-    AfterOpeningAViewOfAChapter {
-        media: &'static str,
-        chapter: &'static str,
-        view: &'static str,
-    },
-    AfterAClickOnAMediaPencil,
-    AfterAClickOnAMediaDelete,
-    AfterAClickOnAChapterRow,
-    AfterAClickOnMaximiseInTheConceptGraph,
-    /// The scene never rests, so it is looked at once its catalogue has loaded and its bar has
-    /// come to the stall.
-    AtTheStallOfItsBuild,
-}
-
-struct Row {
-    picture: &'static str,
-    scene: &'static str,
-    window: [f32; 2],
-    start: Start,
-}
-
-static ROWS: &[Row] = &[
-    Row {
-        picture: "ask-idle",
-        scene: "idle",
-        window: DEFAULT_WINDOW,
-        start: Start::AsItOpens,
-    },
-    Row {
-        picture: "ask-answer",
-        scene: "black-scholes",
-        window: DEFAULT_WINDOW,
-        start: Start::AsItOpens,
-    },
-    Row {
-        picture: "ask-answer-min",
-        scene: "black-scholes",
-        window: MIN_WINDOW,
-        start: Start::AsItOpens,
-    },
-    Row {
-        picture: "ask-share-menu",
-        scene: "black-scholes",
-        window: DEFAULT_WINDOW,
-        start: Start::AfterAClickOnShare,
-    },
-    Row {
-        picture: "ask-export-failed",
-        scene: "black-scholes",
-        window: DEFAULT_WINDOW,
-        start: Start::AfterAnExportThatFails,
-    },
-    Row {
-        picture: "ask-source",
-        scene: "black-scholes",
-        window: DEFAULT_WINDOW,
-        start: Start::AfterAClickOnTheFigureCitation,
-    },
-    Row {
-        picture: "ask-no-sources",
-        scene: "no-sources",
-        window: DEFAULT_WINDOW,
-        start: Start::AsItOpens,
-    },
-    Row {
-        picture: "ask-answer-failed",
-        scene: "answer-failed",
-        window: DEFAULT_WINDOW,
-        start: Start::AsItOpens,
-    },
-    Row {
-        picture: "ask-stores-down",
-        scene: "stores-down",
-        window: DEFAULT_WINDOW,
-        start: Start::AsItOpens,
-    },
-    Row {
-        picture: "ask-first-run",
-        scene: "first-run",
-        window: DEFAULT_WINDOW,
-        start: Start::AsItOpens,
-    },
-    Row {
-        picture: "library",
-        scene: "black-scholes",
-        window: DEFAULT_WINDOW,
-        start: Start::AfterAClickOnTheLibraryTab,
-    },
-    Row {
-        picture: "ingest-ready",
-        scene: "ingest-ready",
-        window: DEFAULT_WINDOW,
-        start: Start::AsItOpens,
-    },
-    Row {
-        picture: "ingest-failed",
-        scene: "ingest-failed",
-        window: DEFAULT_WINDOW,
-        start: Start::AfterAClickOnStartIngest,
-    },
-    Row {
-        picture: "ingest-new-book",
-        scene: "idle",
-        window: DEFAULT_WINDOW,
-        start: Start::AfterANewMediaIsTyped,
-    },
-    Row {
-        picture: "ingest-running",
-        scene: "ingest-running",
-        window: DEFAULT_WINDOW,
-        start: Start::AfterAStartThatNeverEnds,
-    },
-    Row {
-        picture: "library-edit-media",
-        scene: "black-scholes",
-        window: DEFAULT_WINDOW,
-        start: Start::AfterAClickOnAMediaPencil,
-    },
-    Row {
-        picture: "library-delete-media",
-        scene: "black-scholes",
-        window: DEFAULT_WINDOW,
-        start: Start::AfterAClickOnAMediaDelete,
-    },
-    Row {
-        picture: "library-document",
-        scene: "black-scholes",
-        window: DEFAULT_WINDOW,
-        start: Start::AfterAClickOnAChapterRow,
-    },
-    Row {
-        picture: "library-code",
-        scene: "black-scholes",
-        window: DEFAULT_WINDOW,
-        start: Start::AfterOpeningAViewOfAChapter {
-            media: NOTES_ROW,
-            chapter: BLACK_SCHOLES_ROW,
-            view: "Code",
-        },
-    },
-    Row {
-        picture: "library-formulas",
-        scene: "black-scholes",
-        window: DEFAULT_WINDOW,
-        start: Start::AfterOpeningAViewOfAChapter {
-            media: NOTES_ROW,
-            chapter: BLACK_SCHOLES_ROW,
-            view: "Formulas",
-        },
-    },
-    Row {
-        picture: "library-figures",
-        scene: "black-scholes",
-        window: DEFAULT_WINDOW,
-        start: Start::AfterOpeningAViewOfAChapter {
-            media: BOOK_ROW,
-            chapter: CHAPTER_ROW,
-            view: "Figures",
-        },
-    },
-    Row {
-        picture: "library-tables",
-        scene: "black-scholes",
-        window: DEFAULT_WINDOW,
-        start: Start::AfterOpeningAViewOfAChapter {
-            media: BOOK_ROW,
-            chapter: CHAPTER_ROW,
-            view: "Tables",
-        },
-    },
-    Row {
-        picture: "ask-graph-maximised",
-        scene: "black-scholes",
-        window: DEFAULT_WINDOW,
-        start: Start::AfterAClickOnMaximiseInTheConceptGraph,
-    },
-    Row {
-        picture: "datasets-ready",
-        scene: "datasets-ready",
-        window: DEFAULT_WINDOW,
-        start: Start::AsItOpens,
-    },
-    Row {
-        picture: "datasets-running",
-        scene: "datasets-running",
-        window: DEFAULT_WINDOW,
-        start: Start::AtTheStallOfItsBuild,
-    },
-    Row {
-        picture: "balances-unread",
-        scene: "balances-unread",
-        window: DEFAULT_WINDOW,
-        start: Start::AsItOpens,
-    },
-    Row {
-        picture: "ask-out-of-credit",
-        scene: "out-of-credit",
-        window: DEFAULT_WINDOW,
-        start: Start::AsItOpens,
-    },
-    Row {
-        picture: "library-insights",
-        scene: "black-scholes",
-        window: [1536.0, 2112.0],
-        start: Start::AfterOpeningAViewOfAChapter {
-            media: NOTES_ROW,
-            chapter: BLACK_SCHOLES_ROW,
-            view: "Insights",
-        },
-    },
-    Row {
-        picture: "library-insights-none",
-        scene: "black-scholes",
-        window: DEFAULT_WINDOW,
-        start: Start::AfterOpeningAViewOfAChapter {
-            media: BOOK_ROW,
-            chapter: CHAPTER_ROW,
-            view: "Insights",
-        },
-    },
-];
-
-// SMELL: this file is over 400 lines. The steps from here down, which bring the app to each
-// resting state, are the part to move out first.
 
 /// Turns the wheel over the Answer pane until the chip is wholly inside it, then clicks it. A chip
 /// that is cut by the edge of the pane is not what a person clicks.
@@ -383,7 +137,7 @@ fn type_a_new_media(harness: &mut Window) {
 
 impl Row {
     /// Draws the scene at rest and compares it with the kept picture. The error says how.
-    fn compare(&self, options: &SnapshotOptions) -> Result<(), String> {
+    pub(super) fn compare(&self, options: &SnapshotOptions) -> Result<(), String> {
         let home = tempfile::tempdir().unwrap();
         if matches!(self.start, Start::AfterAnExportThatFails) {
             std::fs::write(home.path().join("data"), "not a folder").unwrap();
@@ -439,6 +193,7 @@ impl Row {
             Start::AfterAClickOnMaximiseInTheConceptGraph => {
                 maximise_the_concept_graph(&mut harness, self.window);
             }
+            Start::AfterAClickOn { role, name } => click(&mut harness, role, name),
         }
         // The pointer is painted in the picture until a frame has run without it.
         harness.remove_cursor();
@@ -447,22 +202,4 @@ impl Row {
             .try_snapshot_options(self.picture, options)
             .map_err(|error| format!("{}: {error}", self.picture))
     }
-}
-
-#[test]
-fn every_resting_scene_looks_as_it_was_approved() {
-    let options = SnapshotOptions::new()
-        .threshold(TOLERANCE)
-        .output_path(FOLDER);
-    let differing: Vec<String> = ROWS
-        .iter()
-        .filter_map(|row| row.compare(&options).err())
-        .collect();
-    assert!(
-        differing.is_empty(),
-        "{} of {} pictures differ from the approved ones:\n{}",
-        differing.len(),
-        ROWS.len(),
-        differing.join("\n")
-    );
 }

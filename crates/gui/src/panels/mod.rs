@@ -14,4 +14,5 @@ mod seam;
 pub mod source;
 
 pub use pages::{datasets, ingest, library};
+use seam::PanelWidth;
 pub use seam::{Locals, PanelCx};

@@ -4,7 +4,7 @@
 use eframe::egui::{self, Align, Layout, Sense, UiBuilder, Vec2};
 
 use super::scene::{LEGEND_HEIGHT, Picture, legend_kinds};
-use crate::panels::PanelCx;
+use crate::panels::{PanelCx, PanelWidth};
 use crate::theme::{Icon, Kind, TextRole, color, size, space};
 use crate::widgets::{Button, ControlSize, section_header};
 use contract::{ConceptGraph, Panel};
@@ -41,11 +41,7 @@ impl Areas {
     fn split(ui: &egui::Ui, legend_lines: Option<usize>) -> Areas {
         let all = ui.available_rect_before_wrap();
         let gap = ui.spacing().item_spacing.y;
-        let control_size = if all.width() < NARROW_BELOW {
-            ControlSize::Medium
-        } else {
-            ControlSize::Small
-        };
+        let control_size = PanelWidth::of(ui, NARROW_BELOW).control_size();
         let header_size = egui::vec2(all.width(), control_size.height());
         let header = egui::Rect::from_min_size(all.min, header_size);
         let mut top = header.bottom() + gap;

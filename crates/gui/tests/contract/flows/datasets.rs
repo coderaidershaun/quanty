@@ -10,17 +10,15 @@ use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::NodeT as _;
 use gui::app::layout::DEFAULT_WINDOW;
-use gui::state::{DatasetJob, Shared};
+use gui::state::DatasetJob;
 use gui::testkit::{self, run_until};
 use uuid::Uuid;
 
 use crate::flows::recording::{self, Seen};
 use crate::flows::{
-    COMMAND, Window, click, field, has, is_enabled, node, press, says, shared, type_into,
+    CHAPTER_2, COMMAND, DRY_RUN, Window, click, field, has, is_at_its_stall, is_enabled, node,
+    press, says, sent_builds, shared, type_into,
 };
-
-/// The stage at which the scenes with a build that never ends stand still.
-const STALL: DatasetStage = DatasetStage::WritingSynthetic { done: 6, total: 12 };
 
 fn open(scene: &str, size: [f32; 2]) -> (Window, Seen) {
     let (mut harness, seen) = recording::open(scene, size);
@@ -28,27 +26,6 @@ fn open(scene: &str, size: [f32; 2]) -> (Window, Seen) {
     (harness, seen)
 }
 
-/// The builds the app sent, in the order it sent them.
-pub(super) fn sent_builds(seen: &Seen) -> Vec<DatasetRequest> {
-    seen.all()
-        .into_iter()
-        .filter_map(|command| match command {
-            Command::BuildDataset { build, .. } => Some(build),
-            _ => None,
-        })
-        .collect()
-}
-
-/// Whether a build that never ends has played up to its stall.
-pub(super) fn is_at_its_stall(shared: &Shared) -> bool {
-    matches!(
-        &shared.datasets,
-        DatasetJob::Running { progress: Some(progress), .. } if progress.stage == STALL
-    )
-}
-
-pub(super) const DRY_RUN: &str = "Dry run (export, check and plan only; asks no model)";
-pub(super) const CHAPTER_2: &str = "Chapter 2 · Black Scholes In Depth";
 const LIMIT: Duration = Duration::from_secs(5);
 
 fn the_keys_and_the_strip_open_the_page() {

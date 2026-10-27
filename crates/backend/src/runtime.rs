@@ -28,7 +28,13 @@ struct Task {
     handle: AbortHandle,
     stop: Stop,
     kind: TaskKind,
+    /// Set as soon as the task has ended, before the window is woken for it. The model choices
+    /// read it (through `is_idle_but_for_balance_reads`) in the frame that the wake starts, so it
+    /// must not wait for the wake.
     finished: Arc<AtomicBool>,
+    /// Set once the wake for the end of the task has returned. `is_idle` reads it, so that
+    /// whoever waits for idle never has a wake arrive after.
+    woken: Arc<AtomicBool>,
 }
 
 type Spawn = Box<dyn Fn(Command) -> Task + Send>;
@@ -90,6 +96,8 @@ impl<H: Handler> Runtime<H> {
             let watched = command.clone();
             let finished = Arc::new(AtomicBool::new(false));
             let task_finished = finished.clone();
+            let woken = Arc::new(AtomicBool::new(false));
+            let task_woken = woken.clone();
             let task = handle.spawn(async move { handler.serve(command, reply).await });
             let abort = task.abort_handle();
             // A task that panics sends nothing, and the window would wait for it for ever. This
@@ -108,12 +116,14 @@ impl<H: Handler> Runtime<H> {
                 if delivered {
                     finished_wake();
                 }
+                task_woken.store(true, Ordering::Release);
             });
             Task {
                 handle: abort,
                 stop,
                 kind,
                 finished,
+                woken,
             }
         });
         Self {
@@ -127,12 +137,14 @@ impl<H: Handler> Runtime<H> {
     }
 
     pub fn send(&mut self, command: Command) {
+        // A task stays until its wake is made, or `is_idle` would never see that wake.
         self.tasks
-            .retain(|_, task| !task.finished.load(Ordering::Acquire));
+            .retain(|_, task| !task.woken.load(Ordering::Acquire));
         match command {
             Command::Cancel(request) => {
-                // The task stays in the map until it is finished, so its `Stop` is not dropped
-                // before the abort has taken effect: a dropped `Stop` also ends `cancelled`.
+                // The task stays in the map until it is finished and woken for, so its `Stop` is
+                // not dropped before the abort has taken effect: a dropped `Stop` also ends
+                // `cancelled`.
                 if let Some(task) = self.tasks.get(&request) {
                     if task.kind == TaskKind::Ingest {
                         task.stop.ask();
@@ -157,10 +169,11 @@ impl<H: Handler> Runtime<H> {
         self.events.try_recv().ok()
     }
 
+    /// True when every task has ended and the wake for its end has been made.
     pub fn is_idle(&self) -> bool {
         self.tasks
             .values()
-            .all(|task| task.finished.load(Ordering::Acquire))
+            .all(|task| task.woken.load(Ordering::Acquire))
     }
 
     /// A read of the balances may hang for as long as its limit, and nothing else waits for it,

@@ -3,6 +3,8 @@
 
 use eframe::egui::{Rect, Vec2, pos2, vec2};
 
+pub use crate::panels::ask_bar::NoteRow;
+use crate::panels::ask_bar::{self, rows_height};
 use crate::theme::{size, space};
 use contract::AskView;
 
@@ -44,6 +46,23 @@ impl Form {
             Form::Compact
         }
     }
+
+    /// The space between the edge of the window and what it draws. A compact window is narrow, and
+    /// the sheets of the panels keep their own margin, so it spends less on the space around them.
+    pub(super) fn gutter(self) -> f32 {
+        match self {
+            Form::Compact => space::SM,
+            Form::Wide | Form::Medium => space::LG,
+        }
+    }
+
+    /// The space between two panels.
+    pub(super) fn gap(self) -> f32 {
+        match self {
+            Form::Compact => space::SM,
+            Form::Wide | Form::Medium => space::MD,
+        }
+    }
 }
 
 /// The height of the top bar, in points.
@@ -51,27 +70,10 @@ pub const TOP_BAR: f32 = size::CONTROL_LG + 2.0 * space::SM;
 /// The height of the footer, in points.
 pub const FOOTER: f32 = size::CONTROL_SM;
 /// The height of the Ask bar of a wide window, in points.
-pub const ASK_BAR: f32 = 2.0 * space::MD + size::CONTROL_LG + space::SM + size::CONTROL_SM;
-/// The height of the Ask bar of a medium window, in points. It may grow to 300 before the panels
-/// under it get too small.
-pub const ASK_BAR_MEDIUM: f32 = ASK_BAR;
-/// The height of the Ask bar of a compact window, in points. The Answer view under it keeps at
-/// least 100 points in a phone held sideways only while this stays at 130 or below.
-pub const ASK_BAR_COMPACT: f32 = 2.0 * space::SM
-    + size::CONTROL_LG
-    + space::SM
-    + size::CONTROL_MD
-    + space::XS
-    + size::CONTROL_SM;
+pub const ASK_BAR: f32 = 2.0 * space::MD + ask_bar::TWO_ROWS;
 /// The height of the bottom navigation of a compact window, in points. Each item fills it.
 pub const BOTTOM_NAV: f32 = size::TAB + space::MD;
 
-const GUTTER: f32 = space::LG;
-const GAP: f32 = space::MD;
-/// A compact window is narrow, and the sheets of the panels keep their own margin, so it spends
-/// less on the space around them.
-const COMPACT_GUTTER: f32 = space::SM;
-const COMPACT_GAP: f32 = space::SM;
 /// The side panel of a medium window takes this share of the room along the longer side, so the
 /// Answer always gets the larger share.
 const SIDE_SHARE: f32 = 0.45;
@@ -154,14 +156,21 @@ impl ShellRects {
             .collect()
     }
 
+    /// The room of a view of the Ask tab.
+    pub fn view(&self, view: AskView) -> Rect {
+        match view {
+            AskView::Answer => self.answer,
+            AskView::Source => self.source,
+            AskView::ConceptGraph => self.concept_graph,
+            AskView::RetrievalPath => self.retrieval_path,
+            AskView::FollowUp => self.follow_up,
+        }
+    }
+
     fn rect_of(&self, region: AskRegion) -> Option<Rect> {
         match region {
             AskRegion::AskBar => Some(self.ask_bar),
-            AskRegion::View(AskView::Answer) => Some(self.answer),
-            AskRegion::View(AskView::Source) => Some(self.source),
-            AskRegion::View(AskView::ConceptGraph) => Some(self.concept_graph),
-            AskRegion::View(AskView::RetrievalPath) => Some(self.retrieval_path),
-            AskRegion::View(AskView::FollowUp) => Some(self.follow_up),
+            AskRegion::View(view) => Some(self.view(view)),
             AskRegion::SideTabs => self.side_tabs,
             AskRegion::BottomNav => self.bottom_nav,
         }
@@ -192,21 +201,23 @@ fn bands(window: Rect) -> Bands {
     }
 }
 
-/// The rectangles of every part of the window, laid out for the form that its size gives.
-pub fn shell(window: Rect) -> ShellRects {
+/// The rectangles of every part of the window, laid out for the form that its size gives. `note`
+/// says whether the Ask bar of a narrow window has a row for a note.
+pub fn shell(window: Rect, note: NoteRow) -> ShellRects {
     match Form::of(window.size()) {
         Form::Wide => wide(window),
-        Form::Medium => medium(window),
-        Form::Compact => compact(window),
+        Form::Medium => medium(window, note),
+        Form::Compact => compact(window, note),
     }
 }
 
 /// Extra height goes to the top row, which is what a person reads.
 fn wide(window: Rect) -> ShellRects {
+    let (gutter, gap) = (Form::Wide.gutter(), Form::Wide.gap());
     // Every edge is made whole once, and every other edge is a whole number away from it, so
     // two neighbours never overlap and no border is blurred.
-    let left = (window.left() + GUTTER).round();
-    let right = (window.right() - GUTTER).round();
+    let left = (window.left() + gutter).round();
+    let right = (window.right() - gutter).round();
     let Bands {
         top_bar,
         footer,
@@ -215,19 +226,19 @@ fn wide(window: Rect) -> ShellRects {
     let bottom = (footer.top() - space::SM).round();
     let ask_bar = edges(left, ask_top, right, ask_top + ASK_BAR);
 
-    let work_top = ask_bar.bottom() + GAP;
+    let work_top = ask_bar.bottom() + gap;
     let bottom_height = (BOTTOM_SHARE * (bottom - work_top))
         .clamp(BOTTOM_MIN, BOTTOM_MAX)
         .round();
     let lower_top = bottom - bottom_height;
-    let upper_bottom = lower_top - GAP;
+    let upper_bottom = lower_top - gap;
 
     let right_width = (RIGHT_SHARE * (right - left))
         .clamp(RIGHT_MIN, RIGHT_MAX)
         .round();
     let right_left = right - right_width;
-    let left_right = right_left - GAP;
-    let graph_width = (GRAPH_SHARE * (left_right - left - GAP)).round();
+    let left_right = right_left - gap;
+    let graph_width = (GRAPH_SHARE * (left_right - left - gap)).round();
     let graph_right = left + graph_width;
 
     ShellRects {
@@ -237,7 +248,7 @@ fn wide(window: Rect) -> ShellRects {
         answer: edges(left, work_top, left_right, upper_bottom),
         source: edges(right_left, work_top, right, upper_bottom),
         concept_graph: edges(left, lower_top, graph_right, bottom),
-        retrieval_path: edges(graph_right + GAP, lower_top, left_right, bottom),
+        retrieval_path: edges(graph_right + gap, lower_top, left_right, bottom),
         follow_up: edges(right_left, lower_top, right, bottom),
         side_tabs: None,
         bottom_nav: None,
@@ -248,30 +259,32 @@ fn wide(window: Rect) -> ShellRects {
 
 /// The Answer and one side panel share the room under the Ask bar along its longer side, so a
 /// wide room puts them side by side and a tall room puts the side panel under the Answer.
-fn medium(window: Rect) -> ShellRects {
-    let left = (window.left() + GUTTER).round();
-    let right = (window.right() - GUTTER).round();
+fn medium(window: Rect, note: NoteRow) -> ShellRects {
+    let (gutter, gap) = (Form::Medium.gutter(), Form::Medium.gap());
+    let left = (window.left() + gutter).round();
+    let right = (window.right() - gutter).round();
     let Bands {
         top_bar,
         footer,
         ask_top,
     } = bands(window);
     let bottom = (footer.top() - space::SM).round();
-    let ask_bar = edges(left, ask_top, right, ask_top + ASK_BAR_MEDIUM);
+    let bar_height = 2.0 * space::MD + rows_height(right - left, note);
+    let ask_bar = edges(left, ask_top, right, ask_top + bar_height);
 
-    let work = edges(left, ask_bar.bottom() + GAP, right, bottom);
+    let work = edges(left, ask_bar.bottom() + gap, right, bottom);
     let (answer, side_area) = if work.width() > work.height() {
-        let side_width = (SIDE_SHARE * (work.width() - GAP)).min(SIDE_MAX).round();
+        let side_width = (SIDE_SHARE * (work.width() - gap)).min(SIDE_MAX).round();
         let side_left = right - side_width;
         (
-            edges(left, work.top(), side_left - GAP, bottom),
+            edges(left, work.top(), side_left - gap, bottom),
             edges(side_left, work.top(), right, bottom),
         )
     } else {
-        let side_height = (SIDE_SHARE * (work.height() - GAP)).round();
+        let side_height = (SIDE_SHARE * (work.height() - gap)).round();
         let side_top = bottom - side_height;
         (
-            edges(left, work.top(), right, side_top - GAP),
+            edges(left, work.top(), right, side_top - gap),
             edges(left, side_top, right, bottom),
         )
     };
@@ -306,9 +319,10 @@ fn medium(window: Rect) -> ShellRects {
 
 /// One view fills the room between the top bar and the bottom navigation. Only the Answer view
 /// has the Ask bar above it.
-fn compact(window: Rect) -> ShellRects {
-    let left = (window.left() + COMPACT_GUTTER).round();
-    let right = (window.right() - COMPACT_GUTTER).round();
+fn compact(window: Rect, note: NoteRow) -> ShellRects {
+    let (gutter, gap) = (Form::Compact.gutter(), Form::Compact.gap());
+    let left = (window.left() + gutter).round();
+    let right = (window.right() - gutter).round();
     let Bands {
         top_bar,
         footer,
@@ -320,22 +334,23 @@ fn compact(window: Rect) -> ShellRects {
         window.right(),
         footer.top(),
     );
-    let view_bottom = (bottom_nav.top() - COMPACT_GAP).round();
-    let ask_bar = edges(left, ask_top, right, ask_top + ASK_BAR_COMPACT);
+    let view_bottom = (bottom_nav.top() - gap).round();
+    let bar_height = 2.0 * space::SM + rows_height(right - left, note);
+    let ask_bar = edges(left, ask_top, right, ask_top + bar_height);
     let view = edges(left, ask_top, right, view_bottom);
 
     ShellRects {
         form: Form::Compact,
         top_bar,
         ask_bar,
-        answer: edges(left, ask_bar.bottom() + COMPACT_GAP, right, view_bottom),
+        answer: edges(left, ask_bar.bottom() + gap, right, view_bottom),
         source: view,
         concept_graph: view,
         retrieval_path: view,
         follow_up: view,
         side_tabs: None,
         bottom_nav: Some(bottom_nav),
-        page: edges(left, ask_top, right, (footer.top() - COMPACT_GAP).round()),
+        page: edges(left, ask_top, right, (footer.top() - gap).round()),
         footer,
     }
 }

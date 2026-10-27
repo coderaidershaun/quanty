@@ -183,6 +183,7 @@ pub struct Dropdown<'a, S> {
     placeholder: &'a str,
     size: ControlSize,
     width: f32,
+    is_quiet: bool,
 }
 
 impl<'a, S: AsRef<str>> Dropdown<'a, S> {
@@ -199,6 +200,7 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
             placeholder: "",
             size: ControlSize::Small,
             width,
+            is_quiet: false,
         }
     }
 
@@ -223,6 +225,14 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
         self
     }
 
+    /// For a bar of plain words, such as the top bar: at rest the box has no fill and only a
+    /// hairline edge, and it keeps the narrow padding of a ghost button. The pointer and an open
+    /// list draw it as any other dropdown.
+    pub fn quiet(mut self) -> Self {
+        self.is_quiet = true;
+        self
+    }
+
     pub fn show(self, ui: &mut egui::Ui) -> Option<usize> {
         let chosen_text = self.selected.and_then(|index| self.options.get(index));
         let muted = theme::palette(ui.ctx()).text_muted;
@@ -234,6 +244,14 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
         let response = ui
             .scope(|ui| {
                 ui.spacing_mut().interact_size.y = self.size.height();
+                if self.is_quiet {
+                    // The open list is drawn in a layer of its own, with the style of the app.
+                    ui.spacing_mut().button_padding.x = QUIET_PADDING;
+                    let hairline = theme::palette(ui.ctx()).hairline;
+                    let rest = &mut ui.visuals_mut().widgets.inactive;
+                    rest.weak_bg_fill = Color32::TRANSPARENT;
+                    rest.bg_stroke = Stroke::new(stroke::BORDER, hairline);
+                }
                 // `truncate` cuts the text to the room it is given, and `width` is only a
                 // minimum, so the room is capped here.
                 ui.set_max_width(self.width);
@@ -258,6 +276,9 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
         chosen
     }
 }
+
+/// The padding of a ghost button, at each end of a quiet dropdown.
+const QUIET_PADDING: f32 = space::SM;
 
 /// The caret at the right end of a closed list, for `ComboBox::icon`.
 pub fn paint_caret(ui: &egui::Ui, rect: egui::Rect, _: &egui::style::WidgetVisuals, _: bool) {

@@ -23,19 +23,34 @@ pub(crate) fn pick(sender: Sender<Intent>, ctx: egui::Context) {
         request.mode = ehttp::Mode::SameOrigin;
         request.headers =
             ehttp::Headers::new(&[("X-File-Name", &name), ("Content-Type", "application/pdf")]);
-        ehttp::fetch(request, move |result| match result {
-            Ok(response) if response.status == 200 => {
-                match serde_json::from_slice(&response.bytes) {
-                    Ok(pdf) => {
-                        if sender.send(Intent::PdfPicked(pdf)).is_ok() {
-                            ctx.request_repaint();
-                        }
-                    }
-                    Err(error) => log::error!("could not read PDF upload response: {error}"),
+        ehttp::fetch(request, move |result| {
+            let uploaded = match result {
+                Ok(response) if response.status == 200 => serde_json::from_slice(&response.bytes)
+                    .map_err(|error| {
+                        format!("Could not read the upload response: {error}. Please try again.")
+                    }),
+                Ok(response) => Err(match response.status {
+                    413 => "This PDF is too large to upload.".to_owned(),
+                    415 => "The selected file is not a PDF.".to_owned(),
+                    401 | 403 => "Please sign in again, then upload the PDF.".to_owned(),
+                    status => format!(
+                        "The server could not save the PDF (HTTP {status}). Please try again or contact the server administrator."
+                    ),
+                }),
+                Err(error) => Err(format!(
+                    "Could not upload the PDF: {error}. Please try again."
+                )),
+            };
+            let intent = match uploaded {
+                Ok(pdf) => Intent::PdfPicked(pdf),
+                Err(error) => {
+                    log::error!("PDF upload failed: {error}");
+                    Intent::PdfUploadFailed(error)
                 }
+            };
+            if sender.send(intent).is_ok() {
+                ctx.request_repaint();
             }
-            Ok(response) => log::error!("PDF upload failed: HTTP {}", response.status),
-            Err(error) => log::error!("PDF upload failed: {error}"),
         });
     });
 }

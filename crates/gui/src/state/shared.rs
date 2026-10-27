@@ -21,6 +21,7 @@ pub struct Cues {
     /// The Ingest panel copies `picked_pdf` into its draft.
     pub pdf_picks: u64,
     pub picked_pdf: Option<contract::UploadedPdf>,
+    pub pdf_upload_error: Option<String>,
     /// The source view shows its target again.
     pub source_shows: u64,
     /// The Ingest panel chooses the media `saved_media` once the catalogue that holds it arrives.
@@ -118,11 +119,16 @@ impl Shared {
             Intent::SaveMedia(media) => self.save_media(media, effects),
             Intent::EditMedia(edit) => self.edit_media(edit, effects),
             Intent::DeleteMedia(title) => self.delete_media(title, effects),
-            Intent::PickPdf => effects.push(Effect::PickFile),
+            Intent::PickPdf => {
+                self.cues.pdf_upload_error = None;
+                effects.push(Effect::PickFile);
+            }
             Intent::PdfPicked(path) => {
+                self.cues.pdf_upload_error = None;
                 self.cues.picked_pdf = Some(path);
                 self.cues.pdf_picks += 1;
             }
+            Intent::PdfUploadFailed(error) => self.cues.pdf_upload_error = Some(error),
             Intent::CheckIngest(request) => self.check_ingest(request, effects),
             Intent::StartIngest => self.start_ingest(effects),
             Intent::ClearIngest => self.clear_ingest(effects),

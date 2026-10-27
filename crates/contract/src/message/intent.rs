@@ -133,6 +133,8 @@ pub enum Intent {
     PickPdf,
     /// The shell's answer to `PickPdf`.
     PdfPicked(crate::UploadedPdf),
+    /// The shell could not upload the selected PDF.
+    PdfUploadFailed(String),
     CheckIngest(IngestRequest),
     StartIngest,
     ClearIngest,

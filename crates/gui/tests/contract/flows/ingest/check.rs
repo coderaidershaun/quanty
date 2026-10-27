@@ -15,6 +15,24 @@ use crate::flows::{Window, click, field, has, press, retype, says, type_into};
 const BOOK: &str = "Quanty Sample Notes";
 
 #[test]
+fn a_failed_upload_is_visible_and_a_successful_pick_clears_it() {
+    let (mut harness, seen) = open("idle", DEFAULT_WINDOW);
+    click(&mut harness, Role::Tab, "Ingest");
+    let error = "The server could not save the PDF (HTTP 500). Please try again.";
+    harness
+        .state_mut()
+        .push(contract::Intent::PdfUploadFailed(error.to_owned()));
+    testkit::settle(&mut harness);
+    assert!(says(&harness, "PDF upload failed"));
+    assert!(says(&harness, error));
+    assert_eq!(seen.count(is_preflight), 0);
+
+    pick(&mut harness, "chapter-4-vega.pdf");
+    assert!(!says(&harness, "PDF upload failed"));
+    assert!(!says(&harness, error));
+}
+
+#[test]
 fn a_pdf_is_checked_by_itself_and_a_book_waits_for_its_chapter() {
     let (mut harness, seen) = open("idle", DEFAULT_WINDOW);
     click(&mut harness, Role::Tab, "Ingest");

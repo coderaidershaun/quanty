@@ -284,6 +284,12 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
                 ui.add_enabled_ui(!cx.shared.ingest.is_running(), |ui| {
                     media::show(ui, local, cx);
                     ui.add_space(space::LG);
+                    if let Some(error) = &cx.shared.cues.pdf_upload_error {
+                        crate::widgets::Notice::error("PDF upload failed")
+                            .body(error)
+                            .show(ui);
+                        ui.add_space(space::SM);
+                    }
                     document::show(ui, local, cx.intents);
                 });
                 ui.add_space(space::LG);

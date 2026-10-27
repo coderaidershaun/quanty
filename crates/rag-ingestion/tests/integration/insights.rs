@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use ocr::ChapterInsights;
-use rag_ingestion::ingest_chapter;
+use rag_ingestion::{InsightsOutcome, InsightsWriter, ingest_chapter};
 
 use crate::delete::copy_sample_chapter;
 use crate::support::{
@@ -170,4 +170,41 @@ async fn rag_ingest_insights_writes_the_missing_files_of_stored_chapters() {
         points_before,
         "nothing was embedded or stored again"
     );
+}
+
+/// What the model wrote as the cheat sheet, and what is saved of it.
+const CHEAT_SHEETS: [(&str, &str); 3] = [
+    (
+        r#"### Greeks\n- Delta: $\\frac{\\partial C}{\\partial S}$\n\n| a | b |\n|---|---|\n| 1 | 2 |""#,
+        "### Greeks\n- Delta: $\\frac{\\partial C}{\\partial S}$\n\n| a | b |\n|---|---|\n| 1 | 2 |",
+    ),
+    (
+        "### Rules\n- Vega is not \"volatility\".\n- $\\nu \\neq \\sigma$.\"",
+        "### Rules\n- Vega is not \"volatility\".\n- $\\nu \\neq \\sigma$.",
+    ),
+    (
+        "### Rules\n- $\\nu \\neq \\sigma$ and $a \\\\ b$.",
+        "### Rules\n- $\\nu \\neq \\sigma$ and $a \\\\ b$.",
+    ),
+];
+
+#[tokio::test]
+async fn a_cheat_sheet_escaped_once_too_often_is_saved_as_markdown() {
+    let content = tempfile::tempdir().unwrap();
+    for (written, saved) in CHEAT_SHEETS {
+        let chapter = copy_sample_chapter(&support::sample_chapter(), content.path());
+        let mut reply = rag_ingestion::testing::stand_in_insights_reply();
+        reply["cheat_sheet"] = written.into();
+        let writer = InsightsWriter::new(StandInLlm::replying(move |_, _| Ok(reply.clone())));
+
+        let summary = writer.write_missing(&chapter).await;
+
+        assert!(
+            matches!(summary.outcome, InsightsOutcome::Written { .. }),
+            "{summary:?}"
+        );
+        let insights = ChapterInsights::read(&chapter).unwrap().unwrap();
+        assert_eq!(insights.cheat_sheet, saved);
+        std::fs::remove_dir_all(&chapter).unwrap();
+    }
 }

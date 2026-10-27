@@ -155,7 +155,8 @@ struct ReplyInsight {
 impl Notes {
     /// A reply that does not fit is refused as a whole. Every text is trimmed, a blank insight or
     /// takeaway is dropped, and a page that no marker of the text names is dropped from the pages
-    /// of an insight. The rest of the pages are sorted, with no page twice.
+    /// of an insight. The rest of the pages are sorted, with no page twice. A cheat sheet that was
+    /// escaped once too often is unescaped.
     ///
     /// # Errors
     /// - [`ReplyError::Shape`] when a field is missing or has the wrong kind of value
@@ -185,7 +186,7 @@ impl Notes {
             .map(|takeaway| takeaway.trim().to_owned())
             .filter(|takeaway| !takeaway.is_empty())
             .collect();
-        let cheat_sheet = reply.cheat_sheet.trim().to_owned();
+        let cheat_sheet = cheat_sheet_of(&reply.cheat_sheet);
         for (part, is_empty) in [
             ("insight", insights.is_empty()),
             ("takeaway", takeaways.is_empty()),
@@ -201,4 +202,46 @@ impl Notes {
             cheat_sheet,
         })
     }
+}
+
+/// The cheat sheet as Markdown. A model sometimes escapes it once too often, so that it comes as
+/// one line with `\n` where each line ends and `\\` for each backslash of a formula. A cheat sheet
+/// always has more than one section, so one with no line break that holds a `\n` is unescaped
+/// once more. A model also sometimes ends it with a quote that opens nothing, and that is dropped.
+fn cheat_sheet_of(reply: &str) -> String {
+    let text = reply.trim();
+    let mut text = if !text.contains('\n') && text.contains("\\n") {
+        unescaped(text).trim().to_owned()
+    } else {
+        text.to_owned()
+    };
+    if text.ends_with('"') && text.matches('"').count() % 2 == 1 {
+        text.pop();
+        text.truncate(text.trim_end().len());
+    }
+    text
+}
+
+/// `\n`, `\"` and `\\` become a line break, a quote and a backslash. Every other backslash is
+/// kept as it is, so a formula that was escaped only once keeps its commands.
+fn unescaped(text: &str) -> String {
+    let mut unescaped = String::with_capacity(text.len());
+    let mut chars = text.chars();
+    while let Some(char) = chars.next() {
+        if char != '\\' {
+            unescaped.push(char);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => unescaped.push('\n'),
+            Some('"') => unescaped.push('"'),
+            Some('\\') => unescaped.push('\\'),
+            Some(other) => {
+                unescaped.push('\\');
+                unescaped.push(other);
+            }
+            None => unescaped.push('\\'),
+        }
+    }
+    unescaped
 }

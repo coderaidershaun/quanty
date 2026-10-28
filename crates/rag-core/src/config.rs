@@ -55,6 +55,10 @@ pub struct Config {
     /// `rag-ingest pdf` uses it, and only when a page is left to convert, so a missing key is
     /// not an error here.
     pub jev_api_key: Option<ApiKey>,
+    /// The origins, besides this machine, that `ingest_pdf` may fetch a `pdf_url` from. This
+    /// machine (`localhost`, `127.0.0.0/8` and `::1`) is always allowed, and this list adds to it.
+    /// `QUANTY_FETCH_ORIGINS`, a comma-separated list; none unless set.
+    pub fetch_origins: Vec<reqwest::Url>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -72,6 +76,11 @@ pub enum ConfigError {
     // The bad line is left out on purpose: it may be a key.
     #[error("{} is not a list of NAME=value lines", path.display())]
     DotenvParse { path: PathBuf },
+
+    #[error(
+        "QUANTY_FETCH_ORIGINS holds {value:?}, which is not an origin; give origins separated by commas, each with a scheme (http or https), a host, and no path, user name or password, such as https://jet.example.com or http://10.0.0.5:8080"
+    )]
+    FetchOrigin { value: String },
 }
 
 impl Config {
@@ -97,6 +106,8 @@ impl Config {
     /// # Errors
     /// - [`ConfigError::DotenvRead`] when the file exists but cannot be read
     /// - [`ConfigError::DotenvParse`] when the file is not a list of `NAME=value` lines
+    /// - [`ConfigError::FetchOrigin`] when `QUANTY_FETCH_ORIGINS` holds something that is not an
+    ///   origin
     pub fn from_sources(
         environment: impl Fn(&str) -> Option<String>,
         dotenv_file: Option<&Path>,
@@ -126,7 +137,47 @@ impl Config {
             gemini_ipv4_only: setting("EMBEDDING_GEMINI_IPV4_ONLY")
                 .is_some_and(|value| is_on(&value)),
             jev_api_key: setting("CONVERTER_JEV_API_KEY").map(ApiKey::new),
+            fetch_origins: fetch_origins(setting("QUANTY_FETCH_ORIGINS").as_deref())?,
         })
+    }
+}
+
+/// The origins of a comma-separated list. Blank entries are dropped.
+fn fetch_origins(list: Option<&str>) -> Result<Vec<reqwest::Url>, ConfigError> {
+    list.unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .map(|entry| {
+            origin_of(entry).ok_or_else(|| ConfigError::FetchOrigin {
+                value: with_password_hidden(entry),
+            })
+        })
+        .collect()
+}
+
+/// The URL when it is only a scheme, a host and maybe a port.
+fn origin_of(text: &str) -> Option<reqwest::Url> {
+    let url = reqwest::Url::parse(text).ok()?;
+    let is_only_an_origin = matches!(url.scheme(), "http" | "https")
+        && url.has_host()
+        && url.path() == "/"
+        && url.query().is_none()
+        && url.fragment().is_none()
+        && url.username().is_empty()
+        && url.password().is_none();
+    is_only_an_origin.then_some(url)
+}
+
+/// The entry with any password in it replaced, because an error can end up in a log.
+fn with_password_hidden(entry: &str) -> String {
+    let Ok(mut url) = reqwest::Url::parse(entry) else {
+        return entry.to_owned();
+    };
+    if url.password().is_some() && url.set_password(Some("hidden")).is_ok() {
+        url.to_string()
+    } else {
+        entry.to_owned()
     }
 }
 
@@ -198,5 +249,54 @@ mod tests {
             assert!(!with_ipv4_only(Some(off)).gemini_ipv4_only, "{off:?}");
         }
         assert!(!with_ipv4_only(None).gemini_ipv4_only);
+    }
+
+    fn with_fetch_origins(value: Option<&str>) -> Result<Config, super::ConfigError> {
+        let environment = |name: &str| {
+            (name == "QUANTY_FETCH_ORIGINS")
+                .then(|| value.map(str::to_owned))
+                .flatten()
+        };
+        Config::from_sources(environment, None)
+    }
+
+    #[test]
+    fn fetch_origins_are_read_from_a_comma_list_and_a_bad_one_is_refused() {
+        let config =
+            with_fetch_origins(Some(" https://jet.example.com , http://10.0.0.5:8080,")).unwrap();
+        let origins: Vec<_> = config
+            .fetch_origins
+            .iter()
+            .map(|url| url.origin())
+            .collect();
+        assert_eq!(origins.len(), 2);
+        let explicit_port = reqwest::Url::parse("https://jet.example.com:443/").unwrap();
+        assert_eq!(origins[0], explicit_port.origin());
+        let other = reqwest::Url::parse("http://10.0.0.5:8080/anything").unwrap();
+        assert_eq!(origins[1], other.origin());
+
+        assert!(with_fetch_origins(None).unwrap().fetch_origins.is_empty());
+        assert!(
+            with_fetch_origins(Some("  "))
+                .unwrap()
+                .fetch_origins
+                .is_empty()
+        );
+
+        for bad in [
+            "https://jet.example.com/api",
+            "https://jet.example.com?x=1",
+            "https://jet.example.com/#top",
+            "https://user@jet.example.com",
+            "ftp://x",
+            "not a url",
+        ] {
+            let error = with_fetch_origins(Some(&format!("https://ok.example,{bad}"))).unwrap_err();
+            let text = error.to_string();
+            assert!(text.contains(bad), "{text}");
+            assert!(text.contains("https://jet.example.com"), "{text}");
+        }
+        let error = with_fetch_origins(Some("https://user:secret@jet.example.com")).unwrap_err();
+        assert!(!error.to_string().contains("secret"), "{error}");
     }
 }

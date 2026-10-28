@@ -8,6 +8,7 @@ mod ingest;
 mod insights;
 mod jobs;
 mod library;
+mod pdf_url;
 mod support;
 mod tasks;
 mod tools;

@@ -7,6 +7,7 @@ use graph::GraphError;
 use ocr::{ContentError, ConvertError};
 use rag_core::{EmbedError, EmptyTag, StoreError, UnknownCategory};
 use rag_ingestion::{NamePdfError, PdfError, RelabelError};
+use reqwest::StatusCode;
 use tokio::task::JoinError;
 
 use crate::jobs::BackgroundJob;
@@ -15,22 +16,22 @@ use crate::jobs::{Busy, KEPT_JOBS, busy_from};
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum PdfIngestError {
     #[error(
-        "no PDF was given; give `path` (the absolute path of the PDF on the machine the server runs on) or `pdf_base64` with `file_name`"
+        "no PDF was given; give `path` (the absolute path of the PDF on the machine the server runs on), or `pdf_base64` with `file_name`, or `pdf_url` (an http or https address the server fetches the PDF from) with `file_name`"
     )]
     NoSource,
 
-    #[error("both `path` and `pdf_base64` were given; give one of them")]
-    TwoSources,
+    #[error("{given} were given; give exactly one of them")]
+    ManySources { given: &'static str },
 
     #[error(
-        "`file_name` was given with `path`; `file_name` goes with `pdf_base64` only, because a file at a path has its own name"
+        "`file_name` was given with `path`; `file_name` goes with `pdf_base64` or `pdf_url` only, because a file at a path has its own name"
     )]
     FileNameWithPath,
 
     #[error(
-        "`pdf_base64` was given without `file_name`; give the name to save it under, such as chapter-1-financial-contracts.pdf"
+        "`{way}` was given without `file_name`; give the name to save it under, such as chapter-1-financial-contracts.pdf"
     )]
-    MissingFileName,
+    MissingFileName { way: &'static str },
 
     #[error("`media` is blank; give the title of the media the PDF belongs to, such as a book")]
     BlankMedia,
@@ -74,6 +75,53 @@ pub(crate) enum PdfIngestError {
     UploadNotAPdf,
 
     #[error(
+        "`pdf_url` {value:?} is not a URL ({reason}); give an address such as https://host/file.pdf"
+    )]
+    NotAUrl { value: String, reason: String },
+
+    #[error(
+        "`pdf_url` has the scheme {scheme:?}, and only http or https is fetched; give an address that starts with http:// or https://"
+    )]
+    PdfUrlScheme { scheme: String },
+
+    #[error(
+        "`pdf_url` points at {origin}, which is not an allowed origin: the server fetches only from its own machine (localhost, 127.0.0.1 or [::1]) and from the origins in QUANTY_FETCH_ORIGINS; send the PDF by `path` or `pdf_base64` instead, or ask whoever runs the server to add {origin} to QUANTY_FETCH_ORIGINS"
+    )]
+    PdfUrlOrigin { origin: String },
+
+    #[error(
+        "{url} answered {status}{}, and redirects are not followed; give the URL it points at",
+        redirect_text(location.as_deref())
+    )]
+    PdfUrlRedirect {
+        url: String,
+        status: StatusCode,
+        location: Option<String>,
+    },
+
+    #[error(
+        "{url} answered {status}, not a PDF; check the address, or send the PDF by `path` or `pdf_base64`"
+    )]
+    PdfUrlStatus { url: String, status: StatusCode },
+
+    #[error(
+        "could not fetch the PDF from {url}; check that the address can be reached from the machine the server runs on"
+    )]
+    PdfUrlFetch {
+        url: String,
+        #[source]
+        source: reqwest::Error,
+    },
+
+    #[error(
+        "the answer of {url} does not start with %PDF-, so it is not a PDF; give the address of a PDF file"
+    )]
+    PdfUrlNotAPdf { url: String },
+
+    #[error("could not set up the client that fetches `pdf_url`")]
+    PdfUrlClient(#[source] reqwest::Error),
+
+    #[error(
         "`file_name` must be a plain file name with no folder in it, and {name:?} is not; give a name such as chapter-1-financial-contracts.pdf"
     )]
     FileNameHoldsFolder { name: String },
@@ -89,7 +137,7 @@ pub(crate) enum PdfIngestError {
     Media(#[source] ContentError),
 
     #[error(
-        "this media is a book, and the file name is not that of a book chapter; copy or rename the file to chapter-<number>-<name>.pdf, such as chapter-1-financial-contracts.pdf, or give such a `file_name` with `pdf_base64`, or give `document_title` when the PDF is a part of the book that is not a chapter, such as its index, or, when the library does not have this media yet, give a `category` of paper or other, whose PDF can have any name; a media the library has keeps its own category"
+        "this media is a book, and the file name is not that of a book chapter; copy or rename the file to chapter-<number>-<name>.pdf, such as chapter-1-financial-contracts.pdf, or give such a `file_name` with `pdf_base64` or `pdf_url`, or give `document_title` when the PDF is a part of the book that is not a chapter, such as its index, or, when the library does not have this media yet, give a `category` of paper or other, whose PDF can have any name; a media the library has keeps its own category"
     )]
     ChapterFileName(#[source] ContentError),
 
@@ -166,6 +214,12 @@ impl From<NamePdfError> for PdfIngestError {
             NamePdfError::ChapterFileName(source) => PdfIngestError::ChapterFileName(source),
         }
     }
+}
+
+fn redirect_text(location: Option<&str>) -> String {
+    location.map_or_else(String::new, |location| {
+        format!(" with the location {location}")
+    })
 }
 
 fn size_text(bytes: u64) -> String {

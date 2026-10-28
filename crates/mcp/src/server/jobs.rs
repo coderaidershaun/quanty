@@ -31,10 +31,12 @@ impl<S: Services> QuantyServer<S> {
     /// not saved yet: then the agent writes those alone. A book's chapter must be named
     /// `chapter-<number>-<name>.pdf`; a part of a book that is not a chapter, such as its index,
     /// takes `document_title` and can have any file name; a paper or other PDF can have any name.
-    /// Unified HTTP permits only one background ingest, insights job or dataset build across the
-    /// app and MCP. Stdio permits one job of each kind at a time. The same PDF must not be sent
-    /// through a second server, or beside `rag-ingest pdf`, at the same time. Sending the same PDF
-    /// again goes on from where a stopped run ended.
+    /// A PDF that is not on the server's disk can also be sent as a `pdf_url` with `file_name`,
+    /// from the server's own machine or an allowed origin. Unified HTTP permits only one
+    /// background ingest, insights job or dataset build across the app and MCP. Stdio permits one
+    /// job of each kind at a time. The same PDF must not be sent through a second server, or
+    /// beside `rag-ingest pdf`, at the same time. Sending the same PDF again goes on from where a
+    /// stopped run ended.
     #[tool(
         annotations(
             read_only_hint = false,

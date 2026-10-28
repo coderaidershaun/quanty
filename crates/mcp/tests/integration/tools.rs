@@ -208,6 +208,7 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
                 "media",
                 "path",
                 "pdf_base64",
+                "pdf_url",
                 "tags",
             ],
             &["media"],

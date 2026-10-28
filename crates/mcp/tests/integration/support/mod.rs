@@ -3,6 +3,7 @@
 
 mod client;
 mod library;
+mod pdf_host;
 mod services;
 
 use std::path::{Path, PathBuf};
@@ -18,6 +19,7 @@ pub use client::{
     connect_on_2026_07_28, connect_recording_progress, error_text, structured, tasks_client_config,
 };
 pub use library::{AUTHOR, ClosedPorts, Library};
+pub use pdf_host::{PdfHost, Reply};
 pub use services::{ReadyGate, StandInServices};
 
 /// The committed sample files of the workspace. Tests only read them.

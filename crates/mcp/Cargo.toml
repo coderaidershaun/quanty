@@ -20,6 +20,7 @@ rag-core.workspace = true
 rag-dataset.workspace = true
 rag-ingestion.workspace = true
 rag-retrieval.workspace = true
+reqwest.workspace = true
 rmcp.workspace = true
 schemars.workspace = true
 serde.workspace = true

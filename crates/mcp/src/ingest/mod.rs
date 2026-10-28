@@ -2,6 +2,7 @@
 //! limit on a tool call, so `ingest_pdf` starts a job and `ingest_status` reads it.
 
 mod error;
+mod fetch;
 mod pdf;
 mod progress;
 mod report;
@@ -23,7 +24,9 @@ pub(crate) use pdf::base64_len;
 pub(crate) use report::IngestReport;
 use work::Work;
 
-/// What an agent gives `ingest_pdf`. Give exactly one of `path` and `pdf_base64`.
+const PDF_START: &[u8] = b"%PDF-";
+
+/// What an agent gives `ingest_pdf`. Give exactly one of `path`, `pdf_base64` and `pdf_url`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct IngestPdfArgs {
     /// The title of the media the PDF belongs to, such as "Option Volatility and Pricing".
@@ -58,9 +61,13 @@ pub(crate) struct IngestPdfArgs {
     /// The bytes of the PDF as standard base64, for a client that cannot reach the disk of the
     /// server. It goes with `file_name`.
     pdf_base64: Option<String>,
-    /// The name to save the bytes of `pdf_base64` under, with no folder in it; for a book's
-    /// chapter it must be `chapter-<number>-<name>.pdf`, and a part that is not a chapter takes
-    /// `document_title` and any name. Not for `path`.
+    /// An http or https URL that the server fetches the PDF from with one GET, for a client whose
+    /// file is on another machine. It goes with `file_name`. Only the server's own machine and the
+    /// origins in `QUANTY_FETCH_ORIGINS` are fetched from, and a redirect is not followed.
+    pdf_url: Option<String>,
+    /// The name to save the bytes of `pdf_base64` or `pdf_url` under, with no folder in it; for a
+    /// book's chapter it must be `chapter-<number>-<name>.pdf`, and a part that is not a chapter
+    /// takes `document_title` and any name. Not for `path`.
     file_name: Option<String>,
 }
 
@@ -117,13 +124,7 @@ impl<S: Services> Ingest<S> {
                 .or_else(|| args.path.as_deref().and_then(file_name_of))
                 .unwrap_or_else(|| args.media.clone())
         })?;
-        let config = self.config.clone();
-        let max_pdf_bytes = self.max_pdf_bytes;
-        // The check decodes a PDF that was sent as base64, which can be megabytes of text, so it
-        // runs on a thread that may block and the other calls are not held up.
-        let checked = tokio::task::spawn_blocking(move || pdf::check(args, &config, max_pdf_bytes))
-            .await
-            .map_err(PdfIngestError::Stopped)??;
+        let checked = pdf::check(args, &self.config, self.max_pdf_bytes).await?;
         let (ready, graph) = self.named(checked, error_text).await?;
         let started = self
             .jobs

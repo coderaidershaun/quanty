@@ -181,6 +181,7 @@ pub fn closed_ports_config() -> Config {
         gemini_api_key: Some(ApiKey::new("a-made-up-key")),
         jev_api_key: None,
         gemini_ipv4_only: false,
+        fetch_origins: Vec::new(),
     }
 }
 

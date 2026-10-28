@@ -231,12 +231,13 @@ See part 7.
 
 An ingest never changes a stored media: to change its labels, use `edit_media` (or `edit_document_tags` for the tags of one document), `rag-ingest media`, or the Library tab of the browser app. The media is found by its title whatever its capitals and the space at its ends.
 
-The PDF is sent one of two ways. Give exactly one of them.
+The PDF is sent one of three ways. Give exactly one of them.
 
 | Way | Arguments | For |
 | --- | --- | --- |
 | By path | `path`: the absolute path of the file on the machine the server runs on | An agent on the same machine. This is the way to use |
 | As base64 | `pdf_base64`: the bytes as standard base64, and `file_name` | A program client. An AI agent cannot write megabytes of base64 itself |
+| By URL | `pdf_url`: an `http` or `https` address, and `file_name` | A PDF on another machine, such as the file of a chat in jet. The server fetches it |
 
 Rules:
 
@@ -244,7 +245,8 @@ Rules:
 - A part of a book that is not a chapter, such as its index, takes a `document_title` and can have any file name. It is stored as "<book>, <title>", such as "Option Volatility and Pricing, Index".
 - The PDF of a paper or another media can have any name.
 - It must be an existing file that starts with `%PDF-` and is at most 50 MiB.
-- An upload (`pdf_base64`) is saved under the content folder, in `_uploads/<media folder>/<file name>`, and never at a path that the caller chooses. A `file_name` with a folder in it is refused.
+- A `pdf_url` is fetched with one GET. Redirects are not followed: an answer of 3xx is refused, and the text gives the location. Only the server's own machine (`localhost`, `127.0.0.0/8` and `::1`, on any port) and the origins in `QUANTY_FETCH_ORIGINS` are fetched; an origin is its scheme, host and port, so `http://jet.example` is not `https://jet.example`. The answer must start with `%PDF-` and be at most 50 MiB, and the server stops reading at the limit.
+- An upload (`pdf_base64`) and a fetched PDF (`pdf_url`) are saved under the content folder, in `_uploads/<media folder>/<file name>`, and never at a path that the caller chooses. A `file_name` with a folder in it is refused.
 - The converted pages are saved under the content folder, in `<media folder>/chapter-<number>/` for a book's chapter and in `<media folder>/<document title folder>/` for any other document, which for a part of a book is `<media folder>/<part title folder>/`, made from the title of the part alone. The folders are made from the titles: lower case, with one dash for each run of characters that are not letters or digits.
 - The ingest also writes `insights.json` in that folder: the insights, the takeaways and the cheat sheet that the agent of the Ingest choice wrote about the whole document, from its converted text, in one question. A document whose file is saved is not asked about again. A part of a book that is not a chapter (its index, table of contents, front cover, glossary or preface) gets no insights and no file, and the agent is not asked; a chapter, and a document of another media such as a paper, does get them. Its fields are in the reference, under "Ingesting a converted document".
 
@@ -458,13 +460,14 @@ A failure comes back as a tool error (`isError: true`) with a text that says wha
 | What went wrong | What the text says |
 | --- | --- |
 | A store or a service is down, or a key is missing | The error, the address or key it names, and: call the `health` tool |
-| A bad argument: a blank question, an unknown `kind` or `category`, a blank tag, a bad `document_id`, a `limit` of 0, both `path` and `pdf_base64`, a `kind` of `chunk` for `chapter_contents` | What was given and what is allowed |
+| A bad argument: a blank question, an unknown `kind` or `category`, a blank tag, a bad `document_id`, a `limit` of 0, more than one of `path`, `pdf_base64` and `pdf_url`, a `kind` of `chunk` for `chapter_contents` | What was given and what is allowed |
 | `read_page` for a document that has no converted folder | The id, the content folder, and: call `list_documents` |
 | `read_page` for a document that is not found, when some converted documents cannot be read | The id, the content folder, "the document may be one of the chapters that cannot be read" with the file of each, and: call `list_documents` |
 | `read_page` for a page the document does not have | The page and how many pages there are |
 | `job_status`, `watch_job` or `ingest_status` for an unknown `job_id` | Job ids are forgotten when the server restarts, and the server keeps only its last 100 jobs of each kind; for an ingest, send the PDF again |
 | `watch_job` with a `timeout_s` that is not from 1 to 90 | That `timeout_s` must be from 1 to 90 seconds, and that leaving it out waits 60 |
 | A PDF that is refused: no file at the path, not a file, not a PDF, too big, a `file_name` with a folder in it, a book's file name that is not `chapter-<number>-<name>.pdf` and has no `document_title` | The reason and the fix |
+| A `pdf_url` that is refused: an origin that is not allowed, a scheme that is not `http` or `https`, a redirect, an HTTP status that is not a success, a body over the size limit or that does not start with `%PDF-`, or a host that cannot be reached | The reason and the fix: send the PDF by `path` or `pdf_base64`, give the URL a redirect points at, or ask whoever runs the server to add the origin to `QUANTY_FETCH_ORIGINS` |
 | A store that is down when the PDF is named, before the job starts | `could not connect to the graph`, or `could not read from the graph which media the library has`, with the address it names, and: call the `health` tool, and send the same PDF again |
 | An ingest is already running | Its `job_id`, and: ask `ingest_status`, and send this PDF when that job has ended |
 | `insights_status` or `stop_job` for an unknown `job_id` | Job ids are forgotten when the server restarts, and the server keeps only its last 100 jobs of each kind; for `insights_status`, call `write_insights` again, because insights that are saved are not asked for twice |

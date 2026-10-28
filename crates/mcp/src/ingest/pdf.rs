@@ -1,6 +1,6 @@
 //! Checks the one PDF that an agent sent, before anything is written, stored or paid for: where it
-//! comes from, how big it is, that it is a PDF, where an uploaded one is saved, and how it is
-//! named once the category of its media is known.
+//! comes from, how big it is, that it is a PDF, where an uploaded or fetched one is saved, and how
+//! it is named once the category of its media is known.
 
 use std::collections::BTreeSet;
 use std::fs::File;
@@ -15,10 +15,9 @@ use ocr::content::media_folder_name;
 use rag_core::{Category, Config, MediaLabels, Tag, author_list};
 use rag_ingestion::{TagChange, UnnamedPdf, uploaded_pdf_path};
 
-use super::{IngestPdfArgs, PdfIngestError};
+use super::fetch::fetch_pdf;
+use super::{IngestPdfArgs, PDF_START, PdfIngestError};
 use crate::args::{file_name_of, non_blank, parse_optional, parse_tags};
-
-const PDF_START: &[u8] = b"%PDF-";
 
 /// A PDF whose arguments and file passed every check. It is not named yet: that needs the
 /// category of its media, which the library may already have.
@@ -41,7 +40,7 @@ pub(super) struct ReadyPdf {
     pub(super) chapter: ChapterJob,
     pub(super) media: String,
     pub(super) file_name: String,
-    /// The bytes to save first, when the PDF was sent as base64.
+    /// The bytes to save first, when the PDF was sent as base64 or fetched from a URL.
     pub(super) upload: Option<Upload>,
     /// The labels the media is made with when the library does not have it yet.
     pub(super) new_media: MediaLabels,
@@ -64,11 +63,20 @@ pub(crate) fn base64_len(bytes: u64) -> u64 {
     bytes.div_ceil(3) * 4
 }
 
-/// Checks the arguments, and reads the PDF when it was sent as base64. It writes nothing.
+/// The ways an agent can send the PDF, of which exactly one must be given, and the name to save
+/// it under.
+struct Sent {
+    path: Option<String>,
+    pdf_base64: Option<String>,
+    pdf_url: Option<String>,
+    file_name: Option<String>,
+}
+
+/// Checks the arguments, and reads the PDF when it was sent as base64 or by URL. It writes nothing.
 ///
 /// # Errors
 /// The first check that fails, with what was given and what is allowed.
-pub(super) fn check(
+pub(super) async fn check(
     args: IngestPdfArgs,
     config: &Config,
     max_pdf_bytes: u64,
@@ -82,15 +90,14 @@ pub(super) fn check(
         add: parse_tags(args.document_tags).map_err(PdfIngestError::Tag)?,
         remove: Vec::new(),
     };
-    let source = checked_source(
-        non_blank(args.path),
+    let sent = Sent {
+        path: non_blank(args.path),
         // The base64 text can be megabytes long, so it is not trimmed or copied here.
-        args.pdf_base64.filter(|text| !text.trim().is_empty()),
-        non_blank(args.file_name),
-        config,
-        &media_folder,
-        max_pdf_bytes,
-    )?;
+        pdf_base64: args.pdf_base64.filter(|text| !text.trim().is_empty()),
+        pdf_url: non_blank(args.pdf_url),
+        file_name: non_blank(args.file_name),
+    };
+    let source = checked_source(sent, config, &media_folder, max_pdf_bytes).await?;
     Ok(CheckedPdf {
         pdf_path: source.pdf_path,
         media,
@@ -104,23 +111,28 @@ pub(super) fn check(
     })
 }
 
-/// Exactly one way must be given. A PDF sent as base64 is read here, and saved later.
-fn checked_source(
-    path: Option<String>,
-    pdf_base64: Option<String>,
-    file_name: Option<String>,
+/// Exactly one way must be given. A PDF sent as base64 is read here, and one named by URL is
+/// fetched here; both are saved later.
+async fn checked_source(
+    sent: Sent,
     config: &Config,
     media_folder: &str,
     max_pdf_bytes: u64,
 ) -> Result<Source, PdfIngestError> {
-    match (path, pdf_base64) {
-        (None, None) => Err(PdfIngestError::NoSource),
-        (Some(_), Some(_)) => Err(PdfIngestError::TwoSources),
-        (Some(path), None) => {
+    let Sent {
+        path,
+        pdf_base64,
+        pdf_url,
+        file_name,
+    } = sent;
+    match (path, pdf_base64, pdf_url) {
+        (None, None, None) => Err(PdfIngestError::NoSource),
+        (Some(path), None, None) => {
             if file_name.is_some() {
                 return Err(PdfIngestError::FileNameWithPath);
             }
-            let pdf_path = path_of_a_pdf(&path, max_pdf_bytes)?;
+            // Reading the disk can block, so it runs on a thread that is allowed to block.
+            let pdf_path = blocking(move || path_of_a_pdf(&path, max_pdf_bytes)).await?;
             let file_name = file_name_of(&pdf_path).unwrap_or_default();
             Ok(Source {
                 pdf_path,
@@ -128,18 +140,62 @@ fn checked_source(
                 upload: None,
             })
         }
-        (None, Some(text)) => {
-            let file_name = file_name.ok_or(PdfIngestError::MissingFileName)?;
-            let save_to = uploaded_pdf_path(&config.content_folder, media_folder, &file_name)
-                .map_err(|error| PdfIngestError::FileNameHoldsFolder { name: error.name })?;
-            let bytes = decoded_pdf(&text, max_pdf_bytes)?;
-            Ok(Source {
-                pdf_path: save_to.clone(),
-                file_name,
-                upload: Some(Upload { bytes, save_to }),
-            })
+        (None, Some(text), None) => {
+            let (file_name, save_to) =
+                upload_target("pdf_base64", file_name, config, media_folder)?;
+            // The text can be megabytes long, so it is decoded on a thread that may block and the
+            // other calls are not held up.
+            let bytes = blocking(move || decoded_pdf(&text, max_pdf_bytes)).await?;
+            Ok(uploaded(file_name, save_to, bytes))
         }
+        (None, None, Some(url)) => {
+            let (file_name, save_to) = upload_target("pdf_url", file_name, config, media_folder)?;
+            let bytes = fetch_pdf(&url, &config.fetch_origins, max_pdf_bytes).await?;
+            Ok(uploaded(file_name, save_to, bytes))
+        }
+        (Some(_), Some(_), None) => Err(PdfIngestError::ManySources {
+            given: "both `path` and `pdf_base64`",
+        }),
+        (Some(_), None, Some(_)) => Err(PdfIngestError::ManySources {
+            given: "both `path` and `pdf_url`",
+        }),
+        (None, Some(_), Some(_)) => Err(PdfIngestError::ManySources {
+            given: "both `pdf_base64` and `pdf_url`",
+        }),
+        (Some(_), Some(_), Some(_)) => Err(PdfIngestError::ManySources {
+            given: "all of `path`, `pdf_base64` and `pdf_url`",
+        }),
     }
+}
+
+/// The file name and the place to save a PDF that is not on the disk yet. A bad name is refused
+/// here, before the PDF is read or fetched.
+fn upload_target(
+    way: &'static str,
+    file_name: Option<String>,
+    config: &Config,
+    media_folder: &str,
+) -> Result<(String, PathBuf), PdfIngestError> {
+    let file_name = file_name.ok_or(PdfIngestError::MissingFileName { way })?;
+    let save_to = uploaded_pdf_path(&config.content_folder, media_folder, &file_name)
+        .map_err(|error| PdfIngestError::FileNameHoldsFolder { name: error.name })?;
+    Ok((file_name, save_to))
+}
+
+fn uploaded(file_name: String, save_to: PathBuf, bytes: Vec<u8>) -> Source {
+    Source {
+        pdf_path: save_to.clone(),
+        file_name,
+        upload: Some(Upload { bytes, save_to }),
+    }
+}
+
+async fn blocking<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T, PdfIngestError> + Send + 'static,
+) -> Result<T, PdfIngestError> {
+    tokio::task::spawn_blocking(work)
+        .await
+        .map_err(PdfIngestError::Stopped)?
 }
 
 impl CheckedPdf {

@@ -87,7 +87,7 @@ impl PageCounts {
 }
 
 /// The stage as an agent reads it: the browser's name, a few words, the counts and the share.
-pub(super) fn stage_view(stage: IngestStage) -> Stage {
+pub(crate) fn stage_view(stage: IngestStage) -> Stage {
     let (name, words, done, total) = match stage {
         IngestStage::CheckingStored => (
             "checking_stored",

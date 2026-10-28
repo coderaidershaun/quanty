@@ -1,5 +1,6 @@
 //! Agent requests authenticate on every method, independently of browser sessions.
 
+use super::fake_ingest::a_fake_ingest_is_followed_through_its_stages;
 use super::support::{closed_mcp_config, configured, configured_with_mcp, test_server};
 use contract::{Command, DatasetRequest, Event, Frame, JobKind, RequestId, StartupFacts};
 use rmcp::{
@@ -44,11 +45,11 @@ fn graph_config(home: &std::path::Path, address: std::net::SocketAddr) -> rag_co
     config
 }
 
-fn tool_call(name: &'static str, args: serde_json::Value) -> CallToolRequestParams {
+pub(super) fn tool_call(name: &'static str, args: serde_json::Value) -> CallToolRequestParams {
     CallToolRequestParams::new(name).with_arguments(args.as_object().unwrap().clone())
 }
 
-fn error_text(result: &rmcp::model::CallToolResult) -> String {
+pub(super) fn error_text(result: &rmcp::model::CallToolResult) -> String {
     assert_eq!(result.is_error, Some(true));
     result
         .content
@@ -327,7 +328,27 @@ async fn trusted_fixture_exposes_descriptor_and_free_tools() {
     let tools = running.list_all_tools().await.unwrap();
     let mut names: Vec<_> = tools.iter().map(|tool| tool.name.as_ref()).collect();
     names.sort_unstable();
-    assert_eq!(names, ["fixture_page", "search"]);
+    assert_eq!(
+        names,
+        [
+            "catalog",
+            "fixture_page",
+            "ingest_pdf",
+            "search",
+            "watch_job"
+        ]
+    );
+    let marks = |name: &str| {
+        let tool = tools.iter().find(|tool| tool.name == name).unwrap();
+        serde_json::to_value(&tool.meta).unwrap()
+    };
+    assert_eq!(
+        marks("catalog")["jet/discovery"],
+        json!({ "version": 1, "entryArguments": {} })
+    );
+    let job_mark = json!({ "version": 1, "statusTool": "watch_job", "idField": "job_id" });
+    assert_eq!(marks("ingest_pdf")["jet/job"], job_mark);
+    assert_eq!(marks("watch_job")["jet/job"], job_mark);
     let search = tools.iter().find(|tool| tool.name == "search").unwrap();
     assert_eq!(search.input_schema["required"], json!(["question"]));
     assert_eq!(
@@ -363,6 +384,7 @@ async fn trusted_fixture_exposes_descriptor_and_free_tools() {
             .unwrap()
             .starts_with("content/")
     );
+    a_fake_ingest_is_followed_through_its_stages(&server, &running).await;
     running.cancel().await.unwrap();
     for method in [
         reqwest::Method::GET,

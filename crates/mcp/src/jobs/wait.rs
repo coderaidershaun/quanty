@@ -109,20 +109,23 @@ pub(crate) async fn wait_for_change<R: JobReport>(
     let deadline = sleep(timeout);
     tokio::pin!(deadline, cancelled);
     loop {
+        // The branches are tried in order, progress first, so that when the first tick and the
+        // deadline are ready at once, the first notification is still sent before the wait ends.
         tokio::select! {
-            changed = watcher.changed() => {
-                let latest = watcher.borrow_and_update().clone();
-                // The error means every writer of the report is gone: it will not change again.
-                if changed.is_err() || !latest.is_running() || Phase::of(latest.job()) != began {
-                    return latest;
-                }
-            }
+            biased;
             _ = ticker.tick(), if progress.is_some() => {
                 if let Some(sender) = progress.as_mut() {
                     let job = watcher.borrow().job().clone();
                     if !sender.send_if_changed(&job).await {
                         progress = None;
                     }
+                }
+            }
+            changed = watcher.changed() => {
+                let latest = watcher.borrow_and_update().clone();
+                // The error means every writer of the report is gone: it will not change again.
+                if changed.is_err() || !latest.is_running() || Phase::of(latest.job()) != began {
+                    return latest;
                 }
             }
             () = &mut deadline => return watcher.borrow().clone(),

@@ -4,6 +4,7 @@
 use rag_ingestion::chapter_items;
 use serde_json::{Value, json};
 
+use crate::resources::the_library_is_listed_as_resources_and_a_media_and_a_concept_are_read;
 use crate::support::{
     AUTHOR, Client, Library, QUESTION, call, connect, error_text, sample_chapter_folder,
     sample_document_id, sample_notes_document_id, structured,
@@ -20,6 +21,7 @@ async fn the_stored_library_is_browsed_by_media_and_document_and_searched_by_sec
     documents_are_filtered_named_and_paged(&client).await;
     a_search_is_paged_and_gives_ids_and_sections(&client).await;
     a_search_inside_a_section_finds_only_its_items(&client).await;
+    the_library_is_listed_as_resources_and_a_media_and_a_concept_are_read(&library).await;
 }
 
 async fn an_overview_names_the_concepts_with_their_mentions(client: &Client) {

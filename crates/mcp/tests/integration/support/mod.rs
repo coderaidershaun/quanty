@@ -18,7 +18,8 @@ use serde_json::{Value, json};
 
 pub use client::{
     Client, ProgressRecorder, call, call_and_cancel, connect, connect_declaring_tasks,
-    connect_on_2026_07_28, connect_recording_progress, error_text, structured, tasks_client_config,
+    connect_on_2026_07_28, connect_recording_list_changes, connect_recording_progress, error_text,
+    structured, tasks_client_config,
 };
 pub use library::{AUTHOR, ClosedPorts, Library, QUESTION};
 pub use pdf_host::{PdfHost, Reply};

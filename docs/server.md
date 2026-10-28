@@ -286,8 +286,12 @@ Google refuses the host's IPv6 address.
 contained picture URL, and `search`, which takes a required `question` string
 and returns the same numbered figure for every question. Its `results` include
 `number`, `document`, `document_id`, `page`, `kind`, `text`, `picture` and `label`
-for source cards and citations. Both tools are free and never construct a store
-or model client. This fixture `search` is separate from the normal paid search.
+for source cards and citations. The fixture also has `catalog`, which lists its tools by group
+for a host's tool browser, and a fake ingest: `ingest_pdf` starts a job that reads and writes
+nothing, and `watch_job` follows it through the stages of a real ingest on a timer, with a
+progress notification for each stage when the call has a progress token. Every tool is free
+and never constructs a store or model client. This fixture `search` is separate from the normal
+paid search.
 Normal fixture mode continues to leave MCP absent. To connect a real library, omit
 `--fixture` and select its home; metadata discovery is free, but its ordinary
 paid tools remain paid.

@@ -72,6 +72,25 @@ pub(crate) struct Documents {
     discovery: Option<Discovery>,
 }
 
+impl Documents {
+    /// How many documents fit the filters, over all pages.
+    pub(crate) fn total(&self) -> usize {
+        self.total
+    }
+
+    /// The id and the title of each document of this page.
+    pub(crate) fn names(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.documents
+            .iter()
+            .map(|document| (document.document_id.as_str(), document.title.as_str()))
+    }
+
+    /// What to give back for the next page. `None` on the last page.
+    pub(crate) fn cursor(&self) -> Option<&str> {
+        self.cursor.as_deref()
+    }
+}
+
 #[derive(Serialize, JsonSchema)]
 struct DocumentView {
     /// Give it to `read_page`, or as `document` to `search` and `answer`.

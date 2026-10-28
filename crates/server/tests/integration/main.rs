@@ -2,6 +2,7 @@
 
 mod content;
 mod downloads;
+mod fake_ingest;
 mod login;
 mod loopback;
 mod mcp;

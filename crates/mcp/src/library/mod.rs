@@ -2,6 +2,7 @@
 //! outline, sections, pages and items of a chapter, its concepts and insights, and the labels of a
 //! media or a document.
 
+mod changed;
 mod chapter;
 mod concepts;
 mod contents;
@@ -13,6 +14,7 @@ mod media;
 mod page;
 mod piece;
 
+pub(crate) use changed::LibraryChanges;
 pub(crate) use chapter::{DocumentHeader, find_chapter, parse_document_id};
 pub(crate) use concepts::{ChapterConceptsArgs, ConceptView, ConceptsView, chapter_concepts};
 pub(crate) use contents::{ChapterContentsArgs, ContentsView, chapter_contents};

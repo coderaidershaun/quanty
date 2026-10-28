@@ -163,6 +163,24 @@ pub(crate) enum LibraryError {
 }
 
 impl LibraryError {
+    /// Whether the error says that nothing stored is the document, media, page or section asked
+    /// for, as opposed to a refused argument or a store or file that fails. A document id that is
+    /// not valid and page 0 name nothing either.
+    pub(crate) fn is_not_found(&self) -> bool {
+        matches!(
+            self,
+            LibraryError::DocumentId(_)
+                | LibraryError::ZeroPage
+                | LibraryError::NotStored { .. }
+                | LibraryError::UnknownMedia { .. }
+                | LibraryError::NoDocumentOfMedia { .. }
+                | LibraryError::UnknownDocument { .. }
+                | LibraryError::UnreadableChapters { .. }
+                | LibraryError::PageOutOfRange { .. }
+                | LibraryError::SectionOutOfRange { .. }
+        )
+    }
+
     /// Whether a store is the cause, so that the text of the failure points at `health`.
     pub(crate) fn is_service_failure(&self) -> bool {
         matches!(

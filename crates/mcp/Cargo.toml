@@ -16,6 +16,7 @@ contract.workspace = true
 export.workspace = true
 graph.workspace = true
 ocr.workspace = true
+percent-encoding.workspace = true
 rag-core.workspace = true
 rag-dataset.workspace = true
 rag-ingestion.workspace = true

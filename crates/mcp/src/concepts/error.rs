@@ -99,6 +99,19 @@ pub(crate) enum ConceptsError {
 }
 
 impl ConceptsError {
+    /// Whether the error says that nothing stored is the concept or document asked for, as
+    /// opposed to a refused argument or a store that fails. A concept id that is not valid names
+    /// nothing either.
+    pub(crate) fn is_not_found(&self) -> bool {
+        match self {
+            ConceptsError::Library(error) => error.is_not_found(),
+            ConceptsError::NotAConceptId { .. }
+            | ConceptsError::UnknownConceptId { .. }
+            | ConceptsError::UnknownConceptName { .. } => true,
+            _ => false,
+        }
+    }
+
     /// Whether a store or the embedder is the cause, so that the text of the failure points at
     /// `health`.
     pub(crate) fn is_service_failure(&self) -> bool {

@@ -48,6 +48,13 @@ pub(crate) struct Media {
     discovery: Option<Discovery>,
 }
 
+impl Media {
+    /// The title of each media, in the order of the list.
+    pub(crate) fn titles(&self) -> impl Iterator<Item = &str> {
+        self.media.iter().map(|row| row.title.as_str())
+    }
+}
+
 #[derive(Serialize, JsonSchema)]
 struct MediaRow {
     /// Give it as `media` to `list_documents`.

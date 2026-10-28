@@ -17,14 +17,17 @@ use graph::FalkorGraph;
 use rag_core::Config;
 use schemars::JsonSchema;
 use serde::Deserialize;
+use tokio::sync::watch;
 
 use crate::args::file_name_of;
 use crate::jobs::{BackgroundJobs, JobKind, JobReport, JobState};
 use crate::jobs::{Jobs, first_report};
+use crate::library::LibraryChanges;
 use crate::services::Services;
 pub(crate) use check::{CheckPdfArgs, PdfCheck};
 pub(crate) use error::PdfIngestError;
 pub(crate) use pdf::base64_len;
+pub(crate) use progress::stage_view;
 pub(crate) use report::IngestReport;
 use work::Work;
 
@@ -74,6 +77,7 @@ pub(crate) struct Ingest<S> {
     config: Config,
     services: Arc<S>,
     max_pdf_bytes: u64,
+    changes: LibraryChanges,
     pub(crate) jobs: Jobs<IngestReport>,
 }
 
@@ -83,11 +87,13 @@ impl<S: Services> Ingest<S> {
         services: Arc<S>,
         max_pdf_bytes: u64,
         background_jobs: Option<BackgroundJobs>,
+        changes: LibraryChanges,
     ) -> Ingest<S> {
         Ingest {
             config,
             services,
             max_pdf_bytes,
+            changes,
             jobs: Jobs::new(JobKind::Ingest, background_jobs),
         }
     }
@@ -117,6 +123,7 @@ impl<S: Services> Ingest<S> {
             .jobs
             .start(|id| IngestReport::running(id, &ready.media, &ready.file_name))?;
         let report = started.report.clone();
+        let ended = started.watcher.clone();
         let work = Work {
             services: Arc::clone(&self.services),
             config: self.config.clone(),
@@ -134,6 +141,7 @@ impl<S: Services> Ingest<S> {
             },
             reservation,
         );
+        self.announce_end(ended);
         let report = first_report(started.watcher, IngestReport::is_ready_to_answer)
             .await
             .ok_or(PdfIngestError::Lost)?;
@@ -145,6 +153,17 @@ impl<S: Services> Ingest<S> {
                 Ok(report)
             }
         }
+    }
+
+    /// Tells the listeners of the library that it may have changed once the job ends, however it
+    /// ends. It only watches the report: it does not touch the job or the slot the job holds.
+    fn announce_end(&self, mut ended: watch::Receiver<IngestReport>) {
+        let changes = self.changes.clone();
+        tokio::spawn(async move {
+            // An error means every writer of the report is gone, which is an end too.
+            let _ = ended.wait_for(|report| !report.is_running()).await;
+            changes.notify();
+        });
     }
 
     /// The PDF named by the category that the library has for its media, and the graph that the

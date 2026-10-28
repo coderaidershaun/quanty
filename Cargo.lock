@@ -3052,6 +3052,7 @@ dependencies = [
  "export",
  "graph",
  "ocr",
+ "percent-encoding",
  "rag-core",
  "rag-dataset",
  "rag-ingestion",

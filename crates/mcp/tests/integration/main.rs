@@ -13,6 +13,7 @@ mod library;
 mod navigation;
 mod pdf_url;
 mod reading;
+mod resources;
 mod support;
 mod tasks;
 mod tools;

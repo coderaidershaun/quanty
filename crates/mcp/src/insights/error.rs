@@ -65,4 +65,12 @@ pub(crate) enum InsightsToolError {
     Stopped(#[from] JoinError),
 }
 
+impl InsightsToolError {
+    /// Whether the error says that the document asked for is not there, as opposed to an argument
+    /// that is refused or a file or store that fails.
+    pub(crate) fn is_not_found(&self) -> bool {
+        matches!(self, InsightsToolError::Library(error) if error.is_not_found())
+    }
+}
+
 busy_from!(InsightsToolError);

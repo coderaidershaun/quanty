@@ -1,5 +1,6 @@
 //! An in-process MCP client over a pipe, and the readers of what a tool call gave back.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -47,6 +48,49 @@ impl ProgressRecorder {
             tokio::time::sleep(Duration::from_millis(25)).await;
         }
     }
+}
+
+/// A client that counts the `resources/list_changed` notices the server sends it.
+#[derive(Clone, Default)]
+pub struct ListChangeRecorder {
+    seen: Arc<AtomicUsize>,
+}
+
+impl ClientHandler for ListChangeRecorder {
+    async fn on_resource_list_changed(&self, _context: NotificationContext<RoleClient>) {
+        self.seen.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+impl ListChangeRecorder {
+    /// Waits for the first notice, so that a test fails and does not hang when none comes.
+    pub async fn first(&self) {
+        let started = Instant::now();
+        while self.seen.load(Ordering::SeqCst) == 0 {
+            assert!(
+                started.elapsed() < Duration::from_secs(10),
+                "no resources/list_changed notice came"
+            );
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    }
+}
+
+/// A client that negotiated the 2025-11-25 protocol, and that records the notices of the server
+/// that the list of resources changed.
+pub async fn connect_recording_list_changes<S: Services>(
+    server: QuantyServer<S>,
+) -> (
+    RunningService<RoleClient, ListChangeRecorder>,
+    ListChangeRecorder,
+) {
+    let recorder = ListChangeRecorder::default();
+    let client = recorder
+        .clone()
+        .serve(serve_on_pipe(server))
+        .await
+        .expect("the client should connect");
+    (client, recorder)
 }
 
 /// A client over a pipe that records the progress notifications of the server.

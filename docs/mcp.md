@@ -686,6 +686,32 @@ For stdio on the host, replace that entry with:
 
 Another MCP client uses the same HTTPS URL and authorization header, or starts the same stdio command locally on the host.
 
-## Resources and prompts
+## 15. Resources and prompts
 
-Added by a later change.
+The server also gives the library as MCP resources and three prompts, for clients that read resources or list prompts, such as Claude Code. A resource is data only: it holds what the tool of the same name gives for the same arguments (with the defaults of that tool), and nothing else. A resource calls no tool and costs nothing.
+
+Seven resource templates give an address for each thing:
+
+| Template | Same as the tool |
+| --- | --- |
+| `quanty://media/{title}` | `list_documents` with `media` set to the title |
+| `quanty://document/{id}` | `document_overview` |
+| `quanty://document/{id}/outline` | `document_outline` |
+| `quanty://document/{id}/section/{n}` | `read_section`, where `n` is the `index` of a section of the outline |
+| `quanty://document/{id}/page/{n}` | `read_page` |
+| `quanty://document/{id}/insights` | `chapter_insights` |
+| `quanty://concept/{id}` | `concept` with `concept_id` set to the id |
+
+A title or an id in an address is written with `%XX` for every character that is not a letter, a digit or one of `-._~`. `resources/list` gives one resource for each media (named by its title) and one for each document (named by its title), all in one page. `resources/read` gives one JSON text. An address that names nothing, and a document, page, section or concept that is not stored, are a missing resource, with the address in `data.uri`. A store that is down is an internal error with the text that the tool would give. A client of the 2026-07-28 protocol gets the code -32602 for a missing resource, and an older client gets -32002.
+
+A client of the 2026-07-28 protocol is told how long it may keep a result. The resource templates and the prompt list are public and may be kept for 5 minutes. `resources/list` and every read are private, because the library is behind the sign-in. The list, the media, the overview, the insights and a concept may be kept for a minute, because an ingest or `write_insights` changes them. An outline, a section or a page is converted text that never changes, and may be kept for an hour. A client of the 2025-11-25 protocol is given no such hint.
+
+`notifications/resources/list_changed` is sent when an ingest that this server started ends, however it ends: done, already ingested, failed or stopped. A client of the 2026-07-28 protocol gets it on a `subscriptions/listen` stream that asks for `resourcesListChanged`. A client of the 2025-11-25 protocol gets it as a notification on its session, over stdio or stateful HTTP. It is not sent when an ingest that the browser started ends, or when the browser deletes a document or a media.
+
+The prompts are short instructions that name the tools to call, in order. `prompts/get` fills the arguments into the text, and a missing required argument is an invalid-params error.
+
+| Prompt | Arguments | Tools it names |
+| --- | --- | --- |
+| `research_topic` | `topic`, and `media` to keep to one media | `catalog`, `document_overview`, `read_section`, `concept_neighbours`, `read_item`; it answers with the pages cited |
+| `summarise_document` | `document_id` | `document_overview` with `detail: full`, `document_outline`, `read_section` |
+| `ingest_book` | `media`, and `folder` on the server's machine | for each `chapter-<number>-<name>.pdf`, one at a time: `check_pdf`, a yes from the person, `ingest_pdf`, `watch_job` until the job ends |

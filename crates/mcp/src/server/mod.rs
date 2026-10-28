@@ -10,7 +10,9 @@ mod jobs;
 mod library;
 mod lookup;
 pub(crate) mod meta;
+mod prompts;
 mod reading;
+mod resources;
 mod tasks;
 
 use std::sync::Arc;
@@ -18,16 +20,20 @@ use std::sync::Arc;
 use rag_core::Config;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::model::{
-    CacheScope, CancelTaskParams, GetTaskParams, GetTaskResult, Implementation, ListToolsResult,
-    PaginatedRequestParams, ProtocolVersion, ServerCapabilities, ServerConfig, UpdateTaskParams,
+    CacheScope, CancelTaskParams, GetPromptRequestParams, GetPromptResponse, GetTaskParams,
+    GetTaskResult, Implementation, ListPromptsResult, ListResourceTemplatesResult,
+    ListResourcesResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion,
+    ReadResourceRequestParams, ReadResourceResponse, ServerCapabilities, ServerConfig,
+    SubscriptionFilter, UpdateTaskParams,
 };
-use rmcp::service::RequestContext;
+use rmcp::service::{NotificationContext, RequestContext, SubscriptionContext};
 use rmcp::{ErrorData, RoleServer, ServerHandler, tool_handler};
 
 use crate::datasets::Datasets;
 use crate::ingest::{Ingest, base64_len};
 use crate::insights::Insights;
 use crate::jobs::BackgroundJobs;
+use crate::library::LibraryChanges;
 use crate::services::Services;
 
 /// The size a PDF may have unless the caller sets another limit: 50 MiB.
@@ -62,6 +68,8 @@ struct Shared<S> {
     /// The slot that the browser of the same HTTP server shares. `None` over stdio.
     background_jobs: Option<BackgroundJobs>,
     max_pdf_bytes: u64,
+    /// Told when an ingest ends, so that connected agents list the resources again.
+    changes: LibraryChanges,
 }
 
 impl<S: Services> Clone for QuantyServer<S> {
@@ -101,11 +109,13 @@ impl<S: Services> QuantyServer<S> {
         jobs: Option<BackgroundJobs>,
     ) -> QuantyServer<S> {
         let services = Arc::new(services);
+        let changes = LibraryChanges::new();
         let ingest = Ingest::new(
             config.clone(),
             Arc::clone(&services),
             max_pdf_bytes,
             jobs.clone(),
+            changes.clone(),
         );
         let insights = Insights::new(config.clone(), Arc::clone(&services), jobs.clone());
         let datasets = Datasets::new(config.clone(), Arc::clone(&services), jobs.clone());
@@ -118,6 +128,7 @@ impl<S: Services> QuantyServer<S> {
                 datasets,
                 background_jobs: jobs,
                 max_pdf_bytes,
+                changes,
             }),
             tool_router: Self::reading_router()
                 + Self::jobs_router()
@@ -149,6 +160,9 @@ impl<S: Services> ServerHandler for QuantyServer<S> {
             ServerCapabilities::builder()
                 .enable_tools()
                 .enable_tasks()
+                .enable_resources()
+                .enable_resources_list_changed()
+                .enable_prompts()
                 .build(),
         )
         .with_server_info(Implementation::new("quanty", env!("CARGO_PKG_VERSION")))
@@ -193,5 +207,62 @@ impl<S: Services> ServerHandler for QuantyServer<S> {
         _context: RequestContext<RoleServer>,
     ) -> Result<(), ErrorData> {
         tasks::cancel(&self.shared, &request.task_id).await
+    }
+
+    async fn list_resource_templates(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<ListResourceTemplatesResult, ErrorData> {
+        Ok(resources::templates(sends_cache_hints(&context)))
+    }
+
+    async fn list_resources(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<ListResourcesResult, ErrorData> {
+        resources::list(&self.shared.config, sends_cache_hints(&context)).await
+    }
+
+    async fn read_resource(
+        &self,
+        request: ReadResourceRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<ReadResourceResponse, ErrorData> {
+        let hints = sends_cache_hints(&context);
+        let read = resources::read(&self.shared.config, &request.uri, hints).await?;
+        Ok(read.into())
+    }
+
+    async fn list_prompts(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<ListPromptsResult, ErrorData> {
+        Ok(prompts::list(sends_cache_hints(&context)))
+    }
+
+    async fn get_prompt(
+        &self,
+        request: GetPromptRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<GetPromptResponse, ErrorData> {
+        Ok(prompts::get(request)?.into())
+    }
+
+    fn accepted_subscription_filter(
+        &self,
+        _requested: &SubscriptionFilter,
+    ) -> Option<SubscriptionFilter> {
+        Some(resources::accepted_filter())
+    }
+
+    async fn listen(&self, subscription: SubscriptionContext) -> Result<(), ErrorData> {
+        resources::listen(&self.shared.changes, subscription).await
+    }
+
+    async fn on_initialized(&self, context: NotificationContext<RoleServer>) {
+        resources::tell_session(&self.shared.changes, context.peer);
     }
 }

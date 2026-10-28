@@ -2,17 +2,19 @@
 //! forgotten, and a bad file is refused before anything is written.
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use mcp::QuantyServer;
 use ocr::testing::{Scenario, sample_pdf};
 use rag_ingestion::testing::ThrowawayStores;
+use rmcp::model::{ServerNotification, SubscriptionFilter};
 use serde_json::json;
 
 use crate::support::{
-    ClosedPorts, StandInServices, call, connect, error_text, report_when_ended, sample_document_id,
-    structured,
+    ClosedPorts, StandInServices, call, connect, connect_on_2026_07_28,
+    connect_recording_list_changes, error_text, report_when_ended, sample_document_id, structured,
 };
 
 fn pdf_bytes(length: usize) -> Vec<u8> {
@@ -123,7 +125,19 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
     // stand-ins are.
     let (services, open_the_gate) = StandInServices::new().with_gate();
     let (stores, server) = empty_library("mcp-ingest-path", services);
-    let client = connect(server).await;
+    let client = connect(server.clone()).await;
+    // One listener of each protocol, to be told that the list of resources changed when the job
+    // ends.
+    let (_session, session_notices) = connect_recording_list_changes(server.clone()).await;
+    let listener = connect_on_2026_07_28(server).await;
+    let mut stream = listener
+        .listen(
+            SubscriptionFilter::builder()
+                .resources_list_changed()
+                .build(),
+        )
+        .await
+        .expect("the server should accept a listener of the list of resources");
     // A paper's PDF can have any name.
     let plain = stores.temporary_folder().join("hawkes-notes.pdf");
     std::fs::copy(sample_pdf(), &plain).unwrap();
@@ -155,6 +169,17 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
     let job_id = started["job_id"].as_str().unwrap();
     open_the_gate.send(()).unwrap();
     let ended = report_when_ended(&client, "ingest_status", job_id).await;
+    let notice = tokio::time::timeout(Duration::from_secs(10), stream.next())
+        .await
+        .expect("the listener should be told that the list of resources changed");
+    assert!(
+        matches!(
+            notice,
+            Ok(Some(ServerNotification::ResourceListChangedNotification(_)))
+        ),
+        "{notice:?}"
+    );
+    session_notices.first().await;
     assert_eq!(ended["state"], "done", "{ended}");
     assert_eq!(ended["kind"], "ingest", "{ended}");
     assert!(ended["started_at"].is_string(), "{ended}");

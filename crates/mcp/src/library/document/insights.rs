@@ -1,5 +1,6 @@
 //! The `chapter_insights` tool: the insights, takeaways and cheat sheet that were written for one
-//! document, read from the file in its converted folder.
+//! document, read from the file in its converted folder. It also holds the reader that the
+//! overview and the export of insights share.
 
 use std::path::Path;
 
@@ -10,9 +11,10 @@ use rag_core::{Category, Config, DocId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::InsightsToolError;
 use crate::args::{Budget, Scope, Truncation};
-use crate::library::{DocumentHeader, LibraryError, find_chapter, parse_document_id};
+use crate::library::{
+    DocumentHeader, LibraryError, SavedInsightsError, find_chapter, parse_document_id,
+};
 
 /// What an agent gives `chapter_insights`.
 #[derive(Deserialize, JsonSchema)]
@@ -150,7 +152,7 @@ impl InsightsView {
 pub(crate) async fn chapter_insights(
     config: &Config,
     args: ChapterInsightsArgs,
-) -> Result<InsightsView, InsightsToolError> {
+) -> Result<InsightsView, SavedInsightsError> {
     let id = parse_document_id(&args.document_id)?;
     let scope = Scope::of("chapter_insights").with(id);
     let budget =
@@ -171,9 +173,9 @@ pub(crate) async fn saved_insights(
     config: &Config,
     id: DocId,
     entry: &ChapterEntry,
-) -> Result<Saved, InsightsToolError> {
+) -> Result<Saved, SavedInsightsError> {
     if let Some(saved) =
-        ChapterInsights::read(&entry.folder).map_err(InsightsToolError::Unreadable)?
+        ChapterInsights::read(&entry.folder).map_err(SavedInsightsError::Unreadable)?
     {
         return Ok(Saved::Written(saved));
     }
@@ -191,17 +193,17 @@ async fn category_of(
     config: &Config,
     id: DocId,
     name: &DocumentName,
-) -> Result<Option<Category>, InsightsToolError> {
+) -> Result<Option<Category>, SavedInsightsError> {
     match name {
         DocumentName::Chapter { .. } => Ok(None),
         DocumentName::Title(_) => {
             let graph = FalkorGraph::connect(config)
                 .await
-                .map_err(InsightsToolError::Category)?;
+                .map_err(SavedInsightsError::Category)?;
             let document = graph
                 .document(id)
                 .await
-                .map_err(InsightsToolError::Category)?;
+                .map_err(SavedInsightsError::Category)?;
             Ok(document.and_then(|document| document.labels.category))
         }
     }

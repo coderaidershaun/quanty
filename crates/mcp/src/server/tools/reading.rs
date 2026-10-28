@@ -6,10 +6,9 @@ use rmcp::handler::server::wrapper::Parameters;
 use rmcp::{Json, tool, tool_router};
 
 use super::library::names_entry;
-use crate::insights::{self, ChapterInsightsArgs, InsightsView};
 use crate::library::{
-    self, ChapterConceptsArgs, ChapterContentsArgs, ConceptsView, ContentsView, Documents,
-    ListDocumentsArgs, PageView, ReadPageArgs,
+    self, ChapterConceptsArgs, ChapterContentsArgs, ChapterInsightsArgs, ConceptsView,
+    ContentsView, Documents, InsightsView, ListDocumentsArgs, PageView, ReadPageArgs,
 };
 use crate::retrieval::{self, AnswerResult, QuestionArgs, SearchArgs, SearchResult};
 use crate::server::QuantyServer;
@@ -135,7 +134,7 @@ impl<S: Services> QuantyServer<S> {
         Parameters(args): Parameters<ChapterInsightsArgs>,
     ) -> Result<Json<InsightsView>, ToolError> {
         Ok(Json(
-            insights::chapter_insights(&self.shared.config, args).await?,
+            library::chapter_insights(&self.shared.config, args).await?,
         ))
     }
 

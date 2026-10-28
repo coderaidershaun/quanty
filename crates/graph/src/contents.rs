@@ -185,6 +185,14 @@ pub struct ConceptDocument {
     pub mentions: u64,
 }
 
+/// A document with the number of the concepts it shares with another document.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SharedDocument {
+    pub document: DocId,
+    pub title: String,
+    pub shared: u64,
+}
+
 /// A concept with the documents whose items mention it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SharedConcept {

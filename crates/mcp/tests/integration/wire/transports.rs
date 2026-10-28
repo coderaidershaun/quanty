@@ -184,7 +184,7 @@ fn assert_converting_progress(first: &ProgressNotificationParam) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored transports::"]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored wire::transports::"]
 async fn watch_job_sends_progress_over_stdio_and_streamable_http() {
     let (services, open_the_pages) = StandInServices::new().with_page_gate();
     let stores = ThrowawayStores::new("mcp-progress");

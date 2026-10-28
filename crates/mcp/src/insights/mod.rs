@@ -1,12 +1,11 @@
-//! The `chapter_insights`, `write_insights`, `insights_status` and `export_insights` tools. Writing
-//! the insights of stored documents takes a minute or more for each, and a client puts a time
-//! limit on a tool call, so `write_insights` starts a job and `job_status` reads it;
-//! `insights_status` is the older name for the same read.
+//! The `write_insights`, `insights_status` and `export_insights` tools. Writing the insights of
+//! stored documents takes a minute or more for each, and a client puts a time limit on a tool
+//! call, so `write_insights` starts a job and `job_status` reads it; `insights_status` is the
+//! older name for the same read.
 
 mod error;
 mod exporting;
 mod report;
-mod saved;
 mod work;
 
 use std::sync::Arc;
@@ -26,10 +25,6 @@ use crate::services::Services;
 pub(crate) use error::InsightsToolError;
 pub(crate) use exporting::{ExportInsightsArgs, ExportResult, ExportToolError, export_insights};
 pub(crate) use report::InsightsReport;
-pub(crate) use saved::{
-    ChapterInsightsArgs, InsightView, InsightsView, Saved, SavedState, chapter_insights,
-    saved_insights,
-};
 use work::Work;
 
 /// What an agent gives `write_insights`. Give exactly one of `document_id`, `media` and `all`.

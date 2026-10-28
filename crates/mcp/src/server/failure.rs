@@ -19,7 +19,7 @@ use crate::ingest::PdfIngestError;
 use crate::insights::ExportToolError;
 use crate::insights::InsightsToolError;
 use crate::jobs::{StopError, WatchError};
-use crate::library::LibraryError;
+use crate::library::{LibraryError, SavedInsightsError};
 use crate::retrieval::RetrievalError;
 
 /// Added to the text of a failure of a store or of an outside service.
@@ -33,6 +33,9 @@ pub(super) enum ToolError {
 
     #[error(transparent)]
     Library(#[from] LibraryError),
+
+    #[error(transparent)]
+    SavedInsights(#[from] SavedInsightsError),
 
     #[error(transparent)]
     Ingest(#[from] PdfIngestError),
@@ -141,9 +144,10 @@ impl ToolError {
                     | RetrievalError::Answer(rag_retrieval::AnswerError::Llm(_))
             ),
             ToolError::Library(error) => error.is_service_failure(),
+            ToolError::SavedInsights(error) => error.is_service_failure(),
             ToolError::Insights(error) => is_service_failure_of_insights(error),
             ToolError::Export(error) => match error {
-                ExportToolError::Insights(error) => is_service_failure_of_insights(error),
+                ExportToolError::Saved(error) => error.is_service_failure(),
                 // None of these is a service: the arguments, the document or the writing of the
                 // file is the cause.
                 ExportToolError::Format { .. }
@@ -216,13 +220,10 @@ impl ToolError {
 fn is_service_failure_of_insights(error: &InsightsToolError) -> bool {
     match error {
         InsightsToolError::Library(error) => error.is_service_failure(),
-        InsightsToolError::Graph(_)
-        | InsightsToolError::Category(_)
-        | InsightsToolError::ModelNotReady(_) => true,
+        InsightsToolError::Graph(_) | InsightsToolError::ModelNotReady(_) => true,
         // None of these is a service. The text of a job that failed already got its hint, if it
         // needed one, when the job ended.
-        InsightsToolError::Unreadable(_)
-        | InsightsToolError::Choice
+        InsightsToolError::Choice
         | InsightsToolError::Busy(_)
         | InsightsToolError::SharedBusy(_)
         | InsightsToolError::UnknownJob { .. }

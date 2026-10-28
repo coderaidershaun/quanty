@@ -49,6 +49,7 @@ impl ResourceError {
 fn is_not_found(error: &ToolError) -> bool {
     match error {
         ToolError::Library(error) => error.is_not_found(),
+        ToolError::SavedInsights(error) => error.is_not_found(),
         ToolError::Insights(error) => error.is_not_found(),
         ToolError::Concepts(error) => error.is_not_found(),
         ToolError::Retrieval(_)

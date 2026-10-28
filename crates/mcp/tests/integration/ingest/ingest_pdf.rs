@@ -119,7 +119,7 @@ fn empty_library(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored ingest::"]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored ingest::ingest_pdf::"]
 async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() {
     // The gate holds the conversion, so the first answer is `running` however fast the
     // stand-ins are.
@@ -288,7 +288,7 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored ingest::"]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored ingest::ingest_pdf::"]
 async fn a_pdf_sent_as_base64_is_saved_under_the_content_folder_and_ingested() {
     // The gate holds the conversion, so the first answer is `running` however fast the
     // stand-ins are.
@@ -337,7 +337,7 @@ async fn a_pdf_sent_as_base64_is_saved_under_the_content_folder_and_ingested() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored ingest::"]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored ingest::ingest_pdf::"]
 async fn a_job_that_fails_after_the_paid_work_began_says_failed_and_what_to_do() {
     // Every reply for page 1 fails the check, so each conversion stops after its paid calls.
     let (services, open_the_gate) = StandInServices::new()
@@ -417,7 +417,7 @@ async fn a_job_that_a_file_stops_does_not_point_at_health() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored ingest::"]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored ingest::ingest_pdf::"]
 async fn a_job_is_forgotten_when_a_hundred_newer_jobs_were_started() {
     let (_stores, server) = empty_library("mcp-ingest-forgotten", StandInServices::new());
     let client = connect(server).await;

@@ -188,24 +188,17 @@ fn touched(relations: &[Relation]) -> BTreeSet<ConceptId> {
 
 /// The concepts with these ids in brief, by name. The ones in `known` are not read again, and an
 /// id the graph does not hold is left out.
-///
-/// SMELL: this reads one concept at a time, so a result with many relations makes many reads, up
-/// to about 400 for two steps and 200 relations. A graph read of many concepts by id would make
-/// it one.
 async fn briefs(
     graph: &FalkorGraph,
     ids: BTreeSet<ConceptId>,
     known: Vec<ConceptNode>,
 ) -> Result<Vec<ConceptBrief>, ConceptsError> {
-    let mut briefs: Vec<ConceptBrief> = known.iter().map(ConceptBrief::from).collect();
-    for id in ids {
-        if known.iter().any(|concept| concept.id == id) {
-            continue;
-        }
-        if let Some(concept) = graph.concept(id).await? {
-            briefs.push(ConceptBrief::from(&concept));
-        }
-    }
+    let unread: Vec<ConceptId> = ids
+        .into_iter()
+        .filter(|id| !known.iter().any(|concept| concept.id == *id))
+        .collect();
+    let read = graph.concepts_by_id(&unread).await?;
+    let mut briefs: Vec<ConceptBrief> = known.iter().chain(&read).map(ConceptBrief::from).collect();
     briefs.sort_by_key(|concept| (concept.name.to_lowercase(), concept.concept_id.clone()));
     Ok(briefs)
 }

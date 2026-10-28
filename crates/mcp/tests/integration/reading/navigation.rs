@@ -4,14 +4,14 @@
 use rag_ingestion::chapter_items;
 use serde_json::{Value, json};
 
-use crate::resources::the_library_is_listed_as_resources_and_a_media_and_a_concept_are_read;
+use super::resources::the_library_is_listed_as_resources_and_a_media_and_a_concept_are_read;
 use crate::support::{
     AUTHOR, Client, Library, QUESTION, call, connect, error_text, sample_chapter_folder,
     sample_document_id, sample_notes_document_id, structured,
 };
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored navigation::"]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored reading::navigation::"]
 async fn the_stored_library_is_browsed_by_media_and_document_and_searched_by_section() {
     let library = Library::ingested_with_concepts("mcp-navigation").await;
     let client = connect(library.server()).await;

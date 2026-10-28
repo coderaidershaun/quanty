@@ -1,8 +1,10 @@
 //! The `find_concepts` tool: a concept found by its exact name or alias, which costs nothing, or
 //! concepts found by meaning, which embeds the question.
 
+use std::collections::HashMap;
+
 use graph::{ConceptNode, FalkorGraph};
-use rag_core::{ConceptStore, Config, Embedder, question_usage};
+use rag_core::{ConceptId, ConceptStore, Config, Embedder, question_usage};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -95,13 +97,18 @@ pub(crate) async fn find_concepts<S: Services>(
                 .nearest(vector, limit)
                 .await
                 .map_err(ConceptsError::ConceptStore)?;
-            let mut nodes = Vec::new();
-            for hit in hits {
-                // A point whose concept the graph does not hold is left out.
-                if let Some(node) = graph.concept(hit.id).await? {
-                    nodes.push((node, Some(hit.score)));
-                }
-            }
+            let hit_ids: Vec<ConceptId> = hits.iter().map(|hit| hit.id).collect();
+            let held: HashMap<ConceptId, ConceptNode> = graph
+                .concepts_by_id(&hit_ids)
+                .await?
+                .into_iter()
+                .map(|node| (node.id, node))
+                .collect();
+            // A hit whose concept the graph does not hold is left out.
+            let nodes = hits
+                .iter()
+                .filter_map(|hit| Some((held.get(&hit.id)?.clone(), Some(hit.score))))
+                .collect();
             Ok(FindConceptsResult {
                 concepts: describe(&graph, nodes).await?,
                 spent: Some(Spent::from(&question_usage(&query))),
@@ -110,27 +117,26 @@ pub(crate) async fn find_concepts<S: Services>(
     }
 }
 
-/// SMELL: this reads the aliases and the documents of one concept at a time, so 25 concepts make
-/// 50 reads. Graph reads of many concepts at once would make it two.
 async fn describe(
     graph: &FalkorGraph,
     found: Vec<(ConceptNode, Option<f32>)>,
 ) -> Result<Vec<FoundConcept>, ConceptsError> {
     let ids: Vec<_> = found.iter().map(|(node, _)| node.id).collect();
     let counts = graph.mention_counts(&ids).await?;
-    let mut concepts = Vec::with_capacity(found.len());
-    for (node, score) in found {
-        let aliases = graph.aliases_of(node.id).await?;
-        let documents = graph.documents_for_concept(node.id).await?.len();
-        concepts.push(FoundConcept {
+    let aliases = graph.concept_aliases(&ids).await?;
+    let documents = graph.document_counts(&ids).await?;
+    Ok(found
+        .into_iter()
+        .map(|(node, score)| FoundConcept {
             concept_id: node.id.to_string(),
             name: node.name,
             definition: node.definition,
-            aliases,
+            aliases: aliases.get(&node.id).cloned().unwrap_or_default(),
             mentions: counts.get(&node.id).copied().unwrap_or(0),
-            documents,
+            documents: documents
+                .get(&node.id)
+                .map_or(0, |count| usize::try_from(*count).unwrap_or(usize::MAX)),
             score,
-        });
-    }
-    Ok(concepts)
+        })
+        .collect())
 }

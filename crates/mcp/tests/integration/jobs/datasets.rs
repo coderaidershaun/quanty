@@ -37,7 +37,7 @@ async fn next_sign_in_check(gate: &mut ReadyGate) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored datasets::"]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored jobs::datasets::"]
 async fn a_second_build_is_refused_while_one_runs_and_names_the_running_job() {
     let stores = ThrowawayStores::new("mcp-dataset-busy");
     let (services, mut gate) = StandInServices::new().with_ready_gate();
@@ -87,7 +87,7 @@ async fn a_second_build_is_refused_while_one_runs_and_names_the_running_job() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored datasets::"]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored jobs::datasets::"]
 async fn a_build_that_cannot_start_says_what_to_do_and_a_dry_run_reports_its_folder() {
     let stores = ThrowawayStores::new("mcp-dataset-refused");
     let client = connect(server_over_samples(&stores, StandInServices::new())).await;

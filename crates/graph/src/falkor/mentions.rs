@@ -1,5 +1,5 @@
 //! The statements that read where concepts are mentioned: the documents and the items that
-//! mention a concept, and the concepts that documents share.
+//! mention a concept, the concepts that documents share, and the documents that share concepts.
 
 use std::collections::HashMap;
 
@@ -8,7 +8,9 @@ use rag_core::{ConceptId, DocId, ItemId, ItemKind};
 
 use super::documents::text_or_null;
 use super::{FalkorGraph, fixed, id_list, id_value, parsed, read_rows};
-use crate::contents::{ConceptDocument, ConceptItem, ConceptNode, ItemPlace, SharedConcept};
+use crate::contents::{
+    ConceptDocument, ConceptItem, ConceptNode, ItemPlace, SharedConcept, SharedDocument,
+};
 use crate::error::GraphError;
 
 const CONCEPT_DOCUMENT_ROW: &str = "\
@@ -19,6 +21,10 @@ a document id and a whole number that is not negative)";
 const CONCEPT_ITEM_ROW: &str = "\
 an item that mentions a concept (an item id, a document id, a page, a printed page or null, a \
 kind of item and a wording)";
+const DOCUMENT_COUNT_ROW: &str = "\
+a concept with a count of documents (a concept id and one whole number that is not negative)";
+const SHARED_DOCUMENT_ROW: &str = "\
+a document with a count (an id, a title and one whole number that is not negative)";
 const ITEM_PLACE_ROW: &str = "an item with its place (an item id, a document id and a page)";
 
 const DOCUMENTS_FOR_CONCEPT: &str = "\
@@ -26,6 +32,19 @@ MATCH (d:Document)-[:HAS_ITEM]->(i:Item)-[:MENTIONS]->(:Concept {id: $concept})
 WITH d, count(i) AS mentions
 RETURN d.id, d.title, mentions
 ORDER BY mentions DESC, d.title, d.id";
+
+const DOCUMENT_COUNTS: &str = "\
+MATCH (c:Concept)
+WHERE c.id IN $concepts
+OPTIONAL MATCH (d:Document)-[:HAS_ITEM]->(:Item)-[:MENTIONS]->(c)
+RETURN c.id, count(DISTINCT d)";
+
+const DOCUMENTS_SHARING_CONCEPTS: &str = "\
+MATCH (d:Document)-[:HAS_ITEM]->(:Item)-[:MENTIONS]->(c:Concept)
+WHERE c.id IN $concepts AND d.id <> $except
+WITH d, count(DISTINCT c) AS shared
+RETURN d.id, d.title, shared
+ORDER BY shared DESC, d.title, d.id";
 
 const CONCEPTS_SHARED: &str = "\
 MATCH (d:Document)-[:HAS_ITEM]->(i:Item)-[:MENTIONS]->(c:Concept)
@@ -71,6 +90,66 @@ impl FalkorGraph {
             CONCEPT_DOCUMENT_ROW,
             reply,
             concept_document_from_row,
+        )
+    }
+
+    /// In how many documents each of these concepts is mentioned. A concept that the graph holds
+    /// and that no item mentions counts 0, and an id that the graph does not hold is left out. An
+    /// empty slice makes no call.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   concept with a count
+    pub async fn document_counts(
+        &self,
+        concepts: &[ConceptId],
+    ) -> Result<HashMap<ConceptId, u64>, GraphError> {
+        if concepts.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let action = "count the documents that mention the concepts";
+        let parameters = vec![("concepts", id_list(concepts))];
+        let reply = self.run(action, DOCUMENT_COUNTS, parameters).await?;
+        read_rows(
+            self,
+            action,
+            DOCUMENT_COUNT_ROW,
+            reply,
+            document_count_from_row,
+        )
+    }
+
+    /// Every document except `except` that has an item mentioning at least one of these concepts,
+    /// each once, with how many of the concepts it mentions. The documents with the most come
+    /// first, then by title, then by id. An empty slice makes no call.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   document with a count
+    pub async fn documents_sharing_concepts(
+        &self,
+        concepts: &[ConceptId],
+        except: DocId,
+    ) -> Result<Vec<SharedDocument>, GraphError> {
+        if concepts.is_empty() {
+            return Ok(Vec::new());
+        }
+        let action = "read the documents that mention the same concepts";
+        let parameters = vec![
+            ("concepts", id_list(concepts)),
+            ("except", id_value(except)),
+        ];
+        let reply = self
+            .run(action, DOCUMENTS_SHARING_CONCEPTS, parameters)
+            .await?;
+        read_rows(
+            self,
+            action,
+            SHARED_DOCUMENT_ROW,
+            reply,
+            shared_document_from_row,
         )
     }
 
@@ -182,6 +261,31 @@ fn concept_document_from_row(row: Vec<FalkorValue>) -> Result<ConceptDocument, S
         document: parsed(&document)?,
         title,
         mentions: count_of(mentions)?,
+    })
+}
+
+fn document_count_from_row(row: Vec<FalkorValue>) -> Result<(ConceptId, u64), String> {
+    let row = fixed::<2>(row)?;
+    let [FalkorValue::String(concept), count] = row else {
+        return Err(format!("{row:?}"));
+    };
+    Ok((parsed(&concept)?, count_of(count)?))
+}
+
+fn shared_document_from_row(row: Vec<FalkorValue>) -> Result<SharedDocument, String> {
+    let row = fixed::<3>(row)?;
+    let [
+        FalkorValue::String(document),
+        FalkorValue::String(title),
+        shared,
+    ] = row
+    else {
+        return Err(format!("{row:?}"));
+    };
+    Ok(SharedDocument {
+        document: parsed(&document)?,
+        title,
+        shared: count_of(shared)?,
     })
 }
 

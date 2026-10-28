@@ -2,7 +2,6 @@
 //! takeaways and cheat sheet, its concepts, its outline, and the documents that share its concepts.
 
 use std::cmp::Reverse;
-use std::collections::HashSet;
 use std::path::Path;
 
 use graph::{FalkorGraph, GraphError};
@@ -11,13 +10,12 @@ use rag_ingestion::{assess_artifacts, document_title};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use super::insights::{InsightView, Saved, SavedState, saved_insights};
 use super::mentions::DocumentConcepts;
 use super::outline::{SectionRow, section_rows};
+use crate::library::SavedInsightsError;
 use crate::library::chapter::{DocumentHeader, Whole, parse_document_id};
 use crate::library::contents::ContentsCounts;
-// SMELL: the saved insights are read through the insights module, which reads the library module
-// for the header of a document, so the two modules depend on each other.
-use crate::insights::{InsightView, InsightsToolError, Saved, SavedState, saved_insights};
 
 /// How many concepts a summary names.
 const SUMMARY_CONCEPTS: usize = 10;
@@ -159,13 +157,13 @@ struct FromGraph {
 pub(crate) async fn document_overview(
     config: &Config,
     args: DocumentOverviewArgs,
-) -> Result<Overview, InsightsToolError> {
+) -> Result<Overview, SavedInsightsError> {
     let detail = args.detail.unwrap_or_default();
     let id = parse_document_id(&args.document_id)?;
     let whole = Whole::find(&config.content_folder, id)?;
     let insights = match saved_insights(config, id, &whole.entry).await {
         Ok(saved) => Fallible::Read(OverviewInsights::of(saved, detail)),
-        Err(InsightsToolError::Category(error)) => Fallible::Failed {
+        Err(SavedInsightsError::Category(error)) => Fallible::Failed {
             error: error_chain(&error),
         },
         Err(other) => return Err(other),
@@ -278,33 +276,25 @@ async fn from_graph(
 }
 
 /// The other documents that share enough concepts with this one, the most shared first.
-// SMELL: this reads the graph once for each stored document, so a full overview gets slower as
-// the library grows. One graph query that counts the shared concepts would fix it.
 async fn related_documents(
     graph: &FalkorGraph,
     id: DocId,
     concepts: &DocumentConcepts,
 ) -> Result<Vec<RelatedDocument>, GraphError> {
-    let own: HashSet<ConceptId> = concepts.concepts.iter().map(|concept| concept.id).collect();
-    let mut related = Vec::new();
-    for record in graph.document_records().await? {
-        if record.node.id == id {
-            continue;
-        }
-        let shared = graph
-            .concepts_in_document(record.node.id)
-            .await?
-            .iter()
-            .filter(|concept| own.contains(&concept.id))
-            .count();
-        if shared >= FEWEST_SHARED_TO_RELATE {
-            related.push(RelatedDocument {
-                document_id: record.node.id.to_string(),
-                title: record.node.title,
+    let own: Vec<ConceptId> = concepts.concepts.iter().map(|concept| concept.id).collect();
+    let mut related: Vec<RelatedDocument> = graph
+        .documents_sharing_concepts(&own, id)
+        .await?
+        .into_iter()
+        .filter_map(|document| {
+            let shared = usize::try_from(document.shared).unwrap_or(usize::MAX);
+            (shared >= FEWEST_SHARED_TO_RELATE).then(|| RelatedDocument {
+                document_id: document.document.to_string(),
+                title: document.title,
                 shared,
-            });
-        }
-    }
+            })
+        })
+        .collect();
     related.sort_by(|a, b| (Reverse(a.shared), &a.title).cmp(&(Reverse(b.shared), &b.title)));
     related.truncate(RELATED_DOCUMENTS);
     Ok(related)

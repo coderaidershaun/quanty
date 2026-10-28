@@ -252,7 +252,7 @@ async fn read_page_and_chapter_contents_give_a_chapter_as_it_was_converted() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored library::"]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored reading::library::"]
 async fn the_stored_library_is_listed_its_concepts_are_read_and_a_spent_credit_is_named() {
     let library = Library::ingested_with_concepts("mcp-library").await;
     let client = connect(library.server()).await;

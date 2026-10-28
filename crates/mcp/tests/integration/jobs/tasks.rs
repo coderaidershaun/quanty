@@ -93,7 +93,7 @@ async fn assert_task_follows_job(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored tasks::"]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored jobs::tasks::"]
 async fn a_client_that_declares_tasks_follows_each_start_tool_as_a_task() {
     let (services, open_the_pages) = StandInServices::new().with_page_gate();
     let stores = ThrowawayStores::new("mcp-tasks-follow");
@@ -147,7 +147,7 @@ async fn a_client_that_declares_tasks_follows_each_start_tool_as_a_task() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored tasks::"]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored jobs::tasks::"]
 async fn cancelling_a_task_stops_its_job() {
     let slot = BackgroundJobs::new();
     let (services, open_the_pages) = StandInServices::new().with_page_gate();

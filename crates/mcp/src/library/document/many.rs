@@ -5,11 +5,11 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::insights::{ChapterInsightsArgs, chapter_insights};
 use super::items::{ReadItemArgs, read_item};
 use super::sections::{ReadPagesArgs, ReadSectionArgs, read_pages, read_section};
 use crate::args::{Truncation, checked_max_chars};
-use crate::insights::{ChapterInsightsArgs, InsightsToolError, chapter_insights};
-use crate::library::LibraryError;
+use crate::library::{LibraryError, SavedInsightsError};
 
 /// The most requests one call may hold.
 const MOST_REQUESTS: usize = 20;
@@ -86,7 +86,7 @@ struct Read {
 pub(crate) async fn read_many(
     config: &Config,
     args: ReadManyArgs,
-    wording: impl Fn(InsightsToolError) -> String,
+    wording: impl Fn(SavedInsightsError) -> String,
 ) -> Result<ManyRead, LibraryError> {
     let given = args.requests.len();
     if !(1..=MOST_REQUESTS).contains(&given) {
@@ -139,7 +139,7 @@ async fn read_one(
     config: &Config,
     request: ReadRequest,
     left: usize,
-    wording: &impl Fn(InsightsToolError) -> String,
+    wording: &impl Fn(SavedInsightsError) -> String,
 ) -> Result<Read, String> {
     let tool = request.tool;
     let not_valid = |error: serde_json::Error| {

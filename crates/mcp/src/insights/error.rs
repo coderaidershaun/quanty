@@ -1,8 +1,7 @@
-//! Everything that stops an insights tool: an argument that is refused, a saved file that cannot
-//! be read, a job that cannot start, and a job that fails while it runs.
+//! Everything that stops an insights tool: an argument that is refused, a job that cannot start,
+//! and a job that fails while it runs.
 
 use graph::GraphError;
-use ocr::ContentError;
 use rag_core::LlmError;
 use tokio::task::JoinError;
 
@@ -14,16 +13,6 @@ use crate::library::LibraryError;
 pub(crate) enum InsightsToolError {
     #[error(transparent)]
     Library(#[from] LibraryError),
-
-    #[error(
-        "could not read the saved insights of the document; call `write_insights` with this `document_id` to write them again, which is paid"
-    )]
-    Unreadable(#[source] ContentError),
-
-    #[error(
-        "could not read from the graph whether this document is a part of a book, which gets no insights"
-    )]
-    Category(#[source] GraphError),
 
     #[error("give exactly one of `document_id`, `media` and `all: true`")]
     Choice,

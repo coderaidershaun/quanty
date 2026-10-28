@@ -9,8 +9,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinError;
 
-use super::{InsightsToolError, Saved, saved_insights};
-use crate::library::{find_chapter, parse_document_id};
+use crate::library::{Saved, SavedInsightsError, find_chapter, parse_document_id, saved_insights};
 
 /// What an agent gives `export_insights`.
 #[derive(Deserialize, JsonSchema)]
@@ -68,7 +67,7 @@ pub(crate) enum ExportToolError {
     BookPart { id: DocId },
 
     #[error(transparent)]
-    Insights(Box<InsightsToolError>),
+    Saved(Box<SavedInsightsError>),
 
     #[error("could not write the file")]
     Export(#[source] export::ExportError),
@@ -84,9 +83,9 @@ pub(crate) enum ExportToolError {
     Stopped(#[from] JoinError),
 }
 
-impl From<InsightsToolError> for ExportToolError {
-    fn from(error: InsightsToolError) -> ExportToolError {
-        ExportToolError::Insights(Box::new(error))
+impl From<SavedInsightsError> for ExportToolError {
+    fn from(error: SavedInsightsError) -> ExportToolError {
+        ExportToolError::Saved(Box::new(error))
     }
 }
 
@@ -105,8 +104,8 @@ pub(crate) async fn export_insights(
     })?;
     let path = PathBuf::from(&args.path);
     check_path(&path, format, args.overwrite == Some(true))?;
-    let id = parse_document_id(&args.document_id).map_err(InsightsToolError::from)?;
-    let entry = find_chapter(&config.content_folder, id).map_err(InsightsToolError::from)?;
+    let id = parse_document_id(&args.document_id).map_err(SavedInsightsError::from)?;
+    let entry = find_chapter(&config.content_folder, id).map_err(SavedInsightsError::from)?;
     let saved = match saved_insights(config, id, &entry).await? {
         Saved::Written(saved) => saved,
         Saved::NotWrittenYet => return Err(ExportToolError::NotWrittenYet { id }),

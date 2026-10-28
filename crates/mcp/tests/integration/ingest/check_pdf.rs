@@ -16,7 +16,7 @@ const MEDIA: &str = "Option Volatility and Pricing";
 const FILE: &str = "chapter-1-sample-pages.pdf";
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored check_pdf::"]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored ingest::check_pdf::"]
 async fn check_pdf_says_what_an_ingest_would_do_and_writes_nothing() {
     let stores = ThrowawayStores::new("mcp-check-pdf");
     let client = connect(QuantyServer::new(

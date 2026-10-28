@@ -12,7 +12,6 @@ use serde_json::{Value, json};
 use super::error::{ResourceError, no_such_resource};
 use super::uri::{MIME_TYPE, ResourceUri};
 use crate::concepts::{self, ConceptArgs};
-use crate::insights;
 use crate::library::{self, LibraryError};
 use crate::server::failure::ToolError;
 
@@ -78,7 +77,7 @@ async fn view_text(resource: &ResourceUri, config: &Config) -> Result<String, Re
         }
         ResourceUri::Insights { document_id } => {
             let args = args(json!({ "document_id": document_id }))?;
-            text_of_result(insights::chapter_insights(config, args).await)
+            text_of_result(library::chapter_insights(config, args).await)
         }
         ResourceUri::Concept { concept_id } => {
             let args: ConceptArgs = args(json!({ "concept_id": concept_id }))?;

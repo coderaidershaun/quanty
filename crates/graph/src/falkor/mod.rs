@@ -1,6 +1,7 @@
 //! The connection to FalkorDB, the check that the store behind it answers, and the graph it
 //! prepares for the statements.
 
+mod aliases;
 mod concepts;
 mod documents;
 mod edges;

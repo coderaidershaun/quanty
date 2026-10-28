@@ -162,6 +162,40 @@ pub(crate) enum LibraryError {
     ItemsDiffer,
 }
 
+/// Everything that stops a read of the insights saved for one document.
+#[derive(thiserror::Error, Debug)]
+pub(crate) enum SavedInsightsError {
+    #[error(transparent)]
+    Library(#[from] LibraryError),
+
+    #[error(
+        "could not read the saved insights of the document; call `write_insights` with this `document_id` to write them again, which is paid"
+    )]
+    Unreadable(#[source] ContentError),
+
+    #[error(
+        "could not read from the graph whether this document is a part of a book, which gets no insights"
+    )]
+    Category(#[source] GraphError),
+}
+
+impl SavedInsightsError {
+    /// Whether the error says that the document asked for is not there, as opposed to an argument
+    /// that is refused or a file or store that fails.
+    pub(crate) fn is_not_found(&self) -> bool {
+        matches!(self, SavedInsightsError::Library(error) if error.is_not_found())
+    }
+
+    /// Whether a store is the cause, so that the text of the failure points at `health`.
+    pub(crate) fn is_service_failure(&self) -> bool {
+        match self {
+            SavedInsightsError::Library(error) => error.is_service_failure(),
+            SavedInsightsError::Category(_) => true,
+            SavedInsightsError::Unreadable(_) => false,
+        }
+    }
+}
+
 impl LibraryError {
     /// Whether the error says that nothing stored is the document, media, page or section asked
     /// for, as opposed to a refused argument or a store or file that fails. A document id that is

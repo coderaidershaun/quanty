@@ -13,7 +13,7 @@ use crate::support::{
 };
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored pdf_url::"]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored ingest::pdf_url::"]
 async fn a_pdf_sent_by_url_is_saved_under_the_content_folder_and_ingested() {
     // The gate holds the conversion, so the first answer is `running` however fast the
     // stand-ins are.

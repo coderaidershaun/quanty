@@ -10,7 +10,7 @@ pub mod testing;
 pub use contents::{
     ConceptAlias, ConceptDocument, ConceptItem, ConceptNode, Direction, DocumentNode,
     DocumentRecord, ItemMentions, ItemNode, ItemPlace, ItemsByKind, MediaNode, Mention, PathDepth,
-    Relation, RelationKind, SharedConcept, UnknownRelationKind,
+    Relation, RelationKind, SharedConcept, SharedDocument, UnknownRelationKind,
 };
 pub use error::GraphError;
 pub use falkor::FalkorGraph;

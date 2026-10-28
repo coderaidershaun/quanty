@@ -132,7 +132,7 @@ impl<S: Services> QuantyServer<S> {
         &self,
         Parameters(args): Parameters<ReadManyArgs>,
     ) -> Result<Json<ManyRead>, ToolError> {
-        let wording = |error| ToolError::Insights(error).text();
+        let wording = |error| ToolError::SavedInsights(error).text();
         Ok(Json(
             library::read_many(&self.shared.config, args, wording).await?,
         ))

@@ -61,7 +61,7 @@ fn assert_job_view(view: &Value, kind: &str) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored jobs::"]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored jobs::following::"]
 async fn job_status_gives_one_job_view_for_an_ingest_an_insights_job_and_a_dataset_build() {
     an_ingest_is_seen_before_and_after_its_pages_are_counted().await;
     let library = Library::ingested_with_concepts("mcp-jobs-views").await;
@@ -204,7 +204,7 @@ async fn a_dataset_build_is_seen_in_its_stage(library: &Library) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored jobs::"]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored jobs::following::"]
 async fn watch_job_returns_when_the_stage_changes_or_at_its_timeout() {
     let (services, open_the_pages) = StandInServices::new().with_page_gate();
     let (_stores, server) = empty_library("mcp-jobs-watch", services, None);
@@ -314,7 +314,7 @@ async fn watch_job_returns_when_the_stage_changes_or_at_its_timeout() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored jobs::"]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored jobs::following::"]
 async fn a_cancelled_watch_leaves_its_job_running() {
     let slot = BackgroundJobs::new();
     let (services, open_the_pages) = StandInServices::new().with_page_gate();
@@ -361,7 +361,7 @@ async fn a_cancelled_watch_leaves_its_job_running() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored jobs::"]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored jobs::following::"]
 async fn list_jobs_shows_the_running_job_and_the_recent_jobs_newest_first() {
     let slot = BackgroundJobs::new();
     let (services, open_the_pages) = StandInServices::new().with_page_gate();

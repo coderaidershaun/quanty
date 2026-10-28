@@ -79,7 +79,7 @@ pub fn sample_notes_document_id(chapter: u32) -> DocId {
 
 /// How long a job may take to end in a test: seven pages of stand-in calls and an ingest, or a
 /// build of the sample chapters.
-const JOB_WAIT: Duration = Duration::from_secs(180);
+pub const JOB_WAIT: Duration = Duration::from_secs(180);
 
 /// Asks `status_tool` (`job_status`, or `ingest_status`, `insights_status` or `dataset_status`)
 /// about the job until it is not running.

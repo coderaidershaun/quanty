@@ -92,6 +92,7 @@ async fn an_ingest_is_seen_before_and_after_its_pages_are_counted() {
     let job_id = started["job_id"].as_str().unwrap();
     let opening = status_in_stage(&client, job_id, "opening_pdf").await;
     assert_job_view(&opening, "ingest");
+    assert_eq!(opening["progress"], 0.01, "{opening}");
     assert_eq!(
         opening["stage"],
         json!({
@@ -120,6 +121,7 @@ async fn an_ingest_is_seen_before_and_after_its_pages_are_counted() {
             "share": (f64::from(share) * 1000.0).round() / 1000.0,
         })
     );
+    assert_eq!(converting["progress"], 0.12, "{converting}");
     assert_eq!(converting["media"], MEDIA, "the kind fields stay beside");
     assert!(converting["file"].is_string(), "{converting}");
 
@@ -127,6 +129,7 @@ async fn an_ingest_is_seen_before_and_after_its_pages_are_counted() {
     let ended = report_when_ended(&client, "job_status", job_id).await;
     assert_job_view(&ended, "ingest");
     assert_eq!(ended["state"], "done", "{ended}");
+    assert_eq!(ended["progress"], 1.0, "{ended}");
     assert!(ended.get("stage").is_none(), "{ended}");
     assert!(ended["document_id"].is_string(), "{ended}");
     assert!(ended["usage"].is_array(), "{ended}");
@@ -150,6 +153,7 @@ async fn an_insights_job_is_seen_in_the_document_it_asks_about(library: &Library
     assert_eq!(stage["name"], "writing_insights");
     assert_eq!((&stage["done"], &stage["total"]), (&json!(0), &json!(3)));
     assert_eq!(stage["share"], 0.0);
+    assert_eq!(started["progress"], 0.0, "{started}");
     assert!(stage["words"].as_str().unwrap().contains(title), "{stage}");
     let job_id = started["job_id"].as_str().unwrap();
     let held = structured(&call(&client, "job_status", json!({ "job_id": job_id })).await).clone();
@@ -161,6 +165,7 @@ async fn an_insights_job_is_seen_in_the_document_it_asks_about(library: &Library
     let ended = report_when_ended(&client, "insights_status", job_id).await;
     assert_job_view(&ended, "insights");
     assert_eq!(ended["state"], "done", "{ended}");
+    assert_eq!(ended["progress"], 1.0, "{ended}");
     assert!(ended.get("stage").is_none(), "{ended}");
     assert_eq!(ended["documents"].as_array().unwrap().len(), 3, "{ended}");
     assert!(ended["usage"].is_array() && ended.get("cost_usd").is_some());
@@ -193,6 +198,8 @@ async fn a_dataset_build_is_seen_in_its_stage(library: &Library) {
     assert_eq!(held["stage"]["done"], 0, "{held}");
     assert_eq!(held["stage"]["total"], 1, "{held}");
     assert_eq!(held["stage"]["share"], 0.0, "{held}");
+    // Exporting, checking and planning take the first 20 hundredths of a build.
+    assert_eq!(held["progress"], 0.2, "{held}");
     assert!(held["folder"].is_string(), "the kind fields stay: {held}");
 
     let stopped = call(&client, "stop_job", json!({ "job_id": job_id })).await;
@@ -200,6 +207,10 @@ async fn a_dataset_build_is_seen_in_its_stage(library: &Library) {
     assert_eq!(structured(&stopped)["status_tool"], "job_status");
     let ended = report_when_ended(&client, "job_status", job_id).await;
     assert_eq!(ended["state"], "stopped", "{ended}");
+    assert_eq!(
+        ended["progress"], 0.2,
+        "a stopped job keeps its progress: {ended}"
+    );
     assert!(ended.get("stage").is_none(), "{ended}");
 }
 

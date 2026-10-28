@@ -14,18 +14,17 @@ use serde_json::json;
 use super::mcp::{error_text, tool_call};
 use super::support::TestServer;
 
-/// A client that keeps the message of every progress notification the fixture sends it.
+/// A client that keeps every progress notification the fixture sends it.
 #[derive(Clone, Default)]
-struct StageMessages(Arc<Mutex<Vec<String>>>);
+struct StageNotices(Arc<Mutex<Vec<ProgressNotificationParam>>>);
 
-impl ClientHandler for StageMessages {
+impl ClientHandler for StageNotices {
     async fn on_progress(
         &self,
         params: ProgressNotificationParam,
         _context: NotificationContext<RoleClient>,
     ) {
-        let message = params.message.unwrap_or_default();
-        self.0.lock().unwrap().push(message);
+        self.0.lock().unwrap().push(params);
     }
 }
 
@@ -35,11 +34,11 @@ const FAKE_INGEST_STAGES: [&str; 11] = [
     "opening the PDF",
     "preparing the pages: 7 of 7 ready",
     "converting the pages: 7 of 7 done",
+    "writing artifact descriptions: 20 of 20",
     "writing the graph",
     "embedding 20 items",
     "storing the items",
     "writing the insights, takeaways and cheat sheet",
-    "writing artifact descriptions: 20 of 20",
     "reading the concepts: 20 of 20",
     "linking the concepts: 20 of 20",
 ];
@@ -99,7 +98,7 @@ pub(super) async fn a_fake_ingest_is_followed_through_its_stages(
     assert_eq!(started["file_name"], "chapter-1-sample.pdf");
     let job_id = started["job_id"].as_str().unwrap().to_owned();
 
-    let stages = StageMessages::default();
+    let stages = StageNotices::default();
     let transport = StreamableHttpClientTransport::with_client(
         server.client(),
         StreamableHttpClientTransportConfig::with_uri(server.url("/mcp")),
@@ -119,7 +118,13 @@ pub(super) async fn a_fake_ingest_is_followed_through_its_stages(
 
     // A notification can reach the client after the answer of the call that caused it.
     let waited = std::time::Instant::now();
-    while stages.0.lock().unwrap().last().map(String::as_str) != FAKE_INGEST_STAGES.last().copied()
+    while stages
+        .0
+        .lock()
+        .unwrap()
+        .last()
+        .and_then(|notice| notice.message.as_deref())
+        != FAKE_INGEST_STAGES.last().copied()
     {
         assert!(
             waited.elapsed() < Duration::from_secs(10),
@@ -129,10 +134,24 @@ pub(super) async fn a_fake_ingest_is_followed_through_its_stages(
         tokio::time::sleep(Duration::from_millis(25)).await;
     }
     let seen = stages.0.lock().unwrap().clone();
-    let seen: Vec<&str> = seen.iter().map(String::as_str).collect();
+    let messages: Vec<&str> = seen
+        .iter()
+        .map(|notice| notice.message.as_deref().unwrap_or_default())
+        .collect();
     // The watcher may have begun after the first stage, but it sees the rest in order.
-    assert!(FAKE_INGEST_STAGES.ends_with(&seen), "{seen:?}");
-    assert!(seen.len() >= 5, "{seen:?}");
+    assert!(FAKE_INGEST_STAGES.ends_with(&messages), "{messages:?}");
+    assert!(messages.len() >= 5, "{messages:?}");
+    // The bar is for the whole job: it rises with every notification and ends full.
+    let values: Vec<f64> = seen.iter().map(|notice| notice.progress).collect();
+    assert!(
+        values.windows(2).all(|pair| pair[0] < pair[1]),
+        "{values:?}"
+    );
+    assert_eq!(values.last(), Some(&100.0), "{values:?}");
+    assert!(
+        seen.iter().all(|notice| notice.total == Some(100.0)),
+        "{seen:?}"
+    );
 
     let jobs = starter
         .call_tool(tool_call("catalog", json!({ "group": "jobs" })))

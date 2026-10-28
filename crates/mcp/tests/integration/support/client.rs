@@ -33,17 +33,25 @@ impl ClientHandler for ProgressRecorder {
 }
 
 impl ProgressRecorder {
-    /// The first notification once one has come. The client may handle a notification after it has
-    /// handled the response of the call that caused it, so this waits for it a while.
+    /// The first notification once one has come.
     pub async fn first(&self) -> ProgressNotificationParam {
+        self.at_least(1).await.swap_remove(0)
+    }
+
+    /// Every notification seen so far, once at least `count` have come. The client may handle a
+    /// notification after it has handled the response of the call that caused it, so this waits for
+    /// them a while.
+    pub async fn at_least(&self, count: usize) -> Vec<ProgressNotificationParam> {
         let started = Instant::now();
         loop {
-            if let Some(first) = self.seen.lock().unwrap().first() {
-                return first.clone();
+            let seen = self.seen.lock().unwrap().clone();
+            if seen.len() >= count {
+                return seen;
             }
             assert!(
                 started.elapsed() < Duration::from_secs(10),
-                "no progress notification came"
+                "only {} of {count} progress notifications came",
+                seen.len()
             );
             tokio::time::sleep(Duration::from_millis(25)).await;
         }

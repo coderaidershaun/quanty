@@ -99,7 +99,7 @@ Forty tools. A tool that costs money says so in its description, and so does thi
 | `document_concepts` | concepts | The concepts of a document or of one page, with ids and mention counts | Nothing; it reads FalkorDB |
 | `chapter_concepts` | concepts | The concepts of a document, or of one page of it | Nothing; it reads FalkorDB |
 | `similar_items` | concepts | The stored items nearest to an item by its stored vector | Nothing; it reads Qdrant only |
-| `job_status` | jobs | A job of any kind by its `job_id`: state, stage with counts and share done, usage and error | Nothing |
+| `job_status` | jobs | A job of any kind by its `job_id`: state, `progress` of the whole job, stage with counts and share done, usage and error | Nothing |
 | `watch_job` | jobs | Waits until the stage or the state of a job changes (up to 90 seconds), then gives what `job_status` gives; sends progress notifications while it waits | Nothing |
 | `list_jobs` | jobs | The jobs of this server, newest first, and the job that holds the shared background slot | Nothing |
 | `stop_job` | jobs | Stops a running ingest, insights job or dataset build | Nothing |
@@ -342,7 +342,7 @@ The call does not wait for the whole ingest, which takes minutes. It answers onc
 | `failed` | Stopped. `error` says why. Send the same PDF again to go on: converted pages and kept answers are not paid for twice |
 | `stopped` | `stop_job` stopped it. `error` says so and ends the same way: send the same PDF again to go on |
 
-The stages of an ingest are those of the progress bar of the browser app, with the same counts and the same `share`:
+The stages of an ingest are those of the progress bar of the browser app, with the same counts and the same `share`, in the order a real ingest goes through them:
 
 | `stage.name` | `done` and `total` | What is going on |
 | --- | --- | --- |
@@ -350,13 +350,15 @@ The stages of an ingest are those of the progress bar of the browser app, with t
 | `opening_pdf` | none | The PDF is opened and its pages are counted |
 | `preparing_pages` | pages ready, pages | The pages are cut out, all before the first one is converted |
 | `converting` | pages saved, pages | The pages are read by the agent and Jev: the slow part |
+| `writing_artifacts` | descriptions written, items | The artifact descriptions are written |
 | `writing_graph` | none | The document and its items are written to the graph |
 | `embedding` | none, items | The items are embedded |
 | `storing` | none | The points are stored |
 | `writing_insights` | none | The agent writes the document's insights, takeaways and cheat sheet |
-| `writing_artifacts` | descriptions written, items | The artifact descriptions are written |
 | `reading_concepts` | items read, items | The items are read for their concepts |
 | `linking_concepts` | items linked, items | The concepts are written to the graph |
+
+`share` is the share of one stage. The bar of the whole ingest is `progress`, which rises through all the stages ([section 10](#10-following-and-stopping-a-job)).
 
 Good to know:
 
@@ -475,6 +477,7 @@ The result of a job tool is these fields at the top level, with the fields of it
 | `job_id` | Give it to `job_status`, `watch_job` and `stop_job` |
 | `kind` | `ingest`, `insights` or `dataset` |
 | `state` | `running`, `done`, `already_ingested` (an ingest only), `failed` or `stopped` |
+| `progress` | How much of the whole job is done, from 0 to 1 to three decimals. It never goes down while the job runs, and is 1 when the state is `done` or `already_ingested`. A `failed` or `stopped` job keeps the value it had |
 | `stage` | What a running job is doing. Left out when the job is not running, and before its first step |
 | `started_at` | When the job was made, as RFC 3339 text in UTC |
 | `updated_at` | When its report last changed |
@@ -482,6 +485,8 @@ The result of a job tool is these fields at the top level, with the fields of it
 | `error` | Why the job stopped and what to do. Only when `failed` or `stopped` |
 
 `stage` is `{ "name", "words", "done", "total", "share" }`. `name` is a word that does not change between versions, such as `converting`. `words` is a few lower-case words for a person, such as `converting the pages: 3 of 7 done`. `done` and `total` are whole numbers, and `null` for a stage that does not count. `share` is how much of the stage is done, from 0 to 1 to three decimals, and `null` for a stage that does not count. For an ingest the stage names, the counts and the `share` are those of the progress bar of the browser app. For an insights job and a dataset build `share` is `done` over `total`.
+
+`share` is for the stage only. It starts again at 0 in each stage, so the bar of the whole job is `progress`. The server works `progress` out from the place of the stage among the stages of its kind, and weights each part by the time it takes, in hundredths of the job. An ingest: checking 1, opening 2, preparing and converting the pages 60 (they share one part, as they share one scale of `share`), writing artifacts 10, writing graph 1, embedding 4, storing 1, writing insights 8, reading concepts 10, linking concepts 3. An insights job is one part. A dataset build: exporting 10, checking 5, planning 5, writing synthetic 40, writing sft 35, writing manifest 5. The weights are an estimate, so a bar moves at an uneven pace.
 
 ### `job_status`
 
@@ -495,7 +500,7 @@ The result of a job tool is these fields at the top level, with the fields of it
 - on the first change of `state` or of the name of the `stage` since the call began, which includes the first stage of a job that had none;
 - at the timeout, with the job as it is. A change of the counts or of the words inside one stage does not end the wait.
 
-When the call carries a progress token, it also sends `notifications/progress` while it waits: one at once, then one every 2 seconds at most, and only when `progress` or `message` changed. `progress` is the `share` of the stage in percent (the last value sent when the stage has no share, and 0 at first), `total` is 100 and `message` is the `words` of the stage. They stop when the call returns. A client that cancels the call ends the wait and nothing else: the job goes on, and the shared background slot is not touched. It costs nothing.
+When the call carries a progress token, it also sends `notifications/progress` while it waits: one at once, then one every 2 seconds at most, and only when the value or `message` changed. `progress` is the `progress` of the job in percent, to one decimal, `total` is 100 and `message` is the `words` of the stage. Within one call the value only rises: when the words change and the value does not, it goes up by 0.1, which a bar does not show but a host that prints the message does. That step of 0.1 never takes the value to 100. The job's own `progress` can reach 100 in its last stage, while it is still `running`. The notifications stop when the call returns. A client that cancels the call ends the wait and nothing else: the job goes on, and the shared background slot is not touched. It costs nothing.
 
 ### `list_jobs`
 

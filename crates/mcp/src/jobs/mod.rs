@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 mod background;
 mod list;
+mod progress;
 mod stop;
 mod view;
 mod wait;
@@ -21,7 +22,7 @@ pub use background::{BackgroundJob, BackgroundJobs, BackgroundReservation, JobKi
 pub(crate) use list::JobList;
 pub(crate) use stop::{StopError, StopJobArgs, StopResult, StopState};
 pub(crate) use view::{Job, JobState, Stage, rfc3339};
-pub(crate) use wait::{ProgressSink, WatchError, WatchJobArgs, wait_for_change};
+pub(crate) use wait::{ProgressSender, ProgressSink, WatchError, WatchJobArgs, wait_for_change};
 
 /// The report of a job: the [`Job`] that every kind has, and the fields of its own kind.
 pub(crate) trait JobReport: Clone + Send + Sync + 'static {

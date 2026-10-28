@@ -25,6 +25,10 @@ const PROGRESS_EVERY: Duration = Duration::from_secs(2);
 /// The progress bar of a notification runs from 0 to this.
 const PROGRESS_TOTAL: f64 = 100.0;
 
+/// The same end in tenths of a percent. The values of a wait are kept in whole tenths so that two
+/// of them compare exactly.
+const TENTHS_OF_TOTAL: u32 = 1000;
+
 /// What an agent gives `watch_job`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct WatchJobArgs {
@@ -136,37 +140,56 @@ pub(crate) async fn wait_for_change<R: JobReport>(
     }
 }
 
-/// Sends a notification only when what it says differs from the last one.
-struct ProgressSender {
+/// The value of the next notification in tenths of a percent, or `None` to send nothing. New words
+/// at the same value go one tenth higher, too little to see on a bar, so that a host still shows
+/// the new words while the values of one wait only rise. That step never fills the bar: only the
+/// work of the job does.
+fn next_tenths(last: Option<&(u32, String)>, tenths: u32, message: &str) -> Option<u32> {
+    let Some((sent, sent_message)) = last else {
+        return Some(tenths);
+    };
+    if tenths > *sent {
+        return Some(tenths);
+    }
+    if tenths == *sent && message != sent_message {
+        let nudged = sent + 1;
+        return (nudged < TENTHS_OF_TOTAL).then_some(nudged);
+    }
+    None
+}
+
+/// Sends the progress of a job to the client of a wait: a value that is higher than the last one
+/// sent, or the same value with new words.
+pub(crate) struct ProgressSender {
     sink: ProgressSink,
-    last: Option<(f64, String)>,
+    last: Option<(u32, String)>,
 }
 
 impl ProgressSender {
-    fn new(sink: ProgressSink) -> ProgressSender {
+    pub(crate) fn new(sink: ProgressSink) -> ProgressSender {
         ProgressSender { sink, last: None }
     }
 
     /// `false` when the client cannot be reached any more, so the caller sends no more.
-    async fn send_if_changed(&mut self, job: &Job) -> bool {
+    pub(crate) async fn send_if_changed(&mut self, job: &Job) -> bool {
         if job.state() != JobState::Running {
             return true;
         }
-        let kept = self.last.as_ref().map_or(0.0, |(progress, _)| *progress);
-        let stage = job.stage();
-        let progress = stage
-            .and_then(|stage| stage.share)
-            .map_or(kept, |share| (share * 1000.0).round() / 10.0);
-        let message = stage.map_or_else(|| job.state().as_str().to_owned(), |s| s.words.clone());
-        if self.last.as_ref() == Some(&(progress, message.clone())) {
+        let reached = (job.progress() * f64::from(TENTHS_OF_TOTAL)).round() as u32;
+        let message = job.stage().map_or_else(
+            || job.state().as_str().to_owned(),
+            |stage| stage.words.clone(),
+        );
+        let Some(tenths) = next_tenths(self.last.as_ref(), reached, &message) else {
             return true;
-        }
-        let notification = ProgressNotificationParam::new(self.sink.token.clone(), progress)
+        };
+        let percent = f64::from(tenths) / 10.0;
+        let notification = ProgressNotificationParam::new(self.sink.token.clone(), percent)
             .with_total(PROGRESS_TOTAL)
             .with_message(message.clone());
         match self.sink.peer.notify_progress(notification).await {
             Ok(()) => {
-                self.last = Some((progress, message));
+                self.last = Some((tenths, message));
                 true
             }
             Err(error) => {
@@ -196,6 +219,20 @@ mod tests {
         fn stopped(&mut self) {
             self.0.stop("stopped".to_owned());
         }
+    }
+
+    #[test]
+    fn a_notification_rises_and_a_change_of_words_alone_moves_it_up_by_a_tenth() {
+        let sent = |tenths: u32, words: &str| Some((tenths, words.to_owned()));
+
+        assert_eq!(next_tenths(None, 0, "first"), Some(0));
+        assert_eq!(next_tenths(sent(120, "a").as_ref(), 630, "a"), Some(630));
+        assert_eq!(next_tenths(sent(730, "a").as_ref(), 730, "b"), Some(731));
+        assert_eq!(next_tenths(sent(730, "a").as_ref(), 730, "a"), None);
+        assert_eq!(next_tenths(sent(731, "b").as_ref(), 730, "c"), None);
+        assert_eq!(next_tenths(sent(731, "b").as_ref(), 731, "b"), None);
+        assert_eq!(next_tenths(sent(999, "a").as_ref(), 999, "b"), None);
+        assert_eq!(next_tenths(sent(990, "a").as_ref(), 990, "b"), Some(991));
     }
 
     #[tokio::test]

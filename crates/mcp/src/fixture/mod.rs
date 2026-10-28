@@ -15,8 +15,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use self::catalog::Catalog;
-use self::fake::{FakeIngest, FakeJobs, Progress};
-use crate::jobs::{WatchError, WatchJobArgs};
+use self::fake::{FakeIngest, FakeJobs};
+use crate::jobs::{ProgressSink, WatchError, WatchJobArgs};
 use crate::server::{Cost, Group, ToolMarks, output_schema};
 use crate::transport::mount;
 
@@ -186,10 +186,10 @@ impl Fixture {
             .ok_or(FixtureError::UnknownJob {
                 job_id: args.job_id,
             })?;
-        let progress = context.meta.get_progress_token().map(|token| Progress {
-            peer: context.peer.clone(),
-            token,
-        });
+        let progress = context
+            .meta
+            .get_progress_token()
+            .map(|token| ProgressSink::new(context.peer.clone(), token));
         Ok(Json(job.watch(timeout, progress).await))
     }
 }

@@ -8,6 +8,7 @@ use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
 use super::background::JobKind;
+use super::progress;
 use crate::usage::Spent;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
@@ -102,6 +103,9 @@ pub(crate) struct Job {
     job_id: String,
     kind: JobKind,
     state: JobState,
+    /// How much of the whole job is done, from 0 to 1, to three decimals. It never goes down, and
+    /// is 1 when `done` or `already_ingested`.
+    progress: f64,
     /// Only while `running`. Left out before the first step.
     #[serde(skip_serializing_if = "Option::is_none")]
     stage: Option<Stage>,
@@ -129,6 +133,7 @@ impl Job {
             job_id: id.to_string(),
             kind,
             state: JobState::Running,
+            progress: 0.0,
             stage: None,
             started_at: now,
             updated_at: now,
@@ -161,7 +166,16 @@ impl Job {
         self.error.as_deref()
     }
 
+    pub(crate) fn progress(&self) -> f64 {
+        self.progress
+    }
+
+    /// The job is in `stage`. The progress rises to where the stage puts it and never falls back,
+    /// and stays as it was for a stage that its kind does not know.
     pub(crate) fn set_stage(&mut self, stage: Stage) {
+        if let Some(overall) = progress::overall(self.kind, &stage) {
+            self.progress = self.progress.max(overall);
+        }
         self.stage = Some(stage);
         self.touch();
     }
@@ -173,6 +187,9 @@ impl Job {
 
     /// The end of the job in `state`. A job that has ended has no stage.
     pub(crate) fn end(&mut self, state: JobState) {
+        if matches!(state, JobState::Done | JobState::AlreadyIngested) {
+            self.progress = 1.0;
+        }
         self.state = state;
         self.stage = None;
         self.touch();

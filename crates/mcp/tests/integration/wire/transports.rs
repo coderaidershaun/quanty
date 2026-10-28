@@ -2,24 +2,25 @@
 //! standard input and output of the built `quanty-mcp` command.
 
 use std::process::Stdio;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use mcp::{QuantyServer, http_service};
 use ocr::testing::sample_pdf;
 use rag_ingestion::testing::ThrowawayStores;
-use rmcp::ServiceExt;
 use rmcp::model::ProgressNotificationParam;
+use rmcp::service::RunningService;
 use rmcp::transport::StreamableHttpClientTransport;
+use rmcp::{RoleClient, ServiceExt};
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 use tokio::process::Command;
 
 use crate::support::{
-    ClosedPorts, ProgressRecorder, StandInServices, call, connect, connect_recording_progress,
-    error_text, report_when_ended, status_in_stage, structured,
+    ClosedPorts, JOB_WAIT, ProgressRecorder, StandInServices, call, connect,
+    connect_recording_progress, error_text, report_when_ended, status_in_stage, structured,
 };
 
 /// How long the command may take to end once the client has closed its input.
@@ -172,10 +173,16 @@ async fn the_quanty_mcp_command_serves_the_tools_over_stdio() {
     );
 }
 
+async fn progress_of(client: &RunningService<RoleClient, ProgressRecorder>, job_id: &str) -> f64 {
+    let status = call(client, "job_status", json!({ "job_id": job_id })).await;
+    structured(&status)["progress"].as_f64().unwrap()
+}
+
 /// What the first notification of a job that is held in `converting` says: no page of the 7 is
-/// saved, which is 15 of 100 on the bar of the browser.
+/// saved, so the job has done the 3 hundredths before the pages and 15 of 100 of the 60 hundredths
+/// that the pages take.
 fn assert_converting_progress(first: &ProgressNotificationParam) {
-    assert_eq!(first.progress, 15.0, "{first:?}");
+    assert_eq!(first.progress, 12.0, "{first:?}");
     assert_eq!(first.total, Some(100.0), "{first:?}");
     assert_eq!(
         first.message.as_deref(),
@@ -218,7 +225,76 @@ async fn watch_job_sends_progress_over_stdio_and_streamable_http() {
     assert_eq!(structured(&watched)["stage"]["name"], "converting");
     assert_converting_progress(&http_progress.first().await);
 
+    // Two pages are saved while one wait goes on, a tick apart, so the bar of that wait must rise.
+    let mut sampled = vec![progress_of(&piped, &job_id).await];
+    let seen_before = piped_progress.at_least(1).await.len();
+    let (_, ()) = tokio::join!(
+        call(
+            &piped,
+            "watch_job",
+            json!({ "job_id": job_id, "timeout_s": 5 })
+        ),
+        async {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            open_the_pages.send(()).unwrap();
+            tokio::time::sleep(Duration::from_millis(2500)).await;
+            open_the_pages.send(()).unwrap();
+        }
+    );
+    let during_pages = piped_progress.at_least(seen_before + 2).await;
+    let this_wait = &during_pages[seen_before..];
+    assert!(
+        this_wait
+            .iter()
+            .all(|notice| notice.progress_token == this_wait[0].progress_token),
+        "{this_wait:?}"
+    );
+    sampled.push(progress_of(&piped, &job_id).await);
+
+    // The rest of the job is followed to its end, one wait for each stage.
     drop(open_the_pages);
+    let followed = Instant::now();
+    loop {
+        let watched = call(
+            &piped,
+            "watch_job",
+            json!({ "job_id": job_id, "timeout_s": 5 }),
+        )
+        .await;
+        sampled.push(structured(&watched)["progress"].as_f64().unwrap());
+        let status = call(&piped, "job_status", json!({ "job_id": job_id })).await;
+        sampled.push(structured(&status)["progress"].as_f64().unwrap());
+        if structured(&status)["state"] != "running" {
+            break;
+        }
+        assert!(followed.elapsed() < JOB_WAIT, "the job did not end in time");
+    }
+    assert!(
+        sampled.windows(2).all(|pair| pair[0] <= pair[1]),
+        "{sampled:?}"
+    );
+    assert_eq!(sampled.last(), Some(&1.0), "{sampled:?}");
     let ended = report_when_ended(&starter, "job_status", &job_id).await;
     assert_eq!(ended["state"], "done", "{ended}");
+    assert_eq!(ended["progress"], 1.0, "{ended}");
+
+    // Each wait is one progress token, and its bar only rises.
+    let all = piped_progress.at_least(during_pages.len()).await;
+    let mut tokens = Vec::new();
+    for notice in &all {
+        if !tokens.contains(&notice.progress_token) {
+            tokens.push(notice.progress_token.clone());
+        }
+    }
+    for token in tokens {
+        let values: Vec<f64> = all
+            .iter()
+            .filter(|notice| notice.progress_token == token)
+            .map(|notice| notice.progress)
+            .collect();
+        assert!(
+            values.windows(2).all(|pair| pair[0] < pair[1]),
+            "{token:?}: {values:?}"
+        );
+    }
 }

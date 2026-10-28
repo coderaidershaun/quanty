@@ -5,22 +5,16 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use contract::IngestStage;
-use rmcp::RoleServer;
-use rmcp::model::{ProgressNotificationParam, ProgressToken};
-use rmcp::service::Peer;
 use schemars::JsonSchema;
 use serde::Serialize;
 use tokio::time::{Instant, sleep_until};
 use uuid::Uuid;
 
 use crate::ingest::stage_view;
-use crate::jobs::{Job, JobKind, JobState, lock};
+use crate::jobs::{Job, JobKind, JobState, ProgressSender, ProgressSink, lock};
 
 /// How long a fake job stays in each stage.
 const STAGE_STEP: Duration = Duration::from_millis(150);
-
-/// The progress bar of a notification runs from 0 to this.
-const PROGRESS_TOTAL: f64 = 100.0;
 
 /// The stages of a real ingest of a seven-page chapter, in order, each shown at the end of its
 /// work.
@@ -33,14 +27,14 @@ const STAGES: [IngestStage; 11] = [
         pages: 7,
     },
     IngestStage::Converting { saved: 7, pages: 7 },
-    IngestStage::WritingGraph,
-    IngestStage::Embedding { items: 20 },
-    IngestStage::Storing,
-    IngestStage::WritingInsights,
     IngestStage::WritingArtifacts {
         done: 20,
         items: 20,
     },
+    IngestStage::WritingGraph,
+    IngestStage::Embedding { items: 20 },
+    IngestStage::Storing,
+    IngestStage::WritingInsights,
     IngestStage::ReadingConcepts {
         done: 20,
         items: 20,
@@ -109,12 +103,6 @@ pub(super) struct FakeIngest {
     file_name: String,
 }
 
-/// Where the progress of a wait goes: the client that asked, under the token it gave.
-pub(super) struct Progress {
-    pub(super) peer: Peer<RoleServer>,
-    pub(super) token: ProgressToken,
-}
-
 impl FakeJob {
     pub(super) fn job_id(&self) -> &str {
         self.job.job_id()
@@ -151,14 +139,15 @@ impl FakeJob {
     pub(super) async fn watch(
         &self,
         timeout: Duration,
-        mut progress: Option<Progress>,
+        progress: Option<ProgressSink>,
     ) -> FakeIngest {
         let deadline = Instant::now() + timeout;
         let mut unsent = match self.phase() {
             Phase::Stage(index) => index,
             Phase::Done => STAGES.len(),
         };
-        let mut bar = 0.0;
+        let mut progress = progress.map(ProgressSender::new);
+        let mut job = self.job.clone();
         loop {
             let phase = self.phase();
             let reached = match phase {
@@ -167,20 +156,11 @@ impl FakeJob {
             };
             // A wait that wakes late still sends every stage it slept through.
             for &stage in &STAGES[unsent..reached] {
-                let stage = stage_view(stage);
-                bar = stage.share.map_or(bar, |share| share * PROGRESS_TOTAL);
-                if let Some(sink) = &progress {
-                    let sent = sink
-                        .peer
-                        .notify_progress(
-                            ProgressNotificationParam::new(sink.token.clone(), bar)
-                                .with_total(PROGRESS_TOTAL)
-                                .with_message(stage.words),
-                        )
-                        .await;
-                    if sent.is_err() {
-                        progress = None;
-                    }
+                job.set_stage(stage_view(stage));
+                if let Some(sender) = progress.as_mut()
+                    && !sender.send_if_changed(&job).await
+                {
+                    progress = None;
                 }
             }
             unsent = reached;

@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use self::catalog::Catalog;
 use self::fake::{FakeIngest, FakeJobs, Progress};
 use crate::jobs::{WatchError, WatchJobArgs};
-use crate::server::meta::{Cost, Group, ToolMarks, output_schema};
+use crate::server::{Cost, Group, ToolMarks, output_schema};
 use crate::transport::mount;
 
 const TITLE: &str = "Black–Scholes fixture";

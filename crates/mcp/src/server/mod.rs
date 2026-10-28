@@ -2,18 +2,16 @@
 //! failure for the agent.
 
 mod catalog;
-mod changes;
-mod concepts;
 mod failure;
 mod health;
-mod jobs;
-mod library;
 mod lookup;
-pub(crate) mod meta;
+mod meta;
 mod prompts;
-mod reading;
 mod resources;
 mod tasks;
+mod tools;
+
+pub(crate) use meta::{Cost, Group, ToolMarks, output_schema};
 
 use std::sync::Arc;
 

@@ -5,14 +5,14 @@ use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::JsonObject;
 use rmcp::{Json, tool, tool_router};
 
-use super::QuantyServer;
-use super::failure::ToolError;
-use super::meta::{Cost, Group, ToolMarks, input_schema, output_schema};
 use crate::library::{
     self, DocumentOutlineArgs, DocumentOverviewArgs, ItemRead, ListMediaArgs, ManyRead, Media,
     Outline, Overview, PagesView, ReadItemArgs, ReadManyArgs, ReadPagesArgs, ReadSectionArgs,
     SectionView,
 };
+use crate::server::QuantyServer;
+use crate::server::failure::ToolError;
+use crate::server::meta::{Cost, Group, ToolMarks, input_schema, output_schema};
 use crate::services::Services;
 
 /// The first call that a host makes to a tool that lists its results by name.
@@ -20,7 +20,7 @@ pub(super) fn names_entry() -> JsonObject {
     JsonObject::from_iter([("detail".to_owned(), "names".into())])
 }
 
-#[tool_router(router = library_router, vis = "pub(super)")]
+#[tool_router(router = library_router, vis = "pub(in crate::server)")]
 impl<S: Services> QuantyServer<S> {
     /// Media (books, papers) with labels and counts of documents, pages and items. `detail: names` to browse.
     #[tool(

@@ -4,16 +4,16 @@
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::{Json, tool, tool_router};
 
-use super::QuantyServer;
-use super::failure::ToolError;
-use super::meta::{Cost, Group, ToolMarks, input_schema, output_schema};
 use crate::insights::{ExportInsightsArgs, ExportResult, export_insights};
 use crate::library::{
     self, DocumentTagsView, EditDocumentTagsArgs, EditMediaArgs, MediaLabelsView,
 };
+use crate::server::QuantyServer;
+use crate::server::failure::ToolError;
+use crate::server::meta::{Cost, Group, ToolMarks, input_schema, output_schema};
 use crate::services::Services;
 
-#[tool_router(router = changes_router, vis = "pub(super)")]
+#[tool_router(router = changes_router, vis = "pub(in crate::server)")]
 impl<S: Services> QuantyServer<S> {
     /// Change the category, authors or tags of a media, in both stores. Free.
     #[tool(

@@ -5,18 +5,18 @@ use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::JsonObject;
 use rmcp::{Json, tool, tool_router};
 
-use super::QuantyServer;
-use super::failure::ToolError;
-use super::meta::{Cost, Group, Payer, ToolMarks, input_schema, output_schema};
 use crate::concepts::{
     self, CompareDocumentsArgs, CompareResult, ConceptArgs, ConceptItemsArgs, ConceptItemsResult,
     ConceptNeighboursArgs, ConceptPathArgs, ConceptView, DocumentConceptsArgs,
     DocumentConceptsResult, FindConceptsArgs, FindConceptsResult, NeighboursResult, PathResult,
     SimilarItemsArgs, SimilarItemsResult,
 };
+use crate::server::QuantyServer;
+use crate::server::failure::ToolError;
+use crate::server::meta::{Cost, Group, Payer, ToolMarks, input_schema, output_schema};
 use crate::services::Services;
 
-#[tool_router(router = concepts_router, vis = "pub(super)")]
+#[tool_router(router = concepts_router, vis = "pub(in crate::server)")]
 impl<S: Services> QuantyServer<S> {
     /// Concepts, PAID (one Gemini embedding) for `query`; `name` is free. With aliases and counts.
     #[tool(

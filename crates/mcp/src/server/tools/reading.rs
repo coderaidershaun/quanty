@@ -5,20 +5,20 @@ use rag_ingestion::health;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::{Json, tool, tool_router};
 
-use super::QuantyServer;
-use super::failure::ToolError;
-use super::health::HealthResult;
 use super::library::names_entry;
-use super::meta::{Cost, Group, Payer, ToolMarks, input_schema, output_schema};
 use crate::insights::{self, ChapterInsightsArgs, InsightsView};
 use crate::library::{
     self, ChapterConceptsArgs, ChapterContentsArgs, ConceptsView, ContentsView, Documents,
     ListDocumentsArgs, PageView, ReadPageArgs,
 };
 use crate::retrieval::{self, AnswerResult, QuestionArgs, SearchArgs, SearchResult};
+use crate::server::QuantyServer;
+use crate::server::failure::ToolError;
+use crate::server::health::HealthResult;
+use crate::server::meta::{Cost, Group, Payer, ToolMarks, input_schema, output_schema};
 use crate::services::Services;
 
-#[tool_router(router = reading_router, vis = "pub(super)")]
+#[tool_router(router = reading_router, vis = "pub(in crate::server)")]
 impl<S: Services> QuantyServer<S> {
     /// Search, PAID (one Gemini embedding): the stored items nearest a question, with document, page and why.
     #[tool(

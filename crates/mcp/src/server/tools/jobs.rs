@@ -5,22 +5,22 @@ use rmcp::handler::server::wrapper::Parameters;
 use rmcp::service::RequestContext;
 use rmcp::{Json, RoleServer, tool, tool_router};
 
-use super::QuantyServer;
-use super::failure::ToolError;
-use super::lookup::{FoundJob, JobResult, JobStatusArgs, stop_any};
-use super::meta::{Cost, Group, Payer, ToolMarks, input_schema, output_schema};
-use super::tasks::JobStart;
 use crate::datasets::{BuildDatasetArgs, DatasetReport, DatasetStatusArgs};
 use crate::ingest::{CheckPdfArgs, IngestPdfArgs, IngestReport, IngestStatusArgs, PdfCheck};
 use crate::insights::{InsightsReport, InsightsStatusArgs, WriteInsightsArgs};
 use crate::jobs::{BackgroundJobs, JobList, ProgressSink, WatchJobArgs};
 use crate::jobs::{StopError, StopJobArgs, StopResult};
+use crate::server::QuantyServer;
+use crate::server::failure::ToolError;
+use crate::server::lookup::{FoundJob, JobResult, JobStatusArgs, stop_any};
+use crate::server::meta::{Cost, Group, Payer, ToolMarks, input_schema, output_schema};
+use crate::server::tasks::JobStart;
 use crate::services::Services;
 
 /// How many jobs of each kind `list_jobs` gives.
 const LISTED_PER_KIND: usize = 20;
 
-#[tool_router(router = jobs_router, vis = "pub(super)")]
+#[tool_router(router = jobs_router, vis = "pub(in crate::server)")]
 impl<S: Services> QuantyServer<S> {
     /// PDF check before `ingest_pdf`: title, pages, state, blockers, cost and time estimate. Free.
     #[tool(

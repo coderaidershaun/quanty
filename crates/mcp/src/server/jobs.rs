@@ -5,15 +5,16 @@ use rmcp::handler::server::wrapper::Parameters;
 use rmcp::service::RequestContext;
 use rmcp::{Json, RoleServer, tool, tool_router};
 
+use super::QuantyServer;
 use super::failure::ToolError;
-use super::lookup::{FoundJob, JobResult, JobStatusArgs};
+use super::lookup::{FoundJob, JobResult, JobStatusArgs, stop_any};
 use super::meta::{Cost, Group, Payer, ToolMarks, output_schema};
-use super::{QuantyServer, Shared};
+use super::tasks::JobStart;
 use crate::datasets::{BuildDatasetArgs, DatasetReport, DatasetStatusArgs};
 use crate::ingest::{IngestPdfArgs, IngestReport, IngestStatusArgs};
 use crate::insights::{InsightsReport, InsightsStatusArgs, WriteInsightsArgs};
-use crate::jobs::{BackgroundJobs, JobKind, JobList, ProgressSink, WatchJobArgs};
-use crate::jobs::{StopError, StopJobArgs, StopResult, StopState};
+use crate::jobs::{BackgroundJobs, JobList, ProgressSink, WatchJobArgs};
+use crate::jobs::{StopError, StopJobArgs, StopResult};
 use crate::services::Services;
 
 /// How many jobs of each kind `list_jobs` gives.
@@ -48,9 +49,11 @@ impl<S: Services> QuantyServer<S> {
     async fn ingest_pdf(
         &self,
         Parameters(args): Parameters<IngestPdfArgs>,
-    ) -> Result<Json<IngestReport>, ToolError> {
+        context: RequestContext<RoleServer>,
+    ) -> Result<JobStart<IngestReport>, ToolError> {
         let error_text = |error| ToolError::Ingest(error).text();
-        Ok(Json(self.shared.ingest.start(args, error_text).await?))
+        let report = self.shared.ingest.start(args, error_text).await?;
+        Ok(JobStart::new(report, &context))
     }
 
     /// Deprecated: call `job_status`. Says how an ingest job is going, or how it ended. Over stdio
@@ -91,9 +94,11 @@ impl<S: Services> QuantyServer<S> {
     async fn write_insights(
         &self,
         Parameters(args): Parameters<WriteInsightsArgs>,
-    ) -> Result<Json<InsightsReport>, ToolError> {
+        context: RequestContext<RoleServer>,
+    ) -> Result<JobStart<InsightsReport>, ToolError> {
         let error_text = |error| ToolError::Insights(error).text();
-        Ok(Json(self.shared.insights.start(args, error_text).await?))
+        let report = self.shared.insights.start(args, error_text).await?;
+        Ok(JobStart::new(report, &context))
     }
 
     /// Deprecated: call `job_status`. Says how a `write_insights` job is going, or how it ended:
@@ -136,9 +141,11 @@ impl<S: Services> QuantyServer<S> {
     async fn build_dataset(
         &self,
         Parameters(args): Parameters<BuildDatasetArgs>,
-    ) -> Result<Json<DatasetReport>, ToolError> {
+        context: RequestContext<RoleServer>,
+    ) -> Result<JobStart<DatasetReport>, ToolError> {
         let error_text = |error| ToolError::Dataset(error).text();
-        Ok(Json(self.shared.datasets.start(args, error_text).await?))
+        let report = self.shared.datasets.start(args, error_text).await?;
+        Ok(JobStart::new(report, &context))
     }
 
     /// Deprecated: call `job_status`. Says how a dataset build is going, or how it ended, with
@@ -244,20 +251,4 @@ impl<S: Services> QuantyServer<S> {
             .and_then(BackgroundJobs::running);
         Json(JobList::new(running, jobs))
     }
-}
-
-/// Stops the job with this id, whichever kind of job it is. `None` when no list holds it.
-async fn stop_any<S: Services>(shared: &Shared<S>, job_id: &str) -> Option<(JobKind, StopState)> {
-    if let Some(state) = shared.ingest.jobs.stop(job_id).await {
-        return Some((JobKind::Ingest, state));
-    }
-    if let Some(state) = shared.insights.jobs.stop(job_id).await {
-        return Some((JobKind::Insights, state));
-    }
-    shared
-        .datasets
-        .jobs
-        .stop(job_id)
-        .await
-        .map(|state| (JobKind::Dataset, state))
 }

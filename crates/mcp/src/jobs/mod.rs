@@ -20,7 +20,7 @@ pub(crate) use background::lock;
 pub use background::{BackgroundJob, BackgroundJobs, BackgroundReservation, JobKind};
 pub(crate) use list::JobList;
 pub(crate) use stop::{StopError, StopJobArgs, StopResult, StopState};
-pub(crate) use view::{Job, JobState, Stage};
+pub(crate) use view::{Job, JobState, Stage, rfc3339};
 pub(crate) use wait::{ProgressSink, WatchError, WatchJobArgs, wait_for_change};
 
 /// The report of a job: the [`Job`] that every kind has, and the fields of its own kind.

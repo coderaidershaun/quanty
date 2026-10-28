@@ -413,6 +413,10 @@ When the call carries a progress token, it also sends `notifications/progress` w
 
 `list_jobs` gives `{ "running", "jobs" }`. `running` is the work that holds the shared background slot of the unified HTTP server, as `{ "kind", "name" }`, whether this server or the browser started it, and `null` when the slot is free and always over stdio, which has no shared slot. `jobs` are the jobs of this server of every kind, newest first, at most the last 20 of each kind, each as the fields above and without the fields of its kind. It costs nothing.
 
+### Tasks
+
+A client that declares the tasks extension (`io.modelcontextprotocol/tasks`) gets a task instead of the report from `ingest_pdf`, `write_insights` and `build_dataset`, with the `job_id` as its id, a poll interval of 5 seconds and a lifetime of a day; a client that does not declare it gets the report as before. `tasks/get` says `working` with the `words` of the stage as the status message, `cancelled` for a stopped job, or `completed` with what `job_status` gives as the result of the call, with `isError` set when the job failed. `tasks/cancel` stops the job as `stop_job` does, `tasks/update` changes nothing, and a `job_id` that this server does not hold is an invalid params error.
+
 ### The older status tools
 
 `ingest_status`, `insights_status` and `dataset_status` still answer, with the same result as `job_status` for a job of their kind. Their descriptions start with "Deprecated: call `job_status`", and they will go once the programs that call them have moved.

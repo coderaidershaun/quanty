@@ -14,8 +14,8 @@ use rmcp::service::{RunningService, Service};
 use serde_json::{Value, json};
 
 pub use client::{
-    Client, ProgressRecorder, call, call_and_cancel, connect, connect_on_2026_07_28,
-    connect_recording_progress, error_text, structured,
+    Client, ProgressRecorder, call, call_and_cancel, connect, connect_declaring_tasks,
+    connect_on_2026_07_28, connect_recording_progress, error_text, structured, tasks_client_config,
 };
 pub use library::{AUTHOR, ClosedPorts, Library};
 pub use services::{ReadyGate, StandInServices};

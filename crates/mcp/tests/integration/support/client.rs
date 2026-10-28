@@ -5,8 +5,8 @@ use std::time::{Duration, Instant};
 
 use mcp::{QuantyServer, Services};
 use rmcp::model::{
-    CallToolRequest, CallToolRequestParams, CallToolResult, ClientRequest,
-    ProgressNotificationParam, ProtocolVersion,
+    CallToolRequest, CallToolRequestParams, CallToolResult, ClientCapabilities, ClientConfig,
+    ClientRequest, Implementation, ProgressNotificationParam, ProtocolVersion,
 };
 use rmcp::service::{NotificationContext, PeerRequestOptions, RunningService, Service};
 use rmcp::{ClientHandler, ClientLifecycleMode, ClientServiceExt, RoleClient, ServiceExt};
@@ -103,6 +103,30 @@ pub async fn connect_on_2026_07_28<S: Services>(server: QuantyServer<S>) -> Clie
     )
     .await
     .expect("the client should connect")
+}
+
+/// What a client that declares the tasks extension tells the server about itself.
+pub fn tasks_client_config() -> ClientConfig {
+    ClientConfig::new(
+        ClientCapabilities::builder().enable_tasks().build(),
+        Implementation::new("quanty-test-client", "0.0.0"),
+    )
+}
+
+/// A client that negotiated the 2026-07-28 protocol and declared the tasks extension, so that the
+/// start tools answer it with a task.
+pub async fn connect_declaring_tasks<S: Services>(
+    server: QuantyServer<S>,
+) -> RunningService<RoleClient, ClientConfig> {
+    tasks_client_config()
+        .serve_with_lifecycle(
+            serve_on_pipe(server),
+            ClientLifecycleMode::Discover {
+                preferred_versions: vec![ProtocolVersion::V_2026_07_28],
+            },
+        )
+        .await
+        .expect("the client should connect")
 }
 
 /// Starts `server` on one end of a pipe and gives back the other end.

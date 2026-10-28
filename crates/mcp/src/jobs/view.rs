@@ -137,6 +137,10 @@ impl Job {
         }
     }
 
+    pub(crate) fn job_id(&self) -> &str {
+        &self.job_id
+    }
+
     pub(crate) fn state(&self) -> JobState {
         self.state
     }
@@ -147,6 +151,10 @@ impl Job {
 
     pub(crate) fn started_at(&self) -> OffsetDateTime {
         self.started_at
+    }
+
+    pub(crate) fn updated_at(&self) -> OffsetDateTime {
+        self.updated_at
     }
 
     pub(crate) fn error(&self) -> Option<&str> {
@@ -187,7 +195,12 @@ impl Job {
     }
 }
 
+/// A time as RFC 3339 text, the way a job view writes it.
+pub(crate) fn rfc3339(time: OffsetDateTime) -> Result<String, time::error::Format> {
+    time.format(&Rfc3339)
+}
+
 fn as_rfc3339<S: Serializer>(time: &OffsetDateTime, serializer: S) -> Result<S::Ok, S::Error> {
-    let text = time.format(&Rfc3339).map_err(serde::ser::Error::custom)?;
+    let text = rfc3339(*time).map_err(serde::ser::Error::custom)?;
     serializer.serialize_str(&text)
 }

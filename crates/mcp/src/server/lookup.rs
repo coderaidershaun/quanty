@@ -1,5 +1,6 @@
-//! Finds a job of any kind by its id, and gives it as the `Job` every kind shares or as the whole
-//! result of its kind, so that every tool that is about a job by its id reads it the same way.
+//! Finds or stops a job of any kind by its id, and gives a found job as the `Job` every kind shares
+//! or as the whole result of its kind, so that every tool that is about a job by its id reads it
+//! the same way.
 
 use std::borrow::Cow;
 use std::future::Future;
@@ -13,7 +14,7 @@ use super::Shared;
 use crate::datasets::DatasetReport;
 use crate::ingest::IngestReport;
 use crate::insights::InsightsReport;
-use crate::jobs::{Job, JobReport, ProgressSink, StopError, wait_for_change};
+use crate::jobs::{Job, JobKind, JobReport, ProgressSink, StopError, StopState, wait_for_change};
 use crate::services::Services;
 
 /// What an agent gives `job_status`.
@@ -90,10 +91,6 @@ impl FoundJob {
     }
 
     /// What the job is now, as every kind of job tells it, without the fields of its kind.
-    #[expect(
-        dead_code,
-        reason = "no tool reads a job without the fields of its kind yet"
-    )]
     pub(crate) fn job(&self) -> Job {
         match self {
             FoundJob::Ingest(watcher) => watcher.borrow().job().clone(),
@@ -130,4 +127,23 @@ impl FoundJob {
             }
         }
     }
+}
+
+/// Stops the job with this id, whichever kind of job it is. `None` when no list holds it.
+pub(super) async fn stop_any<S: Services>(
+    shared: &Shared<S>,
+    job_id: &str,
+) -> Option<(JobKind, StopState)> {
+    if let Some(state) = shared.ingest.jobs.stop(job_id).await {
+        return Some((JobKind::Ingest, state));
+    }
+    if let Some(state) = shared.insights.jobs.stop(job_id).await {
+        return Some((JobKind::Insights, state));
+    }
+    shared
+        .datasets
+        .jobs
+        .stop(job_id)
+        .await
+        .map(|state| (JobKind::Dataset, state))
 }

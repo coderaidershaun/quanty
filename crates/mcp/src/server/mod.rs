@@ -8,12 +8,16 @@ mod jobs;
 mod lookup;
 pub(crate) mod meta;
 mod reading;
+mod tasks;
 
 use std::sync::Arc;
 
 use rag_core::Config;
 use rmcp::handler::server::router::tool::ToolRouter;
-use rmcp::model::{CacheScope, ListToolsResult, PaginatedRequestParams, ProtocolVersion};
+use rmcp::model::{
+    CacheScope, CancelTaskParams, GetTaskParams, GetTaskResult, Implementation, ListToolsResult,
+    PaginatedRequestParams, ProtocolVersion, ServerCapabilities, ServerConfig, UpdateTaskParams,
+};
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer, ServerHandler, tool_handler};
 
@@ -32,6 +36,8 @@ const REQUEST_EXTRA_BYTES: u64 = 1024 * 1024;
 /// How long a peer may keep the list of tools: five minutes. The list never changes while the
 /// server runs and is the same for every caller.
 const TOOL_LIST_TTL_MS: u64 = 300_000;
+
+const INSTRUCTIONS: &str = "Search and read a library of books, papers and other media. Start with `search` for a question, then `read_page` to read around a result. `chapter_contents`, `chapter_concepts` and `chapter_insights` give the items, the concepts and the saved notes of one document. `answer` writes a whole answer but spends the subscription usage of the agent of the Ask choice. `ingest_pdf` adds a PDF and `write_insights` writes missing notes, both paid; `build_dataset` builds a training dataset and is paid unless `dry_run` is true. Each starts a job that its status tool follows and `stop_job` stops. `edit_media` and `edit_document_tags` change labels and cost nothing. `export_insights` writes the saved notes of one document to a PDF, Markdown or HTML file, free.";
 
 /// The tools of quanty over its stored library. It is cheap to clone: a clone shares the
 /// services and the jobs with the original.
@@ -124,12 +130,19 @@ fn sends_cache_hints(context: &RequestContext<RoleServer>) -> bool {
         .is_some_and(|version| version >= ProtocolVersion::V_2026_07_28)
 }
 
-#[tool_handler(
-    router = self.tool_router,
-    name = "quanty",
-    instructions = "Search and read a library of books, papers and other media. Start with `search` for a question, then `read_page` to read around a result. `chapter_contents`, `chapter_concepts` and `chapter_insights` give the items, the concepts and the saved notes of one document. `answer` writes a whole answer but spends the subscription usage of the agent of the Ask choice. `ingest_pdf` adds a PDF and `write_insights` writes missing notes, both paid; `build_dataset` builds a training dataset and is paid unless `dry_run` is true. Each starts a job that its status tool follows and `stop_job` stops. `edit_media` and `edit_document_tags` change labels and cost nothing. `export_insights` writes the saved notes of one document to a PDF, Markdown or HTML file, free."
-)]
+#[tool_handler(router = self.tool_router)]
 impl<S: Services> ServerHandler for QuantyServer<S> {
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(
+            ServerCapabilities::builder()
+                .enable_tools()
+                .enable_tasks()
+                .build(),
+        )
+        .with_server_info(Implementation::new("quanty", env!("CARGO_PKG_VERSION")))
+        .with_instructions(INSTRUCTIONS)
+    }
+
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParams>,
@@ -143,5 +156,29 @@ impl<S: Services> ServerHandler for QuantyServer<S> {
         } else {
             Ok(tools)
         }
+    }
+
+    async fn get_task(
+        &self,
+        request: GetTaskParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<GetTaskResult, ErrorData> {
+        tasks::get(&self.shared, &request.task_id)
+    }
+
+    async fn update_task(
+        &self,
+        request: UpdateTaskParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<(), ErrorData> {
+        tasks::update(&self.shared, &request.task_id)
+    }
+
+    async fn cancel_task(
+        &self,
+        request: CancelTaskParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<(), ErrorData> {
+        tasks::cancel(&self.shared, &request.task_id).await
     }
 }

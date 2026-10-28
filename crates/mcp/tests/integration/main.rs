@@ -9,5 +9,6 @@ mod insights;
 mod jobs;
 mod library;
 mod support;
+mod tasks;
 mod tools;
 mod transports;

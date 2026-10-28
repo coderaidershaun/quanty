@@ -18,7 +18,7 @@ use axum::{
 use backend::Handler;
 use contract::StartupFacts;
 pub use launch::{Settings, SettingsError};
-use mcp::BackgroundJobs;
+use mcp::{BackgroundJobs, LibraryChanges};
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 /// The type of a file that the server sends, by its extension.
@@ -51,6 +51,9 @@ pub struct ServerOptions {
     pub fixture: Option<String>,
     pub mcp: Router,
     pub background_jobs: BackgroundJobs,
+    /// Told when the browser changes the library. The hosted MCP server tells its agents from it,
+    /// so it must be the one that server was made with.
+    pub library_changes: LibraryChanges,
 }
 
 /// Serves a live or fixture backend through the same authenticated routes.
@@ -64,6 +67,7 @@ pub fn router<H: Handler>(handler: H, options: ServerOptions) -> Result<Router, 
         fixture,
         mcp,
         background_jobs,
+        library_changes,
     } = options;
     settings.validate()?;
     for (folder, days) in [(backend::UPLOADS, 7), (backend::EXPORTS, 1)] {
@@ -74,7 +78,7 @@ pub fn router<H: Handler>(handler: H, options: ServerOptions) -> Result<Router, 
         .map_err(RouterError::Cleanup)?;
     }
     let auth = auth::Auth::new(settings.clone());
-    let guard = jobs::Guard::new(background_jobs);
+    let guard = jobs::Guard::new(background_jobs, library_changes);
     let facts_guard = guard.clone();
     let home = settings.home.clone();
     let sockets = ws::SocketState {

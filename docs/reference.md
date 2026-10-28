@@ -624,7 +624,7 @@ Build `crates/web-ui` with `trunk build --release` before building `cargo build 
 | `QUANTY_MCP_TOKEN` | Bearer token for remote MCP; without it `/mcp` returns 404 | none |
 | `QUANTY_SESSION_KEY` | 64 hex characters signing the cookie; retain it to preserve sessions after restart | random on each start |
 | `QUANTY_UPLOAD_LIMIT_MB` | Maximum PDF upload in MiB | `1024` |
-| `QUANTY_FETCH_ORIGINS` | Comma-separated origins (`https://jet.example.com`, `http://10.0.0.5:8080`) that `ingest_pdf` may fetch a `pdf_url` from, on top of this machine | loopback only |
+| `QUANTY_FETCH_ORIGINS` | Comma-separated origins (`https://jet.example.com`, `http://10.0.0.5:8080`) that `ingest_pdf` may fetch a `pdf_url` from, on top of this machine. A host name in the list other than `localhost` must resolve to public addresses only: a name that resolves to a private, link-local, shared (`100.64.0.0/10`), unspecified or loopback address is refused. To fetch from a private address, list its IP origin | loopback only |
 | `QDRANT_URL` | Qdrant gRPC address | `http://localhost:6334` |
 | `QDRANT_API_KEY` | Optional Qdrant key, outside the URL | none |
 | `FALKORDB_URL` | FalkorDB address | `falkor://localhost:6379` |

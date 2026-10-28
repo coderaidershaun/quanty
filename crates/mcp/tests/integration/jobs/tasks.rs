@@ -5,7 +5,7 @@
 use std::time::{Duration, Instant};
 
 use mcp::{BackgroundJobs, QuantyServer, http_service};
-use ocr::testing::sample_pdf;
+use ocr::testing::{Scenario, sample_pdf};
 use rag_ingestion::testing::ThrowawayStores;
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, CancelTaskParams, CreateTaskResult, ErrorCode,
@@ -198,6 +198,44 @@ async fn cancelling_a_task_stops_its_job() {
         .await
         .expect("the slot should be free once the job is stopped");
     drop(open_the_pages);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p mcp --test integration -- --ignored jobs::tasks::"]
+async fn a_job_that_fails_is_a_completed_task_whose_result_is_a_tool_error() {
+    // Every reply for page 1 fails the check, so the conversion stops after its paid calls. The
+    // gate holds it until the task exists, or the call would answer with the failure itself.
+    let (services, open_the_gate) = StandInServices::new()
+        .with_pages(Scenario::AllTables {
+            broken_page: Some(1),
+        })
+        .with_gate();
+    let stores = ThrowawayStores::new("mcp-tasks-failed");
+    let server = QuantyServer::new(stores.config().clone(), services);
+    let client = connect_declaring_tasks(server).await;
+    let created = start_task(
+        &client,
+        "ingest_pdf",
+        json!({ "media": MEDIA, "path": sample_pdf() }),
+    )
+    .await;
+    assert_eq!(created.task.status, TaskStatus::Working);
+    let job_id = created.task.task_id.clone();
+
+    open_the_gate.send(()).unwrap();
+    // This panics for any payload but working and completed, so a task that says `failed` fails
+    // the test here.
+    let result = result_when_completed(&client, &job_id).await;
+
+    assert_eq!(result["isError"], true, "{result:?}");
+    assert_eq!(result["structuredContent"]["state"], "failed", "{result:?}");
+    let error = result["structuredContent"]["error"].as_str().unwrap();
+    assert!(error.contains("page 1"), "{error}");
+    let status = call(&client, "job_status", json!({ "job_id": job_id })).await;
+    assert_eq!(result["structuredContent"], *structured(&status));
+    let ended = client.get_task(GetTaskParams::new(&job_id)).await.unwrap();
+    assert_eq!(ended.task.task.status, TaskStatus::Completed);
+    assert_eq!(ended.task.task.status_message.as_deref(), Some(error));
 }
 
 /// Asserts that a call was refused with the error for a parameter that is wrong.

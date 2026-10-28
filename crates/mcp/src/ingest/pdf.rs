@@ -19,6 +19,7 @@ use tempfile::TempDir;
 use super::fetch::fetch_pdf;
 use super::{IngestPdfArgs, PDF_START, PdfIngestError};
 use crate::args::{file_name_of, non_blank, parse_optional, parse_tags};
+use crate::services::Services;
 
 /// A PDF whose arguments and file passed every check. It is not named yet: that needs the
 /// category of its media, which the library may already have.
@@ -77,10 +78,11 @@ struct Sent {
 ///
 /// # Errors
 /// The first check that fails, with what was given and what is allowed.
-pub(super) async fn check(
+pub(super) async fn check<S: Services>(
     args: IngestPdfArgs,
     config: &Config,
     max_pdf_bytes: u64,
+    services: &S,
 ) -> Result<CheckedPdf, PdfIngestError> {
     let media = non_blank(Some(args.media)).ok_or(PdfIngestError::BlankMedia)?;
     let category = parse_optional::<Category>(args.category).map_err(PdfIngestError::Category)?;
@@ -98,7 +100,7 @@ pub(super) async fn check(
         pdf_url: non_blank(args.pdf_url),
         file_name: non_blank(args.file_name),
     };
-    let source = checked_source(sent, config, &media_folder, max_pdf_bytes).await?;
+    let source = checked_source(sent, config, &media_folder, max_pdf_bytes, services).await?;
     Ok(CheckedPdf {
         pdf_path: source.pdf_path,
         media,
@@ -114,11 +116,12 @@ pub(super) async fn check(
 
 /// Exactly one way must be given. A PDF sent as base64 is read here, and one named by URL is
 /// fetched here; both are saved later.
-async fn checked_source(
+async fn checked_source<S: Services>(
     sent: Sent,
     config: &Config,
     media_folder: &str,
     max_pdf_bytes: u64,
+    services: &S,
 ) -> Result<Source, PdfIngestError> {
     let Sent {
         path,
@@ -151,7 +154,7 @@ async fn checked_source(
         }
         (None, None, Some(url)) => {
             let (file_name, save_to) = upload_target("pdf_url", file_name, config, media_folder)?;
-            let bytes = fetch_pdf(&url, &config.fetch_origins, max_pdf_bytes).await?;
+            let bytes = fetch_pdf(&url, &config.fetch_origins, max_pdf_bytes, services).await?;
             Ok(uploaded(file_name, save_to, bytes))
         }
         (Some(_), Some(_), None) => Err(PdfIngestError::ManySources {

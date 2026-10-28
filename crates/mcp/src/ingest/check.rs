@@ -151,7 +151,13 @@ impl<S: Services> Ingest<S> {
     /// A PDF that is refused, a store that cannot be reached or cannot say what it holds, or a PDF
     /// that cannot be read.
     pub(crate) async fn check(&self, args: CheckPdfArgs) -> Result<PdfCheck, PdfIngestError> {
-        let mut checked = pdf::check(args.into(), &self.config, self.max_pdf_bytes).await?;
+        let mut checked = pdf::check(
+            args.into(),
+            &self.config,
+            self.max_pdf_bytes,
+            &*self.services,
+        )
+        .await?;
         // The temporary folder is held to the end, so that a fetched PDF is still there while
         // it is read.
         let _fetched = checked.keep_upload_in_a_temporary_folder().await?;

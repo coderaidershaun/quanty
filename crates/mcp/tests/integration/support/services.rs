@@ -1,5 +1,7 @@
 //! Stand-in services for the server under test, so that no call reaches a paid service.
 
+use std::io;
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use mcp::Services;
@@ -26,7 +28,10 @@ pub struct StandInServices {
     gate: Option<Mutex<mpsc::UnboundedReceiver<()>>>,
     ready_gate: Option<Arc<GateSide>>,
     ask_gate: Option<Arc<GateSide>>,
+    resolver: Option<Resolver>,
 }
+
+type Resolver = Box<dyn Fn(&str, u16) -> io::Result<Vec<SocketAddr>> + Send + Sync>;
 
 impl StandInServices {
     pub fn new() -> StandInServices {
@@ -38,6 +43,7 @@ impl StandInServices {
             gate: None,
             ready_gate: None,
             ask_gate: None,
+            resolver: None,
         }
     }
 
@@ -134,6 +140,16 @@ impl StandInServices {
                 open,
             },
         )
+    }
+
+    /// Answers the lookup of a host name with `resolver`, so that a name can lead anywhere
+    /// without a DNS server. Without one the lookup is the real one.
+    pub fn with_resolver(
+        mut self,
+        resolver: impl Fn(&str, u16) -> io::Result<Vec<SocketAddr>> + Send + Sync + 'static,
+    ) -> StandInServices {
+        self.resolver = Some(Box::new(resolver));
+        self
     }
 
     /// A clone of `llm` keeps what the server asks of it.
@@ -275,6 +291,13 @@ impl Services for StandInServices {
             llm: self.llm.clone(),
             gate: self.ready_gate.clone(),
             ask_gate: self.ask_gate.clone(),
+        }
+    }
+
+    async fn resolve_host(&self, host: &str, port: u16) -> io::Result<Vec<SocketAddr>> {
+        match &self.resolver {
+            Some(resolver) => resolver(host, port),
+            None => Ok(tokio::net::lookup_host((host, port)).await?.collect()),
         }
     }
 

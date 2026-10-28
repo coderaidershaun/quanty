@@ -2,6 +2,7 @@
 //! the server and a test hands stand-ins, so no test can reach a paid service.
 
 use std::future::Future;
+use std::net::SocketAddr;
 
 use ocr::{ChapterJob, ConversionSummary, ConvertError, PageProgress};
 use rag_core::{
@@ -45,6 +46,21 @@ pub trait Services: Send + Sync + 'static {
     /// # Errors
     /// [`SettingsError`] when the saved choice cannot be read or is not valid.
     fn model_choice(&self, work: WorkKind) -> Result<ModelSettings, SettingsError>;
+
+    /// The addresses that `host` resolves to, for a fetch of a `pdf_url` on `port`. The server
+    /// looks a host name up here, checks every address, and then connects to those addresses
+    /// only.
+    ///
+    /// # Errors
+    /// The error of the lookup, such as a name that does not exist.
+    fn resolve_host(
+        &self,
+        host: &str,
+        port: u16,
+    ) -> impl Future<Output = std::io::Result<Vec<SocketAddr>>> + Send {
+        let host = host.to_owned();
+        async move { Ok(tokio::net::lookup_host((host, port)).await?.collect()) }
+    }
 }
 
 /// The paid services. It keeps the clients that ask the providers about a key, so each is made

@@ -1,6 +1,11 @@
 //! Checks `ingest_pdf` with `pdf_url`: a PDF on a local host is fetched, saved and ingested, and
 //! every URL that is not allowed is refused without writing anything.
 
+use std::io;
+use std::net::{IpAddr, SocketAddr};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+
 use mcp::QuantyServer;
 use ocr::testing::sample_pdf;
 use rag_core::Config;
@@ -153,4 +158,112 @@ async fn a_pdf_url_is_refused_before_anything_is_written() {
         host.requested(),
         ["/moved", "/missing", "/not-a-pdf", "/too-big", "/endless"]
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pdf_url_host_is_resolved_once_and_an_internal_address_is_refused() {
+    let ports = ClosedPorts::new();
+    // The host listens on 127.0.0.2, where the lookup of the system never leads for a name.
+    let host = PdfHost::start_on("127.0.0.2", vec![("/x.pdf", Reply::Ok(pdf_bytes(200)))]).await;
+    let port = host.port();
+    let config = Config {
+        fetch_origins: [
+            format!("http://files.example:{port}"),
+            format!("http://[::ffff:127.0.0.2]:{port}"),
+        ]
+        .map(|origin| origin.parse().unwrap())
+        .to_vec(),
+        ..ports.config.clone()
+    };
+    let lookups = Arc::new(AtomicUsize::new(0));
+    // `None` is a lookup that fails.
+    let answer: Arc<Mutex<Option<IpAddr>>> = Arc::new(Mutex::new(None));
+    let services = StandInServices::new().with_resolver({
+        let (lookups, answer) = (Arc::clone(&lookups), Arc::clone(&answer));
+        move |_, port| {
+            lookups.fetch_add(1, Ordering::SeqCst);
+            let address = *answer.lock().unwrap();
+            address
+                .map(|ip| vec![SocketAddr::new(ip, port)])
+                .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no such host"))
+        }
+    });
+    let client = connect(QuantyServer::with_max_pdf_bytes(config, services, LIMIT)).await;
+    let named = |name: &str| {
+        json!({
+            "media": "A Test Book",
+            "pdf_url": format!("http://{name}:{port}/x.pdf"),
+            "file_name": "chapter-1-named.pdf",
+        })
+    };
+    // The PDF is fetched, and the call then stops at the stores, which are closed.
+    let assert_fetched = |text: &str| {
+        for refused in [
+            "resolves to",
+            "could not find the address",
+            "could not fetch",
+        ] {
+            assert!(!text.contains(refused), "{text}");
+        }
+    };
+
+    for internal in [
+        "10.0.0.1",
+        "172.16.0.9",
+        "192.168.1.1",
+        "169.254.169.254",
+        "100.64.0.1",
+        "0.0.0.0",
+        "127.0.0.1",
+        "::",
+        "::1",
+        "fd00::1",
+        "fe80::1",
+        "::ffff:10.0.0.1",
+        "::ffff:127.0.0.1",
+    ] {
+        *answer.lock().unwrap() = Some(internal.parse().unwrap());
+        let before = lookups.load(Ordering::SeqCst);
+        let text = refusal(&client, named("files.example")).await;
+        assert!(text.contains("files.example"), "{internal}: {text}");
+        assert!(
+            text.contains(&format!("resolves to {internal}")),
+            "{internal}: {text}"
+        );
+        assert!(text.contains("QUANTY_FETCH_ORIGINS"), "{internal}: {text}");
+        assert_eq!(lookups.load(Ordering::SeqCst), before + 1, "{internal}");
+    }
+    *answer.lock().unwrap() = None;
+    let text = refusal(&client, named("files.example")).await;
+    assert!(
+        text.contains("could not find the address of files.example"),
+        "{text}"
+    );
+    assert!(text.contains("no such host"), "{text}");
+    assert!(host.requested().is_empty(), "nothing was connected to yet");
+
+    // `localhost` is the one name that may lead to this machine, and the fetch goes to the
+    // address that was checked: the system would send `localhost` to 127.0.0.1, where nothing
+    // listens, and not to the host.
+    *answer.lock().unwrap() = Some("127.0.0.2".parse().unwrap());
+    let before = lookups.load(Ordering::SeqCst);
+    let text = error_text(&call(&client, "ingest_pdf", named("localhost")).await);
+    assert_eq!(lookups.load(Ordering::SeqCst), before + 1, "{text}");
+    assert_eq!(host.requested(), ["/x.pdf"], "{text}");
+    assert_fetched(&text);
+    *answer.lock().unwrap() = Some("10.0.0.1".parse().unwrap());
+    let text = refusal(&client, named("localhost")).await;
+    assert!(text.contains("resolves to 10.0.0.1"), "{text}");
+
+    // Whoever runs the server may list an IP address that is inside a private range, here the
+    // loopback address in its IPv4-mapped form, which is not the loopback address of the rule.
+    let before = lookups.load(Ordering::SeqCst);
+    let text = error_text(&call(&client, "ingest_pdf", named("[::ffff:127.0.0.2]")).await);
+    assert_eq!(
+        lookups.load(Ordering::SeqCst),
+        before,
+        "an IP address is not looked up"
+    );
+    assert_eq!(host.requested(), ["/x.pdf", "/x.pdf"], "{text}");
+    assert_fetched(&text);
 }

@@ -29,7 +29,13 @@ pub struct PdfHost {
 impl PdfHost {
     /// Answers each path of `replies`, and status 404 for any other.
     pub async fn start(replies: Vec<(&str, Reply)>) -> PdfHost {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        PdfHost::start_on("127.0.0.1", replies).await
+    }
+
+    /// Like `start`, on the loopback address `ip`, so that a test can tell a connection to this
+    /// host from one to the same port of another loopback address.
+    pub async fn start_on(ip: &str, replies: Vec<(&str, Reply)>) -> PdfHost {
+        let listener = TcpListener::bind((ip, 0)).await.unwrap();
         let address = listener.local_addr().unwrap();
         let requested = Arc::new(Mutex::new(Vec::new()));
         let replies: Arc<Vec<(String, Reply)>> = Arc::new(

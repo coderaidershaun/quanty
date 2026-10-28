@@ -117,7 +117,7 @@ impl<S: Services> Ingest<S> {
                 .or_else(|| args.path.as_deref().and_then(file_name_of))
                 .unwrap_or_else(|| args.media.clone())
         })?;
-        let checked = pdf::check(args, &self.config, self.max_pdf_bytes).await?;
+        let checked = pdf::check(args, &self.config, self.max_pdf_bytes, &*self.services).await?;
         let (ready, graph) = self.named(checked, error_text).await?;
         let started = self
             .jobs

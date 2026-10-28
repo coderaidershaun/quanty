@@ -1,6 +1,7 @@
 //! Everything that can stop an ingest: a PDF that is refused before anything is written, a job
 //! that cannot start, and a job that fails while it runs.
 
+use std::net::IpAddr;
 use std::path::PathBuf;
 
 use graph::GraphError;
@@ -88,6 +89,20 @@ pub(crate) enum PdfIngestError {
         "`pdf_url` points at {origin}, which is not an allowed origin: the server fetches only from its own machine (localhost, 127.0.0.1 or [::1]) and from the origins in QUANTY_FETCH_ORIGINS; send the PDF by `path` or `pdf_base64` instead, or ask whoever runs the server to add {origin} to QUANTY_FETCH_ORIGINS"
     )]
     PdfUrlOrigin { origin: String },
+
+    #[error(
+        "could not find the address of {host}; check the host name in `pdf_url`, or send the PDF by `path` or `pdf_base64`"
+    )]
+    PdfUrlResolve {
+        host: String,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error(
+        "`pdf_url` names {host}, which resolves to {address}, an address inside a private network or on this machine; the server does not fetch from such an address unless whoever runs the server adds its IP origin, such as http://10.0.0.5:8080, to QUANTY_FETCH_ORIGINS; send the PDF by `path` or `pdf_base64` instead"
+    )]
+    PdfUrlInternalAddress { host: String, address: IpAddr },
 
     #[error(
         "{url} answered {status}{}, and redirects are not followed; give the URL it points at",

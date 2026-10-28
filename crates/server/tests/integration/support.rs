@@ -56,6 +56,7 @@ pub struct TestServer {
     settings: Settings,
     content: PathBuf,
     background_jobs: mcp::BackgroundJobs,
+    library_changes: mcp::LibraryChanges,
     mcp_config: Config,
     task: tokio::task::JoinHandle<()>,
 }
@@ -107,6 +108,7 @@ impl TestServer {
             &self.settings,
             &self.content,
             self.background_jobs.clone(),
+            self.library_changes.clone(),
             self.mcp_config.clone(),
         )
         .await;
@@ -165,10 +167,12 @@ pub async fn configured_with_mcp(
     settings.password = password.map(str::to_owned);
     settings.mcp_token = Some("token".into());
     configure(&mut settings, &mut content);
+    let library_changes = mcp::LibraryChanges::new();
     let (address, task) = start(
         &settings,
         &content,
         background_jobs.clone(),
+        library_changes.clone(),
         mcp_config.clone(),
     )
     .await;
@@ -178,6 +182,7 @@ pub async fn configured_with_mcp(
         settings,
         content,
         background_jobs,
+        library_changes,
         mcp_config,
         task,
     }
@@ -187,6 +192,7 @@ async fn start(
     settings: &Settings,
     content: &std::path::Path,
     background_jobs: mcp::BackgroundJobs,
+    library_changes: mcp::LibraryChanges,
     mcp_config: Config,
 ) -> (std::net::SocketAddr, tokio::task::JoinHandle<()>) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -197,10 +203,11 @@ async fn start(
     let mcp = if settings.trusted_integration {
         mcp::fixture_http_service()
     } else {
-        mcp::http_service(mcp::QuantyServer::with_background_jobs(
+        mcp::http_service(mcp::QuantyServer::hosted(
             mcp_config,
             NoPaidServices,
             background_jobs.clone(),
+            library_changes.clone(),
         ))
     };
     let app = router(
@@ -211,6 +218,7 @@ async fn start(
             fixture: Some("black-scholes".into()),
             mcp,
             background_jobs,
+            library_changes,
         },
     )
     .unwrap();

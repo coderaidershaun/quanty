@@ -66,7 +66,8 @@ struct Shared<S> {
     /// The slot that the browser of the same HTTP server shares. `None` over stdio.
     background_jobs: Option<BackgroundJobs>,
     max_pdf_bytes: u64,
-    /// Told when an ingest ends, so that connected agents list the resources again.
+    /// Told when an ingest ends, and by the HTTP server that hosts this one when the browser
+    /// changes the library, so that connected agents list the resources again.
     changes: LibraryChanges,
 }
 
@@ -88,7 +89,7 @@ impl<S: Services> QuantyServer<S> {
 
     /// Like [`QuantyServer::new`], with a PDF of at most `max_pdf_bytes` bytes.
     pub fn with_max_pdf_bytes(config: Config, services: S, max_pdf_bytes: u64) -> QuantyServer<S> {
-        Self::build(config, services, max_pdf_bytes, None)
+        Self::build(config, services, max_pdf_bytes, None, LibraryChanges::new())
     }
 
     /// Shares one background-work slot with the browser of the same HTTP server.
@@ -97,7 +98,25 @@ impl<S: Services> QuantyServer<S> {
         services: S,
         jobs: BackgroundJobs,
     ) -> QuantyServer<S> {
-        Self::build(config, services, DEFAULT_MAX_PDF_BYTES, Some(jobs))
+        Self::build(
+            config,
+            services,
+            DEFAULT_MAX_PDF_BYTES,
+            Some(jobs),
+            LibraryChanges::new(),
+        )
+    }
+
+    /// The server that an HTTP server hosts next to its browser: it shares the background-work
+    /// slot with the browser, and `changes` is the place where the browser announces that it
+    /// changed the library, so that connected agents list the resources again.
+    pub fn hosted(
+        config: Config,
+        services: S,
+        jobs: BackgroundJobs,
+        changes: LibraryChanges,
+    ) -> QuantyServer<S> {
+        Self::build(config, services, DEFAULT_MAX_PDF_BYTES, Some(jobs), changes)
     }
 
     fn build(
@@ -105,9 +124,9 @@ impl<S: Services> QuantyServer<S> {
         services: S,
         max_pdf_bytes: u64,
         jobs: Option<BackgroundJobs>,
+        changes: LibraryChanges,
     ) -> QuantyServer<S> {
         let services = Arc::new(services);
-        let changes = LibraryChanges::new();
         let ingest = Ingest::new(
             config.clone(),
             Arc::clone(&services),

@@ -9,7 +9,7 @@ use axum::{
     response::Response,
 };
 use backend::{Handler, Runtime};
-use contract::{Command, Frame};
+use contract::{Command, Event, Frame};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
@@ -43,10 +43,22 @@ async fn send(socket: &mut WebSocket, frame: Frame) -> Result<(), ()> {
         .map_err(|_| ())
 }
 
-async fn flush<H: Handler>(socket: &mut WebSocket, runtime: &mut Runtime<H>) -> Result<(), ()> {
+async fn flush<H: Handler>(
+    socket: &mut WebSocket,
+    runtime: &mut Runtime<H>,
+    guard: &Guard,
+) -> Result<(), ()> {
     // Completion can arrive while events are drained, so collect it first.
     let finished = runtime.take_finished();
     while let Some(event) = runtime.try_next() {
+        // A delete that failed may still have removed part of the library, and an extra notice
+        // only makes an agent list the resources again.
+        if matches!(
+            event,
+            Event::DocumentDeleted { .. } | Event::MediaDeleted { .. }
+        ) {
+            guard.library_changed();
+        }
         send(socket, Frame::Event(event)).await?;
     }
     for request in finished {
@@ -84,7 +96,7 @@ async fn connection<H: Handler>(mut socket: WebSocket, state: SocketState<H>) {
                 }
             },
             _ = wake.notified() => {
-                if flush(&mut socket, &mut runtime).await.is_err() { return; }
+                if flush(&mut socket, &mut runtime, &state.guard).await.is_err() { return; }
             },
             Some(frame) = incoming.recv() => { if send(&mut socket, frame).await.is_err() { return; } },
         }

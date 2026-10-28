@@ -2,7 +2,7 @@
 
 use backend::{Handler, Runtime};
 use contract::{Command, Failure, Frame, RequestId, RunningJob};
-use mcp::{BackgroundJobs, BackgroundReservation, JobKind};
+use mcp::{BackgroundJobs, BackgroundReservation, JobKind, LibraryChanges};
 use std::sync::{Arc, Mutex};
 use tokio::sync::{Notify, mpsc};
 use uuid::Uuid;
@@ -42,15 +42,22 @@ struct Active {
 #[derive(Clone)]
 pub(crate) struct Guard {
     jobs: BackgroundJobs,
+    library_changes: LibraryChanges,
     active: Arc<Mutex<Option<Active>>>,
 }
 
 impl Guard {
-    pub(crate) fn new(jobs: BackgroundJobs) -> Self {
+    pub(crate) fn new(jobs: BackgroundJobs, library_changes: LibraryChanges) -> Self {
         Self {
             jobs,
+            library_changes,
             active: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// Tells the agents that the browser changed the library.
+    pub(crate) fn library_changed(&self) {
+        self.library_changes.notify();
     }
 }
 
@@ -131,6 +138,7 @@ impl Guard {
             });
         }
         let frames = owner.frames;
+        let library_changes = self.library_changes.clone();
         let reservation = OwnedReservation {
             id,
             active: self.active.clone(),
@@ -154,6 +162,9 @@ impl Guard {
                 }
                 if !finished.is_empty() {
                     drop(reservation);
+                    if kind == JobKind::Ingest {
+                        library_changes.notify();
+                    }
                     for request in finished {
                         if frames.send(Frame::Finished(request)).is_err() {
                             tracing::trace!(?request, "paid completion has no browser");

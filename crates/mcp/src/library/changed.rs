@@ -8,17 +8,25 @@ use tokio::sync::broadcast;
 const WAITING_NOTICES: usize = 16;
 
 /// The place where a change of the library is announced. A clone announces to and listens with
-/// the same set of listeners.
-#[derive(Clone)]
-pub(crate) struct LibraryChanges(broadcast::Sender<()>);
+/// the same set of listeners, so a server that hosts the MCP server hands it a clone and
+/// announces the changes that happen outside the tools.
+#[derive(Clone, Debug)]
+pub struct LibraryChanges(broadcast::Sender<()>);
+
+impl Default for LibraryChanges {
+    fn default() -> LibraryChanges {
+        LibraryChanges::new()
+    }
+}
 
 impl LibraryChanges {
-    pub(crate) fn new() -> LibraryChanges {
+    /// A place with no listeners yet.
+    pub fn new() -> LibraryChanges {
         LibraryChanges(broadcast::channel(WAITING_NOTICES).0)
     }
 
     /// Tells every listener that the library changed.
-    pub(crate) fn notify(&self) {
+    pub fn notify(&self) {
         // The only error is that nobody listens, and then there is nobody to tell.
         self.0.send(()).ok();
     }

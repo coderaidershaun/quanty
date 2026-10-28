@@ -7,7 +7,7 @@ use backend::{
     live::{LiveContext, RealServices},
 };
 use clap::Parser;
-use mcp::{BackgroundJobs, PaidServices, QuantyServer};
+use mcp::{BackgroundJobs, LibraryChanges, PaidServices, QuantyServer};
 use rag_core::Config;
 use server::{Settings, launch};
 use std::{net::SocketAddr, path::PathBuf};
@@ -89,6 +89,7 @@ fn main() -> anyhow::Result<()> {
                     fixture: Some(scene),
                     mcp: fixture_mcp,
                     background_jobs,
+                    library_changes: LibraryChanges::new(),
                 };
                 serve(fake, options, args.open).await
             }
@@ -96,18 +97,21 @@ fn main() -> anyhow::Result<()> {
                 let background_jobs = BackgroundJobs::new();
                 let config = Config::load().context("could not read the library settings")?;
                 let content = config.content_folder.clone();
+                let library_changes = LibraryChanges::new();
                 let live =
                     LiveContext::new(config.clone(), RealServices::default()).with_home(home);
                 let options = server::ServerOptions {
                     settings,
                     content,
                     fixture: None,
-                    mcp: mcp::http_service(QuantyServer::with_background_jobs(
+                    mcp: mcp::http_service(QuantyServer::hosted(
                         config,
                         PaidServices::default(),
                         background_jobs.clone(),
+                        library_changes.clone(),
                     )),
                     background_jobs,
+                    library_changes,
                 };
                 serve(live, options, args.open).await
             }

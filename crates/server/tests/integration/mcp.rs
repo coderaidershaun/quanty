@@ -2,16 +2,24 @@
 
 use super::fake_ingest::a_fake_ingest_is_followed_through_its_stages;
 use super::support::{closed_mcp_config, configured, configured_with_mcp, test_server};
-use contract::{Command, DatasetRequest, Event, Frame, JobKind, RequestId, StartupFacts};
+use contract::{
+    Category, Command, DatasetRequest, DocumentName, Event, Frame, IngestRequest, JobKind,
+    RequestId, StartupFacts, UploadId,
+};
 use rmcp::{
-    ServiceExt,
+    ClientHandler, RoleClient, ServiceExt,
     model::CallToolRequestParams,
+    service::NotificationContext,
     transport::{
         StreamableHttpClientTransport, streamable_http_client::StreamableHttpClientTransportConfig,
     },
 };
 use serde_json::json;
-use std::time::Duration;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
+use std::time::{Duration, Instant};
 
 fn graph_config(home: &std::path::Path, address: std::net::SocketAddr) -> rag_core::Config {
     assert_eq!(
@@ -255,6 +263,125 @@ async fn browser_and_mcp_share_one_background_job_and_truthful_facts() {
         ));
         drop(agent);
     }
+}
+
+/// An agent that counts the notices that the list of resources changed.
+#[derive(Clone, Default)]
+struct ListChanges(Arc<AtomicUsize>);
+
+impl ClientHandler for ListChanges {
+    async fn on_resource_list_changed(&self, _context: NotificationContext<RoleClient>) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+impl ListChanges {
+    /// Waits until `count` notices have come, so that a test fails and does not hang when one
+    /// does not.
+    async fn reach(&self, count: usize) {
+        let started = Instant::now();
+        while self.0.load(Ordering::SeqCst) < count {
+            assert!(
+                started.elapsed() < Duration::from_secs(10),
+                "only {} of {count} resources/list_changed notices came",
+                self.0.load(Ordering::SeqCst)
+            );
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    }
+}
+
+#[tokio::test]
+async fn browser_ingests_and_deletes_tell_agents_the_resources_changed() {
+    let server =
+        configured_with_mcp(Some("secret"), |_, _| {}, mcp::BackgroundJobs::new(), None).await;
+    let mut config = StreamableHttpClientTransportConfig::with_uri(server.url("/mcp"));
+    config.auth_header = Some("token".into());
+    let transport = StreamableHttpClientTransport::with_client(server.client(), config);
+    let changes = ListChanges::default();
+    let agent = changes.clone().serve(transport).await.unwrap();
+    let mut browser = server.socket().await;
+    super::support::send(
+        &mut browser,
+        &Command::LoadCatalogue {
+            request: RequestId(1),
+        },
+    )
+    .await;
+    let [
+        Event::Catalogue {
+            result: Ok(catalogue),
+            ..
+        },
+    ] = &super::support::finish(&mut browser, RequestId(1)).await[..]
+    else {
+        panic!("the catalogue should load");
+    };
+    let media = catalogue
+        .media
+        .iter()
+        .find(|media| media.title.is_some() && !media.documents.is_empty())
+        .expect("the scene has a titled media with a document");
+    let title = media.title.clone().unwrap();
+    let doc = media.documents[0].id;
+    assert_eq!(
+        changes.0.load(Ordering::SeqCst),
+        0,
+        "reading changes nothing"
+    );
+
+    super::support::send(
+        &mut browser,
+        &Command::DeleteDocument {
+            request: RequestId(2),
+            doc,
+        },
+    )
+    .await;
+    assert!(matches!(
+        &super::support::finish(&mut browser, RequestId(2)).await[..],
+        [Event::DocumentDeleted { result: Ok(()), .. }]
+    ));
+    changes.reach(1).await;
+
+    super::support::send(
+        &mut browser,
+        &Command::DeleteMedia {
+            request: RequestId(3),
+            title,
+        },
+    )
+    .await;
+    assert!(matches!(
+        &super::support::finish(&mut browser, RequestId(3)).await[..],
+        [Event::MediaDeleted { result: Ok(()), .. }]
+    ));
+    changes.reach(2).await;
+
+    super::support::send(
+        &mut browser,
+        &Command::Ingest {
+            request: RequestId(4),
+            ingest: IngestRequest {
+                pdf: UploadId::default(),
+                file_name: "sample.pdf".into(),
+                media: "Sample".into(),
+                category: Category::Book,
+                name: DocumentName::Chapter {
+                    number: 1,
+                    name: "Sample".into(),
+                },
+                tags: vec![],
+            },
+        },
+    )
+    .await;
+    assert!(matches!(
+        &super::support::finish(&mut browser, RequestId(4)).await[..],
+        [.., Event::IngestFinished { result: Ok(_), .. }]
+    ));
+    changes.reach(3).await;
+    agent.cancel().await.unwrap();
 }
 
 #[tokio::test]

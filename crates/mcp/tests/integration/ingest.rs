@@ -149,10 +149,16 @@ async fn a_pdf_sent_by_path_is_ingested_and_a_second_send_is_already_ingested() 
     assert_eq!(started["state"], "running");
     assert_eq!(started["media"], "Hawkes Processes in Finance");
     assert_eq!(started["file"], "hawkes-notes.pdf");
+    assert_eq!(started["kind"], "ingest", "{started}");
+    assert!(started["started_at"].is_string(), "{started}");
+    assert!(started["updated_at"].is_string(), "{started}");
     let job_id = started["job_id"].as_str().unwrap();
     open_the_gate.send(()).unwrap();
     let ended = report_when_ended(&client, "ingest_status", job_id).await;
     assert_eq!(ended["state"], "done", "{ended}");
+    assert_eq!(ended["kind"], "ingest", "{ended}");
+    assert!(ended["started_at"].is_string(), "{ended}");
+    assert!(ended["updated_at"].is_string(), "{ended}");
     assert_eq!(ended["document_id"], sample_document_id().to_string());
     assert!(ended["items"].as_u64().unwrap() > 0);
     assert!(ended.get("stage").is_none());

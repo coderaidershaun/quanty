@@ -28,7 +28,7 @@ const JET_MARK_VERSION: u32 = 1;
 /// The group of a tool. Keep the variants in the order that the groups should take in the tool
 /// list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[expect(dead_code, reason = "most groups have no tool that names them yet")]
+#[expect(dead_code, reason = "some groups have no tool that names them yet")]
 pub(crate) enum Group {
     Catalog,
     Library,
@@ -59,10 +59,6 @@ impl Group {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Cost {
     Free,
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "no paid tool declares its cost yet")
-    )]
     Paid(Payer),
 }
 
@@ -77,7 +73,7 @@ impl Cost {
 
 /// Whose usage or credit a paid tool spends.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[expect(dead_code, reason = "no paid tool names its payer yet")]
+#[expect(dead_code, reason = "some payers have no tool that names them yet")]
 pub(crate) enum Payer {
     Ask,
     Ingest,
@@ -118,10 +114,6 @@ impl ToolMarks {
 
     /// Marks the tool as one that starts a job: `status_tool` reports on it, and `id_field` is the
     /// field of the result that holds the id to give to `status_tool`.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "no tool is marked as starting a job yet")
-    )]
     pub(crate) fn with_job(mut self, status_tool: &str, id_field: &str) -> ToolMarks {
         let mark = json!({
             "version": JET_MARK_VERSION,

@@ -14,7 +14,8 @@ use tokio::sync::watch;
 
 use super::PdfIngestError;
 use super::pdf::{ReadyPdf, Upload};
-use super::report::{IngestReport, Stage};
+use super::progress::PageCounts;
+use super::report::IngestReport;
 use crate::services::Services;
 
 /// One ingest job, with everything it needs to run on a task of its own.
@@ -58,35 +59,23 @@ impl<S: Services> Work<S> {
             graph,
             concepts: ConceptStore::connect(&config).map_err(PdfIngestError::ConceptStore)?,
         };
+        let mut page_counts = PageCounts::default();
         let outcome = ingest_pdf(
             ChapterPdf {
                 job: &pdf.chapter,
                 new_media: &pdf.new_media,
                 convert:
                     async |chapter: &ChapterJob,
-                           _pages: &mut (dyn FnMut(PageProgress) + Send + '_)| {
-                        report.send_modify(|report| report.stage = Some(Stage::Converting));
-                        let summary = services.convert(chapter, &config).await?;
-                        report.send_modify(|report| report.stage = Some(Stage::Ingesting));
-                        Ok(summary)
+                           pages: &mut (dyn FnMut(PageProgress) + Send + '_)| {
+                        services.convert(chapter, &config, pages).await
                     },
                 on_step: |step, spent: &UsageTally| {
-                    let counts = match &step {
+                    let artifacts = match &step {
                         IngestStep::WritingArtifacts { done, total } => Some((*done, *total)),
                         _ => None,
                     };
-                    report.send_modify(|report| report.progress(spent, counts));
-                    match step {
-                        IngestStep::WritingArtifacts { .. } => {
-                            set_stage(&report, Stage::WritingArtifacts)
-                        }
-                        IngestStep::WritingInsights => set_stage(&report, Stage::WritingInsights),
-                        // The concepts come after the insights, so the stage goes back to ingesting.
-                        IngestStep::ReadingConcepts { .. } | IngestStep::LinkingConcepts { .. } => {
-                            set_stage(&report, Stage::Ingesting);
-                        }
-                        _ => {}
-                    }
+                    let stage = page_counts.stage_after(&step);
+                    report.send_modify(|report| report.progress(spent, artifacts, stage));
                 },
             },
             &models,
@@ -101,16 +90,6 @@ impl<S: Services> Work<S> {
         }
         Ok(outcome)
     }
-}
-
-/// Tells the watchers only when the stage changes, because the concept steps come once for each
-/// item.
-fn set_stage(report: &watch::Sender<IngestReport>, stage: Stage) {
-    report.send_if_modified(|report| {
-        let changed = report.stage != Some(stage);
-        report.stage = Some(stage);
-        changed
-    });
 }
 
 fn save(upload: &Upload) -> Result<(), PdfIngestError> {

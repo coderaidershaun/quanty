@@ -16,7 +16,7 @@ use crate::datasets::DatasetToolError;
 use crate::ingest::PdfIngestError;
 use crate::insights::ExportToolError;
 use crate::insights::InsightsToolError;
-use crate::jobs::StopError;
+use crate::jobs::{StopError, WatchError};
 use crate::library::LibraryError;
 use crate::retrieval::RetrievalError;
 
@@ -46,6 +46,9 @@ pub(super) enum ToolError {
 
     #[error(transparent)]
     Stop(#[from] StopError),
+
+    #[error(transparent)]
+    Watch(#[from] WatchError),
 }
 
 impl ToolError {
@@ -190,7 +193,8 @@ impl ToolError {
                 | DatasetToolError::Failed(_)
                 | DatasetToolError::Stopped(_) => false,
             },
-            ToolError::Stop(StopError::UnknownJob { .. }) => false,
+            ToolError::Stop(StopError::UnknownJob { .. })
+            | ToolError::Watch(WatchError::TimeoutOutOfRange { .. }) => false,
         }
     }
 }

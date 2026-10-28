@@ -8,114 +8,85 @@ use schemars::JsonSchema;
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::jobs::JobReport;
-use crate::usage::Spent;
+use crate::jobs::{Job, JobKind, JobReport, JobState, Stage};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum DatasetState {
-    /// The build is going on. Ask again in 20 to 30 seconds.
-    Running,
-    /// The build wrote every file of the dataset. `summary` says what it holds.
-    Done,
-    /// The build stopped. `error` says why and what to do.
-    Failed,
-    /// `stop_job` stopped the build. `error` says what to do. What the models used until then is
-    /// in `usage`.
-    Stopped,
-}
-
-/// How a dataset build is going, or how it ended.
+/// How a dataset build is going, or how it ended. When `done`, the build wrote every file of the
+/// dataset and `summary` says what it holds. What the models used until a `stopped` build is in
+/// `usage`.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub(crate) struct DatasetReport {
-    /// Give it to `dataset_status`.
-    job_id: String,
-    pub(super) state: DatasetState,
-    /// What the build is doing, in words, such as "exporting 3 of 12 documents". Only while
-    /// `running`, and left out before the first step.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(super) stage: Option<String>,
-    /// How many of `total` the stage has done, for a stage that counts. Only while `running`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    done: Option<usize>,
-    /// How many the stage counts to, for a stage that counts. Only while `running`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    total: Option<usize>,
+    #[serde(flatten)]
+    job: Job,
     /// The folder the dataset's files are written to.
     folder: String,
-    /// What the models used so far, updated while the build runs; what the whole build used when
-    /// `done`.
-    #[serde(flatten)]
-    spent: Spent,
     /// What the build wrote, as `rag-dataset build` prints it. When `done`.
     #[serde(skip_serializing_if = "Option::is_none")]
     summary: Option<String>,
-    /// Why the build stopped, and what to do. When `failed` or `stopped`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(super) error: Option<String>,
 }
 
 impl DatasetReport {
     pub(super) fn running(job: Uuid, folder: &Path) -> DatasetReport {
+        let mut job = Job::running(job, JobKind::Dataset);
+        job.set_spent(Some((&UsageTally::default()).into()));
         DatasetReport {
-            job_id: job.to_string(),
-            state: DatasetState::Running,
-            stage: None,
-            done: None,
-            total: None,
+            job,
             folder: folder.display().to_string(),
-            spent: (&UsageTally::default()).into(),
             summary: None,
-            error: None,
         }
     }
 
     /// One step of the build, with what the models used so far.
     pub(super) fn progress(&mut self, step: Step, usage: &UsageTally) {
         let counted = counts(step);
-        self.stage = Some(stage_words(step));
-        self.done = counted.map(|(done, _)| done);
-        self.total = counted.map(|(_, total)| total);
-        self.spent = usage.into();
+        let stage = Stage::new(stage_name(step), stage_words(step)).with_counts(
+            counted.map(|(done, _)| done as u64),
+            counted.map(|(_, total)| total as u64),
+        );
+        self.job.set_stage(stage);
+        self.job.set_spent(Some(usage.into()));
     }
 
     /// The end of a build that ran to the end.
     pub(super) fn finish(&mut self, built: &rag_dataset::Report) {
-        self.end(DatasetState::Done);
         self.summary = Some(built.to_string());
-        self.spent = (&built.usage).into();
+        self.job.set_spent(Some((&built.usage).into()));
+        self.job.end(JobState::Done);
     }
 
     /// The end of a build that stopped. `error` is the whole text for the agent. What was spent
     /// until then stays.
     pub(super) fn fail(&mut self, error: String) {
-        self.end(DatasetState::Failed);
-        self.error = Some(error);
-    }
-
-    fn end(&mut self, state: DatasetState) {
-        self.state = state;
-        self.stage = None;
-        self.done = None;
-        self.total = None;
+        self.job.fail(error);
     }
 }
 
 impl JobReport for DatasetReport {
-    fn is_running(&self) -> bool {
-        self.state == DatasetState::Running
+    fn job(&self) -> &Job {
+        &self.job
     }
 
     fn stopped(&mut self) {
-        self.end(DatasetState::Stopped);
-        self.error = Some(
+        self.job.stop(
             "stopped by `stop_job`; call `build_dataset` again: the answers a model already gave are kept and not paid for twice."
                 .to_owned(),
         );
     }
+}
 
-    fn is_stopped(&self) -> bool {
-        self.state == DatasetState::Stopped
+fn stage_name(step: Step) -> &'static str {
+    match step {
+        Step::Exporting { .. } => "exporting",
+        Step::Checking => "checking",
+        Step::Planning => "planning",
+        Step::Writing {
+            kind: GenerationKind::Synthetic,
+            ..
+        } => "writing_synthetic",
+        Step::Writing {
+            kind: GenerationKind::Sft,
+            ..
+        } => "writing_sft",
+        Step::WritingManifest => "writing_manifest",
     }
 }
 

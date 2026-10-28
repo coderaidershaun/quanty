@@ -12,6 +12,7 @@ anyhow.workspace = true
 axum.workspace = true
 base64.workspace = true
 clap.workspace = true
+contract.workspace = true
 export.workspace = true
 graph.workspace = true
 ocr.workspace = true
@@ -24,7 +25,8 @@ schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sync"] }
+time = { workspace = true, features = ["formatting"] }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 uuid.workspace = true

@@ -3,6 +3,7 @@
 
 mod error;
 mod pdf;
+mod progress;
 mod report;
 mod work;
 
@@ -14,13 +15,12 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::args::file_name_of;
-use crate::jobs::{BackgroundJobs, JobKind};
+use crate::jobs::{BackgroundJobs, JobKind, JobReport, JobState};
 use crate::jobs::{Jobs, first_report};
 use crate::services::Services;
 pub(crate) use error::PdfIngestError;
 pub(crate) use pdf::base64_len;
 pub(crate) use report::IngestReport;
-use report::JobState;
 use work::Work;
 
 /// What an agent gives `ingest_pdf`. Give exactly one of `path` and `pdf_base64`.
@@ -98,9 +98,10 @@ impl<S: Services> Ingest<S> {
         }
     }
 
-    /// Checks the PDF, starts a job and answers once the paid work has begun, or the job ended
-    /// before it could. `error_text` turns the error of a job into the text that the agent
-    /// reads. The server gives it, because the server words every tool error in one place.
+    /// Checks the PDF, starts a job and answers once the paid work has begun (the job is past
+    /// checking the stores), or the job ended before it could. `error_text` turns the error of a
+    /// job into the text that the agent reads. The server gives it, because the server words every
+    /// tool error in one place.
     ///
     /// # Errors
     /// A PDF that is refused, a graph that cannot say which media the library has, an ingest that
@@ -145,13 +146,13 @@ impl<S: Services> Ingest<S> {
             },
             reservation,
         );
-        let report = first_report(started.watcher, |report| {
-            report.stage.is_some() || report.state != JobState::Running
-        })
-        .await
-        .ok_or(PdfIngestError::Lost)?;
-        match report.state {
-            JobState::Failed => Err(PdfIngestError::Failed(report.error.unwrap_or_default())),
+        let report = first_report(started.watcher, IngestReport::is_ready_to_answer)
+            .await
+            .ok_or(PdfIngestError::Lost)?;
+        match report.job().state() {
+            JobState::Failed => Err(PdfIngestError::Failed(
+                report.job().error().unwrap_or_default().to_owned(),
+            )),
             JobState::Running | JobState::Done | JobState::AlreadyIngested | JobState::Stopped => {
                 Ok(report)
             }

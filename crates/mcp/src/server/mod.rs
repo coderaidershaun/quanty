@@ -5,6 +5,7 @@ mod changes;
 mod failure;
 mod health;
 mod jobs;
+mod lookup;
 pub(crate) mod meta;
 mod reading;
 
@@ -45,6 +46,8 @@ struct Shared<S> {
     ingest: Ingest<S>,
     insights: Insights<S>,
     datasets: Datasets<S>,
+    /// The slot that the browser of the same HTTP server shares. `None` over stdio.
+    background_jobs: Option<BackgroundJobs>,
     max_pdf_bytes: u64,
 }
 
@@ -92,7 +95,7 @@ impl<S: Services> QuantyServer<S> {
             jobs.clone(),
         );
         let insights = Insights::new(config.clone(), Arc::clone(&services), jobs.clone());
-        let datasets = Datasets::new(config.clone(), Arc::clone(&services), jobs);
+        let datasets = Datasets::new(config.clone(), Arc::clone(&services), jobs.clone());
         QuantyServer {
             shared: Arc::new(Shared {
                 config,
@@ -100,6 +103,7 @@ impl<S: Services> QuantyServer<S> {
                 ingest,
                 insights,
                 datasets,
+                background_jobs: jobs,
                 max_pdf_bytes,
             }),
             tool_router: Self::reading_router() + Self::jobs_router() + Self::changes_router(),

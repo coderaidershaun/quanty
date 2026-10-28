@@ -4,7 +4,7 @@ use backend::fake::Fake;
 use contract::{Command, Frame};
 use futures_util::{SinkExt, StreamExt};
 use mcp::Services;
-use ocr::{ChapterJob, ConversionSummary, ConvertError};
+use ocr::{ChapterJob, ConversionSummary, ConvertError, PageProgress};
 use rag_core::{
     AgentCli, Config, EmbedError, GeminiEmbedder, ModelSettings, SettingsError, WorkKind,
 };
@@ -32,7 +32,12 @@ impl Services for NoPaidServices {
         panic!("test must not create a model client")
     }
 
-    async fn convert(&self, _: &ChapterJob, _: &Config) -> Result<ConversionSummary, ConvertError> {
+    async fn convert(
+        &self,
+        _: &ChapterJob,
+        _: &Config,
+        _: &mut (dyn FnMut(PageProgress) + Send),
+    ) -> Result<ConversionSummary, ConvertError> {
         panic!("test must not convert a PDF")
     }
 

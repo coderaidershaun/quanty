@@ -1,6 +1,6 @@
-//! The list of the background jobs of one kind, how one job runs, and how a running job is
-//! stopped. A job is one `watch` channel that carries its report: only the tasks of the job write
-//! it, and any number of callers read it.
+//! The list of the background jobs of one kind, how one job runs, how a running job is stopped,
+//! and how a caller follows it. A job is one `watch` channel that carries its report: only the
+//! tasks of the job write it, and any number of callers read it.
 
 use std::collections::VecDeque;
 use std::future::Future;
@@ -11,21 +11,33 @@ use tokio::task::{AbortHandle, JoinError};
 use uuid::Uuid;
 
 mod background;
+mod list;
 mod stop;
+mod view;
+mod wait;
 
 pub(crate) use background::lock;
 pub use background::{BackgroundJob, BackgroundJobs, BackgroundReservation, JobKind};
+pub(crate) use list::JobList;
 pub(crate) use stop::{StopError, StopJobArgs, StopResult, StopState};
+pub(crate) use view::{Job, JobState, Stage};
+pub(crate) use wait::{ProgressSink, WatchError, WatchJobArgs, wait_for_change};
 
-/// A report that says whether its job is still going on.
+/// The report of a job: the [`Job`] that every kind has, and the fields of its own kind.
 pub(crate) trait JobReport: Clone + Send + Sync + 'static {
-    fn is_running(&self) -> bool;
+    fn job(&self) -> &Job;
 
     /// The end of a job that `stop_job` stopped. The report says what the person does to go on.
     fn stopped(&mut self);
 
+    fn is_running(&self) -> bool {
+        self.job().state() == JobState::Running
+    }
+
     /// Whether the report is the end that [`JobReport::stopped`] wrote.
-    fn is_stopped(&self) -> bool;
+    fn is_stopped(&self) -> bool {
+        self.job().state() == JobState::Stopped
+    }
 }
 
 /// What the tasks of a job get when it starts.
@@ -137,11 +149,27 @@ impl<R: JobReport> Jobs<R> {
 
     /// The latest report of the job with this id, or `None` when no job has it.
     pub(crate) fn report_of(&self, job_id: &str) -> Option<R> {
+        self.watcher_of(job_id)
+            .map(|watcher| watcher.borrow().clone())
+    }
+
+    /// A reader of the reports of the job with this id, or `None` when no job has it.
+    pub(crate) fn watcher_of(&self, job_id: &str) -> Option<watch::Receiver<R>> {
         let wanted = Uuid::parse_str(job_id.trim()).ok()?;
         let list = lock(&self.list);
         list.iter()
             .find(|listed| listed.id == wanted)
-            .map(|listed| listed.watcher.borrow().clone())
+            .map(|listed| listed.watcher.clone())
+    }
+
+    /// The [`Job`] of the newest `limit` jobs, newest first.
+    pub(crate) fn newest(&self, limit: usize) -> Vec<Job> {
+        let list = lock(&self.list);
+        list.iter()
+            .rev()
+            .take(limit)
+            .map(|listed| listed.watcher.borrow().job().clone())
+            .collect()
     }
 
     /// Runs `work` for the job `id` on a task of its own, so that it goes on after the tool call
@@ -232,12 +260,16 @@ mod tests {
 
     #[derive(Clone)]
     struct Report {
+        job: Job,
         running: bool,
         stopped: bool,
         admission: BackgroundJobs,
     }
 
     impl JobReport for Report {
+        fn job(&self) -> &Job {
+            &self.job
+        }
         fn is_running(&self) -> bool {
             self.running
         }
@@ -256,6 +288,7 @@ mod tests {
 
     fn report(admission: BackgroundJobs) -> Report {
         Report {
+            job: Job::running(Uuid::new_v4(), JobKind::Ingest),
             running: true,
             stopped: false,
             admission,

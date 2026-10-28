@@ -9,9 +9,14 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use rag_core::DocId;
+use rmcp::RoleClient;
+use rmcp::service::{RunningService, Service};
 use serde_json::{Value, json};
 
-pub use client::{Client, call, connect, connect_on_2026_07_28, error_text, structured};
+pub use client::{
+    Client, ProgressRecorder, call, call_and_cancel, connect, connect_on_2026_07_28,
+    connect_recording_progress, error_text, structured,
+};
 pub use library::{AUTHOR, ClosedPorts, Library};
 pub use services::{ReadyGate, StandInServices};
 
@@ -67,9 +72,13 @@ pub fn sample_notes_document_id(chapter: u32) -> DocId {
 /// build of the sample chapters.
 const JOB_WAIT: Duration = Duration::from_secs(180);
 
-/// Asks `status_tool` (`ingest_status`, `insights_status` or `dataset_status`) about the job until
-/// it is not running.
-pub async fn report_when_ended(client: &Client, status_tool: &'static str, job_id: &str) -> Value {
+/// Asks `status_tool` (`job_status`, or `ingest_status`, `insights_status` or `dataset_status`)
+/// about the job until it is not running.
+pub async fn report_when_ended<S: Service<RoleClient>>(
+    client: &RunningService<RoleClient, S>,
+    status_tool: &'static str,
+    job_id: &str,
+) -> Value {
     let started = Instant::now();
     loop {
         let result = call(client, status_tool, json!({ "job_id": job_id })).await;
@@ -82,5 +91,29 @@ pub async fn report_when_ended(client: &Client, status_tool: &'static str, job_i
             "the job did not end in time: {report}"
         );
         tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+}
+
+/// How long a test waits for a job to come to a stage it expects, so that a failure does not hang.
+pub const STAGE_WAIT: Duration = Duration::from_secs(60);
+
+/// Asks `job_status` until the job is in the stage called `name`.
+pub async fn status_in_stage<S: Service<RoleClient>>(
+    client: &RunningService<RoleClient, S>,
+    job_id: &str,
+    name: &str,
+) -> Value {
+    let started = Instant::now();
+    loop {
+        let status =
+            structured(&call(client, "job_status", json!({ "job_id": job_id })).await).clone();
+        if status["stage"]["name"] == name {
+            return status;
+        }
+        assert!(
+            started.elapsed() < STAGE_WAIT,
+            "the job did not come to the stage {name}: {status}"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
     }
 }

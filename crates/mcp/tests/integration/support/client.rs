@@ -1,13 +1,89 @@
 //! An in-process MCP client over a pipe, and the readers of what a tool call gave back.
 
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
 use mcp::{QuantyServer, Services};
-use rmcp::model::{CallToolRequestParams, CallToolResult, ProtocolVersion};
-use rmcp::service::RunningService;
-use rmcp::{ClientLifecycleMode, ClientServiceExt, RoleClient, ServiceExt};
+use rmcp::model::{
+    CallToolRequest, CallToolRequestParams, CallToolResult, ClientRequest,
+    ProgressNotificationParam, ProtocolVersion,
+};
+use rmcp::service::{NotificationContext, PeerRequestOptions, RunningService, Service};
+use rmcp::{ClientHandler, ClientLifecycleMode, ClientServiceExt, RoleClient, ServiceExt};
 use serde_json::{Map, Value};
 use tokio::io::DuplexStream;
 
 pub type Client = RunningService<RoleClient, ()>;
+
+/// A client that keeps every progress notification the server sends it.
+#[derive(Clone, Default)]
+pub struct ProgressRecorder {
+    seen: Arc<Mutex<Vec<ProgressNotificationParam>>>,
+}
+
+impl ClientHandler for ProgressRecorder {
+    async fn on_progress(
+        &self,
+        params: ProgressNotificationParam,
+        _context: NotificationContext<RoleClient>,
+    ) {
+        self.seen.lock().unwrap().push(params);
+    }
+}
+
+impl ProgressRecorder {
+    /// The first notification once one has come. The client may handle a notification after it has
+    /// handled the response of the call that caused it, so this waits for it a while.
+    pub async fn first(&self) -> ProgressNotificationParam {
+        let started = Instant::now();
+        loop {
+            if let Some(first) = self.seen.lock().unwrap().first() {
+                return first.clone();
+            }
+            assert!(
+                started.elapsed() < Duration::from_secs(10),
+                "no progress notification came"
+            );
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    }
+}
+
+/// A client over a pipe that records the progress notifications of the server.
+pub async fn connect_recording_progress<S: Services>(
+    server: QuantyServer<S>,
+) -> (
+    RunningService<RoleClient, ProgressRecorder>,
+    ProgressRecorder,
+) {
+    let recorder = ProgressRecorder::default();
+    let client = recorder
+        .clone()
+        .serve(serve_on_pipe(server))
+        .await
+        .expect("the client should connect");
+    (client, recorder)
+}
+
+/// Sends a call of a tool and cancels it as soon as it is sent, as a client does when the person
+/// closes the card of a call. Gives what the client got back for the call.
+pub async fn call_and_cancel<S: Service<RoleClient>>(
+    client: &RunningService<RoleClient, S>,
+    tool: &'static str,
+    arguments: Value,
+) -> Result<(), rmcp::ServiceError> {
+    let Value::Object(arguments) = arguments else {
+        panic!("the arguments of a tool call are a JSON object, not {arguments}");
+    };
+    let request = ClientRequest::CallToolRequest(CallToolRequest::new(
+        CallToolRequestParams::new(tool).with_arguments(arguments),
+    ));
+    let sent = client
+        .send_cancellable_request(request, PeerRequestOptions::no_options())
+        .await?;
+    sent.cancel(Some("the test closed the call".to_owned()))
+        .await
+}
 
 /// A client that negotiated the 2025-11-25 protocol with an `initialize` handshake.
 pub async fn connect<S: Services>(server: QuantyServer<S>) -> Client {
@@ -46,7 +122,11 @@ fn serve_on_pipe<S: Services>(server: QuantyServer<S>) -> DuplexStream {
 }
 
 /// Calls a tool and gives back the whole result, an error result too.
-pub async fn call(client: &Client, tool: &'static str, arguments: Value) -> CallToolResult {
+pub async fn call<S: Service<RoleClient>>(
+    client: &RunningService<RoleClient, S>,
+    tool: &'static str,
+    arguments: Value,
+) -> CallToolResult {
     let arguments: Map<String, Value> = match arguments {
         Value::Object(map) => map,
         other => panic!("the arguments of a tool call are a JSON object, not {other}"),

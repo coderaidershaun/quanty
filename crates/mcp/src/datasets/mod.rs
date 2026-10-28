@@ -14,12 +14,11 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::args::non_blank;
-use crate::jobs::{BackgroundJobs, JobKind};
+use crate::jobs::{BackgroundJobs, JobKind, JobReport, JobState};
 use crate::jobs::{Jobs, first_report};
 use crate::services::Services;
 pub(crate) use error::DatasetToolError;
 pub(crate) use report::DatasetReport;
-use report::DatasetState;
 use work::Work;
 
 /// What an agent gives `build_dataset`. Only `name` is needed: every other argument has the
@@ -171,13 +170,17 @@ impl<S: Services> Datasets<S> {
             reservation,
         );
         let report = first_report(started.watcher, |report| {
-            report.stage.is_some() || report.state != DatasetState::Running
+            report.job().stage().is_some() || !report.is_running()
         })
         .await
         .ok_or(DatasetToolError::Lost)?;
-        match report.state {
-            DatasetState::Failed => Err(DatasetToolError::Failed(report.error.unwrap_or_default())),
-            DatasetState::Running | DatasetState::Done | DatasetState::Stopped => Ok(report),
+        match report.job().state() {
+            JobState::Failed => Err(DatasetToolError::Failed(
+                report.job().error().unwrap_or_default().to_owned(),
+            )),
+            JobState::Running | JobState::Done | JobState::AlreadyIngested | JobState::Stopped => {
+                Ok(report)
+            }
         }
     }
 

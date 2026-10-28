@@ -45,6 +45,70 @@ fn required_names(tool: &Tool) -> Vec<String> {
     names
 }
 
+/// The marks a host reads to group the job tools, to price them and to draw a progress bar from
+/// them, and the schema of what each gives back.
+fn assert_job_tools_are_marked_and_have_schemas(tools: &[Tool]) {
+    let tool = |name: &str| tools.iter().find(|tool| tool.name == name).unwrap();
+    let free = json!({ "paid": false });
+    let paid = |who: &str| json!({ "paid": true, "who": who });
+    let job_mark = json!({ "version": 1, "statusTool": "job_status", "idField": "job_id" });
+    let marked = [
+        ("ingest_pdf", "ingest", paid("ingest"), true),
+        ("write_insights", "ingest", paid("ingest"), true),
+        ("build_dataset", "datasets", paid("datasets"), true),
+        ("job_status", "jobs", free.clone(), true),
+        ("watch_job", "jobs", free.clone(), true),
+        ("list_jobs", "jobs", free.clone(), false),
+        ("stop_job", "jobs", free.clone(), false),
+        ("ingest_status", "jobs", free.clone(), false),
+        ("insights_status", "jobs", free.clone(), false),
+        ("dataset_status", "jobs", free, false),
+    ];
+    for (name, group, cost, starts_a_job) in marked {
+        let marks = serde_json::to_value(&tool(name).meta).unwrap();
+        assert_eq!(marks["quanty/group"], group, "the group of {name}");
+        assert_eq!(marks["quanty/cost"], cost, "the cost of {name}");
+        assert_eq!(
+            marks.get("jet/job"),
+            starts_a_job.then_some(&job_mark),
+            "{name}"
+        );
+    }
+    let output_keys = |name: &str| -> Vec<String> {
+        let schema = tool(name).output_schema.as_ref();
+        let schema = schema.unwrap_or_else(|| panic!("{name} declares its output schema"));
+        assert_eq!(schema.get("type"), Some(&json!("object")), "{name}");
+        let properties = schema["properties"].as_object().unwrap();
+        properties.keys().cloned().collect()
+    };
+    let job_keys = [
+        "job_id",
+        "kind",
+        "state",
+        "stage",
+        "started_at",
+        "updated_at",
+    ];
+    for name in [
+        "job_status",
+        "watch_job",
+        "ingest_pdf",
+        "write_insights",
+        "build_dataset",
+        "ingest_status",
+        "insights_status",
+        "dataset_status",
+    ] {
+        let keys = output_keys(name);
+        for key in job_keys.into_iter().chain(["usage", "cost_usd", "error"]) {
+            assert!(keys.iter().any(|k| k == key), "{name} has {key}: {keys:?}");
+        }
+    }
+    let list_keys = output_keys("list_jobs");
+    assert!(list_keys.contains(&"running".to_owned()) && list_keys.contains(&"jobs".to_owned()));
+    assert!(output_keys("stop_job").contains(&"state".to_owned()));
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn the_server_lists_every_tool_with_its_input_schema() {
     let ports = ClosedPorts::new();
@@ -67,14 +131,17 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         "ingest_pdf",
         "ingest_status",
         "insights_status",
+        "job_status",
         "list_documents",
+        "list_jobs",
         "read_page",
         "search",
         "stop_job",
+        "watch_job",
         "write_insights",
     ];
     assert_eq!(names, expected_names);
-    let expected: [(&str, &[&str], &[&str]); 18] = [
+    let expected: [(&str, &[&str], &[&str]); 21] = [
         (
             "answer",
             &[
@@ -147,7 +214,9 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         ),
         ("ingest_status", &["job_id"], &["job_id"]),
         ("insights_status", &["job_id"], &["job_id"]),
+        ("job_status", &["job_id"], &["job_id"]),
         ("list_documents", &[], &[]),
+        ("list_jobs", &[], &[]),
         (
             "read_page",
             &["document_id", "page"],
@@ -162,6 +231,7 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
             &["question"],
         ),
         ("stop_job", &["job_id"], &["job_id"]),
+        ("watch_job", &["job_id", "timeout_s"], &["job_id"]),
         (
             "write_insights",
             &["all", "document_id", "dry_run", "media"],
@@ -233,6 +303,15 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         "{}",
         description("stop_job")
     );
+
+    for old in ["ingest_status", "insights_status", "dataset_status"] {
+        assert!(
+            description(old).starts_with("Deprecated: call `job_status`."),
+            "{}",
+            description(old)
+        );
+    }
+    assert_job_tools_are_marked_and_have_schemas(&tools);
 
     let peer = client
         .peer_info()

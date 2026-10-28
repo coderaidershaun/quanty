@@ -18,14 +18,13 @@ use serde::Deserialize;
 use tokio::task::JoinError;
 
 use crate::args::non_blank;
-use crate::jobs::{BackgroundJobs, JobKind};
+use crate::jobs::{BackgroundJobs, JobKind, JobReport, JobState};
 use crate::jobs::{Jobs, first_report};
 use crate::library::{LibraryError, parse_document_id};
 use crate::services::Services;
 pub(crate) use error::InsightsToolError;
 pub(crate) use exporting::{ExportInsightsArgs, ExportResult, ExportToolError, export_insights};
 pub(crate) use report::InsightsReport;
-use report::InsightsState;
 pub(crate) use saved::{
     ChapterInsightsArgs, InsightsView, Saved, chapter_insights, saved_insights,
 };
@@ -155,15 +154,17 @@ impl<S: Services> Insights<S> {
             reservation,
         );
         let report = first_report(started.watcher, |report| {
-            report.current.is_some() || report.state != InsightsState::Running
+            report.current.is_some() || !report.is_running()
         })
         .await
         .ok_or(InsightsToolError::Lost)?;
-        match report.state {
-            InsightsState::Failed => {
-                Err(InsightsToolError::Failed(report.error.unwrap_or_default()))
+        match report.job().state() {
+            JobState::Failed => Err(InsightsToolError::Failed(
+                report.job().error().unwrap_or_default().to_owned(),
+            )),
+            JobState::Running | JobState::Done | JobState::AlreadyIngested | JobState::Stopped => {
+                Ok(report)
             }
-            InsightsState::Running | InsightsState::Done | InsightsState::Stopped => Ok(report),
         }
     }
 

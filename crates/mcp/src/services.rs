@@ -3,7 +3,7 @@
 
 use std::future::Future;
 
-use ocr::{ChapterJob, ConversionSummary, ConvertError};
+use ocr::{ChapterJob, ConversionSummary, ConvertError, PageProgress};
 use rag_core::{
     AgentCli, ApiKey, Config, EmbedError, Embedder, GeminiEmbedder, Llm, ModelSettings,
     SettingsError, WorkKind,
@@ -23,8 +23,9 @@ pub trait Services: Send + Sync + 'static {
     /// The model client for one kind of work. Real calls load that kind's saved choice.
     fn llm(&self, work: WorkKind) -> Self::Llm;
 
-    /// Converts the pages of the chapter that are not converted yet. This is the part of an ingest
-    /// that pays for a model call for every page.
+    /// Converts the pages of the chapter that are not converted yet, and tells each page to
+    /// `on_page` as it is cut out and as it ends. This is the part of an ingest that pays for a
+    /// model call for every page.
     ///
     /// # Errors
     /// The errors of `ocr::convert_chapter_with_jev_key`.
@@ -32,6 +33,7 @@ pub trait Services: Send + Sync + 'static {
         &self,
         job: &ChapterJob,
         config: &Config,
+        on_page: &mut (dyn FnMut(PageProgress) + Send),
     ) -> impl Future<Output = Result<ConversionSummary, ConvertError>> + Send;
 
     /// The state of the two API keys of `config`, from the one free call each provider allows. It
@@ -68,11 +70,12 @@ impl Services for PaidServices {
         &self,
         job: &ChapterJob,
         config: &Config,
+        on_page: &mut (dyn FnMut(PageProgress) + Send),
     ) -> Result<ConversionSummary, ConvertError> {
         // The key goes to the converter as a value, because the settings never enter the process
         // environment.
         let jev_api_key = config.jev_api_key.as_ref().map(ApiKey::expose);
-        ocr::convert_chapter_with_jev_key(job, jev_api_key, |_| {}).await
+        ocr::convert_chapter_with_jev_key(job, jev_api_key, on_page).await
     }
 
     fn check_keys(&self, config: &Config) -> impl Future<Output = KeyStates> + Send {

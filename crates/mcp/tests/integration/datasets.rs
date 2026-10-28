@@ -131,6 +131,8 @@ async fn a_build_that_cannot_start_says_what_to_do_and_a_dry_run_reports_its_fol
     )
     .await;
     let started = structured(&dry);
+    assert_eq!(started["kind"], "dataset", "{started}");
+    assert!(started["started_at"].is_string(), "{started}");
     let ended = report_when_ended(
         &client,
         "dataset_status",
@@ -138,6 +140,8 @@ async fn a_build_that_cannot_start_says_what_to_do_and_a_dry_run_reports_its_fol
     )
     .await;
     assert_eq!(ended["state"], "done", "a dry run needs no model: {ended}");
+    assert_eq!(ended["kind"], "dataset", "{ended}");
+    assert!(ended["updated_at"].is_string(), "{ended}");
     let folder = stores.config().dataset_folder.join("t");
     assert_eq!(ended["folder"], folder.display().to_string());
     assert!(folder.join("cpt/raw.jsonl").is_file());

@@ -8,22 +8,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::jobs::JobReport;
-use crate::usage::Spent;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum InsightsState {
-    /// The job is going on. Ask again in 20 to 30 seconds.
-    Running,
-    /// Every chosen document was handled. A document that is `not_written` does not fail the job:
-    /// its `reason` says why, and calling `write_insights` again tries it once more.
-    Done,
-    /// The job stopped. `error` says why and what to do.
-    Failed,
-    /// `stop_job` stopped the job. `error` says what to do. What was written until then is kept.
-    Stopped,
-}
+use crate::jobs::{Job, JobKind, JobReport, JobState, Stage};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -84,12 +69,13 @@ impl DocumentLine {
     }
 }
 
-/// How an insights job is going, or how it ended.
+/// How an insights job is going, or how it ended. When `done`, every chosen document was handled:
+/// a document that is `not_written` does not fail the job, its `reason` says why, and calling
+/// `write_insights` again tries it once more. What a `stopped` job wrote is kept.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub(crate) struct InsightsReport {
-    /// Give it to `insights_status` and `stop_job`.
-    job_id: String,
-    pub(super) state: InsightsState,
+    #[serde(flatten)]
+    job: Job,
     /// True when the job only lists what it would write.
     dry_run: bool,
     /// How many of the chosen documents are handled.
@@ -102,32 +88,26 @@ pub(crate) struct InsightsReport {
     pub(super) current: Option<String>,
     /// What became of each document handled so far, in the order they were handled.
     documents: Vec<DocumentLine>,
-    /// What the questions used so far; what the whole job used when it has ended.
-    #[serde(flatten)]
-    spent: Spent,
-    /// Why the job stopped, and what to do. When `failed` or `stopped`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(super) error: Option<String>,
 }
 
 impl InsightsReport {
     pub(super) fn running(job: Uuid, dry_run: bool, total: usize) -> InsightsReport {
+        let mut job = Job::running(job, JobKind::Insights);
+        job.set_spent(Some((&UsageTally::default()).into()));
         InsightsReport {
-            job_id: job.to_string(),
-            state: InsightsState::Running,
+            job,
             dry_run,
             done: 0,
             total,
             current: None,
             documents: Vec::new(),
-            spent: (&UsageTally::default()).into(),
-            error: None,
         }
     }
 
     /// A question about this document is going out.
     pub(super) fn asking(&mut self, title: &str) {
         self.current = Some(title.to_owned());
+        self.show_stage();
     }
 
     /// One document is handled. `usage` is what the job has used so far.
@@ -135,38 +115,47 @@ impl InsightsReport {
         self.documents.push(line);
         self.done += 1;
         self.current = None;
-        self.spent = usage.into();
+        self.job.set_spent(Some(usage.into()));
+        self.show_stage();
     }
 
     /// The end of a job that went through every chosen document.
     pub(super) fn finish(&mut self) {
-        self.state = InsightsState::Done;
         self.current = None;
+        self.job.end(JobState::Done);
     }
 
     /// The end of a job that stopped. `error` is the whole text for the agent.
     pub(super) fn fail(&mut self, error: String) {
-        self.state = InsightsState::Failed;
         self.current = None;
-        self.error = Some(error);
+        self.job.fail(error);
+    }
+
+    fn show_stage(&mut self) {
+        let counts = format!(
+            "writing insights: {} of {} documents done",
+            self.done, self.total
+        );
+        let words = match &self.current {
+            Some(title) => format!("{counts}, asking about {title}"),
+            None => counts,
+        };
+        let stage = Stage::new("writing_insights", words)
+            .with_counts(Some(self.done as u64), Some(self.total as u64));
+        self.job.set_stage(stage);
     }
 }
 
 impl JobReport for InsightsReport {
-    fn is_running(&self) -> bool {
-        self.state == InsightsState::Running
+    fn job(&self) -> &Job {
+        &self.job
     }
 
     fn stopped(&mut self) {
-        self.state = InsightsState::Stopped;
         self.current = None;
-        self.error = Some(
+        self.job.stop(
             "stopped by `stop_job`; call `write_insights` again: insights that are saved are not asked for twice."
                 .to_owned(),
         );
-    }
-
-    fn is_stopped(&self) -> bool {
-        self.state == InsightsState::Stopped
     }
 }

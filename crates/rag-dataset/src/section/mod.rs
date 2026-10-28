@@ -23,6 +23,7 @@ use render::{Block, Rendered};
 
 pub(crate) use passage::{body_of, passages_of};
 pub use rag_core::estimated_tokens;
+pub use render::HeadingMark;
 
 /// A picture that a section's text points at: the file, and where in the text its note starts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -87,7 +88,24 @@ pub fn section_id(document: &ExportDocument, index: usize, part: Option<usize>) 
 /// The sections of a chapter in reading order, with ids that do not change while the chapter does
 /// not. `items` are the items that ingestion makes of the same chapter.
 pub fn sections_of(document: &ExportDocument, chapter: &Chapter, items: &[Item]) -> Vec<Section> {
-    let Rendered { blocks, headings } = render::render(chapter);
+    sections_with_headings(document, chapter, items)
+        .into_iter()
+        .map(|(section, _)| section)
+        .collect()
+}
+
+/// The sections of [`sections_of`], each with the mark of the heading that names it: the last
+/// heading of its path. A section that sits under no heading has none.
+pub fn sections_with_headings(
+    document: &ExportDocument,
+    chapter: &Chapter,
+    items: &[Item],
+) -> Vec<(Section, Option<HeadingMark>)> {
+    let Rendered {
+        blocks,
+        headings,
+        marks,
+    } = render::render(chapter);
     let pieces: HashMap<PieceId, &ChapterPiece> = chapter
         .pieces
         .iter()
@@ -106,10 +124,33 @@ pub fn sections_of(document: &ExportDocument, chapter: &Chapter, items: &[Item])
         let several_parts = unit.parts.len() > 1;
         for (part, positions) in unit.parts.iter().enumerate() {
             let id = section_id(document, index + 1, several_parts.then_some(part + 1));
-            sections.push(maker.section(id, unit, positions));
+            let mark = unit.path.last().map(|&number| marks[number].clone());
+            sections.push((maker.section(id, unit, positions), mark));
         }
     }
     sections
+}
+
+/// One block of a chapter as a reader meets it: its Markdown, and the pieces it is made of. A
+/// paragraph that a page break cut is one block.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadingBlock {
+    pub markdown: String,
+    /// In the order they are written.
+    pub pieces: Vec<PieceId>,
+}
+
+/// The blocks of a chapter in reading order, written as they are in a section. A footnote follows
+/// the paragraph that shows its marker.
+pub fn reading_blocks(chapter: &Chapter) -> Vec<ReadingBlock> {
+    render::render(chapter)
+        .blocks
+        .into_iter()
+        .map(|block| ReadingBlock {
+            markdown: block.text,
+            pieces: block.pieces,
+        })
+        .collect()
 }
 
 struct SectionMaker<'a> {

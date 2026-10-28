@@ -11,13 +11,18 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::InsightsToolError;
-use crate::library::{DocumentHeader, find_chapter, parse_document_id};
+use crate::args::{Budget, Scope, Truncation};
+use crate::library::{DocumentHeader, LibraryError, find_chapter, parse_document_id};
 
 /// What an agent gives `chapter_insights`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct ChapterInsightsArgs {
     /// From `list_documents` or a search result.
     document_id: String,
+    /// At most this many characters of text. 24000 when left out.
+    pub(crate) max_chars: Option<u32>,
+    /// From a result that was `truncated`, with the same other arguments.
+    pub(crate) cursor: Option<String>,
 }
 
 /// The notes written for one document, or why there are none.
@@ -42,11 +47,13 @@ pub(crate) struct InsightsView {
     /// Markdown with short headed sections, formulas and small tables. Only when `saved`.
     #[serde(skip_serializing_if = "Option::is_none")]
     cheat_sheet: Option<String>,
+    #[serde(flatten)]
+    more: Truncation,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-enum SavedState {
+pub(crate) enum SavedState {
     /// The notes are saved, and this holds them.
     Saved,
     /// Nobody has written them yet. Call `write_insights` with this `document_id`, which is paid.
@@ -56,11 +63,11 @@ enum SavedState {
 }
 
 #[derive(Serialize, JsonSchema)]
-struct InsightView {
+pub(crate) struct InsightView {
     /// A short Markdown paragraph.
-    text: String,
+    pub(crate) text: String,
     /// The places of the pages it rests on, from 1. Give one to `read_page`.
-    pages: Vec<u32>,
+    pub(crate) pages: Vec<u32>,
 }
 
 /// What the converted folder of a document holds of insights.
@@ -71,23 +78,52 @@ pub(crate) enum Saved {
 }
 
 impl InsightsView {
-    fn written(document: DocumentHeader, file: &Path, saved: ChapterInsights) -> InsightsView {
-        InsightsView {
+    pub(crate) fn truncation(&self) -> &Truncation {
+        &self.more
+    }
+
+    /// The notes that fit the budget. The units, in order, are each insight, each takeaway and
+    /// the cheat sheet.
+    fn written(
+        document: DocumentHeader,
+        file: &Path,
+        saved: ChapterInsights,
+        budget: &Budget,
+    ) -> Result<InsightsView, LibraryError> {
+        let ChapterInsights {
+            model,
+            prompt_version,
+            insights,
+            takeaways,
+            cheat_sheet,
+        } = saved;
+        let units: Vec<&str> = insights
+            .iter()
+            .map(|insight| insight.text.as_str())
+            .chain(takeaways.iter().map(String::as_str))
+            .chain([cheat_sheet.as_str()])
+            .collect();
+        let taken = budget.take(&units)?;
+        let mut view = InsightsView {
             file: Some(file.display().to_string()),
-            model: Some(saved.model),
-            prompt_version: Some(saved.prompt_version),
-            insights: saved
-                .insights
-                .into_iter()
-                .map(|insight| InsightView {
-                    text: insight.text,
-                    pages: insight.pages,
-                })
-                .collect(),
-            takeaways: saved.takeaways,
-            cheat_sheet: Some(saved.cheat_sheet),
+            model: Some(model),
+            prompt_version: Some(prompt_version),
+            more: taken.truncation,
             ..InsightsView::without(document, SavedState::Saved)
+        };
+        for slice in taken.slices {
+            if let Some(insight) = insights.get(slice.unit) {
+                view.insights.push(InsightView {
+                    text: slice.text,
+                    pages: insight.pages.clone(),
+                });
+            } else if slice.unit < insights.len() + takeaways.len() {
+                view.takeaways.push(slice.text);
+            } else {
+                view.cheat_sheet = Some(slice.text);
+            }
         }
+        Ok(view)
     }
 
     fn without(document: DocumentHeader, state: SavedState) -> InsightsView {
@@ -100,6 +136,7 @@ impl InsightsView {
             insights: Vec::new(),
             takeaways: Vec::new(),
             cheat_sheet: None,
+            more: Truncation::default(),
         }
     }
 }
@@ -115,12 +152,15 @@ pub(crate) async fn chapter_insights(
     args: ChapterInsightsArgs,
 ) -> Result<InsightsView, InsightsToolError> {
     let id = parse_document_id(&args.document_id)?;
+    let scope = Scope::of("chapter_insights").with(id);
+    let budget =
+        Budget::new(scope, args.max_chars, args.cursor.as_deref()).map_err(LibraryError::from)?;
     let entry = find_chapter(&config.content_folder, id)?;
     let document = DocumentHeader::of(&entry);
     Ok(match saved_insights(config, id, &entry).await? {
         Saved::Written(saved) => {
             let file = entry.folder.join(INSIGHTS_FILE);
-            InsightsView::written(document, &file, saved)
+            InsightsView::written(document, &file, saved, &budget)?
         }
         Saved::NotWrittenYet => InsightsView::without(document, SavedState::NotWrittenYet),
         Saved::NoneForBookPart => InsightsView::without(document, SavedState::NoneForBookPart),

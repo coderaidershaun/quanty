@@ -2,8 +2,11 @@
 
 use std::path::Path;
 
-use ocr::{Catalogue, ChapterEntry, DocumentName};
-use rag_core::DocId;
+use ocr::{Catalogue, Chapter, ChapterEntry, DocumentName, read_chapter};
+use rag_core::{DocId, ItemId};
+use rag_dataset::documents::{DocRole, ExportDocument, Split};
+use rag_dataset::section::{HeadingMark, Section, sections_with_headings};
+use rag_ingestion::{Item, chapter_items, document_title};
 use schemars::JsonSchema;
 use serde::Serialize;
 
@@ -109,4 +112,61 @@ pub(super) fn chapter_of(name: &DocumentName) -> Option<(u32, &str)> {
 /// The document that a converted chapter is stored as: the same PDF always gives the same id.
 pub(super) fn document_of(entry: &ChapterEntry) -> DocId {
     DocId::from_source_sha256(&entry.index.source_sha256)
+}
+
+/// A converted chapter read whole, with the items that ingestion makes of it and the sections it
+/// is cut into. The sections are those of a dataset build, so a section here is the same text.
+pub(super) struct Whole {
+    pub(super) entry: ChapterEntry,
+    pub(super) chapter: Chapter,
+    pub(super) items: Vec<Item>,
+    /// In reading order. The place of a section here, counted from 1, is its `index`.
+    pub(super) sections: Vec<(Section, Option<HeadingMark>)>,
+}
+
+impl Whole {
+    /// # Errors
+    /// The errors of [`find_chapter`], and a chapter that cannot be read.
+    pub(super) fn find(content_folder: &Path, id: DocId) -> Result<Whole, LibraryError> {
+        Whole::of(find_chapter(content_folder, id)?)
+    }
+
+    /// # Errors
+    /// [`LibraryError::Chapter`] when the chapter cannot be read.
+    pub(super) fn of(entry: ChapterEntry) -> Result<Whole, LibraryError> {
+        let chapter = read_chapter(&entry.folder)?;
+        let items = chapter_items(&chapter);
+        let sections = sections_with_headings(&export_document(&entry), &chapter, &items);
+        Ok(Whole {
+            entry,
+            chapter,
+            items,
+            sections,
+        })
+    }
+
+    /// The first section whose items hold this one, with its place from 1.
+    pub(super) fn section_holding(&self, item: ItemId) -> Option<(usize, &Section)> {
+        self.sections
+            .iter()
+            .enumerate()
+            .find(|(_, (section, _))| section.item_ids.contains(&item))
+            .map(|(place, (section, _))| (place + 1, section))
+    }
+}
+
+/// The document of a chapter as the sections of a dataset build take it.
+fn export_document(entry: &ChapterEntry) -> ExportDocument {
+    let role = match entry.index.name {
+        DocumentName::Chapter { .. } => DocRole::Chapter,
+        DocumentName::Title(_) => DocRole::Document,
+    };
+    ExportDocument {
+        id: document_of(entry),
+        title: document_title(&entry.index),
+        media: entry.index.media_title.clone(),
+        folder: entry.folder.clone(),
+        role,
+        split: Split::Train,
+    }
 }

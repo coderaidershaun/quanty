@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use super::LibraryError;
 use super::chapter::{DocumentHeader, find_chapter, parse_document_id};
 use super::piece::PieceView;
-use crate::args::parse_optional;
+use crate::args::{Budget, Scope, Truncation, parse_optional};
 
 /// What an agent gives `chapter_contents`.
 #[derive(Deserialize, JsonSchema)]
@@ -18,6 +18,10 @@ pub(crate) struct ChapterContentsArgs {
     document_id: String,
     /// `formula`, `figure`, `table` or `code`. Every kind when left out.
     kind: Option<String>,
+    /// At most this many characters of text. 24000 when left out.
+    max_chars: Option<u32>,
+    /// From a result that was `truncated`, with the same other arguments.
+    cursor: Option<String>,
 }
 
 /// The formulas, figures, tables and code listings of one chapter, in reading order.
@@ -28,10 +32,12 @@ pub(crate) struct ContentsView {
     /// How many items of each kind the whole chapter has, whatever `kind` asked for.
     counts: ContentsCounts,
     items: Vec<ContentsItem>,
+    #[serde(flatten)]
+    more: Truncation,
 }
 
 #[derive(Serialize, JsonSchema)]
-struct ContentsCounts {
+pub(super) struct ContentsCounts {
     formula: usize,
     figure: usize,
     table: usize,
@@ -40,7 +46,7 @@ struct ContentsCounts {
 
 /// One item, with the piece it starts at.
 #[derive(Serialize, JsonSchema)]
-struct ContentsItem {
+pub(super) struct ContentsItem {
     /// The place of the page the item starts on in the chapter, from 1. Give it to `read_page` to
     /// read around the item.
     page: u32,
@@ -59,19 +65,23 @@ struct ContentsItem {
 }
 
 impl ContentsItem {
-    fn from_item(item: &ChapterItem<'_>, content: &std::path::Path) -> ContentsItem {
+    pub(super) fn from_item(
+        item: &ChapterItem<'_>,
+        content: &std::path::Path,
+        shown_content: String,
+    ) -> ContentsItem {
         ContentsItem {
             page: item.first.id.page,
             printed_page: item.first.printed_page_number.clone(),
             last_page: item.last_page(),
             last_printed_page: item.last_printed_page().map(str::to_owned),
-            piece: PieceView::of_item(item, content),
+            piece: PieceView::of_item(item, content).with_content(shown_content),
         }
     }
 }
 
 impl ContentsCounts {
-    fn of(items: &[ChapterItem<'_>]) -> ContentsCounts {
+    pub(super) fn of(items: &[ChapterItem<'_>]) -> ContentsCounts {
         let count = |kind: ItemKind| items.iter().filter(|item| is_of_kind(item, kind)).count();
         ContentsCounts {
             formula: count(ItemKind::Formula),
@@ -80,19 +90,43 @@ impl ContentsCounts {
             code: count(ItemKind::Code),
         }
     }
+
+    /// How many of each kind these are. A chunk is not counted.
+    pub(super) fn of_kinds(kinds: impl IntoIterator<Item = ItemKind>) -> ContentsCounts {
+        let mut counts = ContentsCounts {
+            formula: 0,
+            figure: 0,
+            table: 0,
+            code: 0,
+        };
+        for kind in kinds {
+            match kind {
+                ItemKind::Formula => counts.formula += 1,
+                ItemKind::Figure => counts.figure += 1,
+                ItemKind::Table => counts.table += 1,
+                ItemKind::Code => counts.code += 1,
+                ItemKind::Chunk => {}
+            }
+        }
+        counts
+    }
 }
 
 fn is_of_kind(item: &ChapterItem<'_>, kind: ItemKind) -> bool {
-    let item_kind = match item.first.detail {
-        PieceDetail::Formula { .. } => ItemKind::Formula,
-        PieceDetail::Figure { .. } => ItemKind::Figure,
-        PieceDetail::Table { .. } => ItemKind::Table,
-        PieceDetail::Code { .. } => ItemKind::Code,
+    kind_of(item) == Some(kind)
+}
+
+/// The kind of an item of a chapter, which is never a chunk.
+pub(super) fn kind_of(item: &ChapterItem<'_>) -> Option<ItemKind> {
+    match item.first.detail {
+        PieceDetail::Formula { .. } => Some(ItemKind::Formula),
+        PieceDetail::Figure { .. } => Some(ItemKind::Figure),
+        PieceDetail::Table { .. } => Some(ItemKind::Table),
+        PieceDetail::Code { .. } => Some(ItemKind::Code),
         PieceDetail::Heading { .. } | PieceDetail::Text { .. } | PieceDetail::Footnote { .. } => {
-            return false;
+            None
         }
-    };
-    item_kind == kind
+    }
 }
 
 /// The kind that was asked for, or `None` for every kind.
@@ -117,16 +151,29 @@ pub(crate) fn chapter_contents(
     let id = parse_document_id(&args.document_id)?;
     let kind = wanted_kind(args.kind)?;
     let entry = find_chapter(&config.content_folder, id)?;
+    let scope = Scope::of("chapter_contents")
+        .with(id)
+        .with(kind.map_or("every kind", |kind| kind.as_str()));
+    let budget = Budget::new(scope, args.max_chars, args.cursor.as_deref())?;
     let chapter = read_chapter(&entry.folder)?;
     let all = chapter.items();
-    let items = all
+    let wanted: Vec<&ChapterItem<'_>> = all
         .iter()
         .filter(|item| kind.is_none_or(|kind| is_of_kind(item, kind)))
-        .map(|item| ContentsItem::from_item(item, &config.content_folder))
+        .collect();
+    let contents: Vec<String> = wanted.iter().map(|item| item.content()).collect();
+    let taken = budget.take(&contents)?;
+    let items = taken
+        .slices
+        .into_iter()
+        .map(|slice| {
+            ContentsItem::from_item(wanted[slice.unit], &config.content_folder, slice.text)
+        })
         .collect();
     Ok(ContentsView {
         document: DocumentHeader::of(&entry),
         counts: ContentsCounts::of(&all),
         items,
+        more: taken.truncation,
     })
 }

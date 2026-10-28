@@ -37,13 +37,20 @@ The unified HTTP server admits one background ingest, insights job or dataset bu
 
 ## 3. The tools
 
-Twenty-two tools. A tool that costs money says so in its description, and so does this table.
+Twenty-nine tools. A tool that costs money says so in its description, and so does this table.
 
 | Tool | What it does | Costs |
 | --- | --- | --- |
 | `search` | The stored items (text chunks, formulas, figures, tables, code listings) nearest to a question | A small Gemini call |
 | `answer` | An answer written from what `search` finds, with its sources | A Gemini call and your Claude usage; a minute or two |
 | `list_documents` | Every stored document with its media, category, authors, tags, chapter, whether it was ingested whole and how many items of each kind it has | Nothing |
+| `list_media` | The media of the library with their labels and how many documents, pages and items each holds | Nothing; it reads FalkorDB |
+| `document_overview` | A document at a glance: header, item counts, insights and takeaways, concepts with mention counts; `detail: full` adds the cheat sheet, outline, related documents and artifacts | Nothing; it reads FalkorDB for the concepts only |
+| `document_outline` | The sections of a document with their page ranges, item counts and concept counts | Nothing; it reads FalkorDB for the concept counts only |
+| `read_section` | One section of a document as Markdown or as pieces | Nothing, and it needs no store |
+| `read_pages` | A run of pages of a document as Markdown or as pieces | Nothing, and it needs no store |
+| `read_item` | One formula, figure, table or code listing by its label or `item_id`, with the paragraphs that cite it | Nothing, and it needs no store |
+| `read_many` | Up to 20 of the reads above and `chapter_insights` in one call, sharing one `max_chars` | Nothing, and it needs no store |
 | `read_page` | The pieces of one page of a document, in reading order | Nothing, and it needs no store |
 | `chapter_contents` | Every formula, figure, table and code listing of a document, in reading order | Nothing, and it needs no store |
 | `chapter_concepts` | The concepts of a document, or of one page of it | Nothing; it reads FalkorDB |
@@ -87,8 +94,13 @@ First calls to try, in this order:
 | `tags` | Only documents that have every one of these tags, each as a tag of the media or as an own tag of the document |
 | `limit` | Keep only the first `limit` results (from 1) |
 | `explain` | `true` adds `trace`, which says how the search got to the results |
+| `detail` | `full` (default), or `ids` for `number`, `item_id`, `document_id`, `page`, `kind` and `score` only |
+| `offset` | Skip this many results first. Each page searches again, which embeds the question again |
+| `cursor` | From a result that has one, with the same question and filters. Not with `offset` |
+| `section` | Only inside one section of `document`: its `index` from `document_outline`. `document` must then be a `document_id` |
+| `max_chars` | With `detail: full`, at most this many characters of result texts (24000 when left out) |
 
-Gives `results`, best first. Each result has `number`, `document_id`, `document` (its title: the book and the chapter, or a title of its own), `media` (the title of its media; a picture that stands alone has none), `category` (left out when there is no media), `authors`, `media_tags` (the tags of the media), `tags` (the document's own tags), `page` (the place of the page in the document, from 1), `printed_page` (the number printed on the page: cite with it), `last_page` and `last_printed_page` (only for a code listing that page breaks cut, which is one result: the place and the printed number of the page it ends on; left out for every other item), `kind`, `label`, `language` (the language of a code listing in lower case, left out when it is not known), `score`, `reason`, `text` and, for a figure, `picture` (a contained picture URL relative to the app base). `reason` is `{"why": "nearest"}`, `{"why": "concept", "concept": …}` or `{"why": "cited", "by": …, "label": …}`. With `explain`, `trace` has `documents_searched`, `seeds`, `question_concepts`, `seed_concepts`, `related_concepts`, `candidates`, `ranked`, `capped` and `kept`. It also gives `usage` and `cost_usd`, as below. Give the `document_id` and `page` of a result to `read_page` to read around it; for a code listing with `last_page`, read each page from `page` to `last_page`.
+Gives `results`, best first. Each result has `number`, `document_id`, `document` (its title: the book and the chapter, or a title of its own), `media` (the title of its media; a picture that stands alone has none), `category` (left out when there is no media), `authors`, `media_tags` (the tags of the media), `tags` (the document's own tags), `page` (the place of the page in the document, from 1), `printed_page` (the number printed on the page: cite with it), `last_page` and `last_printed_page` (only for a code listing that page breaks cut, which is one result: the place and the printed number of the page it ends on; left out for every other item), `kind`, `label`, `language` (the language of a code listing in lower case, left out when it is not known), `score`, `reason`, `text` and, for a figure, `picture` (a contained picture URL relative to the app base). `reason` is `{"why": "nearest"}`, `{"why": "concept", "concept": …}` or `{"why": "cited", "by": …, "label": …}`. With `explain`, `trace` has `documents_searched`, `seeds`, `question_concepts`, `seed_concepts`, `related_concepts`, `candidates`, `ranked`, `capped` and `kept`. It also gives `usage` and `cost_usd`, as below. Each result of `detail: full` also has `item_id` (give it to `read_item`) and `section` (`index` and `path` of the section of `document_outline` that holds it; left out when the document is not converted on this machine). `truncated` is `true` when a text was cut or a result left out for `max_chars`, and `cursor` is there whenever results are left for the next call. Give the `document_id` and `page` of a result to `read_page` to read around it; for a code listing with `last_page`, read each page from `page` to `last_page`.
 
 ### `answer`
 
@@ -103,7 +115,17 @@ The arguments `question`, `kind`, `document`, `media`, `author`, `category` and 
 
 ### `list_documents`
 
-No arguments. Gives `documents`, sorted by title: `document_id`, `title` (the whole stored title), `media` and `category` (left out for a picture that stands alone, which belongs to no media), `authors`, `media_tags` (the tags of the media), `tags` (the document's own tags) and, when the converted document is under the content folder, `pages`, with `chapter_number` and `chapter_name` for a book's chapter. It also gives `ingested_whole` and `items`. `items` says how many items of each kind the stores hold for the document: `chunk`, `formula`, `figure`, `table` and `code`. `ingested_whole` is `false` when an ingest stopped or skipped an item, or when the document was stored before quanty kept this mark: a search may miss part of it, and sending its PDF again with `ingest_pdf` finishes it. Give the `title` or the `document_id` of one as `document` to `search` or `answer` to ask that document alone.
+| Argument | |
+| --- | --- |
+| `media` | Only documents of this media, whatever the capitals |
+| `category` | Only documents of this category: `book`, `paper` or `other` |
+| `author` | Only documents by this author, whatever the capitals |
+| `tags` | Only documents that have every one of these tags, each as a tag of the media or of the document |
+| `detail` | `full` (default), `summary` (`document_id`, `title`, `media`, `category`, `pages`, `ingested_whole`) or `names` (`document_id` and `title`) |
+| `limit` | How many documents at most, from 1 to 500 (100 when left out) |
+| `cursor` | From a result that has one, with the same filters |
+
+Gives `total` (how many documents fit the filters), `cursor` (only when more fit than this page holds) and `documents`, sorted by title: `document_id`, `title` (the whole stored title), `media` and `category` (left out for a picture that stands alone, which belongs to no media), `authors`, `media_tags` (the tags of the media), `tags` (the document's own tags) and, when the converted document is under the content folder, `pages`, with `chapter_number` and `chapter_name` for a book's chapter. It also gives `ingested_whole` and `items`. `items` says how many items of each kind the stores hold for the document: `chunk`, `formula`, `figure`, `table` and `code`. `ingested_whole` is `false` when an ingest stopped or skipped an item, or when the document was stored before quanty kept this mark: a search may miss part of it, and sending its PDF again with `ingest_pdf` finishes it. Give the `title` or the `document_id` of one as `document` to `search` or `answer` to ask that document alone.
 
 It also gives `unreadable_chapters`: one line for each converted document under the content folder whose `chapter.json` cannot be read, with the file that is at fault. The list is always there, and it is empty when every one can be read. Such a document shows no `chapter_number`, `chapter_name` or `pages`, and `read_page` cannot read it.
 
@@ -113,8 +135,9 @@ It also gives `unreadable_chapters`: one line for each converted document under 
 | --- | --- |
 | `document_id` | Required. From a search result or `list_documents` |
 | `page` | Required. The `page` of a search result (from 1), not the printed number |
+| `max_chars`, `cursor` | See [Reading the library](#reading-the-library) |
 
-Gives `document_id`, `media` (the title of its media), `chapter_number` and `chapter_name` (for a book's chapter), `document_title` (for a document with a title of its own, such as a paper's or a part of a book that is not a chapter; it gives the whole stored title, which for a part is "<book>, <part>"), `page`, `pages`, `printed_page`, `page_image` (the contained whole-page picture URL relative to the app base) and `pieces`: for each, `number`, `kind` (`heading`, `text`, `formula`, `figure`, `table`, `footnote` or `code`), `section` (the headings it sits under, outermost first), `label`, `caption` (the caption as printed, without its label, for a figure, table or code listing that has one), `name` (the name the book gives a formula, such as "Black–Scholes call price", when it names it), `language` (for code, when it is known), `content` (the code as printed, with its indentation, for code) and, for a figure, `picture`.
+Gives `truncated` (and `cursor`), `document_id`, `media` (the title of its media), `chapter_number` and `chapter_name` (for a book's chapter), `document_title` (for a document with a title of its own, such as a paper's or a part of a book that is not a chapter; it gives the whole stored title, which for a part is "<book>, <part>"), `page`, `pages`, `printed_page`, `page_image` (the contained whole-page picture URL relative to the app base) and `pieces`: for each, `number`, `kind` (`heading`, `text`, `formula`, `figure`, `table`, `footnote` or `code`), `section` (the headings it sits under, outermost first), `label`, `caption` (the caption as printed, without its label, for a figure, table or code listing that has one), `name` (the name the book gives a formula, such as "Black–Scholes call price", when it names it), `language` (for code, when it is known), `content` (the code as printed, with its indentation, for code) and, for a figure, `picture`.
 
 ### `chapter_contents`
 
@@ -122,6 +145,7 @@ Gives `document_id`, `media` (the title of its media), `chapter_number` and `cha
 | --- | --- |
 | `document_id` | Required. From `list_documents` or a search result |
 | `kind` | `formula`, `figure`, `table` or `code`: only items of that kind. Every kind when left out. `chunk` is refused: read the text of a page with `read_page` |
+| `max_chars`, `cursor` | See [Reading the library](#reading-the-library) |
 
 Lists every formula, figure, table and code listing of one converted document, in reading order. It reads the saved chapter, so it needs no store and shows while the stores are down. Gives the same `document_id`, `media`, `chapter_number`, `chapter_name`, `document_title` and `pages` as `read_page`, then `counts` (`formula`, `figure`, `table` and `code`, always of the whole document, whatever `kind` asked) and `items`. Each item has `page` (the place of the page it starts on, from 1: give it to `read_page` to read around the item), `printed_page`, `number`, `kind`, `section`, `label`, `caption` (a figure, table or code listing), `name` (a formula), `language` (code), `content` (the LaTeX of a formula, the code as printed, the explanation of a figure, the Markdown of a table) and, for a figure, `picture`. A code listing that page breaks cut is one item: `content` holds all of it, and `last_page` and `last_printed_page` say where it ends.
 
@@ -131,6 +155,7 @@ Lists every formula, figure, table and code listing of one converted document, i
 | --- | --- |
 | `document_id` | Required. From `list_documents` or a search result |
 | `page` | Only the concepts of this page: the `page` of a search result or of `chapter_contents` (from 1), not the printed number. The whole document when left out |
+| `max_chars`, `cursor` | See [Reading the library](#reading-the-library). A cut falls inside the definition |
 
 Gives `document_id`, `title` (the whole stored title), `page` (only when asked) and `concepts`, the most mentioned first: each has `name` and a one-line `definition`. A page with no concept gives an empty list. It reads FalkorDB, as the browser app does beside a page.
 
@@ -139,6 +164,7 @@ Gives `document_id`, `title` (the whole stored title), `page` (only when asked) 
 | Argument | |
 | --- | --- |
 | `document_id` | Required. From `list_documents` or a search result |
+| `max_chars`, `cursor` | See [Reading the library](#reading-the-library). The units are each insight, each takeaway, then the cheat sheet |
 
 Gives what the agent of the Ingest choice wrote about the whole document when it was ingested, from the file `insights.json` in its converted folder: the same `document_id`, `media`, `chapter_number`, `chapter_name`, `document_title` and `pages` as `read_page`, and `state`:
 
@@ -220,6 +246,26 @@ See part 5. `dataset_status` is deprecated: `job_status` gives the same result.
 ### `job_status`, `watch_job`, `list_jobs` and `stop_job`
 
 See part 7.
+
+### Reading the library
+
+Seven tools browse and read the library from the converted files on disk. None costs anything, and none needs a store except for the concepts, which come from FalkorDB.
+
+| Tool | Takes | Gives |
+| --- | --- | --- |
+| `list_media` | `category`, `author`, `tag`, `detail` (`summary` or `names`) | `media`: `title`, `category`, `authors`, `tags`, `documents`, `pages`, `items`, `with_insights` |
+| `document_overview` | `document_id`, `detail` (`summary` or `full`) | The header, `items` (formulas, figures, tables, code), `insights`, `concepts` (`concept_id`, `name`, `mentions`) and `ingested_whole`. `full` adds `outline`, every insight, the `cheat_sheet`, fifty concepts with definitions, `related_documents` (three shared concepts or more, at most five) and `artifacts` |
+| `document_outline` | `document_id` | `sections`: `index`, `path`, `rank`, `printed_number`, `pages` (first and last), `chars`, `items` and `concepts` |
+| `read_section` | `document_id`, `section` (an `index` from the outline, or its heading), `as` (`markdown` or `pieces`) | The section as `text` or `pieces`, with `index`, `path`, `pages`, `item_ids` and `pictures` |
+| `read_pages` | `document_id`, `from`, `to`, `as` | The pages as `text` or `pieces`. A paragraph that starts on a page of the run is given whole |
+| `read_item` | `document_id` with `kind` and `label`, or `item_id` | One item with `item_id`, `page`, `section`, `section_index`, `label`, `caption`, `content` and `cited_by` (the paragraphs that cite its label) |
+| `read_many` | `requests` (1 to 20, each `{"tool": …, "args": {…}}` with a tool of `read_section`, `read_pages`, `read_item` or `chapter_insights`), `max_chars` | `results` in order, each with `tool`, `truncated` and `result` or `error`, and `used_chars` |
+
+A read that can be long takes `max_chars` (24000 when left out, at most 200000, counted in characters of the main text) and `cursor`: `read_page`, `read_section`, `read_pages`, `read_item`, `chapter_contents`, `chapter_concepts`, `chapter_insights` and `search`. Its result has `truncated`, and a `cursor` when the text goes on. Give the `cursor` back with the same other arguments to read on from exactly where the text stopped, so the reads put together are the whole text. A cursor of another read is refused.
+
+`read_many` runs its requests in order against one `max_chars`. Each gets at most what is left (or its own smaller `max_chars`). A request with nothing left is not read and comes back with `truncated: true` and no result. A request that fails has an `error` and does not fail the call.
+
+`detail` shortens `list_media`, `list_documents` (`names`, `summary` or `full`) and `document_overview`. With `names` a result lists nodes that a host can open, for a person who browses without asking a model: media, then documents of a media, then the outline of a document, then its sections. The same path is `list_media`, `list_documents`, `document_outline`, `read_section`.
 
 ## 4. Sending a PDF
 

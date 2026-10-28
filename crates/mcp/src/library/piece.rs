@@ -4,6 +4,8 @@ use ocr::{ChapterItem, ChapterPiece, PieceDetail};
 use schemars::JsonSchema;
 use serde::Serialize;
 
+use crate::args::{Budget, BudgetError, Truncation};
+
 #[derive(Serialize, JsonSchema)]
 pub(super) struct PieceView {
     /// The place of the piece on the page, from 1.
@@ -56,6 +58,33 @@ impl PieceView {
         }
     }
 
+    /// The same piece with `content` in place of its own, which a read that cuts a piece needs.
+    pub(super) fn with_content(self, content: String) -> PieceView {
+        PieceView { content, ..self }
+    }
+
+    /// The pieces that fit the budget, in order. The last one holds only the part of its content
+    /// that fits, and a read that goes on from a cursor starts with the rest of such a piece.
+    ///
+    /// # Errors
+    /// A cursor that does not belong to these pieces.
+    pub(super) fn within(
+        pieces: &[&ChapterPiece],
+        budget: &Budget,
+        content: &std::path::Path,
+    ) -> Result<(Vec<PieceView>, Truncation), BudgetError> {
+        let contents: Vec<&str> = pieces.iter().map(|piece| piece.content.as_str()).collect();
+        let taken = budget.take(&contents)?;
+        let views = taken
+            .slices
+            .into_iter()
+            .map(|slice| {
+                PieceView::from_piece(pieces[slice.unit], content).with_content(slice.text)
+            })
+            .collect();
+        Ok((views, taken.truncation))
+    }
+
     /// An item of a chapter as one piece: the first piece, with the content and the language of
     /// the whole item, which is longer than the first piece for a listing that page breaks cut.
     pub(super) fn of_item(item: &ChapterItem<'_>, content: &std::path::Path) -> PieceView {
@@ -67,7 +96,7 @@ impl PieceView {
     }
 }
 
-fn label_of(detail: &PieceDetail) -> Option<String> {
+pub(super) fn label_of(detail: &PieceDetail) -> Option<String> {
     match detail {
         PieceDetail::Formula { label, .. }
         | PieceDetail::Figure { label, .. }

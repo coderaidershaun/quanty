@@ -5,8 +5,12 @@ use std::path::PathBuf;
 
 use graph::GraphError;
 use ocr::{ContentError, ReadChapterError};
-use rag_core::{DocId, EmptyTag, ParseDocIdError, StoreError, UnknownCategory, UnknownItemKind};
+use rag_core::{
+    DocId, EmptyTag, ItemId, ParseDocIdError, StoreError, UnknownCategory, UnknownItemKind,
+};
 use rag_ingestion::{RelabelError, StoredChaptersError};
+
+use crate::args::BudgetError;
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum LibraryError {
@@ -32,6 +36,12 @@ pub(crate) enum LibraryError {
         "a tag in `tags` is blank; give each tag as a word, or give `[]` to take every tag away"
     )]
     MediaTag(#[source] EmptyTag),
+
+    #[error("a tag in `tags` is blank; give each tag as a word, or leave `tags` out")]
+    FilterTag(#[source] EmptyTag),
+
+    #[error("`limit` is {given}; give a whole number from 1 to {most}, or leave it out")]
+    LimitOutOfRange { given: u32, most: u32 },
 
     #[error("nothing to change; give tags in `add` or `remove`")]
     NoTagChange,
@@ -100,6 +110,56 @@ pub(crate) enum LibraryError {
 
     #[error("page {page} is out of range: the chapter has {pages} pages, numbered from 1")]
     PageOutOfRange { page: u32, pages: u32 },
+
+    #[error(transparent)]
+    Budget(#[from] BudgetError),
+
+    #[error("`from` is page {from} and `to` is page {to}; give `from` no later than `to`")]
+    PagesReversed { from: u32, to: u32 },
+
+    #[error(
+        "section {index} is out of range: the document has {sections} sections, numbered from 1; call `document_outline` to see them"
+    )]
+    SectionOutOfRange { index: usize, sections: usize },
+
+    #[error(
+        "no section of the document has the heading {name:?}; call `document_outline` to see the sections and their `index`"
+    )]
+    NoSuchSection { name: String },
+
+    #[error(
+        "{name:?} is the heading of several sections, {indexes}; give one of these as a number"
+    )]
+    AmbiguousSection { name: String, indexes: String },
+
+    #[error("give from 1 to {most} requests in `requests`, not {given}")]
+    RequestCount { given: usize, most: usize },
+
+    #[error("give the `document_id`, `kind` and `label` of the item, or its `item_id`")]
+    ItemChoice,
+
+    #[error(
+        "`read_item` reads a formula, figure, table or code listing; read the text of a page with `read_page`"
+    )]
+    ItemKindIsText,
+
+    #[error("`item_id` is not valid; take it from a result of `search`")]
+    ItemId(#[source] uuid::Error),
+
+    #[error(
+        "the document has no {kind} labelled {label:?}; call `chapter_contents` to see its items and their labels"
+    )]
+    NoItemLabelled { kind: String, label: String },
+
+    #[error(
+        "no converted chapter holds the item {id}; call `search` to see the items and their ids"
+    )]
+    NoSuchItem { id: ItemId },
+
+    #[error(
+        "the item cannot be matched to the id it is stored under; read it with `chapter_contents` or `read_page`"
+    )]
+    ItemsDiffer,
 }
 
 impl LibraryError {

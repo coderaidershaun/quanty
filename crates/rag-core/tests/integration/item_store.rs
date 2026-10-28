@@ -124,6 +124,7 @@ async fn a_collection_that_holds_items_gets_the_index_on_the_kind_and_is_searche
     let only_formulas = ItemFilter {
         kind: Some(ItemKind::Formula),
         documents: None,
+        items: None,
     };
 
     // Nothing is asserted between the creation and the deletion, so a failure cannot leave the

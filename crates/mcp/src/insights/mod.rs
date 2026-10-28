@@ -26,7 +26,8 @@ pub(crate) use error::InsightsToolError;
 pub(crate) use exporting::{ExportInsightsArgs, ExportResult, ExportToolError, export_insights};
 pub(crate) use report::InsightsReport;
 pub(crate) use saved::{
-    ChapterInsightsArgs, InsightsView, Saved, chapter_insights, saved_insights,
+    ChapterInsightsArgs, InsightView, InsightsView, Saved, SavedState, chapter_insights,
+    saved_insights,
 };
 use work::Work;
 

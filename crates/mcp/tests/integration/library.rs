@@ -328,6 +328,7 @@ async fn chapter_concepts_gives_the_concepts_of_a_chapter_and_of_a_page(client: 
             "document_id": sample,
             "title": "Option Volatility and Pricing, chapter 1: Sample Pages",
             "concepts": long_straddle,
+            "truncated": false,
         })
     );
 

@@ -5,6 +5,7 @@ mod changes;
 mod failure;
 mod health;
 mod jobs;
+mod library;
 mod lookup;
 pub(crate) mod meta;
 mod reading;
@@ -112,7 +113,10 @@ impl<S: Services> QuantyServer<S> {
                 background_jobs: jobs,
                 max_pdf_bytes,
             }),
-            tool_router: Self::reading_router() + Self::jobs_router() + Self::changes_router(),
+            tool_router: Self::reading_router()
+                + Self::jobs_router()
+                + Self::changes_router()
+                + Self::library_router(),
         }
     }
 

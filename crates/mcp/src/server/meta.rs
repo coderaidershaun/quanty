@@ -105,9 +105,16 @@ impl ToolMarks {
     }
 
     /// Marks the tool as an entry point, with the arguments that a host should call it with first.
-    #[cfg_attr(not(test), expect(dead_code, reason = "no tool is an entry point yet"))]
     pub(crate) fn with_discovery(mut self, entry_arguments: JsonObject) -> ToolMarks {
         let mark = json!({ "version": JET_MARK_VERSION, "entryArguments": entry_arguments });
+        self.0.insert(DISCOVERY_KEY.to_owned(), mark);
+        self
+    }
+
+    /// Marks the tool as one that other discovery results point at but that cannot be called
+    /// first, because it needs an argument such as a document id.
+    pub(crate) fn with_discovery_target(mut self) -> ToolMarks {
+        let mark = json!({ "version": JET_MARK_VERSION });
         self.0.insert(DISCOVERY_KEY.to_owned(), mark);
         self
     }

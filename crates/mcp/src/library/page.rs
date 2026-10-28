@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use super::LibraryError;
 use super::chapter::{DocumentHeader, find_chapter, parse_document_id};
 use super::piece::PieceView;
+use crate::args::{Budget, Scope, Truncation};
 
 /// What an agent gives `read_page`.
 #[derive(Deserialize, JsonSchema)]
@@ -17,6 +18,10 @@ pub(crate) struct ReadPageArgs {
     /// The `page` of a search result: the place of the page in the chapter, from 1. It is not the
     /// number printed on the page.
     page: u32,
+    /// At most this many characters of text. 24000 when left out.
+    max_chars: Option<u32>,
+    /// From a result that was `truncated`, with the same other arguments.
+    cursor: Option<String>,
 }
 
 /// The pieces of one page, in reading order.
@@ -33,6 +38,8 @@ pub(crate) struct PageView {
     #[serde(skip_serializing_if = "Option::is_none")]
     page_image: Option<String>,
     pieces: Vec<PieceView>,
+    #[serde(flatten)]
+    more: Truncation,
 }
 
 /// The pieces of one page of the chapter that the document id names. It needs no store.
@@ -52,12 +59,15 @@ pub(crate) fn read_page(config: &Config, args: ReadPageArgs) -> Result<PageView,
             pages: entry.index.page_count,
         });
     }
+    let scope = Scope::of("read_page").with(id).with(args.page);
+    let budget = Budget::new(scope, args.max_chars, args.cursor.as_deref())?;
     let chapter = read_chapter(&entry.folder)?;
     let on_page: Vec<_> = chapter
         .pieces
         .iter()
         .filter(|piece| piece.id.page == args.page)
         .collect();
+    let (pieces, more) = PieceView::within(&on_page, &budget, &config.content_folder)?;
     Ok(PageView {
         document: DocumentHeader::of(&entry),
         page: args.page,
@@ -67,9 +77,7 @@ pub(crate) fn read_page(config: &Config, args: ReadPageArgs) -> Result<PageView,
         page_image: on_page
             .first()
             .and_then(|piece| rag_core::content_url(&piece.page_image, &config.content_folder)),
-        pieces: on_page
-            .into_iter()
-            .map(|piece| PieceView::from_piece(piece, &config.content_folder))
-            .collect(),
+        pieces,
+        more,
     })
 }

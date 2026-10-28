@@ -9,8 +9,8 @@ mod trace;
 
 use graph::{FalkorGraph, GraphError};
 use rag_core::{
-    ConceptStore, DocId, EmbedError, Embedder, ItemFilter, ItemKind, ItemStore, LabelFilter,
-    StoreError, UsageTally, question_usage,
+    ConceptStore, DocId, EmbedError, Embedder, ItemFilter, ItemId, ItemKind, ItemStore,
+    LabelFilter, StoreError, UsageTally, question_usage,
 };
 
 pub use results::{Reason, SearchHit, SearchResults};
@@ -103,6 +103,28 @@ impl<E: Embedder> Retriever<E> {
         kind: Option<ItemKind>,
         wanted: &LabelFilter,
     ) -> Result<TracedSearch, SearchError> {
+        self.search_traced_within(question, kind, wanted, None)
+            .await
+    }
+
+    /// Like [`Retriever::search_traced`], and with `items` given only those items are looked at,
+    /// in every step: the seeds, the items the graph adds and the items that a result cites. The
+    /// scope is applied before the nearest items are taken, because one document gives at most
+    /// [`MAX_RESULTS_PER_DOCUMENT`] results and a scope applied afterwards would leave nothing.
+    /// An empty scope finds nothing, and the question is then not embedded, which costs nothing.
+    ///
+    /// # Errors
+    /// The errors of [`Retriever::search_traced`].
+    pub async fn search_traced_within(
+        &self,
+        question: &str,
+        kind: Option<ItemKind>,
+        wanted: &LabelFilter,
+        items: Option<&[ItemId]>,
+    ) -> Result<TracedSearch, SearchError> {
+        if items.is_some_and(<[ItemId]>::is_empty) {
+            return Ok(nothing_found(Some(0), UsageTally::default()));
+        }
         let documents = if wanted.is_empty() {
             None
         } else {
@@ -120,7 +142,11 @@ impl<E: Embedder> Retriever<E> {
             Some(fitting)
         };
         let documents_searched = documents.as_ref().map(Vec::len);
-        let filter = ItemFilter { kind, documents };
+        let filter = ItemFilter {
+            kind,
+            documents,
+            items: items.map(<[ItemId]>::to_vec),
+        };
         let vector = self.embedder.embed_query(question).await?;
         let usage = question_usage(question);
         let seeds = self
@@ -140,6 +166,9 @@ impl<E: Embedder> Retriever<E> {
         let kept = hits.len();
         if kind.is_none() {
             cited::pull_in(&self.items, &vector, &mut hits).await?;
+            if let Some(scope) = items {
+                hits.retain(|hit| scope.contains(&hit.item.id));
+            }
         }
         Ok(TracedSearch {
             results: SearchResults { hits, usage },

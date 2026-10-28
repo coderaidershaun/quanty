@@ -1,25 +1,98 @@
 //! What `search` gives back: the items found, each with the reason it is there, and the trace
 //! of the steps that found them.
 
-use rag_core::{ConceptHit, ItemPayload, UsageTally};
+use std::collections::HashMap;
+use std::path::Path;
+
+use rag_core::{ConceptHit, DocId, ItemId, ItemPayload, UsageTally};
 use rag_retrieval::{Reason, SearchHit, SearchTrace};
 use schemars::JsonSchema;
 use serde::Serialize;
 
-use crate::library::ConceptView;
+use super::SearchDetail;
+use crate::args::{Budget, BudgetError, Position, Scope, Truncation};
+use crate::library::{ConceptView, SectionRef};
 use crate::usage::Spent;
+
+/// The part of the results that one call shows, and what it needs to say where the next call goes
+/// on.
+pub(super) struct Page<'a> {
+    pub(super) hits: &'a [SearchHit],
+    /// The place, counted from 0, of the first of the hits among all the results.
+    pub(super) first: usize,
+    /// Whether results come after the hits, which `limit` left out.
+    pub(super) has_more_after: bool,
+    pub(super) detail: SearchDetail,
+    pub(super) budget: Budget,
+    pub(super) scope: Scope,
+    /// The section of each item, by document. Empty with `detail: ids`.
+    pub(super) sections: HashMap<DocId, HashMap<ItemId, SectionRef>>,
+}
+
+impl Page<'_> {
+    /// The rows with their texts, as many as the budget holds. Only the first row is ever cut, so
+    /// that each call shows a result.
+    fn full_rows(&self, content: &Path) -> Result<(Vec<Found>, Truncation), BudgetError> {
+        let texts: Vec<&str> = self
+            .hits
+            .iter()
+            .map(|hit| hit.item.payload.text.as_str())
+            .collect();
+        let taken = self
+            .budget
+            .take_keeping_heads(&texts, |unit| texts[unit].chars().count())?;
+        let rows = taken
+            .slices
+            .into_iter()
+            .map(|slice| {
+                let hit = &self.hits[slice.unit];
+                let section = self
+                    .sections
+                    .get(&hit.item.payload.doc_id)
+                    .and_then(|places| places.get(&hit.item.id))
+                    .cloned();
+                let number = self.first + slice.unit + 1;
+                Found::of(number, hit, content, section, slice.text)
+            })
+            .collect();
+        Ok((rows, taken.truncation))
+    }
+}
 
 /// The items a search found, best first.
 #[derive(Serialize, JsonSchema)]
 pub(crate) struct SearchResult {
     /// The items found, best first. The items that a result cites come last.
-    results: Vec<Found>,
+    results: Rows,
     /// How the search got to the results. Only with `explain`.
     #[serde(skip_serializing_if = "Option::is_none")]
     trace: Option<Trace>,
+    /// `truncated` is true when a text was cut or a result left out for `max_chars`. `cursor` is
+    /// there whenever results are left for the next call.
+    #[serde(flatten)]
+    more: Truncation,
     /// What embedding the question used, estimated.
     #[serde(flatten)]
     spent: Spent,
+}
+
+/// The results, whole or as ids only.
+#[derive(Serialize, JsonSchema)]
+#[serde(untagged)]
+enum Rows {
+    Full(Vec<Found>),
+    Ids(Vec<FoundId>),
+}
+
+/// One result of a search with `detail: ids`.
+#[derive(Serialize, JsonSchema)]
+struct FoundId {
+    number: usize,
+    item_id: String,
+    document_id: String,
+    page: u32,
+    kind: String,
+    score: f32,
 }
 
 /// One stored item that a search found.
@@ -27,6 +100,12 @@ pub(crate) struct SearchResult {
 struct Found {
     /// The place of the item in the results, from 1. Other results and answer sources name it.
     number: usize,
+    /// Give it to `read_item`.
+    item_id: String,
+    /// The section of the document that holds the item. Left out when the document is not
+    /// converted on this machine.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    section: Option<SectionRef>,
     #[serde(flatten)]
     item: ItemView,
     /// How near the item is to the question, from 0 to 1. Higher is nearer.
@@ -128,31 +207,76 @@ struct ConceptScore {
 }
 
 impl SearchResult {
-    /// The hits in order, numbered from 1, the trace when one was asked for, and what the search
-    /// used.
+    /// The hits in order, numbered from 1 among all the results, the trace when one was asked
+    /// for, and what the search used.
+    ///
+    /// # Errors
+    /// A budget that cannot be taken from.
     pub(super) fn of(
-        hits: &[SearchHit],
+        page: &Page<'_>,
         trace: Option<SearchTrace>,
         usage: &UsageTally,
-        content: &std::path::Path,
-    ) -> SearchResult {
-        SearchResult {
-            results: hits
-                .iter()
-                .enumerate()
-                .map(|(index, hit)| Found::of(index + 1, hit, content))
-                .collect(),
+        content: &Path,
+    ) -> Result<SearchResult, BudgetError> {
+        let (results, shown, truncation) = match page.detail {
+            SearchDetail::Full => {
+                let (rows, truncation) = page.full_rows(content)?;
+                let shown = rows.len();
+                (Rows::Full(rows), shown, truncation)
+            }
+            SearchDetail::Ids => {
+                let rows = (page.first + 1..)
+                    .zip(page.hits)
+                    .map(|(number, hit)| FoundId::of(number, hit))
+                    .collect();
+                (Rows::Ids(rows), page.hits.len(), Truncation::whole(0))
+            }
+        };
+        let has_more = page.has_more_after || shown < page.hits.len();
+        let cursor = has_more.then(|| {
+            page.scope.cursor(Position {
+                unit: page.first + shown,
+                offset: 0,
+            })
+        });
+        Ok(SearchResult {
+            results,
             trace: trace.map(Trace::from),
+            more: truncation.paged_by(cursor),
             spent: usage.into(),
+        })
+    }
+}
+
+impl FoundId {
+    fn of(number: usize, hit: &SearchHit) -> FoundId {
+        FoundId {
+            number,
+            item_id: hit.item.id.to_string(),
+            document_id: hit.item.payload.doc_id.to_string(),
+            page: hit.item.payload.page,
+            kind: hit.item.payload.kind.as_str().to_owned(),
+            score: hit.item.score,
         }
     }
 }
 
 impl Found {
-    fn of(number: usize, hit: &SearchHit, content: &std::path::Path) -> Found {
+    fn of(
+        number: usize,
+        hit: &SearchHit,
+        content: &Path,
+        section: Option<SectionRef>,
+        text: String,
+    ) -> Found {
         Found {
             number,
-            item: ItemView::from_payload(&hit.item.payload, content),
+            item_id: hit.item.id.to_string(),
+            section,
+            item: ItemView {
+                text,
+                ..ItemView::from_payload(&hit.item.payload, content)
+            },
             score: hit.item.score,
             reason: (&hit.reason).into(),
         }

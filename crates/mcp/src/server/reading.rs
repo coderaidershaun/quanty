@@ -8,11 +8,12 @@ use rmcp::{Json, tool, tool_router};
 use super::QuantyServer;
 use super::failure::ToolError;
 use super::health::HealthResult;
+use super::library::names_entry;
 use super::meta::{Cost, Group, ToolMarks, output_schema};
 use crate::insights::{self, ChapterInsightsArgs, InsightsView};
 use crate::library::{
     self, ChapterConceptsArgs, ChapterContentsArgs, ConceptsView, ContentsView, Documents,
-    PageView, ReadPageArgs,
+    ListDocumentsArgs, PageView, ReadPageArgs,
 };
 use crate::retrieval::{self, AnswerResult, QuestionArgs, SearchArgs, SearchResult};
 use crate::services::Services;
@@ -24,6 +25,8 @@ impl<S: Services> QuantyServer<S> {
     /// embeds the question with the Gemini API, which is a small paid call. Give the
     /// `document_id` and `page` of a result to `read_page` to read the page around it. Give
     /// `document` (a `title` or `document_id` from `list_documents`) to search one document only.
+    /// `detail: ids` gives ids only, `offset` or `cursor` pages, `section` searches one section of
+    /// that document, and `max_chars` shortens the texts.
     #[tool(annotations(read_only_hint = true))]
     async fn search(
         &self,
@@ -52,14 +55,28 @@ impl<S: Services> QuantyServer<S> {
 
     /// Lists every stored document with its media, category, authors, tags and chapter. Give the
     /// `document_id` of one to `read_page`, and its `title` or `document_id` as `document` to
-    /// `search` or `answer` to ask that document alone.
-    #[tool(annotations(read_only_hint = true))]
-    async fn list_documents(&self) -> Result<Json<Documents>, ToolError> {
-        Ok(Json(library::list_documents(&self.shared.config).await?))
+    /// `search` or `answer` to ask that document alone. Filter with `media`, `category`, `author`
+    /// and `tags`; `detail` and `cursor` shorten and page it.
+    #[tool(
+        title = "List documents",
+        annotations(read_only_hint = true, idempotent_hint = true),
+        output_schema = output_schema::<Documents>(),
+        meta = ToolMarks::new(Group::Library, Cost::Free)
+            .with_discovery(names_entry())
+            .into()
+    )]
+    async fn list_documents(
+        &self,
+        Parameters(args): Parameters<ListDocumentsArgs>,
+    ) -> Result<Json<Documents>, ToolError> {
+        Ok(Json(
+            library::list_documents(&self.shared.config, args).await?,
+        ))
     }
 
     /// Reads the pieces of one page of a chapter in reading order, to read around a search result.
-    /// It reads the saved chapter and needs no store.
+    /// It reads the saved chapter and needs no store. A long page continues with `max_chars` and
+    /// `cursor`.
     #[tool(annotations(read_only_hint = true))]
     async fn read_page(
         &self,
@@ -74,7 +91,7 @@ impl<S: Services> QuantyServer<S> {
     /// explanation of a figure with the app-relative URL of its picture, the Markdown of a table. A code
     /// listing that page breaks cut is one item. Give `kind` for one kind only. It reads the
     /// saved chapter, needs no store and costs nothing. Give the `page` of an item to `read_page`
-    /// to read around it.
+    /// to read around it. A long list continues with `max_chars` and `cursor`.
     #[tool(annotations(read_only_hint = true))]
     async fn chapter_contents(
         &self,
@@ -85,7 +102,8 @@ impl<S: Services> QuantyServer<S> {
 
     /// Lists the concepts that one document discusses, as the ingest found them, the most
     /// mentioned first, each with a one-line definition. Give `page` for the concepts of one page
-    /// only, as the browser app shows beside a page. It reads FalkorDB and costs nothing.
+    /// only, as the browser app shows beside a page. It reads FalkorDB and costs nothing. A long
+    /// list continues with `max_chars` and `cursor`.
     #[tool(annotations(read_only_hint = true))]
     async fn chapter_concepts(
         &self,
@@ -101,7 +119,8 @@ impl<S: Services> QuantyServer<S> {
     /// Markdown sheet of definitions, formulas and rules of thumb. `state` is `saved`,
     /// `not_written_yet` (call `write_insights` with this `document_id`, which is paid) or
     /// `none_for_book_part` (a part of a book that is not a chapter, such as its index, gets
-    /// none). It reads the saved file and costs nothing.
+    /// none). It reads the saved file and costs nothing. Long notes continue with `max_chars` and
+    /// `cursor`.
     #[tool(annotations(read_only_hint = true))]
     async fn chapter_insights(
         &self,

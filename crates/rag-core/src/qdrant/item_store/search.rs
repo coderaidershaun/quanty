@@ -31,6 +31,8 @@ pub struct ItemFilter {
     pub kind: Option<ItemKind>,
     /// `None` is every document, and an empty list is no document, so it finds nothing.
     pub documents: Option<Vec<DocId>>,
+    /// `None` is every item, and an empty list is no item, so it finds nothing.
+    pub items: Option<Vec<ItemId>>,
 }
 
 impl ItemFilter {
@@ -39,10 +41,15 @@ impl ItemFilter {
             let ids: Vec<String> = documents.iter().map(ToString::to_string).collect();
             Condition::matches(DOC_ID_FIELD, ids)
         });
+        let of_items = self
+            .items
+            .as_ref()
+            .map(|items| Condition::has_id(items.iter().map(ToString::to_string)));
         self.kind
             .map(kind_condition)
             .into_iter()
             .chain(of_documents)
+            .chain(of_items)
             .collect()
     }
 }

@@ -4,17 +4,21 @@
 mod found;
 mod written;
 
+use std::collections::{HashMap, HashSet};
+
 use graph::{FalkorGraph, GraphError};
 use rag_core::{
-    Category, ConceptStore, Config, EmbedError, EmptyTag, ItemKind, ItemStore, LabelFilter, Llm,
-    StoreError, UnknownCategory, UnknownItemKind, WantedDocument, WorkKind,
+    Category, ConceptStore, Config, DocId, EmbedError, EmptyTag, ItemId, ItemKind, ItemStore,
+    LabelFilter, Llm, StoreError, UnknownCategory, UnknownItemKind, WantedDocument, WorkKind,
 };
-use rag_retrieval::{AnswerError, Retriever, SearchError};
+use rag_retrieval::{AnswerError, Retriever, SearchError, SearchHit};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::args::{non_blank, parse_optional, parse_tags};
+use crate::args::{Budget, BudgetError, Scope, non_blank, parse_optional, parse_tags};
+use crate::library::{self, LibraryError, SectionRef};
 use crate::services::Services;
+use found::Page;
 pub(crate) use found::SearchResult;
 pub(crate) use written::AnswerResult;
 
@@ -54,6 +58,26 @@ pub(crate) struct SearchArgs {
     limit: Option<u32>,
     /// Set to true to add `trace`, which says how each step of the search got to the results.
     explain: Option<bool>,
+    /// `full` (default), or `ids` for the number, item id, document, page, kind and score only.
+    detail: Option<SearchDetail>,
+    /// Skip this many results first. Each page searches again, which embeds the question again.
+    offset: Option<u32>,
+    /// From a result that has one, with the same question and filters. Not with `offset`.
+    cursor: Option<String>,
+    /// Look only inside one section of the document: its `index` from `document_outline`. Needs
+    /// `document` to be a `document_id`.
+    section: Option<u32>,
+    /// With `detail: full`, at most this many characters of result texts. 24000 when left out.
+    max_chars: Option<u32>,
+}
+
+/// How much of each result `search` gives.
+#[derive(Deserialize, JsonSchema, Clone, Copy, Default, PartialEq, Eq, Debug)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum SearchDetail {
+    #[default]
+    Full,
+    Ids,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -72,6 +96,20 @@ pub(crate) enum RetrievalError {
 
     #[error("`limit` is 0; give a whole number from 1, or leave it out")]
     ZeroLimit,
+
+    #[error("give `offset` or `cursor`, not both; `cursor` goes on from the page it came with")]
+    OffsetAndCursor,
+
+    #[error(
+        "`section` needs `document` to be a `document_id`, not a title; take it from `list_documents`"
+    )]
+    SectionNeedsDocument,
+
+    #[error(transparent)]
+    Budget(#[from] BudgetError),
+
+    #[error(transparent)]
+    Section(#[from] LibraryError),
 
     #[error("could not connect to the graph")]
     Graph(#[from] GraphError),
@@ -127,7 +165,9 @@ impl QuestionArgs {
 /// Finds the items for the question.
 ///
 /// # Errors
-/// - a bad argument: a blank question, an unknown kind or category, a blank tag or a `limit` of 0
+/// - a bad argument: a blank question, an unknown kind or category, a blank tag, a `limit` of 0,
+///   `offset` with `cursor`, a `section` without a `document_id`, a `max_chars` that is refused or
+///   a cursor of another search
 /// - a store or the embedder that is not ready, or a search that fails
 pub(crate) async fn search<S: Services>(
     config: &Config,
@@ -138,20 +178,79 @@ pub(crate) async fn search<S: Services>(
     if args.limit == Some(0) {
         return Err(RetrievalError::ZeroLimit);
     }
+    let cursor = non_blank(args.cursor);
+    if args.offset.is_some() && cursor.is_some() {
+        return Err(RetrievalError::OffsetAndCursor);
+    }
+    let detail = args.detail.unwrap_or_default();
+    let items = section_scope(config, &asked, args.section)?;
+    let scope = Scope::of("search").with_fingerprint(&format!(
+        "{}|{:?}|{:?}|{:?}",
+        asked.question, asked.kind, asked.wanted, args.section
+    ));
+    let budget = Budget::new(scope.clone(), args.max_chars, None)?;
+    let first = match cursor {
+        Some(cursor) => scope.resume(&cursor)?.unit,
+        None => args.offset.unwrap_or(0) as usize,
+    };
     let retriever = retriever(config, services).await?;
     let found = retriever
-        .search_traced(&asked.question, asked.kind, &asked.wanted)
+        .search_traced_within(&asked.question, asked.kind, &asked.wanted, items.as_deref())
         .await?;
-    let mut hits = found.results.hits;
-    if let Some(limit) = args.limit {
-        hits.truncate(limit as usize);
-    }
+    let all = found.results.hits;
+    let rest = all.get(first..).unwrap_or_default();
+    let shown = args
+        .limit
+        .map_or(rest.len(), |limit| rest.len().min(limit as usize));
+    let window = &rest[..shown];
+    let sections = match detail {
+        SearchDetail::Full => sections_of_hits(config, window),
+        SearchDetail::Ids => HashMap::new(),
+    };
+    let page = Page {
+        hits: window,
+        first,
+        has_more_after: first + window.len() < all.len(),
+        detail,
+        budget,
+        scope,
+        sections,
+    };
     Ok(SearchResult::of(
-        &hits,
+        &page,
         args.explain.unwrap_or(false).then_some(found.trace),
         &found.results.usage,
         &config.content_folder,
-    ))
+    )?)
+}
+
+/// The stored items of the section that the search looks inside, or `None` to look at every item.
+fn section_scope(
+    config: &Config,
+    asked: &Asked,
+    section: Option<u32>,
+) -> Result<Option<Vec<ItemId>>, RetrievalError> {
+    let Some(index) = section else {
+        return Ok(None);
+    };
+    let Some(WantedDocument::Id(document)) = &asked.wanted.document else {
+        return Err(RetrievalError::SectionNeedsDocument);
+    };
+    let items = library::items_of_section(config, *document, index as usize)?;
+    Ok(Some(items))
+}
+
+/// The section of each hit's item, by document. The chapter of each document is read once.
+fn sections_of_hits(
+    config: &Config,
+    hits: &[SearchHit],
+) -> HashMap<DocId, HashMap<ItemId, SectionRef>> {
+    hits.iter()
+        .map(|hit| hit.item.payload.doc_id)
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .map(|document| (document, library::sections_of_items(config, document)))
+        .collect()
 }
 
 /// Writes an answer from the items found for the question. The model is not asked when nothing

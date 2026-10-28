@@ -38,6 +38,16 @@ pub(super) struct Rendered {
     pub blocks: Vec<Block>,
     /// The text of every heading as saved, with its printed number, by the number the paths use.
     pub headings: Vec<String>,
+    /// The level and the printed number of every heading, by the same numbers.
+    pub marks: Vec<HeadingMark>,
+}
+
+/// How a heading is printed: its level, from 1 for a chapter title down to 4, and the number the
+/// book gives it, such as "7.2".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeadingMark {
+    pub rank: u8,
+    pub printed_number: Option<String>,
 }
 
 /// The earlier half of a paragraph that a page break cut and the later half. A word that the
@@ -78,6 +88,7 @@ pub(super) fn render(chapter: &Chapter) -> Rendered {
     Rendered {
         blocks,
         headings: state.headings,
+        marks: state.marks,
     }
 }
 
@@ -85,6 +96,7 @@ pub(super) fn render(chapter: &Chapter) -> Rendered {
 struct Rendering {
     slots: Vec<Slot>,
     headings: Vec<String>,
+    marks: Vec<HeadingMark>,
     /// The headings the next piece sits under.
     open_path: Vec<usize>,
     /// The paragraph that a text piece is part of, by the place of its block.
@@ -142,6 +154,10 @@ impl Rendering {
         let saved = heading_text(printed_number, &piece.content);
         let number = self.headings.len();
         self.headings.push(saved.clone());
+        self.marks.push(HeadingMark {
+            rank,
+            printed_number: printed_number.map(str::to_owned),
+        });
         // The headings above this one are the ones in the piece's section.
         self.open_path.truncate(piece.section.len());
         self.open_path.push(number);

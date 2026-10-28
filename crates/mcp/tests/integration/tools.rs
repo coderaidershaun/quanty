@@ -124,6 +124,61 @@ fn assert_job_tools_are_marked_and_have_schemas(tools: &[Tool]) {
     assert!(output_keys("stop_job").contains(&"state".to_owned()));
 }
 
+/// The tools that browse and read the library: each has a title, a short description, the schema
+/// of its result and a group, and only three of them are marked for a host that discovers tools.
+fn assert_library_tools_are_marked_and_have_schemas(tools: &[Tool]) {
+    let tool = |name: &str| tools.iter().find(|tool| tool.name == name).unwrap();
+    let free = json!({ "paid": false });
+    let new_tools = [
+        ("list_media", "library"),
+        ("document_overview", "library"),
+        ("document_outline", "library"),
+        ("read_section", "library"),
+        ("read_pages", "library"),
+        ("read_item", "library"),
+        ("read_many", "research"),
+    ];
+    for (name, group) in new_tools {
+        let tool = tool(name);
+        let marks = serde_json::to_value(&tool.meta).unwrap();
+        assert_eq!(marks["quanty/group"], group, "the group of {name}");
+        assert_eq!(marks["quanty/cost"], free, "the cost of {name}");
+        assert!(tool.title.is_some(), "{name} has a title");
+        let description = tool.description.as_deref().unwrap();
+        assert!(
+            description.len() < 300 && !description.contains("PAID"),
+            "{name} has a short description of a free tool: {description}"
+        );
+        let schema = tool.output_schema.as_ref().unwrap();
+        assert_eq!(schema.get("type"), Some(&json!("object")), "{name}");
+    }
+    let entry = json!({ "version": 1, "entryArguments": { "detail": "names" } });
+    let target = json!({ "version": 1 });
+    let discovery = |name: &str| {
+        serde_json::to_value(&tool(name).meta)
+            .unwrap()
+            .get("jet/discovery")
+            .cloned()
+    };
+    assert_eq!(discovery("list_media"), Some(entry.clone()));
+    assert_eq!(discovery("list_documents"), Some(entry));
+    assert_eq!(discovery("document_outline"), Some(target));
+    for name in [
+        "document_overview",
+        "read_section",
+        "read_pages",
+        "read_item",
+        "read_many",
+        "read_page",
+        "search",
+    ] {
+        assert_eq!(discovery(name), None, "{name} is not a discovery tool");
+    }
+    let documents = tool("list_documents");
+    assert_eq!(documents.title.as_deref(), Some("List documents"));
+    assert!(documents.output_schema.is_some());
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn the_server_lists_every_tool_with_its_input_schema() {
     let ports = ClosedPorts::new();
@@ -140,6 +195,8 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         "chapter_insights",
         "check_pdf",
         "dataset_status",
+        "document_outline",
+        "document_overview",
         "edit_document_tags",
         "edit_media",
         "export_insights",
@@ -150,14 +207,19 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         "job_status",
         "list_documents",
         "list_jobs",
+        "list_media",
+        "read_item",
+        "read_many",
         "read_page",
+        "read_pages",
+        "read_section",
         "search",
         "stop_job",
         "watch_job",
         "write_insights",
     ];
     assert_eq!(names, expected_names);
-    let expected: [(&str, &[&str], &[&str]); 22] = [
+    let expected: [(&str, &[&str], &[&str]); 29] = [
         (
             "answer",
             &[
@@ -187,15 +249,19 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         ),
         (
             "chapter_concepts",
-            &["document_id", "page"],
+            &["cursor", "document_id", "max_chars", "page"],
             &["document_id"],
         ),
         (
             "chapter_contents",
-            &["document_id", "kind"],
+            &["cursor", "document_id", "kind", "max_chars"],
             &["document_id"],
         ),
-        ("chapter_insights", &["document_id"], &["document_id"]),
+        (
+            "chapter_insights",
+            &["cursor", "document_id", "max_chars"],
+            &["document_id"],
+        ),
         (
             "check_pdf",
             &[
@@ -209,6 +275,12 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
             &["media"],
         ),
         ("dataset_status", &["job_id"], &["job_id"]),
+        ("document_outline", &["document_id"], &["document_id"]),
+        (
+            "document_overview",
+            &["detail", "document_id"],
+            &["document_id"],
+        ),
         (
             "edit_document_tags",
             &["add", "document_id", "remove"],
@@ -244,17 +316,59 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         ("ingest_status", &["job_id"], &["job_id"]),
         ("insights_status", &["job_id"], &["job_id"]),
         ("job_status", &["job_id"], &["job_id"]),
-        ("list_documents", &[], &[]),
+        (
+            "list_documents",
+            &[
+                "author", "category", "cursor", "detail", "limit", "media", "tags",
+            ],
+            &[],
+        ),
         ("list_jobs", &[], &[]),
+        ("list_media", &["author", "category", "detail", "tag"], &[]),
+        (
+            "read_item",
+            &[
+                "cursor",
+                "document_id",
+                "item_id",
+                "kind",
+                "label",
+                "max_chars",
+            ],
+            &[],
+        ),
+        ("read_many", &["max_chars", "requests"], &["requests"]),
         (
             "read_page",
+            &["cursor", "document_id", "max_chars", "page"],
             &["document_id", "page"],
-            &["document_id", "page"],
+        ),
+        (
+            "read_pages",
+            &["as", "cursor", "document_id", "from", "max_chars", "to"],
+            &["document_id", "from", "to"],
+        ),
+        (
+            "read_section",
+            &["as", "cursor", "document_id", "max_chars", "section"],
+            &["document_id", "section"],
         ),
         (
             "search",
             &[
-                "author", "category", "document", "explain", "kind", "limit", "media", "question",
+                "author",
+                "category",
+                "cursor",
+                "detail",
+                "document",
+                "explain",
+                "kind",
+                "limit",
+                "max_chars",
+                "media",
+                "offset",
+                "question",
+                "section",
                 "tags",
             ],
             &["question"],
@@ -306,6 +420,7 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         );
     }
     assert_job_tools_are_marked_and_have_schemas(&tools);
+    assert_library_tools_are_marked_and_have_schemas(&tools);
 
     let peer = client
         .peer_info()
@@ -355,6 +470,8 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
     assert_eq!(names_by_read[0], expected_names);
 }
 
+// SMELL: this file is over 500 lines because the table of tools grows with each tool. The check
+// of `health` below is a subject of its own and can move to a file of its own.
 #[tokio::test(flavor = "multi_thread")]
 async fn health_names_each_service_that_is_not_ready_and_says_why_a_key_cannot_be_used() {
     let ports = ClosedPorts::new();

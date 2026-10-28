@@ -53,6 +53,7 @@ async fn chapter_insights_reads_the_saved_file_and_says_when_there_is_none() {
             }],
             "takeaways": ["A call is worth more when volatility rises."],
             "cheat_sheet": "### Terms\n\n| a | b |\n|---|---|\n| 1 | 2 |",
+            "truncated": false,
         })
     );
 
@@ -75,6 +76,7 @@ async fn chapter_insights_reads_the_saved_file_and_says_when_there_is_none() {
             "state": "not_written_yet",
             "insights": [],
             "takeaways": [],
+            "truncated": false,
         })
     );
 

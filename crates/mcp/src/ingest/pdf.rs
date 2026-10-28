@@ -14,6 +14,7 @@ use ocr::ChapterJob;
 use ocr::content::media_folder_name;
 use rag_core::{Category, Config, MediaLabels, Tag, author_list};
 use rag_ingestion::{TagChange, UnnamedPdf, uploaded_pdf_path};
+use tempfile::TempDir;
 
 use super::fetch::fetch_pdf;
 use super::{IngestPdfArgs, PDF_START, PdfIngestError};
@@ -199,6 +200,37 @@ async fn blocking<T: Send + 'static>(
 }
 
 impl CheckedPdf {
+    /// Writes the bytes of an uploaded or fetched PDF to a temporary folder, under their own file
+    /// name, and points the PDF there instead of at the place a job saves it. The folder goes away
+    /// when the returned value is dropped. A PDF that is on the disk already is left alone and
+    /// gives `None`.
+    ///
+    /// # Errors
+    /// [`PdfIngestError::Temporary`] when the folder or the file cannot be written.
+    pub(super) async fn keep_upload_in_a_temporary_folder(
+        &mut self,
+    ) -> Result<Option<TempDir>, PdfIngestError> {
+        let Some(upload) = self.upload.take() else {
+            return Ok(None);
+        };
+        let folder = tempfile::tempdir().map_err(|source| PdfIngestError::Temporary {
+            path: std::env::temp_dir(),
+            source,
+        })?;
+        let kept = folder.path().join(&self.file_name);
+        let written = kept.clone();
+        // Writing megabytes to the disk can take a while, so it runs on a thread that may block.
+        blocking(move || {
+            std::fs::write(&written, &upload.bytes).map_err(|source| PdfIngestError::Temporary {
+                path: written,
+                source,
+            })
+        })
+        .await?;
+        self.pdf_path = kept;
+        Ok(Some(folder))
+    }
+
     /// Names the PDF by the category that the graph has for its media, or else by the one the
     /// agent gave. It writes nothing.
     ///

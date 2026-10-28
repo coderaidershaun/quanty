@@ -33,7 +33,9 @@ pub use insights::{
     ChapterChoice, InsightsNeed, InsightsOutcome, InsightsSummary, InsightsWriter, StoredChapter,
     StoredChaptersError, stored_chapters,
 };
-pub use items::{Item, LoneImage, chapter_items, context_line, document_title, image_items};
+pub use items::{
+    Item, LoneImage, chapter_items, context_line, document_title, document_title_of, image_items,
+};
 pub use summary::{IngestStep, IngestSummary, ItemCounts, usage_of};
 pub(crate) use summary::{Meter, OnStep, write_usage};
 

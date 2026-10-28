@@ -1,6 +1,8 @@
-//! The `ingest_pdf` and `ingest_status` tools. An ingest takes minutes and a client puts a time
-//! limit on a tool call, so `ingest_pdf` starts a job and `ingest_status` reads it.
+//! The `ingest_pdf` and `ingest_status` tools, and the `check_pdf` tool that says first what an
+//! ingest would do. An ingest takes minutes and a client puts a time limit on a tool call, so
+//! `ingest_pdf` starts a job and `ingest_status` reads it.
 
+mod check;
 mod error;
 mod fetch;
 mod pdf;
@@ -19,6 +21,7 @@ use crate::args::file_name_of;
 use crate::jobs::{BackgroundJobs, JobKind, JobReport, JobState};
 use crate::jobs::{Jobs, first_report};
 use crate::services::Services;
+pub(crate) use check::{CheckPdfArgs, PdfCheck};
 pub(crate) use error::PdfIngestError;
 pub(crate) use pdf::base64_len;
 pub(crate) use report::IngestReport;

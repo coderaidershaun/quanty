@@ -53,6 +53,7 @@ fn assert_job_tools_are_marked_and_have_schemas(tools: &[Tool]) {
     let paid = |who: &str| json!({ "paid": true, "who": who });
     let job_mark = json!({ "version": 1, "statusTool": "job_status", "idField": "job_id" });
     let marked = [
+        ("check_pdf", "ingest", free.clone(), false),
         ("ingest_pdf", "ingest", paid("ingest"), true),
         ("write_insights", "ingest", paid("ingest"), true),
         ("build_dataset", "datasets", paid("datasets"), true),
@@ -104,6 +105,20 @@ fn assert_job_tools_are_marked_and_have_schemas(tools: &[Tool]) {
             assert!(keys.iter().any(|k| k == key), "{name} has {key}: {keys:?}");
         }
     }
+    let check = tool("check_pdf");
+    assert!(check.title.is_some(), "check_pdf has a title");
+    let check_keys = output_keys("check_pdf");
+    for key in ["title", "pages", "state", "blockers", "estimate"] {
+        assert!(check_keys.iter().any(|k| k == key), "check_pdf has {key}");
+    }
+    let check_description = check
+        .description
+        .as_deref()
+        .expect("check_pdf has a description");
+    assert!(
+        check_description.len() <= 300 && check_description.contains("Free"),
+        "{check_description}"
+    );
     let list_keys = output_keys("list_jobs");
     assert!(list_keys.contains(&"running".to_owned()) && list_keys.contains(&"jobs".to_owned()));
     assert!(output_keys("stop_job").contains(&"state".to_owned()));
@@ -123,6 +138,7 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         "chapter_concepts",
         "chapter_contents",
         "chapter_insights",
+        "check_pdf",
         "dataset_status",
         "edit_document_tags",
         "edit_media",
@@ -141,7 +157,7 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         "write_insights",
     ];
     assert_eq!(names, expected_names);
-    let expected: [(&str, &[&str], &[&str]); 21] = [
+    let expected: [(&str, &[&str], &[&str]); 22] = [
         (
             "answer",
             &[
@@ -180,6 +196,18 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
             &["document_id"],
         ),
         ("chapter_insights", &["document_id"], &["document_id"]),
+        (
+            "check_pdf",
+            &[
+                "category",
+                "document_title",
+                "file_name",
+                "media",
+                "path",
+                "pdf_url",
+            ],
+            &["media"],
+        ),
         ("dataset_status", &["job_id"], &["job_id"]),
         (
             "edit_document_tags",
@@ -254,56 +282,21 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
             .and_then(|tool| tool.description.as_deref())
             .unwrap_or_else(|| panic!("{name} has a description"))
     };
-    assert!(
-        description("answer").contains("subscription"),
-        "{}",
-        description("answer")
-    );
-    assert!(
-        description("ingest_pdf").contains("PAID"),
-        "{}",
-        description("ingest_pdf")
-    );
-    assert!(
-        description("build_dataset").contains("PAID"),
-        "{}",
-        description("build_dataset")
-    );
-    assert!(
-        description("build_dataset").contains("dry_run"),
-        "{}",
-        description("build_dataset")
-    );
-    assert!(
-        description("write_insights").contains("PAID"),
-        "{}",
-        description("write_insights")
-    );
-    assert!(
-        description("write_insights").contains("dry_run"),
-        "{}",
-        description("write_insights")
-    );
-    assert!(
-        description("edit_media").contains("both stores"),
-        "{}",
-        description("edit_media")
-    );
-    assert!(
-        description("export_insights").contains("file"),
-        "{}",
-        description("export_insights")
-    );
-    assert!(
-        description("export_insights").contains("overwrite"),
-        "{}",
-        description("export_insights")
-    );
-    assert!(
-        description("stop_job").contains("an ingest, an insights job or a dataset build"),
-        "{}",
-        description("stop_job")
-    );
+    let phrases = [
+        ("answer", "subscription"),
+        ("ingest_pdf", "PAID"),
+        ("build_dataset", "PAID"),
+        ("build_dataset", "dry_run"),
+        ("write_insights", "PAID"),
+        ("write_insights", "dry_run"),
+        ("edit_media", "both stores"),
+        ("export_insights", "file"),
+        ("export_insights", "overwrite"),
+        ("stop_job", "an ingest, an insights job or a dataset build"),
+    ];
+    for (name, phrase) in phrases {
+        assert!(description(name).contains(phrase), "{}", description(name));
+    }
 
     for old in ["ingest_status", "insights_status", "dataset_status"] {
         assert!(

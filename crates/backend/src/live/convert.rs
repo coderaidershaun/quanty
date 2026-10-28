@@ -1,6 +1,7 @@
 //! The ids, the item kind, the category, the document name, the label shapes, the steps of a build,
-//! what a run used and what became of its insights, to and from the types of the backend. Every
-//! part of the live backend converts through these and writes none of its own.
+//! what a run used, how far a document is and what became of its insights, to and from the types
+//! of the backend. Every part of the live backend converts through these and writes none of its
+//! own.
 
 use std::collections::BTreeSet;
 
@@ -210,6 +211,33 @@ impl IntoView<Usage> for &UsageTally {
         Usage {
             models,
             cost_usd: self.cost_usd(),
+        }
+    }
+}
+
+impl IntoView<contract::ChapterState> for rag_ingestion::DocumentState {
+    fn into_view(self) -> contract::ChapterState {
+        match self {
+            rag_ingestion::DocumentState::New => contract::ChapterState::New,
+            rag_ingestion::DocumentState::PartlyConverted { pages_done } => {
+                contract::ChapterState::PartlyConverted { pages_done }
+            }
+            rag_ingestion::DocumentState::Converted => contract::ChapterState::Converted,
+            rag_ingestion::DocumentState::Ingested { items } => {
+                contract::ChapterState::Ingested { items }
+            }
+            rag_ingestion::DocumentState::IngestedWithoutMetadata {
+                items,
+                missing_artifacts,
+                missing_insights,
+            } => contract::ChapterState::IngestedWithoutMetadata {
+                items,
+                missing_artifacts,
+                missing_insights,
+            },
+            rag_ingestion::DocumentState::IngestedWithoutInsights { items } => {
+                contract::ChapterState::IngestedWithoutInsights { items }
+            }
         }
     }
 }

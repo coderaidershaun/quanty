@@ -2,6 +2,7 @@
 //! searchable items and a graph of their concepts, and can relabel a stored media or document,
 //! delete a stored document or a whole media, and say what the two API keys can do.
 
+mod check;
 mod delete;
 pub mod health;
 mod ingest;
@@ -14,6 +15,7 @@ mod stores;
 pub mod testing;
 mod uploads;
 
+pub use check::{Blocker, CheckError, DocumentCheck, DocumentState, check_document};
 pub use delete::{
     DeleteError, DocumentDeleteSummary, MediaDeleteSummary, delete_document, delete_media,
 };
@@ -23,8 +25,8 @@ pub use ingest::{
     ConceptExtractor, ConceptSummary, IngestError, IngestStep, IngestSummary, InsightsNeed,
     InsightsOutcome, InsightsSummary, InsightsWriter, Item, ItemCounts, LINK_SCORE, LoneImage,
     Models, Outcome, Reading, SkippedItem, StoredChapter, StoredChaptersError, assess_artifacts,
-    chapter_items, context_line, document_title, image_items, ingest_chapter, ingest_image,
-    stored_chapters, usage_of,
+    chapter_items, context_line, document_title, document_title_of, image_items, ingest_chapter,
+    ingest_image, stored_chapters, usage_of,
 };
 pub use keys::{KEY_CHECK_LIMIT, KeyClients, KeyReadFailure, KeyState, KeyStates, read_key_states};
 pub use labels::{RelabelError, Relabelled, TagChange, relabel_document_tags};

@@ -25,6 +25,7 @@ rmcp.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
 thiserror.workspace = true
 time = { workspace = true, features = ["formatting"] }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
@@ -36,5 +37,4 @@ uuid.workspace = true
 ocr = { workspace = true, features = ["testing"] }
 rag-ingestion = { workspace = true, features = ["testing"] }
 rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest"] }
-tempfile.workspace = true
 tokio = { workspace = true, features = ["io-util", "macros", "process", "rt", "rt-multi-thread", "time"] }

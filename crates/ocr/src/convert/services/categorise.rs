@@ -8,8 +8,9 @@ use schemars::generate::SchemaSettings;
 use super::claude::{self, Answer, ClaudeCall, ClaudeError};
 use crate::content::PageCategories;
 
+/// The model that tags each page with the kinds of content on it.
 // An alias for the newest Haiku model, so answers can change when a new one comes out.
-const MODEL: &str = "haiku";
+pub const TAG_MODEL: &str = "haiku";
 const TAGGING_TIMEOUT: Duration = Duration::from_secs(120);
 
 const SYSTEM_PROMPT: &str = "You categorise a single page from a PDF book. Read the page you are given, then report which kinds of content are visibly present on it. Mark a category true only when that content appears on the page itself, and mark every other category false.";
@@ -22,7 +23,7 @@ pub(super) async fn categorise_page_with_usage(
     pdf_page: &Path,
 ) -> Result<Answer<PageCategories>, ClaudeError> {
     claude::run(&ClaudeCall {
-        model: MODEL,
+        model: TAG_MODEL,
         effort: None,
         system_prompt: SYSTEM_PROMPT,
         instruction: "Categorise the PDF page",

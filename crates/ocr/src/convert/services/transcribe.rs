@@ -8,12 +8,14 @@ use super::claude::{self, Answer, ClaudeCall, ClaudeError};
 use super::schema::reply_schema;
 use crate::convert::reply::{CopiedPage, TranscribedPage};
 
-const COPY_MODEL: &str = "haiku";
+/// The model that copies the text of a plain page.
+pub const COPY_MODEL: &str = "haiku";
 const COPY_INSTRUCTION: &str = "Copy the text of the page in the file";
 const COPY_PROMPT: &str = include_str!("prompts/copy.md");
 
+/// The model that transcribes a page with math or figures.
 // Pinned: the prompts were tuned against this model.
-const TRANSCRIBE_MODEL: &str = "claude-sonnet-5-5";
+pub const TRANSCRIBE_MODEL: &str = "claude-sonnet-5-5";
 const TRANSCRIBE_EFFORT: &str = "medium";
 const TRANSCRIBE_INSTRUCTION: &str = "Transcribe the page in the file";
 const TRANSCRIBE_PROMPT: &str = include_str!("prompts/transcribe.md");

@@ -25,12 +25,13 @@ use crate::support::{
 /// How long the command may take to end once the client has closed its input.
 const END_WAIT: Duration = Duration::from_secs(20);
 
-const TOOL_NAMES: [&str; 21] = [
+const TOOL_NAMES: [&str; 22] = [
     "answer",
     "build_dataset",
     "chapter_concepts",
     "chapter_contents",
     "chapter_insights",
+    "check_pdf",
     "dataset_status",
     "edit_document_tags",
     "edit_media",

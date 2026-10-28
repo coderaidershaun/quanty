@@ -91,9 +91,15 @@ pub(super) fn document_id(index: &ChapterIndex) -> DocId {
 /// The title is embedded with every item and is part of the key of the cached concepts, so the
 /// title of a chapter must not change.
 pub fn document_title(index: &ChapterIndex) -> String {
-    match &index.name {
+    document_title_of(&index.media_title, &index.name)
+}
+
+/// The title that a document of this name in this media is stored under, which a program can work
+/// out before the document is converted.
+pub fn document_title_of(media_title: &str, name: &DocumentName) -> String {
+    match name {
         DocumentName::Chapter { number, name } => {
-            format!("{}, chapter {number}: {name}", index.media_title)
+            format!("{media_title}, chapter {number}: {name}")
         }
         DocumentName::Title(title) => title.clone(),
     }

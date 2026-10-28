@@ -6,7 +6,7 @@ use std::error::Error;
 use ocr::convert::services::JevError;
 use ocr::{ConvertError, PageError};
 use rag_core::{EmbedError, error_chain};
-use rag_ingestion::{ConceptError, IngestError, PdfError};
+use rag_ingestion::{CheckError, ConceptError, IngestError, PdfError};
 use rmcp::ErrorData;
 use rmcp::handler::server::tool::IntoCallToolResult;
 use rmcp::model::{CallToolResponse, CallToolResult, ContentBlock};
@@ -161,6 +161,9 @@ impl ToolError {
                 PdfError::Graph(_) | PdfError::Store(_) => true,
                 PdfError::Ingest(error) => is_service_failure_of_the_ingest(error),
             },
+            ToolError::Ingest(PdfIngestError::Check(error)) => {
+                matches!(**error, CheckError::Stores(_))
+            }
             ToolError::Ingest(error) => matches!(
                 error,
                 PdfIngestError::Embedder(_)

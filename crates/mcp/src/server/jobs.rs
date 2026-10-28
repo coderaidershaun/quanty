@@ -1,5 +1,5 @@
-//! The tools that start a job, follow it and stop it: ingest a PDF, write insights, build a
-//! dataset, the status of each, and the tools that watch and list jobs of any kind.
+//! The tools that start a job, follow it and stop it: check and ingest a PDF, write insights, build
+//! a dataset, the status of each, and the tools that watch and list jobs of any kind.
 
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::service::RequestContext;
@@ -11,7 +11,7 @@ use super::lookup::{FoundJob, JobResult, JobStatusArgs, stop_any};
 use super::meta::{Cost, Group, Payer, ToolMarks, output_schema};
 use super::tasks::JobStart;
 use crate::datasets::{BuildDatasetArgs, DatasetReport, DatasetStatusArgs};
-use crate::ingest::{IngestPdfArgs, IngestReport, IngestStatusArgs};
+use crate::ingest::{CheckPdfArgs, IngestPdfArgs, IngestReport, IngestStatusArgs, PdfCheck};
 use crate::insights::{InsightsReport, InsightsStatusArgs, WriteInsightsArgs};
 use crate::jobs::{BackgroundJobs, JobList, ProgressSink, WatchJobArgs};
 use crate::jobs::{StopError, StopJobArgs, StopResult};
@@ -22,8 +22,25 @@ const LISTED_PER_KIND: usize = 20;
 
 #[tool_router(router = jobs_router, vis = "pub(super)")]
 impl<S: Services> QuantyServer<S> {
+    /// PDF check before `ingest_pdf`: the title quanty would store, pages, state, blockers and a
+    /// rough cost and time estimate. Free: it reads the PDF and the stores, starts no job and
+    /// writes nothing.
+    #[tool(
+        title = "Check PDF",
+        annotations(read_only_hint = true, idempotent_hint = true),
+        output_schema = output_schema::<PdfCheck>(),
+        meta = ToolMarks::new(Group::Ingest, Cost::Free).into()
+    )]
+    async fn check_pdf(
+        &self,
+        Parameters(args): Parameters<CheckPdfArgs>,
+    ) -> Result<Json<PdfCheck>, ToolError> {
+        Ok(Json(self.shared.ingest.check(args).await?))
+    }
+
     /// Converts one PDF of a book, a paper or another media and stores it so that it can be
-    /// searched. It is PAID and slow: each page is read by the agent of the Ingest choice and Jev,
+    /// searched. Call `check_pdf` first: it is free and says the pages, the state and a cost
+    /// estimate. It is PAID and slow: each page is read by the agent of the Ingest choice and Jev,
     /// the items are embedded by Gemini and that agent writes the chapter's insights, takeaways
     /// and cheat sheet and finds the concepts, which takes minutes for a chapter. The call
     /// answers when that work has started, with a `job_id`: call `watch_job` with it (it waits for

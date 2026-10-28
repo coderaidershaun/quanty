@@ -17,6 +17,9 @@ use crate::content::PageCategories;
 use categorise::categorise_page_with_usage;
 use transcribe::{copy_page, transcribe_page_with_picture};
 
+pub use categorise::TAG_MODEL;
+pub use transcribe::{COPY_MODEL, TRANSCRIBE_MODEL};
+
 pub use claude::{Answer, CallUsage, ClaudeError};
 pub use jev::{Jev, JevError, MathPlacement};
 

@@ -152,6 +152,11 @@ impl ChapterJob {
         &self.name
     }
 
+    /// The PDF the job converts.
+    pub fn chapter_pdf(&self) -> &Path {
+        &self.chapter_pdf
+    }
+
     /// The SHA-256 of the chapter PDF as lower-case hex: the value that `chapter.json` keeps as
     /// `source-sha256`. It reads the whole file.
     ///

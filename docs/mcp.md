@@ -37,7 +37,7 @@ The unified HTTP server admits one background ingest, insights job or dataset bu
 
 ## 3. The tools
 
-Twenty-one tools. A tool that costs money says so in its description, and so does this table.
+Twenty-two tools. A tool that costs money says so in its description, and so does this table.
 
 | Tool | What it does | Costs |
 | --- | --- | --- |
@@ -52,6 +52,7 @@ Twenty-one tools. A tool that costs money says so in its description, and so doe
 | `edit_media` | Changes the category, authors or tags of a stored media, in both stores | Nothing |
 | `edit_document_tags` | Adds tags to a stored document or takes tags away, in both stores | Nothing |
 | `health` | Whether Qdrant, FalkorDB, the sign-in of the Ingest choice's agent and the two keys are ready, and the model of each kind of work | Nothing |
+| `check_pdf` | What an `ingest_pdf` of a PDF would do: the title it is stored under, its pages, its state, what would stop it and a rough cost and time | Nothing |
 | `ingest_pdf` | Converts one PDF of a media, stores it and writes its insights | **Paid and slow**: Claude, Jev and Gemini; minutes for each PDF |
 | `ingest_status` | Deprecated: call `job_status`. How an ingest job is going | Nothing |
 | `write_insights` | Writes the missing insights, takeaways and cheat sheets of documents that are stored already | **Paid and slow** unless `dry_run` is `true`: the agent of the Ingest choice is asked once for each document that has none, a minute or more for each. A dry run is free |
@@ -200,6 +201,10 @@ No arguments. It runs every check, so one report names everything that is wrong,
 
 The keys are read when the server starts, so a key that is fixed in `.env` needs a restart. No tool shows a key.
 
+### `check_pdf`
+
+See the next part.
+
 ### `ingest_pdf` and `ingest_status`
 
 See the next part. `ingest_status` is deprecated: `job_status` gives the same result.
@@ -217,6 +222,34 @@ See part 5. `dataset_status` is deprecated: `job_status` gives the same result.
 See part 7.
 
 ## 4. Sending a PDF
+
+### Check it first
+
+An agent calls `check_pdf` before `ingest_pdf`, with the same PDF arguments: `media`, `category`, `document_title`, and `path`, or `pdf_url` with `file_name`. It answers what the free check of the browser app answers when a PDF is chosen, and adds a rough estimate. It is free: it starts no job, holds no background slot and writes nothing to the stores or to the content folder. A `pdf_url` is fetched into a temporary file that is removed when the check ends, and never saved under `_uploads`. A PDF that `ingest_pdf` would refuse (a blank media, no PDF or two, a file that is not a PDF, a `pdf_url` that is not allowed) is refused the same way, as a tool error.
+
+| Field | Meaning |
+| --- | --- |
+| `media`, `category`, `file` | The media title, the category that names the PDF (the stored media's, else the one given, else `book`) and the file name |
+| `title` | The title the document has once it is ingested, as `list_documents` shows it |
+| `document_id` | The id the document has once it is ingested |
+| `pages` | The pages of the PDF. `null` when they cannot be counted (a blocker says why) and for a document that is stored already |
+| `state` | See the states below. `null` when the folder of the document holds a different PDF, which a blocker says |
+| `pages_done`, `items`, `missing_artifacts`, `missing_insights` | Only for the states that name them |
+| `blockers` | Every reason an `ingest_pdf` would fail, one line each. Empty means it may start |
+| `estimate` | `pages_to_convert`, `usd_low`, `usd_high` and `minutes` |
+
+| `state` | Meaning |
+| --- | --- |
+| `new` | Nothing of it is converted or stored |
+| `partly_converted` | Some pages are converted: `pages_done` says how many. A start goes on from there |
+| `converted` | Every page is converted, and the stores do not hold it yet |
+| `ingested` | The stores hold it whole: `items` says how many. A start finds nothing to do |
+| `ingested_without_insights` | The stores hold it, but its insights are not saved. A start asks the agent for them |
+| `ingested_without_metadata` | The stores hold it, but its artifact descriptions need repair, and its insights too when `missing_insights` is `true` |
+
+The estimate is rough, and it is a range. It covers converting the pages, the part of an ingest that is paid for each page, at the API prices of the table of prices ([reference.md](reference.md#costs)): `usd_low` if every page is a plain page and `usd_high` if every page is read as math or figures, each rounded up to the cent, and `null` when the table has no price for a model. `minutes` counts about 28 seconds a page, rounded up to a whole minute. `pages_to_convert` is all the pages of a new PDF, the rest of a partly converted one and none of the others. The later steps (artifact descriptions, concepts, embedding and insights) cost extra and are not in the estimate.
+
+### Send it
 
 `ingest_pdf` takes the media, the PDF and labels:
 
@@ -448,7 +481,6 @@ The tools do what the browser app does where an agent needs it. These are left o
 | Deleting a document or a whole media | A delete removes converted pages, points and graph nodes and cannot be undone, and making them again is paid work. An agent never needs it to read or learn, and a stored page can hold words that lead an agent to call such a tool. A required `confirm` field guards nothing, because a misled agent fills it too. Delete in the Library tab, or with `rag-ingest delete-document` and `rag-ingest delete-media` |
 | Changing the model or thinking of a kind of work | It decides what the browser app, the command line and this server spend on every paid call. The person sets it in the top bar or in `.quanty-model.json`. `health` shows it, and an agent needs no other model to do its work |
 | Exporting an answer to PDF, Markdown or HTML | The agent already holds the answer, its claims and its sources as JSON. The browser app asks quanty to export the answer it holds, and a tool would need the server to keep every answer between calls |
-| Checking a PDF before sending it | A PDF that is ingested already costs nothing and says so, and `list_documents` shows what is stored |
 | Saving a media before its first PDF | `ingest_pdf` makes a new media with its labels, and a media with no document holds nothing to read |
 | Cancelling an ask | The client cancels its own call |
 | Navigation and drawing: the shelf, the find box, panels, the concept graph, notices | An agent filters the list itself, and a tool says how it ended. The concepts that a search went through are in `search` with `explain` |

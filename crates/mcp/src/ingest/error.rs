@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use graph::GraphError;
 use ocr::{ContentError, ConvertError};
 use rag_core::{EmbedError, EmptyTag, StoreError, UnknownCategory};
-use rag_ingestion::{NamePdfError, PdfError, RelabelError};
+use rag_ingestion::{CheckError, NamePdfError, PdfError, RelabelError};
 use reqwest::StatusCode;
 use tokio::task::JoinError;
 
@@ -178,6 +178,22 @@ pub(crate) enum PdfIngestError {
         #[source]
         source: std::io::Error,
     },
+
+    #[error(
+        "could not write the PDF to a temporary file at {}; check that the server can write to its temporary folder",
+        path.display()
+    )]
+    Temporary {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("could not read the PDF to check it")]
+    Source(#[source] ConvertError),
+
+    #[error("could not check what the stores and the folder hold of the document")]
+    Check(#[source] Box<CheckError>),
 
     #[error("could not set up the embedder")]
     Embedder(#[from] EmbedError),

@@ -8,7 +8,7 @@ use super::{FalkorGraph, fixed, id_list, parsed, read_rows};
 use crate::contents::{Mention, Relation};
 use crate::error::GraphError;
 
-const RELATION_ROW: &str = "\
+pub(super) const RELATION_ROW: &str = "\
 a relation (the id of the concept it leaves, the id of the concept it reaches, a kind of relation \
 and the id of an item)";
 const MENTION_ROW: &str = "a mention (an item id, a concept id and the wording)";
@@ -71,7 +71,7 @@ impl FalkorGraph {
     }
 }
 
-fn relation_from_row(row: Vec<FalkorValue>) -> Result<Relation, String> {
+pub(super) fn relation_from_row(row: Vec<FalkorValue>) -> Result<Relation, String> {
     let row = fixed::<4>(row)?;
     let [
         FalkorValue::String(from),

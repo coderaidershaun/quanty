@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use mcp::QuantyServer;
 use rag_ingestion::{KeyReadFailure, KeyState, KeyStates};
 
+use crate::marks::assert_concept_tools_are_marked_and_have_schemas;
 use crate::support::{
     ClosedPorts, StandInServices, call, connect, connect_on_2026_07_28, structured,
 };
@@ -45,6 +46,8 @@ fn required_names(tool: &Tool) -> Vec<String> {
     names
 }
 
+// SMELL: this file is longer than 500 lines. This check and the check of the marks of the
+// concept tools belong together in a module of their own.
 /// The marks a host reads to group the job tools, to price them and to draw a progress bar from
 /// them, and the schema of what each gives back.
 fn assert_job_tools_are_marked_and_have_schemas(tools: &[Tool]) {
@@ -194,12 +197,19 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         "chapter_contents",
         "chapter_insights",
         "check_pdf",
+        "compare_documents",
+        "concept",
+        "concept_items",
+        "concept_neighbours",
+        "concept_path",
         "dataset_status",
+        "document_concepts",
         "document_outline",
         "document_overview",
         "edit_document_tags",
         "edit_media",
         "export_insights",
+        "find_concepts",
         "health",
         "ingest_pdf",
         "ingest_status",
@@ -214,12 +224,13 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         "read_pages",
         "read_section",
         "search",
+        "similar_items",
         "stop_job",
         "watch_job",
         "write_insights",
     ];
     assert_eq!(names, expected_names);
-    let expected: [(&str, &[&str], &[&str]); 29] = [
+    let expected: [(&str, &[&str], &[&str]); 37] = [
         (
             "answer",
             &[
@@ -274,7 +285,33 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
             ],
             &["media"],
         ),
+        (
+            "compare_documents",
+            &["document_ids", "limit"],
+            &["document_ids"],
+        ),
+        ("concept", &["concept_id", "name"], &[]),
+        (
+            "concept_items",
+            &["concept_id", "cursor", "document", "kind", "limit"],
+            &["concept_id"],
+        ),
+        (
+            "concept_neighbours",
+            &["concept_id", "depth", "direction", "kinds", "limit"],
+            &["concept_id"],
+        ),
+        (
+            "concept_path",
+            &["from", "max_depth", "to"],
+            &["from", "to"],
+        ),
         ("dataset_status", &["job_id"], &["job_id"]),
+        (
+            "document_concepts",
+            &["document_id", "limit", "page", "with_counts"],
+            &["document_id"],
+        ),
         ("document_outline", &["document_id"], &["document_id"]),
         (
             "document_overview",
@@ -296,6 +333,7 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
             &["document_id", "format", "overwrite", "path"],
             &["document_id", "format", "path"],
         ),
+        ("find_concepts", &["limit", "name", "query"], &[]),
         ("health", &[], &[]),
         (
             "ingest_pdf",
@@ -373,6 +411,7 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
             ],
             &["question"],
         ),
+        ("similar_items", &["item_id", "kind", "limit"], &["item_id"]),
         ("stop_job", &["job_id"], &["job_id"]),
         ("watch_job", &["job_id", "timeout_s"], &["job_id"]),
         (
@@ -421,6 +460,7 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
     }
     assert_job_tools_are_marked_and_have_schemas(&tools);
     assert_library_tools_are_marked_and_have_schemas(&tools);
+    assert_concept_tools_are_marked_and_have_schemas(&tools);
 
     let peer = client
         .peer_info()

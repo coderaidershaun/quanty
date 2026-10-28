@@ -8,8 +8,9 @@ mod falkor;
 pub mod testing;
 
 pub use contents::{
-    ConceptAlias, ConceptNode, DocumentNode, DocumentRecord, ItemMentions, ItemNode, ItemsByKind,
-    MediaNode, Mention, Relation, RelationKind, UnknownRelationKind,
+    ConceptAlias, ConceptDocument, ConceptItem, ConceptNode, Direction, DocumentNode,
+    DocumentRecord, ItemMentions, ItemNode, ItemPlace, ItemsByKind, MediaNode, Mention, PathDepth,
+    Relation, RelationKind, SharedConcept, UnknownRelationKind,
 };
 pub use error::GraphError;
 pub use falkor::FalkorGraph;

@@ -22,7 +22,7 @@ use resolve::Resolver;
 
 pub(crate) use cache::TRIES_FOR_ONE_QUESTION;
 pub use cache::{CALLS_AT_A_TIME, Cache, Outcome, Reading};
-pub use resolve::{ASK_SCORE, LINK_SCORE};
+pub use resolve::{ASK_SCORE, LINK_SCORE, normalised as normalised_concept_name};
 
 use super::items::Item;
 use super::summary::Meter;

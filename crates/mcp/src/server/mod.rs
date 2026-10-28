@@ -2,6 +2,7 @@
 //! failure for the agent.
 
 mod changes;
+mod concepts;
 mod failure;
 mod health;
 mod jobs;
@@ -116,7 +117,8 @@ impl<S: Services> QuantyServer<S> {
             tool_router: Self::reading_router()
                 + Self::jobs_router()
                 + Self::changes_router()
-                + Self::library_router(),
+                + Self::library_router()
+                + Self::concepts_router(),
         }
     }
 

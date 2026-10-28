@@ -2,7 +2,10 @@
 //! document that carry chosen printed labels.
 
 use qdrant_client::Payload;
-use qdrant_client::qdrant::{Condition, Filter, QueryPointsBuilder, ScoredPoint};
+use qdrant_client::qdrant::vector_output::Vector;
+use qdrant_client::qdrant::{
+    Condition, Filter, GetPointsBuilder, PointId, QueryPointsBuilder, ScoredPoint,
+};
 
 use super::{DOC_ID_FIELD, ItemStore, KIND_FIELD};
 use crate::qdrant::point_id_text;
@@ -72,9 +75,42 @@ impl ItemStore {
             "search for items",
             vector,
             filter.conditions(),
+            Vec::new(),
             limit as u64,
         )
         .await
+    }
+
+    /// The `limit` items whose vectors are nearest to the stored vector of the item `id`, nearest
+    /// first, among the items that the filter lets through. The item itself is never among them.
+    /// `None` when the collection holds no point with this id. It embeds nothing, and it never
+    /// creates the collection.
+    ///
+    /// # Errors
+    /// - [`StoreError::Request`] when Qdrant refuses, cannot be reached, or has no such collection
+    /// - [`StoreError::ItemVector`] when the point has no vector of numbers
+    /// - [`StoreError::ItemPointId`] and [`StoreError::StoredItemPayload`] when a stored point is not an
+    ///   item; one such point fails the whole search
+    pub async fn search_by_point(
+        &self,
+        id: ItemId,
+        filter: &ItemFilter,
+        limit: usize,
+    ) -> Result<Option<Vec<ItemHit>>, StoreError> {
+        let Some(vector) = self.stored_vector(id).await? else {
+            return Ok(None);
+        };
+        let not_itself = vec![Condition::has_id([id.to_string()])];
+        let hits = self
+            .query(
+                "search for items near a stored item",
+                vector,
+                filter.conditions(),
+                not_itself,
+                limit as u64,
+            )
+            .await?;
+        Ok(Some(hits))
     }
 
     /// Every stored item among `ids` that the filter lets through, nearest to `vector` first. An
@@ -96,8 +132,14 @@ impl ItemStore {
         }
         let of_ids = Condition::has_id(ids.iter().map(ToString::to_string));
         let conditions = std::iter::once(of_ids).chain(filter.conditions()).collect();
-        self.query("rank items", vector, conditions, ids.len() as u64)
-            .await
+        self.query(
+            "rank items",
+            vector,
+            conditions,
+            Vec::new(),
+            ids.len() as u64,
+        )
+        .await
     }
 
     /// The items of `document` whose printed label is one of `labels`, nearest to `vector` first.
@@ -130,9 +172,36 @@ impl ItemStore {
             "look up the items that carry these labels",
             vector,
             conditions,
+            Vec::new(),
             LABELLED_LIMIT,
         )
         .await
+    }
+
+    /// The vector of the point, or `None` when no point has the id.
+    async fn stored_vector(&self, id: ItemId) -> Result<Option<Embedding>, StoreError> {
+        let request = GetPointsBuilder::new(
+            self.collection.name.as_str(),
+            vec![PointId::from(id.to_string())],
+        )
+        .with_payload(false)
+        .with_vectors(true);
+        let reply = self
+            .collection
+            .client
+            .get_points(request)
+            .await
+            .map_err(self.collection.request_error("read the vector of an item"))?;
+        let Some(point) = reply.result.into_iter().next() else {
+            return Ok(None);
+        };
+        match point.vectors.and_then(|vectors| vectors.get_vector()) {
+            Some(Vector::Dense(dense)) => Ok(Some(dense.data)),
+            _ => Err(StoreError::ItemVector {
+                id,
+                collection: self.collection.name.clone(),
+            }),
+        }
     }
 
     async fn query(
@@ -140,14 +209,19 @@ impl ItemStore {
         action: &'static str,
         vector: Embedding,
         conditions: Vec<Condition>,
+        must_not: Vec<Condition>,
         limit: u64,
     ) -> Result<Vec<ItemHit>, StoreError> {
         let mut query = QueryPointsBuilder::new(self.collection.name.as_str())
             .query(vector)
             .limit(limit)
             .with_payload(true);
-        if !conditions.is_empty() {
-            query = query.filter(Filter::must(conditions));
+        if !conditions.is_empty() || !must_not.is_empty() {
+            query = query.filter(Filter {
+                must: conditions,
+                must_not,
+                ..Filter::default()
+            });
         }
         let reply = self
             .collection

@@ -159,3 +159,86 @@ async fn a_collection_that_holds_items_gets_the_index_on_the_kind_and_is_searche
         indexes.payload_schema
     );
 }
+
+/// A unit vector at this cosine to `unit_vector`, with the rest on `other_axis`.
+fn vector_at(cosine: f32, other_axis: usize) -> Vec<f32> {
+    let mut vector = vec![0.0; EMBEDDING_DIMENSIONS];
+    vector[0] = cosine;
+    vector[other_axis] = (1.0 - cosine * cosine).sqrt();
+    vector
+}
+
+#[tokio::test]
+#[ignore = "needs the local Qdrant from docker compose and bills nothing; run with: cargo test -p rag-core --test integration -- --ignored item_store::"]
+async fn a_stored_point_finds_its_nearest_items_but_not_itself_and_an_unknown_point_finds_nothing()
+{
+    let config = throwaway_items("items-by-point");
+    let store = ItemStore::connect(&config).expect("the item store should open");
+    let document = DocId::from_source_sha256("items-by-point");
+    // The cosines to the first point are 1, 0.9, 0.6 and 0, so the order of the search is known.
+    let origin = point(document, ItemKind::Chunk, 0);
+    let near_formula = ItemPoint {
+        vector: vector_at(0.9, 1),
+        ..point(document, ItemKind::Formula, 1)
+    };
+    let middle_chunk = ItemPoint {
+        vector: vector_at(0.6, 2),
+        ..point(document, ItemKind::Chunk, 2)
+    };
+    let far_figure = ItemPoint {
+        vector: vector_at(0.0, 3),
+        ..point(document, ItemKind::Figure, 3)
+    };
+    let unknown = ItemId::new(document, ItemKind::Code, 99);
+    let everything = ItemFilter::default();
+    let only_chunks = ItemFilter {
+        kind: Some(ItemKind::Chunk),
+        documents: None,
+        items: None,
+    };
+
+    // Nothing is asserted between the creation and the deletion, so a failure cannot leave the
+    // collection behind.
+    let made = store.ensure_collection().await;
+    let stored = store
+        .upsert(&[
+            origin.clone(),
+            near_formula.clone(),
+            middle_chunk.clone(),
+            far_figure.clone(),
+        ])
+        .await;
+    let nearest = store.search_by_point(origin.id, &everything, 10).await;
+    let nearest_one = store.search_by_point(origin.id, &everything, 1).await;
+    let nearest_chunks = store.search_by_point(origin.id, &only_chunks, 10).await;
+    let from_unknown = store.search_by_point(unknown, &everything, 10).await;
+    remove_collection(&config, &config.items_collection).await;
+
+    made.expect("the collection should be made");
+    stored.expect("the items should be stored");
+    let ids = |hits: Option<Vec<rag_core::ItemHit>>| -> Vec<ItemId> {
+        hits.expect("the point is stored")
+            .into_iter()
+            .map(|hit| hit.id)
+            .collect()
+    };
+    let nearest = nearest.unwrap().expect("the point is stored");
+    assert_eq!(
+        nearest.iter().map(|hit| hit.id).collect::<Vec<_>>(),
+        vec![near_formula.id, middle_chunk.id, far_figure.id],
+        "nearest first, and never the point itself"
+    );
+    assert!(
+        (nearest[0].score - 0.9).abs() < 1e-4,
+        "{}",
+        nearest[0].score
+    );
+    assert_eq!(nearest[0].payload, near_formula.payload);
+    assert_eq!(ids(nearest_one.unwrap()), vec![near_formula.id]);
+    assert_eq!(
+        ids(nearest_chunks.unwrap()),
+        vec![middle_chunk.id],
+        "the filter keeps the chunks, and the point is a chunk that is left out"
+    );
+    assert_eq!(from_unknown.unwrap(), None, "no point has that id");
+}

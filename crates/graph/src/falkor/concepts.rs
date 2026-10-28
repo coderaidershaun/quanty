@@ -6,7 +6,10 @@ use std::collections::HashMap;
 use falkordb::FalkorValue;
 use rag_core::{ConceptId, DocId, ItemId};
 
-use super::{FalkorGraph, fixed, id_list, id_value, parsed, read_rows, texts_into};
+use super::mentions::count_value;
+use super::{
+    FalkorGraph, fixed, id_list, id_value, parsed, read_rows, texts_into, unreadable_reply,
+};
 use crate::contents::{ConceptNode, ItemMentions};
 use crate::error::GraphError;
 
@@ -15,6 +18,10 @@ const ITEM_ROW: &str =
     "an item with the concepts it mentions (an item id and a list of concept ids)";
 const MENTION_COUNT_ROW: &str =
     "a concept with a count (a concept id and one whole number that is not negative)";
+const ALIASES_ROW: &str = "the aliases of a concept (a list of names or null)";
+const TOP_CONCEPT_ROW: &str = "\
+a concept with a count (an id, a name, a normalised name, a definition and one whole number that \
+is not negative)";
 
 const FIND_CONCEPT: &str = "\
 MATCH (c:Concept)
@@ -66,6 +73,17 @@ MATCH (d:Document {id: $document})-[:HAS_ITEM]->(i:Item)-[:MENTIONS]->(c:Concept
 WITH c, count(i) AS mentions
 RETURN c.id, c.name, c.normalised_name, c.definition
 ORDER BY mentions DESC, c.normalised_name";
+
+const ALIASES: &str = "\
+MATCH (c:Concept {id: $id})
+RETURN c.aliases";
+
+const TOP_CONCEPTS: &str = "\
+MATCH (i:Item)-[:MENTIONS]->(c:Concept)
+WITH c, count(i) AS mentions
+RETURN c.id, c.name, c.normalised_name, c.definition, mentions
+ORDER BY mentions DESC, c.normalised_name, c.id
+LIMIT $limit";
 
 impl FalkorGraph {
     /// The concept that has exactly this text as its normalised name or as one of its normalised
@@ -255,6 +273,43 @@ impl FalkorGraph {
         )
         .await
     }
+
+    /// The names that items gave the concept besides its own, as the items wrote them, in the
+    /// order they were added. A concept that is not in the graph, and a concept with no alias,
+    /// give none.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a list
+    ///   of names
+    pub async fn aliases_of(&self, concept: ConceptId) -> Result<Vec<String>, GraphError> {
+        let action = "read the aliases of the concept";
+        let parameters = vec![("id", id_value(concept))];
+        let reply = self.run(action, ALIASES, parameters).await?;
+        let aliases = reply
+            .data
+            .into_values_lossy()
+            .next()
+            .map(aliases_from_row)
+            .transpose()
+            .map_err(|found| unreadable_reply(self, action, ALIASES_ROW, found))?;
+        Ok(aliases.unwrap_or_default())
+    }
+
+    /// The concepts that the most items mention, with how many items do, the most first and then
+    /// by normalised name. At most `limit` come back. A concept that no item mentions is not
+    /// among them.
+    ///
+    /// # Errors
+    /// - [`GraphError::Query`] when the store refuses or cannot be reached
+    /// - [`GraphError::UnreadableReply`] when the store answers with something that is not a
+    ///   concept with a count
+    pub async fn top_concepts(&self, limit: usize) -> Result<Vec<(ConceptNode, u64)>, GraphError> {
+        let action = "read the concepts that the most items mention";
+        let parameters = vec![("limit", count_value(limit))];
+        let reply = self.run(action, TOP_CONCEPTS, parameters).await?;
+        read_rows(self, action, TOP_CONCEPT_ROW, reply, top_concept_from_row)
+    }
 }
 
 async fn read_concept(
@@ -315,4 +370,26 @@ fn mention_count_from_row(row: Vec<FalkorValue>) -> Result<(ConceptId, u64), Str
     let concept = parsed(&concept)?;
     let count = u64::try_from(count).map_err(|_| count.to_string())?;
     Ok((concept, count))
+}
+
+fn aliases_from_row(row: Vec<FalkorValue>) -> Result<Vec<String>, String> {
+    let [aliases] = fixed::<1>(row)?;
+    texts_into(aliases, Ok)
+}
+
+fn top_concept_from_row(row: Vec<FalkorValue>) -> Result<(ConceptNode, u64), String> {
+    let row = fixed::<5>(row)?;
+    let [
+        id,
+        name,
+        normalised_name,
+        definition,
+        FalkorValue::I64(mentions),
+    ] = row
+    else {
+        return Err(format!("{row:?}"));
+    };
+    let concept = concept_from_row(vec![id, name, normalised_name, definition])?;
+    let mentions = u64::try_from(mentions).map_err(|_| mentions.to_string())?;
+    Ok((concept, mentions))
 }

@@ -4,13 +4,13 @@
 
 use mcp::QuantyServer;
 use ocr::testing::sample_pdf;
-use rag_core::DocId;
+use rag_core::{ConceptId, DocId, ItemId, ItemKind};
 use rag_ingestion::testing::StandInLlm;
 use serde_json::{Value, json};
 
 use crate::support::{
     Client, ClosedPorts, StandInServices, call, connect, error_text, sample_content_folder,
-    sample_document_id,
+    sample_document_id, sample_notes_document_id,
 };
 
 const STORE_DOWN: [&str; 2] = ["falkor://127.0.0.1:1", "Call the `health` tool"];
@@ -131,6 +131,22 @@ async fn every_refusal_is_a_tool_error_that_says_what_to_do() {
             json!({ "document_id": id, "add": ["a"] }),
             STORE_DOWN.to_vec(),
         ),
+        (
+            "find_concepts",
+            json!({ "query": "how much a price moves" }),
+            STORE_DOWN.to_vec(),
+        ),
+        ("concept", json!({}), STORE_DOWN.to_vec()),
+        (
+            "compare_documents",
+            json!({ "document_ids": [id, sample_notes_document_id(1).to_string()] }),
+            STORE_DOWN.to_vec(),
+        ),
+        (
+            "similar_items",
+            json!({ "item_id": ItemId::new(sample_document_id(), ItemKind::Chunk, 0).to_string() }),
+            vec!["http://127.0.0.1:1", "Call the `health` tool"],
+        ),
     ];
     for (tool, arguments, words) in calls {
         refused(&client, tool, arguments, &words).await;
@@ -181,6 +197,26 @@ async fn every_refusal_is_a_tool_error_that_says_what_to_do() {
             "edit_document_tags",
             json!({ "document_id": id, "remove": [" "] }),
             "a tag in `add` or `remove` is blank",
+        ),
+        (
+            "concept_neighbours",
+            json!({ "concept_id": ConceptId::random().to_string(), "depth": 3 }),
+            "`depth` is 3",
+        ),
+        (
+            "concept_path",
+            json!({ "from": "delta", "to": "gamma", "max_depth": 5 }),
+            "`max_depth` is 5",
+        ),
+        (
+            "find_concepts",
+            json!({}),
+            "exactly one of `name` and `query`",
+        ),
+        (
+            "compare_documents",
+            json!({ "document_ids": [id] }),
+            "from 2 to 10 different document ids",
         ),
     ] {
         let text = refused(&client, tool, arguments, &[words]).await;

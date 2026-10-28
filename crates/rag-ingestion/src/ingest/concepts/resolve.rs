@@ -32,7 +32,7 @@ pub(super) enum Resolved {
 /// The form in which names are compared: lower case, with every run of characters that are not
 /// letters or digits turned into one space. A hyphen is a word break, not a letter to delete, so
 /// "Black–Scholes", "black-scholes" and "Black Scholes" are the same name.
-pub(super) fn normalised(name: &str) -> String {
+pub fn normalised(name: &str) -> String {
     ocr::content::slug(name)
         .unwrap_or_default()
         .replace('-', " ")

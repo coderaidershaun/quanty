@@ -26,7 +26,7 @@ pub use ingest::{
     InsightsOutcome, InsightsSummary, InsightsWriter, Item, ItemCounts, LINK_SCORE, LoneImage,
     Models, Outcome, Reading, SkippedItem, StoredChapter, StoredChaptersError, assess_artifacts,
     chapter_items, context_line, document_title, document_title_of, image_items, ingest_chapter,
-    ingest_image, stored_chapters, usage_of,
+    ingest_image, normalised_concept_name, stored_chapters, usage_of,
 };
 pub use keys::{KEY_CHECK_LIMIT, KeyClients, KeyReadFailure, KeyState, KeyStates, read_key_states};
 pub use labels::{RelabelError, Relabelled, TagChange, relabel_document_tags};

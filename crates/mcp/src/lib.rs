@@ -2,6 +2,7 @@
 //! Stand-in services let callers exercise the tools without paying for model calls.
 
 mod args;
+mod concepts;
 mod datasets;
 mod fixture;
 mod ingest;

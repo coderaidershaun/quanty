@@ -116,6 +116,37 @@ impl FromStr for RelationKind {
     }
 }
 
+/// The most edges in a chain that [`crate::FalkorGraph::shortest_path`] looks for: from 1 to
+/// [`PathDepth::MAX`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PathDepth(u32);
+
+impl PathDepth {
+    pub const MAX: PathDepth = PathDepth(4);
+
+    /// `None` when `edges` is 0 or more than [`PathDepth::MAX`].
+    pub fn new(edges: u32) -> Option<PathDepth> {
+        (1..=PathDepth::MAX.0)
+            .contains(&edges)
+            .then_some(PathDepth(edges))
+    }
+
+    pub fn edges(self) -> u32 {
+        self.0
+    }
+}
+
+/// Which `RELATES_TO` edges of a concept a read follows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Direction {
+    /// The edges that leave the concept.
+    Out,
+    /// The edges that reach the concept.
+    In,
+    /// The edges that leave or reach the concept.
+    Both,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Relation {
     pub from: ConceptId,
@@ -144,4 +175,39 @@ pub struct DocumentRecord {
     /// that was stored before folders were kept.
     pub chapter_folder: Option<PathBuf>,
     pub items: ItemsByKind,
+}
+
+/// A document with the number of its items that mention a concept.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ConceptDocument {
+    pub document: DocId,
+    pub title: String,
+    pub mentions: u64,
+}
+
+/// A concept with the documents whose items mention it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SharedConcept {
+    pub concept: ConceptNode,
+    /// For each document that has an item mentioning the concept, how many of its items do.
+    /// Ordered by document id.
+    pub mentions: Vec<(DocId, u64)>,
+}
+
+/// An item that mentions a concept, with where it is.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ConceptItem {
+    pub item: ItemId,
+    pub document: DocId,
+    pub page: u32,
+    pub printed_page: Option<String>,
+    pub kind: ItemKind,
+    /// The name the item used for the concept.
+    pub wording: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ItemPlace {
+    pub document: DocId,
+    pub page: u32,
 }

@@ -2,6 +2,7 @@
 //! process.
 
 mod check_pdf;
+mod concepts;
 mod datasets;
 mod exporting;
 mod failures;
@@ -9,6 +10,7 @@ mod ingest;
 mod insights;
 mod jobs;
 mod library;
+mod marks;
 mod navigation;
 mod pdf_url;
 mod reading;

@@ -12,6 +12,7 @@ use rmcp::handler::server::tool::IntoCallToolResult;
 use rmcp::model::{CallToolResponse, CallToolResult, ContentBlock};
 
 use super::health::{GEMINI_BILLING_PAGE, JEV_CONSOLE_PAGE, LOCATION_REFUSED_DETAIL};
+use crate::concepts::ConceptsError;
 use crate::datasets::DatasetToolError;
 use crate::ingest::PdfIngestError;
 use crate::insights::ExportToolError;
@@ -49,6 +50,9 @@ pub(super) enum ToolError {
 
     #[error(transparent)]
     Watch(#[from] WatchError),
+
+    #[error(transparent)]
+    Concepts(#[from] ConceptsError),
 }
 
 impl ToolError {
@@ -196,6 +200,7 @@ impl ToolError {
                 | DatasetToolError::Failed(_)
                 | DatasetToolError::Stopped(_) => false,
             },
+            ToolError::Concepts(error) => error.is_service_failure(),
             ToolError::Stop(StopError::UnknownJob { .. })
             | ToolError::Watch(WatchError::TimeoutOutOfRange { .. }) => false,
         }

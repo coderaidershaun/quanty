@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use mcp::QuantyServer;
-use rag_core::{ApiKey, Config, ItemKind, MediaLabels};
+use rag_core::{ApiKey, Config, Embedding, ItemKind, MediaLabels};
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores, first_axis};
 use rag_ingestion::{ChapterFolder, MediaChange, chapter_items, ingest_chapter, relabel_media};
 use serde_json::{Value, json};
@@ -73,6 +73,8 @@ pub struct Library {
     /// What the server asks of the model. The ingest asked it too.
     pub llm: StandInLlm,
     figure_text: String,
+    /// More texts the ingest embedder places at a chosen vector.
+    placements: Vec<(String, Embedding)>,
 }
 
 pub const AUTHOR: &str = "Sheldon Natenberg";
@@ -88,15 +90,16 @@ impl Library {
                 json!([])
             };
             json!({ "concepts": concepts, "relations": [] })
-        })
+        }, Vec::new())
         .await
     }
 
     /// `concepts_of(text)` is what the stand-in model replies to the question about the concepts of
     /// an item with this text.
-    async fn ingested_finding(
+    pub(super) async fn ingested_finding(
         test_name: &str,
         concepts_of: impl Fn(&str) -> Value + Send + Sync + 'static,
+        placements: Vec<(String, Embedding)>,
     ) -> Library {
         let stores = ThrowawayStores::new(test_name);
         let figure_text = chapter_items(
@@ -117,6 +120,7 @@ impl Library {
                 })
             }),
             figure_text,
+            placements,
         };
         let connected = library.stores.connect().await;
         let models = library
@@ -147,9 +151,14 @@ impl Library {
     }
 
     fn embedder(&self) -> StandInEmbedder {
-        StandInEmbedder::default()
+        let embedder = StandInEmbedder::default()
             .placing(QUESTION, first_axis())
-            .placing(&self.figure_text, first_axis())
+            .placing(&self.figure_text, first_axis());
+        self.placements
+            .iter()
+            .fold(embedder, |embedder, (text, vector)| {
+                embedder.placing(text, vector.clone())
+            })
     }
 
     /// A server over these stores that reads and writes the chapters in `content_folder`, with

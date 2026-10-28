@@ -54,6 +54,11 @@ pub enum StoreError {
     #[error("the payload of item {id} is not a json object")]
     ItemPayloadShape { id: ItemId },
 
+    #[error(
+        "the point of item {id} in the collection {collection} holds no single vector of numbers"
+    )]
+    ItemVector { id: ItemId, collection: String },
+
     #[error("a point of the collection {collection} has the id {point}, which is not an item id")]
     ItemPointId {
         collection: String,

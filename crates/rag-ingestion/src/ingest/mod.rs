@@ -25,7 +25,7 @@ pub use artifacts::{
 pub(crate) use concepts::TRIES_FOR_ONE_QUESTION;
 pub use concepts::{
     ASK_SCORE, CALLS_AT_A_TIME, Cache, ConceptError, ConceptExtractor, ConceptSummary, LINK_SCORE,
-    Outcome, Reading, SkippedItem,
+    Outcome, Reading, SkippedItem, normalised_concept_name,
 };
 #[cfg(feature = "testing")]
 pub(crate) use insights::INSIGHTS_PROMPT;

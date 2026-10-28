@@ -37,7 +37,7 @@ The unified HTTP server admits one background ingest, insights job or dataset bu
 
 ## 3. The tools
 
-Twenty-nine tools. A tool that costs money says so in its description, and so does this table.
+Thirty-seven tools. A tool that costs money says so in its description, and so does this table.
 
 | Tool | What it does | Costs |
 | --- | --- | --- |
@@ -158,6 +158,25 @@ Lists every formula, figure, table and code listing of one converted document, i
 | `max_chars`, `cursor` | See [Reading the library](#reading-the-library). A cut falls inside the definition |
 
 Gives `document_id`, `title` (the whole stored title), `page` (only when asked) and `concepts`, the most mentioned first: each has `name` and a one-line `definition`. A page with no concept gives an empty list. It reads FalkorDB, as the browser app does beside a page.
+
+### Exploring concepts
+
+Eight tools read the concept graph that an ingest builds, so that an agent can walk from a concept to the items that mention it and to the concepts next to it. They are in the group `concepts`. All are free except `find_concepts` with `query`, which embeds the query with Gemini. Every result names the items it shows with `item_id`, `document_id` and `page`, so the next call is `read_page` with a `document_id` and a `page`.
+
+| Tool | Main arguments | Gives |
+| --- | --- | --- |
+| `find_concepts` | exactly one of `name` (an exact name or alias, free) and `query` (by meaning, **paid**: one Gemini call); `limit` 1 to 25, default 10 | `concepts`: `concept_id`, `name`, `definition`, `aliases`, `mentions` (items), `documents` and, for a `query`, `score`; `usage` and `cost_usd` for a `query` |
+| `concept` | `concept_id` or `name`, not both; neither gives the most mentioned concepts | `version`, `nodes` for a program that explores tools by calling them (`concept_items`, `concept_neighbours` and one node for each concept next to it, at most 20), and the concept: `aliases`, `mentions`, `documents` with their mentions, and `top_items`, its first 5 items |
+| `concept_neighbours` | `concept_id`; `kinds` (`DERIVED_FROM`, `ASSUMES`, `GENERALISES`, `PART_OF`, `USED_FOR`); `direction` (`out`, `in` or `both`, default `both`); `depth` 1 or 2; `limit` 1 to 200, default 50 | `edges` (`from`, `to`, `kind` and `stated_by`, the item, document and page that stated it, or `null`), `concepts` they touch, and `truncated` |
+| `concept_items` | `concept_id`; `document`; `kind`; `limit` 1 to 100, default 20; `cursor` | `items` (`item_id`, `document_id`, `page`, `printed_page`, `kind` and `wording`) and `next_cursor` when there are more |
+| `concept_path` | `from` and `to`, each a concept id or a name; `max_depth` 1 to 4, default 4 | The shortest chain of relations, followed either way, as `edges` in order, and the `concepts` on it. Both are empty when no chain is that short |
+| `compare_documents` | `document_ids`, 2 to 10 different; `limit` 1 to 500, default 50, for each list | `shared`: concepts that at least two documents mention, with the number of items of each; `only_in`: for each document, the concepts that only it mentions; `truncated` |
+| `document_concepts` | `document_id`; `page`; `limit` 1 to 500; `with_counts` | The concepts of `chapter_concepts` with their `concept_id`, and with `with_counts` the number of items of the whole document that mention each |
+| `similar_items` | `item_id`; `limit` 1 to 50, default 10; `kind` | The stored items nearest to that item by its stored vector, nearest first, with `document`, `page`, `label` and `score`. It reads Qdrant only and embeds nothing |
+
+A depth, a limit or a cursor that is not allowed is a tool error, never changed quietly. A concept that is not stored is a tool error that says to call `find_concepts`.
+
+The order to use them: `find_concepts` to find a concept, `concept` to see it, `concept_neighbours` and `concept_items` to go on from it, then `read_page` to read the pages.
 
 ### `chapter_insights`
 

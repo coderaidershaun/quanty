@@ -3,4 +3,5 @@
 mod indexes;
 mod reads;
 mod support;
+mod traversal;
 mod writes;

@@ -2,6 +2,7 @@
 //! in-process MCP client.
 
 mod client;
+pub mod concept_graph;
 mod library;
 mod pdf_host;
 mod reading;

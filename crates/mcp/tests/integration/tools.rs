@@ -1,13 +1,15 @@
 //! Checks what an agent sees before it calls anything: the list of tools with their input
 //! schemas, and the report of `health`.
 
-use rmcp::model::Tool;
+use rmcp::model::{CacheScope, ProtocolVersion, Tool};
 use serde_json::{Value, json};
 
 use mcp::QuantyServer;
 use rag_ingestion::{KeyReadFailure, KeyState, KeyStates};
 
-use crate::support::{ClosedPorts, StandInServices, call, connect, structured};
+use crate::support::{
+    ClosedPorts, StandInServices, call, connect, connect_on_2026_07_28, structured,
+};
 
 fn property_names(tool: &Tool) -> Vec<String> {
     assert_eq!(
@@ -51,29 +53,27 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
     let tools = client.list_all_tools().await.unwrap();
 
     let names: Vec<&str> = tools.iter().map(|tool| tool.name.as_ref()).collect();
-    assert_eq!(
-        names,
-        [
-            "answer",
-            "build_dataset",
-            "chapter_concepts",
-            "chapter_contents",
-            "chapter_insights",
-            "dataset_status",
-            "edit_document_tags",
-            "edit_media",
-            "export_insights",
-            "health",
-            "ingest_pdf",
-            "ingest_status",
-            "insights_status",
-            "list_documents",
-            "read_page",
-            "search",
-            "stop_job",
-            "write_insights"
-        ]
-    );
+    let expected_names = [
+        "answer",
+        "build_dataset",
+        "chapter_concepts",
+        "chapter_contents",
+        "chapter_insights",
+        "dataset_status",
+        "edit_document_tags",
+        "edit_media",
+        "export_insights",
+        "health",
+        "ingest_pdf",
+        "ingest_status",
+        "insights_status",
+        "list_documents",
+        "read_page",
+        "search",
+        "stop_job",
+        "write_insights",
+    ];
+    assert_eq!(names, expected_names);
     let expected: [(&str, &[&str], &[&str]); 18] = [
         (
             "answer",
@@ -233,6 +233,53 @@ async fn the_server_lists_every_tool_with_its_input_schema() {
         "{}",
         description("stop_job")
     );
+
+    let peer = client
+        .peer_info()
+        .expect("the handshake gave the server info");
+    assert_eq!(peer.protocol_version, ProtocolVersion::V_2025_11_25);
+    let listed = client.list_tools(None).await.unwrap();
+    assert_eq!(listed.ttl_ms, None, "a 2025-11-25 peer gets no cache hint");
+    assert_eq!(listed.cache_scope, None);
+
+    let health = tools.iter().find(|tool| tool.name == "health").unwrap();
+    let output_schema = health
+        .output_schema
+        .as_ref()
+        .expect("health declares its output schema");
+    let mut result_fields: Vec<&str> = output_schema["properties"]
+        .as_object()
+        .expect("the output schema has properties")
+        .keys()
+        .map(String::as_str)
+        .collect();
+    result_fields.sort();
+    assert_eq!(result_fields, ["healthy", "keys", "models", "report"]);
+    assert_eq!(
+        serde_json::to_value(&health.meta).unwrap(),
+        json!({ "quanty/group": "admin", "quanty/cost": { "paid": false } })
+    );
+
+    // The rmcp client keeps a list that has a time to live, so each read needs its own connection.
+    let mut names_by_read = Vec::new();
+    for _ in 0..2 {
+        let client = connect_on_2026_07_28(ports.server()).await;
+        let peer = client
+            .peer_info()
+            .expect("the discovery gave the server info");
+        assert_eq!(peer.protocol_version, ProtocolVersion::V_2026_07_28);
+        let listed = client.list_tools(None).await.unwrap();
+        assert_eq!(listed.ttl_ms, Some(300_000));
+        assert_eq!(listed.cache_scope, Some(CacheScope::Public));
+        let listed_names: Vec<String> = listed
+            .tools
+            .iter()
+            .map(|tool| tool.name.to_string())
+            .collect();
+        names_by_read.push(listed_names);
+    }
+    assert_eq!(names_by_read[0], names_by_read[1]);
+    assert_eq!(names_by_read[0], expected_names);
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use rag_core::DocId;
 use serde_json::{Value, json};
 
-pub use client::{Client, call, connect, error_text, structured};
+pub use client::{Client, call, connect, connect_on_2026_07_28, error_text, structured};
 pub use library::{AUTHOR, ClosedPorts, Library};
 pub use services::{ReadyGate, StandInServices};
 

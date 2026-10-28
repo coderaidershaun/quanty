@@ -5,13 +5,16 @@ mod changes;
 mod failure;
 mod health;
 mod jobs;
+pub(crate) mod meta;
 mod reading;
 
 use std::sync::Arc;
 
 use rag_core::Config;
 use rmcp::handler::server::router::tool::ToolRouter;
-use rmcp::{ServerHandler, tool_handler};
+use rmcp::model::{CacheScope, ListToolsResult, PaginatedRequestParams, ProtocolVersion};
+use rmcp::service::RequestContext;
+use rmcp::{ErrorData, RoleServer, ServerHandler, tool_handler};
 
 use crate::datasets::Datasets;
 use crate::ingest::{Ingest, base64_len};
@@ -24,6 +27,10 @@ const DEFAULT_MAX_PDF_BYTES: u64 = 50 * 1024 * 1024;
 
 /// Room in a request for everything but the base64 text of the PDF: 1 MiB.
 const REQUEST_EXTRA_BYTES: u64 = 1024 * 1024;
+
+/// How long a peer may keep the list of tools: five minutes. The list never changes while the
+/// server runs and is the same for every caller.
+const TOOL_LIST_TTL_MS: u64 = 300_000;
 
 /// The tools of quanty over its stored library. It is cheap to clone: a clone shares the
 /// services and the jobs with the original.
@@ -105,9 +112,32 @@ impl<S: Services> QuantyServer<S> {
     }
 }
 
+/// Only a peer of the 2026-07-28 protocol or later knows the cache hints of a list. rmcp does not
+/// remove them from the reply to an older peer, so the server must not add them.
+fn sends_cache_hints(context: &RequestContext<RoleServer>) -> bool {
+    context
+        .protocol_version()
+        .is_some_and(|version| version >= ProtocolVersion::V_2026_07_28)
+}
+
 #[tool_handler(
     router = self.tool_router,
     name = "quanty",
     instructions = "Search and read a library of books, papers and other media. Start with `search` for a question, then `read_page` to read around a result. `chapter_contents`, `chapter_concepts` and `chapter_insights` give the items, the concepts and the saved notes of one document. `answer` writes a whole answer but spends the subscription usage of the agent of the Ask choice. `ingest_pdf` adds a PDF and `write_insights` writes missing notes, both paid; `build_dataset` builds a training dataset and is paid unless `dry_run` is true. Each starts a job that its status tool follows and `stop_job` stops. `edit_media` and `edit_document_tags` change labels and cost nothing. `export_insights` writes the saved notes of one document to a PDF, Markdown or HTML file, free."
 )]
-impl<S: Services> ServerHandler for QuantyServer<S> {}
+impl<S: Services> ServerHandler for QuantyServer<S> {
+    async fn list_tools(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<ListToolsResult, ErrorData> {
+        let tools = ListToolsResult::with_all_items(self.tool_router.list_all());
+        if sends_cache_hints(&context) {
+            Ok(tools
+                .with_ttl_ms(TOOL_LIST_TTL_MS)
+                .with_cache_scope(CacheScope::Public))
+        } else {
+            Ok(tools)
+        }
+    }
+}

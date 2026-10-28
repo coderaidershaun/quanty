@@ -8,6 +8,7 @@ use rmcp::{Json, tool, tool_router};
 use super::QuantyServer;
 use super::failure::ToolError;
 use super::health::HealthResult;
+use super::meta::{Cost, Group, ToolMarks, output_schema};
 use crate::insights::{self, ChapterInsightsArgs, InsightsView};
 use crate::library::{
     self, ChapterConceptsArgs, ChapterContentsArgs, ConceptsView, ContentsView, Documents,
@@ -115,7 +116,11 @@ impl<S: Services> QuantyServer<S> {
     /// keys are ready, and which model and thinking each kind of work uses. Each key is checked
     /// with the one free call its provider allows; neither Google nor Jev gives a balance to a
     /// key, so a billing page is given instead. It costs nothing.
-    #[tool(annotations(read_only_hint = true))]
+    #[tool(
+        annotations(read_only_hint = true),
+        output_schema = output_schema::<HealthResult>(),
+        meta = ToolMarks::new(Group::Admin, Cost::Free).into()
+    )]
     async fn health(&self) -> Json<HealthResult> {
         let shared = &self.shared;
         let (services, keys) = tokio::join!(

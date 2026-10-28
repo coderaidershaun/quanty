@@ -1,14 +1,36 @@
 //! An in-process MCP client over a pipe, and the readers of what a tool call gave back.
 
 use mcp::{QuantyServer, Services};
-use rmcp::model::{CallToolRequestParams, CallToolResult};
+use rmcp::model::{CallToolRequestParams, CallToolResult, ProtocolVersion};
 use rmcp::service::RunningService;
-use rmcp::{RoleClient, ServiceExt};
+use rmcp::{ClientLifecycleMode, ClientServiceExt, RoleClient, ServiceExt};
 use serde_json::{Map, Value};
+use tokio::io::DuplexStream;
 
 pub type Client = RunningService<RoleClient, ()>;
 
+/// A client that negotiated the 2025-11-25 protocol with an `initialize` handshake.
 pub async fn connect<S: Services>(server: QuantyServer<S>) -> Client {
+    ().serve(serve_on_pipe(server))
+        .await
+        .expect("the client should connect")
+}
+
+/// A client that negotiated the 2026-07-28 protocol, which has no `initialize` handshake: the
+/// client asks the server to discover its versions instead.
+pub async fn connect_on_2026_07_28<S: Services>(server: QuantyServer<S>) -> Client {
+    ().serve_with_lifecycle(
+        serve_on_pipe(server),
+        ClientLifecycleMode::Discover {
+            preferred_versions: vec![ProtocolVersion::V_2026_07_28],
+        },
+    )
+    .await
+    .expect("the client should connect")
+}
+
+/// Starts `server` on one end of a pipe and gives back the other end.
+fn serve_on_pipe<S: Services>(server: QuantyServer<S>) -> DuplexStream {
     let (server_end, client_end) = tokio::io::duplex(1 << 20);
     tokio::spawn(async move {
         let running = server
@@ -20,9 +42,7 @@ pub async fn connect<S: Services>(server: QuantyServer<S>) -> Client {
             .await
             .expect("the server should end without a panic");
     });
-    ().serve(client_end)
-        .await
-        .expect("the client should connect")
+    client_end
 }
 
 /// Calls a tool and gives back the whole result, an error result too.

@@ -30,6 +30,7 @@ The browser runs the egui UI as WebAssembly. One native `quanty` server serves i
 | `deploy/` | Ubuntu installer, systemd units, store configuration and Caddyfile |
 | `docs/` | User guide, reference, MCP, server setup, training and troubleshooting |
 | `samples/` | Sample PDF and converted fixture chapters |
+| `skills/` | Agent skill files that teach an agent to use quanty |
 | `content/` | Converted documents, pictures, source uploads and insights |
 | `data/` | Stores, kept answers, temporary uploads and exports |
 | `datasets/` | Built training datasets |

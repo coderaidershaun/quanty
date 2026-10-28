@@ -358,7 +358,7 @@ This is the path for any Linux host or web server, whether quanty is reached dir
    open "https://$QUANTY_DOMAIN"
    ```
 
-10. **Add the MCP endpoint to Claude Code.** In a Bash shell on the machine where you use Claude Code, enter the server's MCP token. This endpoint uses a bearer token independently of the browser login. See the [MCP guide](docs/mcp.md#10-add-it-to-claude-code) for the project config and stdio option.
+10. **Add the MCP endpoint to Claude Code.** In a Bash shell on the machine where you use Claude Code, enter the server's MCP token. This endpoint uses a bearer token independently of the browser login. See the [MCP guide](docs/mcp.md#14-add-it-to-claude-code) for the project config and stdio option.
 
     ```bash
     QUANTY_DOMAIN=quanty.example.com
@@ -367,11 +367,13 @@ This is the path for any Linux host or web server, whether quanty is reached dir
     unset QUANTY_MCP_TOKEN
     ```
 
+    The server has forty tools in eight groups: `catalog`, `library`, `research`, `concepts`, `jobs`, `ingest`, `datasets` and `admin`. An agent starts with `health`, then `catalog` (the tools by group), `list_documents` and `document_overview`; `describe_tool` explains one tool and `guide` the rest. A tool that spends money says PAID as the second word of its description. [skills/quanty/SKILL.md](skills/quanty/SKILL.md) is a skill file that teaches an agent this path.
+
 ## Documentation
 
 - [docs/guide.md](docs/guide.md): choose a model, understand the library, add your first PDF, use the browser app and command line, costs, start fresh and artifact descriptions.
 - [docs/server.md](docs/server.md): run quanty on an Ubuntu server, no Docker, with HTTPS, backups and moving a library.
-- [docs/mcp.md](docs/mcp.md): the MCP server for agents, its tools and how to add it to Claude Code.
+- [docs/mcp.md](docs/mcp.md): the MCP server for agents, how it lists its tools, what each costs and how to add it to Claude Code.
 - [docs/reference.md](docs/reference.md): every command, flag and setting in full.
 - [docs/training.md](docs/training.md): train Gemma 4 on a dataset that quanty built.
 - [docs/troubleshooting.md](docs/troubleshooting.md): messages you may see, and what to do.

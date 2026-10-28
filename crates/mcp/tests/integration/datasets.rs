@@ -81,7 +81,7 @@ async fn a_second_build_is_refused_while_one_runs_and_names_the_running_job() {
     let started = structured(&answered);
     let job_id = started["job_id"].as_str().unwrap();
     assert!(refusal.contains(job_id), "{refusal}");
-    assert!(refusal.contains("`dataset_status`"), "{refusal}");
+    assert!(refusal.contains("`job_status`"), "{refusal}");
     let ended = report_when_ended(&second_client, "dataset_status", job_id).await;
     assert_eq!(ended["state"], "done", "{ended}");
 }

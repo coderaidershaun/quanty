@@ -212,7 +212,7 @@ sudo systemctl reload caddy
 
 Open `https://quanty.example.com` and enter `QUANTY_PASSWORD`. The HttpOnly session cookie lasts 30 days. Five wrong passwords within a minute cause a one-minute 429 response. `POST /logout` clears the cookie. Keep a password set behind Caddy: a password-free loopback server rejects the public hostname that Caddy forwards.
 
-To connect Claude Code, use [the MCP guide](mcp.md#10-add-it-to-claude-code):
+To connect Claude Code, use [the MCP guide](mcp.md#14-add-it-to-claude-code):
 
 ```bash
 claude mcp add --transport http quanty https://quanty.example.com/mcp --header "Authorization: Bearer YOUR_QUANTY_MCP_TOKEN"

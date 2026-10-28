@@ -15,15 +15,13 @@ use crate::library::{find_chapter, parse_document_id};
 /// What an agent gives `export_insights`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct ExportInsightsArgs {
-    /// From `list_documents` or a search result.
+    /// From `list_documents`.
     document_id: String,
     /// `pdf`, `markdown` or `html`.
     format: String,
-    /// The absolute path of the file to write, on the machine the server runs on, ending in
-    /// `.pdf`, `.md` or `.html` as `format` is. Its folder must exist.
+    /// Absolute file path to write.
     path: String,
-    /// True to replace a file that is at `path`. False when left out: a file that is there is
-    /// kept and the call fails.
+    /// Replace an existing file.
     overwrite: Option<bool>,
 }
 

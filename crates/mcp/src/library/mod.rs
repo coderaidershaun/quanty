@@ -5,7 +5,6 @@
 mod chapter;
 mod concepts;
 mod contents;
-mod discovery;
 mod document;
 mod documents;
 mod error;

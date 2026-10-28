@@ -1,14 +1,16 @@
 //! The parts of a result that several concept tools share: a concept in brief, a relation with the
-//! place of the item that stated it, an item that mentions a concept, and a node for a host that
-//! explores tools by calling them.
+//! place of the item that stated it, an item that mentions a concept, and the nodes for a host
+//! that explores tools by calling them.
 
 use std::collections::HashMap;
 
 use graph::{ConceptItem, ConceptNode, ItemPlace, Relation};
 use rag_core::{ConceptId, ItemId};
+use rmcp::model::JsonObject;
 use schemars::JsonSchema;
 use serde::Serialize;
-use serde_json::{Map, Value};
+
+use crate::discovery::Node;
 
 #[derive(Serialize, JsonSchema)]
 pub(super) struct ConceptBrief {
@@ -85,43 +87,16 @@ impl From<ConceptItem> for ItemRow {
     }
 }
 
-/// The version that the nodes of a result carry, which a host that explores tools reads.
-pub(super) const NODE_VERSION: u32 = 1;
-
-#[derive(Serialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-enum NodeKind {
-    Discover,
-    Tool,
+/// The node that opens a tool for one concept, by its id.
+pub(super) fn tool_node(label: &str, tool: &str, concept: ConceptId) -> Node {
+    Node::reading(label, tool, concept_arguments(concept))
 }
 
-/// A call that a host which explores tools shows, and makes when a person opens it.
-#[derive(Serialize, JsonSchema)]
-pub(super) struct Node {
-    label: String,
-    kind: NodeKind,
-    tool: &'static str,
-    arguments: Map<String, Value>,
+/// The node that opens a concept.
+pub(super) fn concept_node(concept: &ConceptNode) -> Node {
+    Node::discovering(&concept.name, "concept", concept_arguments(concept.id))
 }
 
-impl Node {
-    pub(super) fn tool(label: &str, tool: &'static str, concept: ConceptId) -> Node {
-        Node::new(label, NodeKind::Tool, tool, concept)
-    }
-
-    /// The node that opens a concept.
-    pub(super) fn concept(concept: &ConceptNode) -> Node {
-        Node::new(&concept.name, NodeKind::Discover, "concept", concept.id)
-    }
-
-    fn new(label: &str, kind: NodeKind, tool: &'static str, concept: ConceptId) -> Node {
-        let arguments =
-            Map::from_iter([("concept_id".to_owned(), Value::String(concept.to_string()))]);
-        Node {
-            label: label.to_owned(),
-            kind,
-            tool,
-            arguments,
-        }
-    }
+fn concept_arguments(concept: ConceptId) -> JsonObject {
+    JsonObject::from_iter([("concept_id".to_owned(), concept.to_string().into())])
 }

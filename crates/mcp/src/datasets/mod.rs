@@ -1,5 +1,6 @@
 //! The `build_dataset` and `dataset_status` tools. A build takes minutes to hours and a client puts
-//! a time limit on a tool call, so `build_dataset` starts a job and `dataset_status` reads it.
+//! a time limit on a tool call, so `build_dataset` starts a job and `job_status` reads it;
+//! `dataset_status` is the older name for the same read.
 
 mod error;
 mod report;
@@ -25,43 +26,33 @@ use work::Work;
 /// default that `rag-dataset build` has.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct BuildDatasetArgs {
-    /// The name of the dataset: letters, digits, `-`, `_` and `.`. It is the name of its folder in
-    /// the dataset folder. A build with the name of an earlier one replaces that dataset's files.
+    /// Dataset and folder name.
     name: String,
-    /// Only the documents of these media, by title whatever the capitals. Every media when left
-    /// out.
+    /// Only these media.
     media: Option<Vec<String>>,
-    /// Only these documents, each a `document_id` or the whole `title` from `list_documents`.
-    /// Every document of the chosen media when left out.
+    /// Only these documents.
     documents: Option<Vec<String>>,
-    /// Documents kept out of training for evaluation, named like `documents`. Their sections go to
-    /// `cpt/heldout.jsonl`, and no synthetic text is written from them.
+    /// Documents kept for evaluation.
     holdout: Option<Vec<String>>,
-    /// Also export the parts of a book that are not chapters, such as its index. An appendix is
-    /// always exported. False when left out.
+    /// Also export non-chapter parts.
     include_book_parts: Option<bool>,
-    /// How many rewritten texts are written from each passage of a training section, a part of it
-    /// of at most 2,500 estimated tokens. 3 when left out.
+    /// Rewrites per passage. Default 3.
     rewrites: Option<u32>,
-    /// How many questions each section gets. 2 when left out.
+    /// Questions per section. Default 2.
     questions: Option<u32>,
-    /// The most fine-tuning examples the build writes. 300 when left out.
+    /// Most fine-tuning examples.
     max_sft: Option<u32>,
-    /// The most synthetic texts the build writes. No limit when left out.
+    /// Most synthetic texts.
     max_synthetic: Option<u32>,
-    /// How many times the model answers each question, to check that its answers agree. 3 when
-    /// left out.
+    /// Answers per question. Default 3.
     samples: Option<u32>,
-    /// Run the Python that the model writes for an answer, on the machine the server runs on, to
-    /// check it. True when left out.
+    /// Run model code to check it.
     run_code: Option<bool>,
-    /// Export, check and plan only. It asks no model and costs nothing, and its `summary` gives
-    /// the texts, questions and model calls that the full build would make. False when left out.
+    /// Plan only; asks no model.
     dry_run: Option<bool>,
-    /// A section whose worst page matches less of the PDF's own text than this share, from 0 to
-    /// 1, is rejected. 0.90 when left out.
+    /// Section page match, 0 to 1.
     min_page_score: Option<f64>,
-    /// Keep a section whose formulas do not render, instead of rejecting it. False when left out.
+    /// Keep sections that do not render.
     keep_unrendered: Option<bool>,
 }
 
@@ -104,7 +95,7 @@ fn entries(texts: Option<Vec<String>>) -> Vec<String> {
 /// What an agent gives `dataset_status`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct DatasetStatusArgs {
-    /// The `job_id` that `build_dataset` gave.
+    /// The `job_id` of a job.
     job_id: String,
 }
 

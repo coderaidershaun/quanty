@@ -18,11 +18,11 @@ const MOST_FOUND: u32 = 25;
 /// What an agent gives `find_concepts`: exactly one of `name` and `query`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct FindConceptsArgs {
-    /// An exact name or alias, whatever its capitals. Free.
+    /// Exact name or alias. Free.
     name: Option<String>,
-    /// What the concept is about, in plain words. PAID: one embedding call.
+    /// By meaning. PAID.
     query: Option<String>,
-    /// How many concepts at most, from 1 to 25. Default 10.
+    /// Most concepts.
     limit: Option<u32>,
 }
 

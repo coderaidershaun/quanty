@@ -6,14 +6,14 @@ use std::collections::HashMap;
 use graph::{DocumentRecord, FalkorGraph, ItemsByKind};
 use ocr::{Catalogue, ChapterEntry};
 use rag_core::{Category, Config, DocId, DocumentLabels, LabelFilter};
+use rmcp::model::JsonObject;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 
 use super::LibraryError;
 use super::chapter::{chapter_of, document_of, unreadable_chapters};
-use super::discovery::Discovery;
 use crate::args::{BudgetError, Position, Scope, non_blank, parse_optional, parse_tags};
+use crate::discovery::{Discovery, Node};
 
 /// How many documents a page holds unless the caller asks for another number.
 const DEFAULT_LIMIT: u32 = 100;
@@ -24,20 +24,19 @@ const LARGEST_LIMIT: u32 = 500;
 /// What an agent gives `list_documents`. Every part is optional.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct ListDocumentsArgs {
-    /// Only documents of this media, whatever the capitals.
+    /// Media title.
     media: Option<String>,
-    /// Only documents of this category: `book`, `paper` or `other`.
+    /// `book`, `paper` or `other`.
     category: Option<String>,
-    /// Only documents by this author, whatever the capitals.
+    /// An author.
     author: Option<String>,
-    /// Only documents that have every one of these tags, each as a tag of the media or of the
-    /// document.
+    /// Every tag must match.
     tags: Option<Vec<String>>,
-    /// `full` (default), `summary` or `names`.
+    /// `full`, `summary` or `names`.
     detail: Option<DocumentsDetail>,
-    /// From a result that has one, with the same filters.
+    /// From a `truncated` result.
     cursor: Option<String>,
-    /// How many documents at most, from 1 to 500. 100 when left out.
+    /// Most results to return.
     limit: Option<u32>,
 }
 
@@ -218,8 +217,15 @@ pub(crate) async fn list_documents(
         .collect();
     let discovery = (detail == DocumentsDetail::Names).then(|| {
         page.iter().fold(Discovery::new(), |discovery, document| {
-            let arguments = json!({ "document_id": document.document_id });
-            discovery.discovering(&document.title, "document_outline", arguments)
+            let arguments = JsonObject::from_iter([(
+                "document_id".to_owned(),
+                document.document_id.clone().into(),
+            )]);
+            discovery.with(Node::discovering(
+                &document.title,
+                "document_outline",
+                arguments,
+            ))
         })
     });
     Ok(Documents {

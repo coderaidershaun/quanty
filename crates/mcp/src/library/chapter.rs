@@ -15,6 +15,16 @@ use super::LibraryError;
 /// What names a document in the answer of a tool that reads one converted chapter.
 #[derive(Serialize, JsonSchema)]
 pub(crate) struct DocumentHeader {
+    #[serde(flatten)]
+    identity: DocumentIdentity,
+    /// How many pages the chapter has.
+    pages: u32,
+}
+
+/// What names a document, without its page count. A result with a page range of its own, such as
+/// a section, gives the page count of the document under another name.
+#[derive(Serialize, JsonSchema)]
+pub(crate) struct DocumentIdentity {
     document_id: String,
     /// The title of the media the document belongs to.
     media: String,
@@ -27,8 +37,6 @@ pub(crate) struct DocumentHeader {
     /// For a document with a title of its own, such as a paper, only.
     #[serde(skip_serializing_if = "Option::is_none")]
     document_title: Option<String>,
-    /// How many pages the chapter has.
-    pages: u32,
 }
 
 impl DocumentHeader {
@@ -39,13 +47,20 @@ impl DocumentHeader {
             DocumentName::Chapter { .. } => None,
         };
         DocumentHeader {
-            document_id: document_of(entry).to_string(),
-            media: entry.index.media_title.clone(),
-            chapter_number: chapter.map(|(number, _)| number),
-            chapter_name: chapter.map(|(_, name)| name.to_owned()),
-            document_title,
+            identity: DocumentIdentity {
+                document_id: document_of(entry).to_string(),
+                media: entry.index.media_title.clone(),
+                chapter_number: chapter.map(|(number, _)| number),
+                chapter_name: chapter.map(|(_, name)| name.to_owned()),
+                document_title,
+            },
             pages: entry.index.page_count,
         }
+    }
+
+    /// The name of the document and its page count, apart.
+    pub(crate) fn into_parts(self) -> (DocumentIdentity, u32) {
+        (self.identity, self.pages)
     }
 }
 

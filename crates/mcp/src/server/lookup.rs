@@ -20,7 +20,7 @@ use crate::services::Services;
 /// What an agent gives `job_status`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct JobStatusArgs {
-    /// The `job_id` that `ingest_pdf`, `write_insights` or `build_dataset` gave.
+    /// The `job_id` of a job.
     pub(crate) job_id: String,
 }
 

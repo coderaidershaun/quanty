@@ -20,9 +20,9 @@ const MOST_COMPARED: u32 = 500;
 /// What an agent gives `compare_documents`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct CompareDocumentsArgs {
-    /// From 2 to 10 different `document_id`s from `list_documents`.
+    /// 2 to 10 `document_id`s.
     document_ids: Vec<String>,
-    /// How many concepts at most in each list, from 1 to 500. Default 50.
+    /// Most concepts per list.
     limit: Option<u32>,
 }
 
@@ -61,13 +61,13 @@ struct OnlyView {
 /// What an agent gives `document_concepts`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct DocumentConceptsArgs {
-    /// From `list_documents` or a search result.
+    /// From `list_documents`.
     document_id: String,
-    /// One page only: the `page` of a search result (from 1). The whole document when left out.
+    /// One page only, from 1.
     page: Option<u32>,
-    /// How many concepts at most, from 1 to 500. All when left out.
+    /// Most concepts.
     limit: Option<u32>,
-    /// Add `mentions`, the number of items of the whole document that mention each concept.
+    /// Add mention counts.
     with_counts: Option<bool>,
 }
 

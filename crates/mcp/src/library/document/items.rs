@@ -20,17 +20,17 @@ const EXCERPT_CHARS: usize = 200;
 /// `item_id`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct ReadItemArgs {
-    /// With `kind` and `label`. With `item_id` it is the document to look in, which is faster.
+    /// Needed with `kind` and `label`.
     pub(crate) document_id: Option<String>,
-    /// `formula`, `figure`, `table` or `code`. With `label`.
+    /// With `label`.
     pub(crate) kind: Option<String>,
-    /// The label as printed, such as "(7.3)" or "Figure 13-4". With `kind`.
+    /// As printed, such as "(7.3)".
     pub(crate) label: Option<String>,
-    /// The `item_id` of a search result or of `read_section`. Instead of `kind` and `label`.
+    /// From a search result.
     pub(crate) item_id: Option<String>,
-    /// At most this many characters of content. 24000 when left out.
+    /// Text limit. Default 24000.
     pub(crate) max_chars: Option<u32>,
-    /// From a result that was `truncated`, with the same other arguments.
+    /// From a `truncated` result.
     pub(crate) cursor: Option<String>,
 }
 

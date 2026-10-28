@@ -110,13 +110,4 @@ impl JobKind {
             JobKind::Dataset => "dataset build",
         }
     }
-
-    /// The tool that tells how a job of this kind goes or how it ended.
-    pub(crate) fn status_tool(self) -> &'static str {
-        match self {
-            JobKind::Ingest => "ingest_status",
-            JobKind::Insights => "insights_status",
-            JobKind::Dataset => "dataset_status",
-        }
-    }
 }

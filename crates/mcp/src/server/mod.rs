@@ -1,6 +1,7 @@
 //! The MCP server: one thin tool for each thing an agent can do, and the one place that words a
 //! failure for the agent.
 
+mod catalog;
 mod changes;
 mod concepts;
 mod failure;
@@ -39,7 +40,11 @@ const REQUEST_EXTRA_BYTES: u64 = 1024 * 1024;
 /// server runs and is the same for every caller.
 const TOOL_LIST_TTL_MS: u64 = 300_000;
 
-const INSTRUCTIONS: &str = "Search and read a library of books, papers and other media. Start with `search` for a question, then `read_page` to read around a result. `chapter_contents`, `chapter_concepts` and `chapter_insights` give the items, the concepts and the saved notes of one document. `answer` writes a whole answer but spends the subscription usage of the agent of the Ask choice. `check_pdf` checks a PDF first, free. `ingest_pdf` adds a PDF and `write_insights` writes missing notes, both paid; `build_dataset` builds a training dataset and is paid unless `dry_run` is true. Each starts a job that its status tool follows and `stop_job` stops. `edit_media` and `edit_document_tags` change labels and cost nothing. `export_insights` writes the saved notes of one document to a PDF, Markdown or HTML file, free.";
+const INSTRUCTIONS: &str = "quanty serves a library of books, papers and other media: search it, read it by document, section and page, and walk its concepts.
+Start with `health`, `catalog` and `document_overview`.
+`catalog` lists the tools by group; `describe_tool` gives one in detail.
+A tool that spends money has PAID as the second word of its description; check a PDF with `check_pdf` before `ingest_pdf`.
+`guide` holds the rest: start, research, ingest, jobs, costs and errors.";
 
 /// The tools of quanty over its stored library. It is cheap to clone: a clone shares the
 /// services and the jobs with the original.
@@ -118,7 +123,8 @@ impl<S: Services> QuantyServer<S> {
                 + Self::jobs_router()
                 + Self::changes_router()
                 + Self::library_router()
-                + Self::concepts_router(),
+                + Self::concepts_router()
+                + Self::catalog_router(),
         }
     }
 
@@ -154,7 +160,8 @@ impl<S: Services> ServerHandler for QuantyServer<S> {
         _request: Option<PaginatedRequestParams>,
         context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
-        let tools = ListToolsResult::with_all_items(self.tool_router.list_all());
+        let tools =
+            ListToolsResult::with_all_items(catalog::in_list_order(self.tool_router.list_all()));
         if sends_cache_hints(&context) {
             Ok(tools
                 .with_ttl_ms(TOOL_LIST_TTL_MS)

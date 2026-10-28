@@ -35,23 +35,20 @@ const fn tokens(input_tokens: u64, output_tokens: u64) -> Usage {
 /// and without `pdf_base64`. Give exactly one of `path` and `pdf_url`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct CheckPdfArgs {
-    /// The title of the media the PDF belongs to, such as "Option Volatility and Pricing".
     // An agent that still sends the older name `book` is understood. The schema shows `media`
     // only.
+    /// Media title.
     #[serde(alias = "book")]
     media: String,
-    /// `book` (the default), `paper` or `other`. Used only when the library does not have this
-    /// media yet: a stored media keeps its own category.
+    /// `book`, `paper` or `other`.
     category: Option<String>,
-    /// The title of this document, as `ingest_pdf` takes it.
+    /// Title of this document.
     document_title: Option<String>,
-    /// The absolute path of the PDF on the machine the server runs on.
+    /// Absolute PDF path on the server.
     path: Option<String>,
-    /// An http or https URL that the server fetches the PDF from, as `ingest_pdf` takes it. It
-    /// goes with `file_name`. The PDF is held in a temporary file that is removed when the check
-    /// ends.
+    /// URL to fetch the PDF from.
     pdf_url: Option<String>,
-    /// The name of the PDF fetched from `pdf_url`, as `ingest_pdf` takes it. Not for `path`.
+    /// Name for the fetched PDF.
     file_name: Option<String>,
 }
 

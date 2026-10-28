@@ -19,25 +19,24 @@ use crate::args::{non_blank, parse_optional, parse_tags};
 /// What an agent gives `edit_media`. A label that is left out stays as it is.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct EditMediaArgs {
-    /// The title of the stored media, whatever the capitals, as `list_documents` gives it.
+    /// Media title.
     media: String,
-    /// `book`, `paper` or `other`. A book's chapter PDFs must be named
-    /// `chapter-<number>-<name>.pdf`.
+    /// `book`, `paper` or `other`.
     category: Option<String>,
-    /// The authors, in order. They replace the old ones; `[]` takes every author away.
+    /// Replaces authors; `[]` clears.
     authors: Option<Vec<String>>,
-    /// The tags of the media. They replace the old ones; `[]` takes every tag away.
+    /// Replaces tags; `[]` clears.
     tags: Option<Vec<String>>,
 }
 
 /// What an agent gives `edit_document_tags`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct EditDocumentTagsArgs {
-    /// From `list_documents` or a search result.
+    /// From `list_documents`.
     document_id: String,
-    /// Tags to give the document.
+    /// Tags to add.
     add: Option<Vec<String>>,
-    /// Tags to take away from the document, after `add`.
+    /// Tags to remove, after `add`.
     remove: Option<Vec<String>>,
 }
 

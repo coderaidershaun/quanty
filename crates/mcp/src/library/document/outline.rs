@@ -6,21 +6,21 @@ use std::collections::HashMap;
 use graph::FalkorGraph;
 use rag_core::{Config, DocId, ItemId, ItemKind, error_chain};
 use rag_ingestion::document_title;
+use rmcp::model::JsonObject;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 
 use super::mentions::DocumentConcepts;
 use super::sections::{PATH_SEPARATOR, page_range};
+use crate::discovery::{Discovery, Node};
 use crate::library::LibraryError;
 use crate::library::chapter::{DocumentHeader, Whole, parse_document_id};
 use crate::library::contents::ContentsCounts;
-use crate::library::discovery::Discovery;
 
 /// What an agent gives `document_outline`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct DocumentOutlineArgs {
-    /// From `list_documents` or a search result.
+    /// From `list_documents`.
     document_id: String,
 }
 
@@ -79,8 +79,11 @@ pub(crate) async fn document_outline(
         } else {
             row.path.join(PATH_SEPARATOR)
         };
-        let arguments = json!({ "document_id": id.to_string(), "section": row.index });
-        discovery.reading(&label, "read_section", arguments)
+        let arguments = JsonObject::from_iter([
+            ("document_id".to_owned(), id.to_string().into()),
+            ("section".to_owned(), row.index.into()),
+        ]);
+        discovery.with(Node::reading(&label, "read_section", arguments))
     });
     Ok(Outline {
         document: DocumentHeader::of(&whole.entry),

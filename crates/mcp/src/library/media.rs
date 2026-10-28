@@ -7,25 +7,25 @@ use graph::{DocumentRecord, FalkorGraph, MediaNode};
 use ocr::content::INSIGHTS_FILE;
 use ocr::{Catalogue, ChapterEntry};
 use rag_core::{Category, Config, DocId, Tag, is_same_name};
+use rmcp::model::JsonObject;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 
 use super::LibraryError;
 use super::chapter::document_of;
-use super::discovery::Discovery;
 use crate::args::{non_blank, parse_optional};
+use crate::discovery::{Discovery, Node};
 
 /// What an agent gives `list_media`. Every part is optional.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct ListMediaArgs {
-    /// Only media of this category: `book`, `paper` or `other`.
+    /// `book`, `paper` or `other`.
     category: Option<String>,
-    /// Only media by this author, whatever the capitals.
+    /// An author.
     author: Option<String>,
-    /// Only media with this tag, whatever the capitals.
+    /// A tag.
     tag: Option<String>,
-    /// `summary` (default) or `names`.
+    /// `summary` or `names`.
     detail: Option<MediaDetail>,
 }
 
@@ -116,8 +116,11 @@ pub(crate) async fn list_media(
         .collect::<Vec<_>>();
     let discovery = (detail == MediaDetail::Names).then(|| {
         media.iter().fold(Discovery::new(), |discovery, entry| {
-            let arguments = json!({ "media": entry.title, "detail": "names" });
-            discovery.discovering(&entry.title, "list_documents", arguments)
+            let arguments = JsonObject::from_iter([
+                ("media".to_owned(), entry.title.clone().into()),
+                ("detail".to_owned(), "names".into()),
+            ]);
+            discovery.with(Node::discovering(&entry.title, "list_documents", arguments))
         })
     });
     let rows = media

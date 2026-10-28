@@ -25,27 +25,22 @@ pub(crate) use written::AnswerResult;
 /// What an agent gives `search` and `answer` to say what it wants to know.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct QuestionArgs {
-    /// The question, in plain words, as a person would ask it.
+    /// In plain words.
     question: String,
-    /// Look only at items of this kind: `chunk` (running text), `formula`, `figure`, `table` or
-    /// `code` (a code listing).
+    /// `chunk`, `formula`, `figure`, `table`, `code`.
     kind: Option<String>,
-    /// Look only at one document: its `title` or its `document_id` from `list_documents`. The
-    /// title is the whole stored title, such as "Option Volatility and Pricing, chapter 1: Sample
-    /// Pages", whatever its capitals.
+    /// Title or `document_id`.
     document: Option<String>,
-    /// Look only at documents of this media, such as a book, whatever its capitals.
     // An agent that still sends the older name `book` keeps its filter. The schema shows `media`
     // only.
+    /// Media title.
     #[serde(alias = "book")]
     media: Option<String>,
-    /// Look only at documents by this author, whatever its capitals. It matches any author of a
-    /// document.
+    /// An author.
     author: Option<String>,
-    /// Look only at documents of this category: `book`, `paper` or `other`.
+    /// `book`, `paper` or `other`.
     category: Option<String>,
-    /// Look only at documents that have every one of these tags, each as a tag of the media or as
-    /// a tag of the document itself.
+    /// Every tag must match.
     tags: Option<Vec<String>>,
 }
 
@@ -54,20 +49,19 @@ pub(crate) struct QuestionArgs {
 pub(crate) struct SearchArgs {
     #[serde(flatten)]
     question: QuestionArgs,
-    /// Keep only the first `limit` results. A whole number from 1.
+    /// Most results.
     limit: Option<u32>,
-    /// Set to true to add `trace`, which says how each step of the search got to the results.
+    /// Add a `trace`.
     explain: Option<bool>,
-    /// `full` (default), or `ids` for the number, item id, document, page, kind and score only.
+    /// `full` or `ids`.
     detail: Option<SearchDetail>,
-    /// Skip this many results first. Each page searches again, which embeds the question again.
+    /// Results to skip.
     offset: Option<u32>,
-    /// From a result that has one, with the same question and filters. Not with `offset`.
+    /// From a result that has one.
     cursor: Option<String>,
-    /// Look only inside one section of the document: its `index` from `document_outline`. Needs
-    /// `document` to be a `document_id`.
+    /// Section `index`; `document` must be an id.
     section: Option<u32>,
-    /// With `detail: full`, at most this many characters of result texts. 24000 when left out.
+    /// Text limit. Default 24000.
     max_chars: Option<u32>,
 }
 

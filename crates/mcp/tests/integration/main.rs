@@ -10,7 +10,6 @@ mod ingest;
 mod insights;
 mod jobs;
 mod library;
-mod marks;
 mod navigation;
 mod pdf_url;
 mod reading;

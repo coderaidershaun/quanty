@@ -51,7 +51,7 @@ pub(crate) enum DatasetToolError {
     ModelNotReady(#[source] LlmError),
 
     #[error(
-        "a dataset build is running (job {}); ask `dataset_status` with that job_id, and start this build when that job has ended",
+        "a dataset build is running (job {}); ask `job_status` with that job_id, and start this build when that job has ended",
         .0.running_job
     )]
     Busy(Busy),

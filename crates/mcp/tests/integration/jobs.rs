@@ -197,6 +197,7 @@ async fn a_dataset_build_is_seen_in_its_stage(library: &Library) {
 
     let stopped = call(&client, "stop_job", json!({ "job_id": job_id })).await;
     assert_eq!(structured(&stopped)["state"], "stopped");
+    assert_eq!(structured(&stopped)["status_tool"], "job_status");
     let ended = report_when_ended(&client, "job_status", job_id).await;
     assert_eq!(ended["state"], "stopped", "{ended}");
     assert!(ended.get("stage").is_none(), "{ended}");

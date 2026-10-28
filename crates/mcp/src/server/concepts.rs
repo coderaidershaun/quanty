@@ -7,7 +7,7 @@ use rmcp::{Json, tool, tool_router};
 
 use super::QuantyServer;
 use super::failure::ToolError;
-use super::meta::{Cost, Group, Payer, ToolMarks, output_schema};
+use super::meta::{Cost, Group, Payer, ToolMarks, input_schema, output_schema};
 use crate::concepts::{
     self, CompareDocumentsArgs, CompareResult, ConceptArgs, ConceptItemsArgs, ConceptItemsResult,
     ConceptNeighboursArgs, ConceptPathArgs, ConceptView, DocumentConceptsArgs,
@@ -18,12 +18,11 @@ use crate::services::Services;
 
 #[tool_router(router = concepts_router, vis = "pub(super)")]
 impl<S: Services> QuantyServer<S> {
-    /// Concept search: `query` is PAID (one Gemini embedding call) and finds concepts by meaning,
-    /// `name` is free and finds one by its exact name or alias. Give exactly one. Each concept
-    /// comes with its aliases, its mention count and its document count.
+    /// Concepts, PAID (one Gemini embedding) for `query`; `name` is free. With aliases and counts.
     #[tool(
         title = "Find concepts",
         annotations(read_only_hint = true, idempotent_hint = true),
+        input_schema = input_schema::<FindConceptsArgs>(),
         output_schema = output_schema::<FindConceptsResult>(),
         meta = ToolMarks::new(Group::Concepts, Cost::Paid(Payer::Gemini)).into()
     )]
@@ -37,12 +36,11 @@ impl<S: Services> QuantyServer<S> {
         ))
     }
 
-    /// Concept card: definition, aliases, mention count, documents and first items, with nodes
-    /// that lead to its items and to the concepts next to it. Give `concept_id` or `name`; with
-    /// neither, the nodes lead to the most mentioned concepts. Free.
+    /// One concept: definition, aliases, mentions, documents, first items. Nodes lead to its items and neighbours.
     #[tool(
         title = "Concept",
         annotations(read_only_hint = true, idempotent_hint = true),
+        input_schema = input_schema::<ConceptArgs>(),
         output_schema = output_schema::<ConceptView>(),
         meta = ToolMarks::new(Group::Concepts, Cost::Free)
             .with_discovery(JsonObject::new())
@@ -58,12 +56,11 @@ impl<S: Services> QuantyServer<S> {
         ))
     }
 
-    /// Concept neighbours: the relations (`DERIVED_FROM`, `ASSUMES`, `GENERALISES`, `PART_OF`,
-    /// `USED_FOR`) that touch a concept, one or two steps out, each with the item that stated it.
-    /// Free.
+    /// Relations of a concept one or two steps out, each with the item that stated it.
     #[tool(
         title = "Concept neighbours",
         annotations(read_only_hint = true, idempotent_hint = true),
+        input_schema = input_schema::<ConceptNeighboursArgs>(),
         output_schema = output_schema::<NeighboursResult>(),
         meta = ToolMarks::new(Group::Concepts, Cost::Free).into()
     )]
@@ -76,11 +73,11 @@ impl<S: Services> QuantyServer<S> {
         ))
     }
 
-    /// Concept items: the items that mention a concept, a page at a time, each with its document
-    /// and page. Give a row's `document_id` and `page` to `read_page`. Free.
+    /// Items that mention a concept, paged, with document and page. Read them with `read_item` or `read_pages`.
     #[tool(
         title = "Concept items",
         annotations(read_only_hint = true, idempotent_hint = true),
+        input_schema = input_schema::<ConceptItemsArgs>(),
         output_schema = output_schema::<ConceptItemsResult>(),
         meta = ToolMarks::new(Group::Concepts, Cost::Free).into()
     )]
@@ -93,11 +90,11 @@ impl<S: Services> QuantyServer<S> {
         ))
     }
 
-    /// Concept path: the shortest chain of relations between two concepts, given by id or name,
-    /// followed either way, each relation with the item that stated it. Free.
+    /// Shortest chain of relations between two concepts, each with its stating item.
     #[tool(
         title = "Concept path",
         annotations(read_only_hint = true, idempotent_hint = true),
+        input_schema = input_schema::<ConceptPathArgs>(),
         output_schema = output_schema::<PathResult>(),
         meta = ToolMarks::new(Group::Concepts, Cost::Free).into()
     )]
@@ -110,11 +107,11 @@ impl<S: Services> QuantyServer<S> {
         ))
     }
 
-    /// Compare documents: the concepts that 2 to 10 documents share, and those that only one has,
-    /// with how many items of each document mention them. Free.
+    /// Concepts shared by 2 to 10 documents, and those only one has, with mention counts.
     #[tool(
         title = "Compare documents",
         annotations(read_only_hint = true, idempotent_hint = true),
+        input_schema = input_schema::<CompareDocumentsArgs>(),
         output_schema = output_schema::<CompareResult>(),
         meta = ToolMarks::new(Group::Concepts, Cost::Free).into()
     )]
@@ -127,11 +124,11 @@ impl<S: Services> QuantyServer<S> {
         ))
     }
 
-    /// Document concepts: the concepts of a document, or of one page, as `chapter_concepts` gives
-    /// them, with concept ids, a `limit` and optional mention counts. Free.
+    /// Concepts of a document or one page, with ids, a `limit` and optional mention counts.
     #[tool(
         title = "Document concepts",
         annotations(read_only_hint = true, idempotent_hint = true),
+        input_schema = input_schema::<DocumentConceptsArgs>(),
         output_schema = output_schema::<DocumentConceptsResult>(),
         meta = ToolMarks::new(Group::Concepts, Cost::Free).into()
     )]
@@ -144,11 +141,11 @@ impl<S: Services> QuantyServer<S> {
         ))
     }
 
-    /// Similar items: the stored items nearest to a stored item by its vector, nearest first.
-    /// Free: it reads Qdrant only and embeds nothing.
+    /// Stored items nearest to an item by its vector. Free: it embeds nothing.
     #[tool(
         title = "Similar items",
         annotations(read_only_hint = true, idempotent_hint = true),
+        input_schema = input_schema::<SimilarItemsArgs>(),
         output_schema = output_schema::<SimilarItemsResult>(),
         meta = ToolMarks::new(Group::Concepts, Cost::Free).into()
     )]

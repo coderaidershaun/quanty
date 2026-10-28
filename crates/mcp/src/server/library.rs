@@ -7,7 +7,7 @@ use rmcp::{Json, tool, tool_router};
 
 use super::QuantyServer;
 use super::failure::ToolError;
-use super::meta::{Cost, Group, ToolMarks, output_schema};
+use super::meta::{Cost, Group, ToolMarks, input_schema, output_schema};
 use crate::library::{
     self, DocumentOutlineArgs, DocumentOverviewArgs, ItemRead, ListMediaArgs, ManyRead, Media,
     Outline, Overview, PagesView, ReadItemArgs, ReadManyArgs, ReadPagesArgs, ReadSectionArgs,
@@ -22,11 +22,11 @@ pub(super) fn names_entry() -> JsonObject {
 
 #[tool_router(router = library_router, vis = "pub(super)")]
 impl<S: Services> QuantyServer<S> {
-    /// Media of the library, such as books and papers, with their labels and counts of documents,
-    /// pages and items. Give `detail: names` to browse.
+    /// Media (books, papers) with labels and counts of documents, pages and items. `detail: names` to browse.
     #[tool(
         title = "List media",
         annotations(read_only_hint = true, idempotent_hint = true),
+        input_schema = input_schema::<ListMediaArgs>(),
         output_schema = output_schema::<Media>(),
         meta = ToolMarks::new(Group::Library, Cost::Free)
             .with_discovery(names_entry())
@@ -39,11 +39,11 @@ impl<S: Services> QuantyServer<S> {
         Ok(Json(library::list_media(&self.shared.config, args).await?))
     }
 
-    /// A document at a glance: its insights, takeaways, concepts with mention counts and related
-    /// documents. Give `detail: full` for the cheat sheet, outline and every insight.
+    /// Document at a glance: insights, takeaways, concepts, related documents. `detail: full` adds the cheat sheet.
     #[tool(
         title = "Document overview",
         annotations(read_only_hint = true, idempotent_hint = true),
+        input_schema = input_schema::<DocumentOverviewArgs>(),
         output_schema = output_schema::<Overview>(),
         meta = ToolMarks::new(Group::Library, Cost::Free).into()
     )]
@@ -56,11 +56,11 @@ impl<S: Services> QuantyServer<S> {
         ))
     }
 
-    /// Sections of a document with their headings, page ranges, item counts and concept counts.
-    /// Give a section's `index` to `read_section`.
+    /// Sections of a document with headings, page ranges, item and concept counts.
     #[tool(
         title = "Document outline",
         annotations(read_only_hint = true, idempotent_hint = true),
+        input_schema = input_schema::<DocumentOutlineArgs>(),
         output_schema = output_schema::<Outline>(),
         meta = ToolMarks::new(Group::Library, Cost::Free)
             .with_discovery_target()
@@ -75,11 +75,11 @@ impl<S: Services> QuantyServer<S> {
         ))
     }
 
-    /// One section of a document as Markdown or as pieces, with its formulas, figures, tables and
-    /// code. A long section continues with `cursor`.
+    /// One section of a document as Markdown or pieces, with formulas, figures, tables and code.
     #[tool(
         title = "Read section",
         annotations(read_only_hint = true, idempotent_hint = true),
+        input_schema = input_schema::<ReadSectionArgs>(),
         output_schema = output_schema::<SectionView>(),
         meta = ToolMarks::new(Group::Library, Cost::Free).into()
     )]
@@ -90,10 +90,11 @@ impl<S: Services> QuantyServer<S> {
         Ok(Json(library::read_section(&self.shared.config, args)?))
     }
 
-    /// A run of pages of a document as Markdown or as pieces. A long run continues with `cursor`.
+    /// A run of pages of a document as Markdown or pieces.
     #[tool(
         title = "Read pages",
         annotations(read_only_hint = true, idempotent_hint = true),
+        input_schema = input_schema::<ReadPagesArgs>(),
         output_schema = output_schema::<PagesView>(),
         meta = ToolMarks::new(Group::Library, Cost::Free).into()
     )]
@@ -104,11 +105,11 @@ impl<S: Services> QuantyServer<S> {
         Ok(Json(library::read_pages(&self.shared.config, args)?))
     }
 
-    /// One formula, figure, table or code listing, by its printed label or its `item_id`, with its
-    /// page, section, content and the paragraphs that cite it.
+    /// One formula, figure, table or code listing by label or `item_id`, with page, content and citing text.
     #[tool(
         title = "Read item",
         annotations(read_only_hint = true, idempotent_hint = true),
+        input_schema = input_schema::<ReadItemArgs>(),
         output_schema = output_schema::<ItemRead>(),
         meta = ToolMarks::new(Group::Library, Cost::Free).into()
     )]
@@ -119,11 +120,11 @@ impl<S: Services> QuantyServer<S> {
         Ok(Json(library::read_item(&self.shared.config, args)?))
     }
 
-    /// Several reads in one call (`read_section`, `read_pages`, `read_item` or `chapter_insights`)
-    /// that share one `max_chars` budget.
+    /// Several reads (`read_section`, `read_pages`, `read_item`, `chapter_insights`) in one call under one `max_chars`.
     #[tool(
         title = "Read many",
         annotations(read_only_hint = true, idempotent_hint = true),
+        input_schema = input_schema::<ReadManyArgs>(),
         output_schema = output_schema::<ManyRead>(),
         meta = ToolMarks::new(Group::Research, Cost::Free).into()
     )]

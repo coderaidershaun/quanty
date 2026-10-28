@@ -6,10 +6,13 @@ use serde::{Deserialize, Serialize};
 use super::KEPT_JOBS;
 use super::background::JobKind;
 
+/// The tool that follows a job of any kind.
+const STATUS_TOOL: &str = "job_status";
+
 /// What an agent gives `stop_job`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct StopJobArgs {
-    /// The `job_id` that `ingest_pdf`, `write_insights` or `build_dataset` gave.
+    /// The `job_id` of a job.
     pub(crate) job_id: String,
 }
 
@@ -38,7 +41,7 @@ impl StopResult {
             job_id: job_id.trim().to_owned(),
             kind,
             state,
-            status_tool: kind.status_tool(),
+            status_tool: STATUS_TOOL,
         }
     }
 }

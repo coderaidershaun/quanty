@@ -7,7 +7,7 @@ use std::path::Path;
 
 use graph::{FalkorGraph, GraphError};
 use rag_core::{ConceptId, Config, DocId, ItemId, error_chain};
-use rag_ingestion::assess_artifacts;
+use rag_ingestion::{assess_artifacts, document_title};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -34,9 +34,9 @@ const RELATED_DOCUMENTS: usize = 5;
 /// What an agent gives `document_overview`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct DocumentOverviewArgs {
-    /// From `list_documents` or a search result.
+    /// From `list_documents`.
     document_id: String,
-    /// `summary` (default) or `full`.
+    /// `summary` or `full`.
     detail: Option<OverviewDetail>,
 }
 
@@ -70,6 +70,11 @@ impl OverviewDetail {
 pub(crate) struct Overview {
     #[serde(flatten)]
     document: DocumentHeader,
+    /// The title that `list_documents` gives.
+    title: String,
+    /// The authors of the media. Left out when none is known or the graph is down.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    authors: Option<Vec<String>>,
     /// How many items of each kind the chapter has.
     items: ContentsCounts,
     insights: Fallible<OverviewInsights>,
@@ -138,6 +143,7 @@ struct Artifacts {
 
 /// What the graph gave for the overview.
 struct FromGraph {
+    authors: Vec<String>,
     concepts: DocumentConcepts,
     ingested_whole: bool,
     related: Vec<RelatedDocument>,
@@ -169,13 +175,15 @@ pub(crate) async fn document_overview(
         let concepts = from_graph.as_ref().ok().map(|found| &found.concepts);
         section_rows(&whole, concepts)
     });
-    let (concepts, ingested_whole, related) = match from_graph {
+    let (authors, concepts, ingested_whole, related) = match from_graph {
         Ok(found) => (
+            Some(found.authors).filter(|authors| !authors.is_empty()),
             Fallible::Read(concept_rows(&found.concepts, detail)),
             Some(found.ingested_whole),
             Fallible::Read(found.related),
         ),
         Err(error) => (
+            None,
             Fallible::Failed {
                 error: error.clone(),
             },
@@ -185,6 +193,8 @@ pub(crate) async fn document_overview(
     };
     Ok(Overview {
         document: DocumentHeader::of(&whole.entry),
+        title: document_title(&whole.entry.index),
+        authors,
         items: ContentsCounts::of(&whole.chapter.items()),
         insights,
         concepts,
@@ -245,6 +255,11 @@ async fn from_graph(
     let item_ids: Vec<ItemId> = whole.items.iter().map(|item| item.id).collect();
     let read = async {
         let graph = FalkorGraph::connect(config).await?;
+        let authors = graph
+            .document(id)
+            .await?
+            .map(|node| node.labels.authors)
+            .unwrap_or_default();
         let concepts = DocumentConcepts::read(&graph, id, &item_ids).await?;
         let ingested_whole = graph.ingested_items(id).await?.is_some();
         let related = if detail.is_full() {
@@ -253,6 +268,7 @@ async fn from_graph(
             Vec::new()
         };
         Ok::<_, GraphError>(FromGraph {
+            authors,
             concepts,
             ingested_whole,
             related,

@@ -17,11 +17,11 @@ use crate::library::{DocumentHeader, LibraryError, find_chapter, parse_document_
 /// What an agent gives `chapter_insights`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct ChapterInsightsArgs {
-    /// From `list_documents` or a search result.
+    /// From `list_documents`.
     document_id: String,
-    /// At most this many characters of text. 24000 when left out.
+    /// Text limit. Default 24000.
     pub(crate) max_chars: Option<u32>,
-    /// From a result that was `truncated`, with the same other arguments.
+    /// From a `truncated` result.
     pub(crate) cursor: Option<String>,
 }
 

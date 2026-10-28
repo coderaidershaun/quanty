@@ -147,7 +147,7 @@ pub(crate) enum PdfIngestError {
     DocumentTitle(#[source] ConvertError),
 
     #[error(
-        "an ingest is running (job {}); ask `ingest_status` with that job_id, and send this PDF when that job has ended",
+        "an ingest is running (job {}); ask `job_status` with that job_id, and send this PDF when that job has ended",
         .0.running_job
     )]
     Busy(Busy),

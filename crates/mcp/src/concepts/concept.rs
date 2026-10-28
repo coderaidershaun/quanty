@@ -8,8 +8,9 @@ use serde::{Deserialize, Serialize};
 
 use super::args::{ConceptRef, parse_concept_id};
 use super::error::ConceptsError;
-use super::view::{ItemRow, NODE_VERSION, Node};
+use super::view::{ItemRow, concept_node, tool_node};
 use crate::args::non_blank;
+use crate::discovery::Discovery;
 
 /// How many concepts next to the concept, or most mentioned in the library, the nodes lead to.
 const NODE_LIMIT: usize = 20;
@@ -20,9 +21,9 @@ const TOP_ITEMS: usize = 5;
 /// What an agent gives `concept`. With neither field it gets the most mentioned concepts.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct ConceptArgs {
-    /// The `concept_id` that a result gave.
+    /// From a result.
     concept_id: Option<String>,
-    /// An exact name or alias, whatever its capitals.
+    /// Exact name or alias.
     name: Option<String>,
 }
 
@@ -48,8 +49,8 @@ impl ConceptArgs {
 
 #[derive(Serialize, JsonSchema)]
 pub(crate) struct ConceptView {
-    version: u32,
-    nodes: Vec<Node>,
+    #[serde(flatten)]
+    discovery: Discovery,
     #[serde(flatten)]
     concept: Option<ConceptDetail>,
 }
@@ -85,11 +86,11 @@ pub(crate) async fn concept(
     let Some(reference) = reference else {
         let top = graph.top_concepts(NODE_LIMIT).await?;
         return Ok(ConceptView {
-            version: NODE_VERSION,
-            nodes: top
-                .iter()
-                .map(|(concept, _)| Node::concept(concept))
-                .collect(),
+            discovery: Discovery::of(
+                top.iter()
+                    .map(|(concept, _)| concept_node(concept))
+                    .collect(),
+            ),
             concept: None,
         });
     };
@@ -102,13 +103,12 @@ pub(crate) async fn concept(
     let next_to = graph.related_concepts(&[id]).await?;
 
     let mut nodes = vec![
-        Node::tool("Items that mention it", "concept_items", id),
-        Node::tool("Relations", "concept_neighbours", id),
+        tool_node("Items that mention it", "concept_items", id),
+        tool_node("Relations", "concept_neighbours", id),
     ];
-    nodes.extend(next_to.iter().take(NODE_LIMIT).map(Node::concept));
+    nodes.extend(next_to.iter().take(NODE_LIMIT).map(concept_node));
     Ok(ConceptView {
-        version: NODE_VERSION,
-        nodes,
+        discovery: Discovery::of(nodes),
         concept: Some(ConceptDetail {
             concept_id: id.to_string(),
             name: stored.name,

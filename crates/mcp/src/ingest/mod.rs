@@ -1,6 +1,7 @@
 //! The `ingest_pdf` and `ingest_status` tools, and the `check_pdf` tool that says first what an
 //! ingest would do. An ingest takes minutes and a client puts a time limit on a tool call, so
-//! `ingest_pdf` starts a job and `ingest_status` reads it.
+//! `ingest_pdf` starts a job and `job_status` reads it; `ingest_status` is the older name for
+//! the same read.
 
 mod check;
 mod error;
@@ -32,52 +33,35 @@ const PDF_START: &[u8] = b"%PDF-";
 /// What an agent gives `ingest_pdf`. Give exactly one of `path`, `pdf_base64` and `pdf_url`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct IngestPdfArgs {
-    /// The title of the media the PDF belongs to, such as "Option Volatility and Pricing".
     // An agent that still sends the older name `book` is understood. The schema shows `media`
     // only.
+    /// Media title.
     #[serde(alias = "book")]
     media: String,
-    /// `book` (the default), `paper` or `other`. A book's chapter must be named
-    /// `chapter-<number>-<name>.pdf`; a part of a book that is not a chapter takes
-    /// `document_title` and can have any name; a paper or other PDF can have any name. Used only
-    /// when the library does not have this media yet: a stored media keeps its own category,
-    /// which says how the PDF is named.
+    /// `book`, `paper` or `other`.
     category: Option<String>,
-    /// The authors of the media. Used only when the library does not have this media yet.
+    /// Used when the media is new.
     authors: Option<Vec<String>>,
-    /// Tags of the media, such as "options". Used only when the library does not have this media
-    /// yet.
+    /// Used when the media is new.
     tags: Option<Vec<String>>,
     /// Tags of this PDF only.
     document_tags: Option<Vec<String>>,
-    /// The title of this document. For a paper or other media it defaults to the title of the
-    /// media. For a book it names a part that is not a chapter, such as "Index" or "Glossary":
-    /// the document is stored as "<book>, <title>" and the file can have any name; leave it out
-    /// for a book's chapter, whose file is named `chapter-<number>-<name>.pdf`. Whether the
-    /// media is a book is up to the library when it has this media already: a stored media keeps
-    /// its own category, which says how the PDF is named.
+    /// Title of this document.
     document_title: Option<String>,
-    /// The absolute path of the PDF on the machine the server runs on. A book's chapter file
-    /// must be named `chapter-<number>-<name>.pdf`; a part that is not a chapter takes
-    /// `document_title` and any file name.
+    /// Absolute PDF path on the server.
     path: Option<String>,
-    /// The bytes of the PDF as standard base64, for a client that cannot reach the disk of the
-    /// server. It goes with `file_name`.
+    /// PDF bytes as base64.
     pdf_base64: Option<String>,
-    /// An http or https URL that the server fetches the PDF from with one GET, for a client whose
-    /// file is on another machine. It goes with `file_name`. Only the server's own machine and the
-    /// origins in `QUANTY_FETCH_ORIGINS` are fetched from, and a redirect is not followed.
+    /// URL to fetch the PDF from.
     pdf_url: Option<String>,
-    /// The name to save the bytes of `pdf_base64` or `pdf_url` under, with no folder in it; for a
-    /// book's chapter it must be `chapter-<number>-<name>.pdf`, and a part that is not a chapter
-    /// takes `document_title` and any name. Not for `path`.
+    /// Name for the saved PDF.
     file_name: Option<String>,
 }
 
 /// What an agent gives `ingest_status`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct IngestStatusArgs {
-    /// The `job_id` that `ingest_pdf` gave.
+    /// The `job_id` of a job.
     job_id: String,
 }
 

@@ -1,6 +1,7 @@
 //! The `chapter_insights`, `write_insights`, `insights_status` and `export_insights` tools. Writing
 //! the insights of stored documents takes a minute or more for each, and a client puts a time
-//! limit on a tool call, so `write_insights` starts a job and `insights_status` reads it.
+//! limit on a tool call, so `write_insights` starts a job and `job_status` reads it;
+//! `insights_status` is the older name for the same read.
 
 mod error;
 mod exporting;
@@ -34,20 +35,20 @@ use work::Work;
 /// What an agent gives `write_insights`. Give exactly one of `document_id`, `media` and `all`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct WriteInsightsArgs {
-    /// One stored document: its `document_id` from `list_documents`.
+    /// One document.
     document_id: Option<String>,
-    /// Every document of this media, by title whatever the capitals.
+    /// Every document of this media.
     media: Option<String>,
-    /// True for every stored document that belongs to a media.
+    /// Every stored document.
     all: Option<bool>,
-    /// List what would be written and ask nothing. It costs nothing. False when left out.
+    /// List only; costs nothing.
     dry_run: Option<bool>,
 }
 
 /// What an agent gives `insights_status`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct InsightsStatusArgs {
-    /// The `job_id` that `write_insights` gave.
+    /// The `job_id` of a job.
     job_id: String,
 }
 

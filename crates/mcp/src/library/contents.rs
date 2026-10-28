@@ -14,13 +14,13 @@ use crate::args::{Budget, Scope, Truncation, parse_optional};
 /// What an agent gives `chapter_contents`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct ChapterContentsArgs {
-    /// From `list_documents` or a search result.
+    /// From `list_documents`.
     document_id: String,
-    /// `formula`, `figure`, `table` or `code`. Every kind when left out.
+    /// `formula`, `figure`, `table` or `code`.
     kind: Option<String>,
-    /// At most this many characters of text. 24000 when left out.
+    /// Text limit. Default 24000.
     max_chars: Option<u32>,
-    /// From a result that was `truncated`, with the same other arguments.
+    /// From a `truncated` result.
     cursor: Option<String>,
 }
 

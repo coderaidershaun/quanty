@@ -17,9 +17,9 @@ const MOST_REQUESTS: usize = 20;
 /// What an agent gives `read_many`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct ReadManyArgs {
-    /// From 1 to 20 reads, done in order.
+    /// 1 to 20 reads, in order.
     requests: Vec<ReadRequest>,
-    /// At most this many characters of text over all the reads. 24000 when left out.
+    /// Text limit for all. Default 24000.
     max_chars: Option<u32>,
 }
 

@@ -22,15 +22,15 @@ const MOST_SIMILAR: u32 = 50;
 /// What an agent gives `concept_items`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct ConceptItemsArgs {
-    /// The `concept_id` that a result gave.
+    /// From a result.
     concept_id: String,
-    /// Keep only the items of this document: a `document_id` from `list_documents`.
+    /// Only this document.
     document: Option<String>,
-    /// Keep only items of this kind: `chunk`, `formula`, `figure`, `table` or `code`.
+    /// `chunk`, `formula`, `figure`, `table`, `code`.
     kind: Option<String>,
-    /// How many items at most, from 1 to 100. Default 20.
+    /// Most items.
     limit: Option<u32>,
-    /// The `next_cursor` of the previous result, to read the next page.
+    /// `next_cursor` of the last page.
     cursor: Option<String>,
 }
 
@@ -47,11 +47,11 @@ pub(crate) struct ConceptItemsResult {
 /// What an agent gives `similar_items`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct SimilarItemsArgs {
-    /// The `item_id` that a result gave.
+    /// From a search result.
     item_id: String,
-    /// How many items at most, from 1 to 50. Default 10.
+    /// Most items.
     limit: Option<u32>,
-    /// Keep only items of this kind: `chunk`, `formula`, `figure`, `table` or `code`.
+    /// `chunk`, `formula`, `figure`, `table`, `code`.
     kind: Option<String>,
 }
 

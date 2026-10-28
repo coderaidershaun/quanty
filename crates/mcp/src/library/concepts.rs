@@ -13,14 +13,13 @@ use crate::args::{Budget, Scope, Slice, Truncation};
 /// What an agent gives `chapter_concepts`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct ChapterConceptsArgs {
-    /// From `list_documents` or a search result.
+    /// From `list_documents`.
     document_id: String,
-    /// One page only: the `page` of a search result or of `chapter_contents` (from 1), not the
-    /// number printed on the page. The whole document when left out.
+    /// One page only, from 1.
     page: Option<u32>,
-    /// At most this many characters of names and definitions. 24000 when left out.
+    /// Text limit. Default 24000.
     max_chars: Option<u32>,
-    /// From a result that was `truncated`, with the same other arguments.
+    /// From a `truncated` result.
     cursor: Option<String>,
 }
 

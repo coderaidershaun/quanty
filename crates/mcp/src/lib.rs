@@ -4,6 +4,7 @@
 mod args;
 mod concepts;
 mod datasets;
+mod discovery;
 mod fixture;
 mod ingest;
 mod insights;

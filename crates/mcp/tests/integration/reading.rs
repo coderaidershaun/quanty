@@ -164,6 +164,8 @@ async fn a_section_reads_as_the_dataset_renders_it_and_as_pieces(client: &Client
         let read = structured(&read);
         assert_eq!(read["text"], section.markdown.as_str(), "section {index}");
         assert_eq!(read["index"], index);
+        assert_eq!(read["document_pages"], 7);
+        assert_eq!(read["pages"].as_array().map(Vec::len), Some(2));
         assert_eq!(read["path"], json!(section.section_path));
         assert_eq!(read["truncated"], false);
         assert!(read.get("cursor").is_none());

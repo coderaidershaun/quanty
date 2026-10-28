@@ -37,7 +37,7 @@ pub(crate) enum InsightsToolError {
     ModelNotReady(#[source] LlmError),
 
     #[error(
-        "insights are being written (job {}); ask `insights_status` with that job_id, and call `write_insights` again when that job has ended",
+        "insights are being written (job {}); ask `job_status` with that job_id, and call `write_insights` again when that job has ended",
         .0.running_job
     )]
     Busy(Busy),

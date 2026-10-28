@@ -20,17 +20,15 @@ const DEEPEST_NEIGHBOURS: u32 = 2;
 /// What an agent gives `concept_neighbours`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct ConceptNeighboursArgs {
-    /// The `concept_id` that a result gave.
+    /// From a result.
     concept_id: String,
-    /// Keep only these kinds of relation: `DERIVED_FROM`, `ASSUMES`, `GENERALISES`, `PART_OF` or
-    /// `USED_FOR`. All when left out.
+    /// Relation kinds to keep.
     kinds: Option<Vec<String>>,
-    /// `out` for relations that leave the concept, `in` for those that reach it, or `both`.
-    /// Default `both`.
+    /// `out`, `in` or `both`.
     direction: Option<String>,
-    /// 1 for the concepts next to it, 2 to go one step further. Default 1.
+    /// 1 or 2 steps.
     depth: Option<u32>,
-    /// How many relations at most, from 1 to 200. Default 50.
+    /// Most relations.
     limit: Option<u32>,
 }
 
@@ -48,11 +46,11 @@ pub(crate) struct NeighboursResult {
 /// What an agent gives `concept_path`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct ConceptPathArgs {
-    /// A `concept_id` or a name.
+    /// Concept id or name.
     from: String,
-    /// A `concept_id` or a name.
+    /// Concept id or name.
     to: String,
-    /// The most relations in the chain, from 1 to 4. Default 4.
+    /// 1 to 4 relations.
     max_depth: Option<u32>,
 }
 

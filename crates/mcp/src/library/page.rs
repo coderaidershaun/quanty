@@ -13,14 +13,13 @@ use crate::args::{Budget, Scope, Truncation};
 /// What an agent gives `read_page`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct ReadPageArgs {
-    /// The `document_id` of a search result or of `list_documents`.
+    /// From `list_documents`.
     document_id: String,
-    /// The `page` of a search result: the place of the page in the chapter, from 1. It is not the
-    /// number printed on the page.
+    /// Place in the chapter, from 1.
     page: u32,
-    /// At most this many characters of text. 24000 when left out.
+    /// Text limit. Default 24000.
     max_chars: Option<u32>,
-    /// From a result that was `truncated`, with the same other arguments.
+    /// From a `truncated` result.
     cursor: Option<String>,
 }
 

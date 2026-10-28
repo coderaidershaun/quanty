@@ -49,6 +49,14 @@ async fn an_overview_names_the_concepts_with_their_mentions(client: &Client) {
     assert!(concept["concept_id"].is_string());
     assert_eq!(full["related_documents"], json!([]));
     assert_eq!(full["ingested_whole"], true);
+    let listed = call(client, "list_documents", json!({ "detail": "names" })).await;
+    let listed = structured(&listed)["documents"].as_array().unwrap();
+    let stored_title = listed
+        .iter()
+        .find(|document| document["document_id"] == sample.as_str())
+        .map(|document| document["title"].clone());
+    assert_eq!(Some(full["title"].clone()), stored_title);
+    assert_eq!(full["authors"], json!([AUTHOR]));
     assert!(full["insights"]["state"].is_string());
     let counts: Vec<u64> = full["outline"]
         .as_array()

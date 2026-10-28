@@ -1,6 +1,6 @@
 # The MCP server
 
-`quanty-mcp` lets an AI agent use quanty: search the stored library of books, papers and other media, read the pages of its documents, list the formulas, figures, tables, code listings and concepts of a chapter, read its insights and export them to a file, send a PDF to be ingested, write the missing insights of stored chapters, change the labels of a media or a document, stop a job, and build a training dataset from the converted documents. It speaks the [Model Context Protocol](https://modelcontextprotocol.io), through quanty’s authenticated HTTP endpoint, or through `quanty-mcp` over standard input and output on the server itself.
+`quanty-mcp` lets an AI agent use quanty: search the stored library of books, papers and other media, read the pages of its documents, list the formulas, figures, tables, code listings and concepts of a chapter, read its insights and export them to a file, send a PDF to be ingested, write the missing insights of stored chapters, change the labels of a media or a document, stop a job, and build a training dataset from the converted documents. It has forty tools in eight groups; the free tools `catalog`, `describe_tool` and `guide` say what the others do ([section 3](#3-discovering-the-tools)). It speaks the [Model Context Protocol](https://modelcontextprotocol.io), through quanty’s authenticated HTTP endpoint, or through `quanty-mcp` over standard input and output on the server itself.
 
 ## 1. Before you start it
 
@@ -21,7 +21,7 @@ https://quanty.example.com/mcp
 Authorization: Bearer YOUR_QUANTY_MCP_TOKEN
 ```
 
-The endpoint uses streamable HTTP behind Caddy HTTPS. See [section 10](#10-add-it-to-claude-code) for client configuration.
+The endpoint uses streamable HTTP behind Caddy HTTPS. See [section 14](#14-add-it-to-claude-code) for client configuration.
 
 For stdio on the host:
 
@@ -35,41 +35,85 @@ The client starts that process. Standard output carries only MCP; logs go to sta
 
 The unified HTTP server admits one background ingest, insights job or dataset build at a time across MCP and browser tabs. `/api/facts` shows its kind and name while it runs. A separate `quanty-mcp` stdio process keeps one job of each kind at a time; it does not share admission with the HTTP server or other processes. Searches, reads and status calls remain available while a background job runs.
 
-## 3. The tools
+## 3. Discovering the tools
 
-Thirty-seven tools. A tool that costs money says so in its description, and so does this table.
+An agent does not have to read forty descriptions. The tool list gives each tool a short description, with the nouns a keyword search would use, and three free tools in the group `catalog` give the rest when it is wanted:
 
-| Tool | What it does | Costs |
-| --- | --- | --- |
-| `search` | The stored items (text chunks, formulas, figures, tables, code listings) nearest to a question | A small Gemini call |
-| `answer` | An answer written from what `search` finds, with its sources | A Gemini call and your Claude usage; a minute or two |
-| `list_documents` | Every stored document with its media, category, authors, tags, chapter, whether it was ingested whole and how many items of each kind it has | Nothing |
-| `list_media` | The media of the library with their labels and how many documents, pages and items each holds | Nothing; it reads FalkorDB |
-| `document_overview` | A document at a glance: header, item counts, insights and takeaways, concepts with mention counts; `detail: full` adds the cheat sheet, outline, related documents and artifacts | Nothing; it reads FalkorDB for the concepts only |
-| `document_outline` | The sections of a document with their page ranges, item counts and concept counts | Nothing; it reads FalkorDB for the concept counts only |
-| `read_section` | One section of a document as Markdown or as pieces | Nothing, and it needs no store |
-| `read_pages` | A run of pages of a document as Markdown or as pieces | Nothing, and it needs no store |
-| `read_item` | One formula, figure, table or code listing by its label or `item_id`, with the paragraphs that cite it | Nothing, and it needs no store |
-| `read_many` | Up to 20 of the reads above and `chapter_insights` in one call, sharing one `max_chars` | Nothing, and it needs no store |
-| `read_page` | The pieces of one page of a document, in reading order | Nothing, and it needs no store |
-| `chapter_contents` | Every formula, figure, table and code listing of a document, in reading order | Nothing, and it needs no store |
-| `chapter_concepts` | The concepts of a document, or of one page of it | Nothing; it reads FalkorDB |
-| `chapter_insights` | The insights, takeaways and cheat sheet written for a document | Nothing, and it needs no store |
-| `export_insights` | Writes the saved insights, takeaways and cheat sheet of a document to a PDF, Markdown or HTML file | Nothing; writes one file |
-| `edit_media` | Changes the category, authors or tags of a stored media, in both stores | Nothing |
-| `edit_document_tags` | Adds tags to a stored document or takes tags away, in both stores | Nothing |
-| `health` | Whether Qdrant, FalkorDB, the sign-in of the Ingest choice's agent and the two keys are ready, and the model of each kind of work | Nothing |
-| `check_pdf` | What an `ingest_pdf` of a PDF would do: the title it is stored under, its pages, its state, what would stop it and a rough cost and time | Nothing |
-| `ingest_pdf` | Converts one PDF of a media, stores it and writes its insights | **Paid and slow**: Claude, Jev and Gemini; minutes for each PDF |
-| `ingest_status` | Deprecated: call `job_status`. How an ingest job is going | Nothing |
-| `write_insights` | Writes the missing insights, takeaways and cheat sheets of documents that are stored already | **Paid and slow** unless `dry_run` is `true`: the agent of the Ingest choice is asked once for each document that has none, a minute or more for each. A dry run is free |
-| `insights_status` | Deprecated: call `job_status`. How an insights job is going, and what became of each document | Nothing |
-| `build_dataset` | Builds a training dataset for Gemma 4 from the converted documents | **Paid and slow** unless `dry_run` is `true`: the agent of the Datasets choice writes every rewritten text and answers every question, which can take hours. A dry run is free |
-| `dataset_status` | Deprecated: call `job_status`. How a dataset build is going, and what it spent so far | Nothing |
-| `job_status` | A job of any kind by its `job_id`: state, stage with counts and share done, usage and error | Nothing |
-| `watch_job` | Waits until the stage or the state of a job changes (up to 90 seconds), then gives what `job_status` gives; sends progress notifications while it waits | Nothing |
-| `list_jobs` | The jobs of this server, newest first, and the job that holds the shared background slot | Nothing |
-| `stop_job` | Stops a running ingest, insights job or dataset build | Nothing |
+| Tool | Gives |
+| --- | --- |
+| `catalog` | The tools by group, each with a one-line summary and whether it is paid, and a short `start_here` path. `group` shows one group, and `detail: names` is the smallest answer |
+| `describe_tool` | One tool in detail: the long description with its rules and caveats, notes on each argument, example calls as JSON, what can fail, what it costs and the tools to use next |
+| `guide` | A short guide, under 6 KiB, on `start`, `research`, `ingest`, `jobs`, `costs` or `errors` |
+
+The path to follow first is `health`, then `catalog`, then `list_documents` with `detail: names`, then `document_overview` and `read_section` for a document, or `search` for a question. The `instructions` that the server sends when a client connects say the same in five lines.
+
+The tools are in eight groups. The list shows them in this order, and inside a group in the order of the table in section 4.
+
+| Group | For |
+| --- | --- |
+| `catalog` | Finding out what the tools do |
+| `library` | Browsing and reading media, documents, sections, pages and items |
+| `research` | Searching, reading many places in one call, and written answers |
+| `concepts` | Walking the concept graph and finding items like an item |
+| `jobs` | Following, listing and stopping ingest, insights and dataset jobs |
+| `ingest` | Checking a PDF, adding it, and writing missing insights |
+| `datasets` | Building a training dataset |
+| `admin` | Checking the services, changing labels, exporting insights |
+
+What a program can rely on:
+
+- **PAID.** A tool that spends money has PAID as the second word of its description, such as "Search, PAID (one Gemini embedding): …", and `paid: true` in `catalog`. No free tool says PAID. Six tools are paid: `search`, `answer`, `find_concepts`, `ingest_pdf`, `write_insights` and `build_dataset`; `find_concepts` by `name`, and `write_insights` and `build_dataset` with `dry_run`, are free.
+- **Marks.** Each tool carries `_meta` with `quanty/group` and `quanty/cost` (`{ "paid": false }`, or `{ "paid": true, "who": … }` with `ask`, `ingest`, `datasets` or `gemini`). `catalog`, `list_media`, `list_documents` and `concept` carry `jet/discovery` and `document_outline` carries `jet/discovery` as a target, so that a host that browses tools can open them and show a person media, documents, sections and concepts without asking a model and without paying; the `nodes` of their results are the next calls. `ingest_pdf`, `write_insights`, `build_dataset`, `job_status` and `watch_job` carry `jet/job` (`{ "version": 1, "statusTool": "job_status", "idField": "job_id" }`), so that a host can follow the job with the free status tool after the model's turn has ended.
+- **Schemas and hints.** Every tool has a title, an `outputSchema` whose root is an object with the fields of its result, and annotations: the tools that read say `readOnlyHint` and `idempotentHint` (`answer` only `readOnlyHint`, because a second call writes a new answer), a job start says it is not read-only, and the tools that replace or write say `destructiveHint`.
+- **Order and size.** The list has one order on every read. The part of the list that a model reads (name, title, description and input schema of every tool) stays under 24 KiB, and the whole list under 48 KiB; a test fails when either grows past that. The long text of each tool lives in notes that `describe_tool` serves.
+- **Cache.** A client of the 2026-07-28 protocol gets `ttlMs: 300000` and `cacheScope: "public"` with the list, because it does not change while the server runs and is the same for every caller. An older client gets no hint.
+
+## 4. The tools
+
+Forty tools. A tool that costs money says so in its description, and so does this table. The tools are listed in the order of the tool list.
+
+| Tool | Group | What it does | Costs |
+| --- | --- | --- | --- |
+| `catalog` | catalog | The tools by group, with a summary of each and a path to start from | Nothing |
+| `describe_tool` | catalog | One tool in detail: notes, examples, errors, cost, related tools | Nothing |
+| `guide` | catalog | A short guide on start, research, ingest, jobs, costs or errors | Nothing |
+| `list_media` | library | The media of the library with their labels and how many documents, pages and items each holds | Nothing; it reads FalkorDB |
+| `list_documents` | library | Every stored document with its media, category, authors, tags, chapter, whether it was ingested whole and how many items of each kind it has | Nothing |
+| `document_overview` | library | A document at a glance: header, item counts, insights and takeaways, concepts with mention counts; `detail: full` adds the cheat sheet, outline, related documents and artifacts | Nothing; it reads FalkorDB for the concepts only |
+| `document_outline` | library | The sections of a document with their page ranges, item counts and concept counts | Nothing; it reads FalkorDB for the concept counts only |
+| `read_section` | library | One section of a document as Markdown or as pieces | Nothing, and it needs no store |
+| `read_pages` | library | A run of pages of a document as Markdown or as pieces | Nothing, and it needs no store |
+| `read_item` | library | One formula, figure, table or code listing by its label or `item_id`, with the paragraphs that cite it | Nothing, and it needs no store |
+| `read_page` | library | The pieces of one page of a document, in reading order | Nothing, and it needs no store |
+| `chapter_contents` | library | Every formula, figure, table and code listing of a document, in reading order | Nothing, and it needs no store |
+| `chapter_insights` | library | The insights, takeaways and cheat sheet written for a document | Nothing, and it needs no store |
+| `search` | research | The stored items (text chunks, formulas, figures, tables, code listings) nearest to a question | **Paid**: a small Gemini call |
+| `read_many` | research | Up to 20 of the reads above in one call, sharing one `max_chars` | Nothing, and it needs no store |
+| `answer` | research | An answer written from what `search` finds, with its sources | **Paid**: a Gemini call and your Claude usage; a minute or two |
+| `find_concepts` | concepts | Concepts by exact name or alias, or by meaning | Nothing by `name`; **paid** by `query`: one Gemini call |
+| `concept` | concepts | One concept with its aliases, documents and first items, and nodes to walk on from | Nothing; it reads FalkorDB |
+| `concept_neighbours` | concepts | The relations that touch a concept, one or two steps out | Nothing; it reads FalkorDB |
+| `concept_items` | concepts | The items that mention a concept, a page at a time | Nothing; it reads FalkorDB |
+| `concept_path` | concepts | The shortest chain of relations between two concepts | Nothing; it reads FalkorDB |
+| `compare_documents` | concepts | The concepts that 2 to 10 documents share, and those only one has | Nothing; it reads FalkorDB |
+| `document_concepts` | concepts | The concepts of a document or of one page, with ids and mention counts | Nothing; it reads FalkorDB |
+| `chapter_concepts` | concepts | The concepts of a document, or of one page of it | Nothing; it reads FalkorDB |
+| `similar_items` | concepts | The stored items nearest to an item by its stored vector | Nothing; it reads Qdrant only |
+| `job_status` | jobs | A job of any kind by its `job_id`: state, stage with counts and share done, usage and error | Nothing |
+| `watch_job` | jobs | Waits until the stage or the state of a job changes (up to 90 seconds), then gives what `job_status` gives; sends progress notifications while it waits | Nothing |
+| `list_jobs` | jobs | The jobs of this server, newest first, and the job that holds the shared background slot | Nothing |
+| `stop_job` | jobs | Stops a running ingest, insights job or dataset build | Nothing |
+| `ingest_status` | jobs | Deprecated: call `job_status`. How an ingest job is going | Nothing |
+| `insights_status` | jobs | Deprecated: call `job_status`. How an insights job is going, and what became of each document | Nothing |
+| `dataset_status` | jobs | Deprecated: call `job_status`. How a dataset build is going, and what it spent so far | Nothing |
+| `check_pdf` | ingest | What an `ingest_pdf` of a PDF would do: the title it is stored under, its pages, its state, what would stop it and a rough cost and time | Nothing |
+| `ingest_pdf` | ingest | Converts one PDF of a media, stores it and writes its insights | **Paid and slow**: Claude, Jev and Gemini; minutes for each PDF |
+| `write_insights` | ingest | Writes the missing insights, takeaways and cheat sheets of documents that are stored already | **Paid and slow** unless `dry_run` is `true`: the agent of the Ingest choice is asked once for each document that has none, a minute or more for each. A dry run is free |
+| `build_dataset` | datasets | Builds a training dataset for Gemma 4 from the converted documents | **Paid and slow** unless `dry_run` is `true`: the agent of the Datasets choice writes every rewritten text and answers every question, which can take hours. A dry run is free |
+| `health` | admin | Whether Qdrant, FalkorDB, the sign-in of the Ingest choice's agent and the two keys are ready, and the model of each kind of work | Nothing |
+| `edit_media` | admin | Changes the category, authors or tags of a stored media, in both stores | Nothing |
+| `edit_document_tags` | admin | Adds tags to a stored document or takes tags away, in both stores | Nothing |
+| `export_insights` | admin | Writes the saved insights, takeaways and cheat sheet of a document to a PDF, Markdown or HTML file | Nothing; writes one file |
 
 `search` and `answer` use the Ask choice, `ingest_pdf` and `write_insights` the Ingest choice and `build_dataset` the Datasets choice. `health` shows all three.
 
@@ -78,8 +122,11 @@ An optional argument can be left out or set to `null`. An optional text that is 
 First calls to try, in this order:
 
 1. `health` with no arguments: `healthy` must be `true`.
-2. `list_documents` with no arguments: the documents that are stored, each with its `document_id`.
-3. `search` with `{"question": "What is the Black–Scholes formula for a call option?"}`: then give the `document_id` and `page` of a result to `read_page`.
+2. `catalog` with no arguments: the groups and their tools.
+3. `list_documents` with `{"detail": "names"}`: the documents that are stored, each with its `document_id`.
+4. `document_overview` with a `document_id`, then `read_section`; or `search` with `{"question": "What is the Black–Scholes formula for a call option?"}` and `read_page` with the `document_id` and `page` of a result.
+
+## 5. Searching and answering
 
 ### `search`
 
@@ -113,6 +160,30 @@ The arguments `question`, `kind`, `document`, `media`, `author`, `category` and 
 "cost_usd": 0.0000024
 ```
 
+## 6. Reading the library
+
+Twelve tools browse and read the library from the converted files on disk. None costs anything, and none needs a store except for the concepts, which come from FalkorDB.
+
+Every tool that reads one converted document starts its result with the same header: `document_id`, `media`, `chapter_number` and `chapter_name` (for a book's chapter), `document_title` (for a document with a title of its own) and `pages`, the page count of the document. `read_section` gives the count as `document_pages`, because its own `pages` is the first and the last page of the section.
+
+| Tool | Takes | Gives |
+| --- | --- | --- |
+| `list_media` | `category`, `author`, `tag`, `detail` (`summary` or `names`) | `media`: `title`, `category`, `authors`, `tags`, `documents`, `pages`, `items`, `with_insights` |
+| `document_overview` | `document_id`, `detail` (`summary` or `full`) | The header, `title` (as `list_documents` gives it), `authors` (when the graph knows them), `items` (formulas, figures, tables, code), `insights`, `concepts` (`concept_id`, `name`, `mentions`) and `ingested_whole`. `full` adds `outline`, every insight, the `cheat_sheet`, fifty concepts with definitions, `related_documents` (three shared concepts or more, at most five) and `artifacts` |
+| `document_outline` | `document_id` | `sections`: `index`, `path`, `rank`, `printed_number`, `pages` (first and last), `chars`, `items` and `concepts` |
+| `read_section` | `document_id`, `section` (an `index` from the outline, or its heading), `as` (`markdown` or `pieces`) | The section as `text` or `pieces`, with `index`, `path`, `pages` (the section's first and last page), `document_pages`, `item_ids` and `pictures` |
+| `read_pages` | `document_id`, `from`, `to`, `as` | The pages as `text` or `pieces`. A paragraph that starts on a page of the run is given whole |
+| `read_item` | `document_id` with `kind` and `label`, or `item_id` | One item with `item_id`, `page`, `section`, `section_index`, `label`, `caption`, `content` and `cited_by` (the paragraphs that cite its label) |
+| `read_many` | `requests` (1 to 20, each `{"tool": …, "args": {…}}` with a tool of `read_section`, `read_pages`, `read_item` or `chapter_insights`), `max_chars` | `results` in order, each with `tool`, `truncated` and `result` or `error`, and `used_chars` |
+
+`detail` shortens `list_media`, `list_documents` (`names`, `summary` or `full`) and `document_overview`. With `names` a result lists nodes that a host can open, for a person who browses without asking a model: media, then documents of a media, then the outline of a document, then its sections. The same path is `list_media`, `list_documents`, `document_outline`, `read_section`.
+
+### Budgets and cursors
+
+A read that can be long takes `max_chars` (24000 when left out, at most 200000, counted in characters of the main text) and `cursor`: `read_page`, `read_section`, `read_pages`, `read_item`, `chapter_contents`, `chapter_concepts`, `chapter_insights` and `search`. Its result has `truncated`, and a `cursor` when the text goes on. Give the `cursor` back with the same other arguments to read on from exactly where the text stopped, so the reads put together are the whole text. A cursor of another read is refused.
+
+`read_many` runs its requests in order against one `max_chars`. Each gets at most what is left (or its own smaller `max_chars`). A request with nothing left is not read and comes back with `truncated: true` and no result. A request that fails has an `error` and does not fail the call.
+
 ### `list_documents`
 
 | Argument | |
@@ -135,7 +206,7 @@ It also gives `unreadable_chapters`: one line for each converted document under 
 | --- | --- |
 | `document_id` | Required. From a search result or `list_documents` |
 | `page` | Required. The `page` of a search result (from 1), not the printed number |
-| `max_chars`, `cursor` | See [Reading the library](#reading-the-library) |
+| `max_chars`, `cursor` | See [Budgets and cursors](#budgets-and-cursors) |
 
 Gives `truncated` (and `cursor`), `document_id`, `media` (the title of its media), `chapter_number` and `chapter_name` (for a book's chapter), `document_title` (for a document with a title of its own, such as a paper's or a part of a book that is not a chapter; it gives the whole stored title, which for a part is "<book>, <part>"), `page`, `pages`, `printed_page`, `page_image` (the contained whole-page picture URL relative to the app base) and `pieces`: for each, `number`, `kind` (`heading`, `text`, `formula`, `figure`, `table`, `footnote` or `code`), `section` (the headings it sits under, outermost first), `label`, `caption` (the caption as printed, without its label, for a figure, table or code listing that has one), `name` (the name the book gives a formula, such as "Black–Scholes call price", when it names it), `language` (for code, when it is known), `content` (the code as printed, with its indentation, for code) and, for a figure, `picture`.
 
@@ -145,45 +216,16 @@ Gives `truncated` (and `cursor`), `document_id`, `media` (the title of its media
 | --- | --- |
 | `document_id` | Required. From `list_documents` or a search result |
 | `kind` | `formula`, `figure`, `table` or `code`: only items of that kind. Every kind when left out. `chunk` is refused: read the text of a page with `read_page` |
-| `max_chars`, `cursor` | See [Reading the library](#reading-the-library) |
+| `max_chars`, `cursor` | See [Budgets and cursors](#budgets-and-cursors) |
 
 Lists every formula, figure, table and code listing of one converted document, in reading order. It reads the saved chapter, so it needs no store and shows while the stores are down. Gives the same `document_id`, `media`, `chapter_number`, `chapter_name`, `document_title` and `pages` as `read_page`, then `counts` (`formula`, `figure`, `table` and `code`, always of the whole document, whatever `kind` asked) and `items`. Each item has `page` (the place of the page it starts on, from 1: give it to `read_page` to read around the item), `printed_page`, `number`, `kind`, `section`, `label`, `caption` (a figure, table or code listing), `name` (a formula), `language` (code), `content` (the LaTeX of a formula, the code as printed, the explanation of a figure, the Markdown of a table) and, for a figure, `picture`. A code listing that page breaks cut is one item: `content` holds all of it, and `last_page` and `last_printed_page` say where it ends.
-
-### `chapter_concepts`
-
-| Argument | |
-| --- | --- |
-| `document_id` | Required. From `list_documents` or a search result |
-| `page` | Only the concepts of this page: the `page` of a search result or of `chapter_contents` (from 1), not the printed number. The whole document when left out |
-| `max_chars`, `cursor` | See [Reading the library](#reading-the-library). A cut falls inside the definition |
-
-Gives `document_id`, `title` (the whole stored title), `page` (only when asked) and `concepts`, the most mentioned first: each has `name` and a one-line `definition`. A page with no concept gives an empty list. It reads FalkorDB, as the browser app does beside a page.
-
-### Exploring concepts
-
-Eight tools read the concept graph that an ingest builds, so that an agent can walk from a concept to the items that mention it and to the concepts next to it. They are in the group `concepts`. All are free except `find_concepts` with `query`, which embeds the query with Gemini. Every result names the items it shows with `item_id`, `document_id` and `page`, so the next call is `read_page` with a `document_id` and a `page`.
-
-| Tool | Main arguments | Gives |
-| --- | --- | --- |
-| `find_concepts` | exactly one of `name` (an exact name or alias, free) and `query` (by meaning, **paid**: one Gemini call); `limit` 1 to 25, default 10 | `concepts`: `concept_id`, `name`, `definition`, `aliases`, `mentions` (items), `documents` and, for a `query`, `score`; `usage` and `cost_usd` for a `query` |
-| `concept` | `concept_id` or `name`, not both; neither gives the most mentioned concepts | `version`, `nodes` for a program that explores tools by calling them (`concept_items`, `concept_neighbours` and one node for each concept next to it, at most 20), and the concept: `aliases`, `mentions`, `documents` with their mentions, and `top_items`, its first 5 items |
-| `concept_neighbours` | `concept_id`; `kinds` (`DERIVED_FROM`, `ASSUMES`, `GENERALISES`, `PART_OF`, `USED_FOR`); `direction` (`out`, `in` or `both`, default `both`); `depth` 1 or 2; `limit` 1 to 200, default 50 | `edges` (`from`, `to`, `kind` and `stated_by`, the item, document and page that stated it, or `null`), `concepts` they touch, and `truncated` |
-| `concept_items` | `concept_id`; `document`; `kind`; `limit` 1 to 100, default 20; `cursor` | `items` (`item_id`, `document_id`, `page`, `printed_page`, `kind` and `wording`) and `next_cursor` when there are more |
-| `concept_path` | `from` and `to`, each a concept id or a name; `max_depth` 1 to 4, default 4 | The shortest chain of relations, followed either way, as `edges` in order, and the `concepts` on it. Both are empty when no chain is that short |
-| `compare_documents` | `document_ids`, 2 to 10 different; `limit` 1 to 500, default 50, for each list | `shared`: concepts that at least two documents mention, with the number of items of each; `only_in`: for each document, the concepts that only it mentions; `truncated` |
-| `document_concepts` | `document_id`; `page`; `limit` 1 to 500; `with_counts` | The concepts of `chapter_concepts` with their `concept_id`, and with `with_counts` the number of items of the whole document that mention each |
-| `similar_items` | `item_id`; `limit` 1 to 50, default 10; `kind` | The stored items nearest to that item by its stored vector, nearest first, with `document`, `page`, `label` and `score`. It reads Qdrant only and embeds nothing |
-
-A depth, a limit or a cursor that is not allowed is a tool error, never changed quietly. A concept that is not stored is a tool error that says to call `find_concepts`.
-
-The order to use them: `find_concepts` to find a concept, `concept` to see it, `concept_neighbours` and `concept_items` to go on from it, then `read_page` to read the pages.
 
 ### `chapter_insights`
 
 | Argument | |
 | --- | --- |
 | `document_id` | Required. From `list_documents` or a search result |
-| `max_chars`, `cursor` | See [Reading the library](#reading-the-library). The units are each insight, each takeaway, then the cheat sheet |
+| `max_chars`, `cursor` | See [Budgets and cursors](#budgets-and-cursors). The units are each insight, each takeaway, then the cheat sheet |
 
 Gives what the agent of the Ingest choice wrote about the whole document when it was ingested, from the file `insights.json` in its converted folder: the same `document_id`, `media`, `chapter_number`, `chapter_name`, `document_title` and `pages` as `read_page`, and `state`:
 
@@ -195,98 +237,40 @@ Gives what the agent of the Ingest choice wrote about the whole document when it
 
 It costs nothing. It reads the file, and it reads the graph only for a document with a title of its own that has no file, to see whether it is a part of a book. A file that cannot be read is a tool error that names it and says to call `write_insights`, which writes it again.
 
-### `export_insights`
+### `chapter_concepts`
 
 | Argument | |
 | --- | --- |
 | `document_id` | Required. From `list_documents` or a search result |
-| `format` | Required. `pdf`, `markdown` or `html`, whatever the capitals |
-| `path` | Required. The absolute path of the file to write, on the machine the server runs on, ending in `.pdf`, `.md` or `.html` as `format` is. Its folder must exist |
-| `overwrite` | `true` to replace a file that is at `path`. `false` when left out: a file that is there is kept and the call fails |
+| `page` | Only the concepts of this page: the `page` of a search result or of `chapter_contents` (from 1), not the printed number. The whole document when left out |
+| `max_chars`, `cursor` | See [Budgets and cursors](#budgets-and-cursors). A cut falls inside the definition |
 
-Writes what `chapter_insights` reads to one file that stands alone, the same file that **Export** in the Insights view of the browser app writes: the title of the document, a line that names the model, the insights with their pages, the takeaways and the cheat sheet. The PDF has its formulas typeset, the HTML file has its pictures inside it, and the Markdown file keeps its formulas as `$…$`. Every check runs before anything is written, in this order: `format`, that `path` is absolute, that it ends with the extension of the format (whatever the capitals), that its folder is there, that no file is at `path` unless `overwrite` is `true` (a link that points nowhere counts as a file), and then the saved insights, which it reads as `chapter_insights` does. A document with no saved insights is refused with a text that says to call `write_insights`, which is paid, and so is a part of a book that is not a chapter, which gets none. It makes no folder. Gives `document_id`, `format`, `path` (as it was given) and `bytes` (the size of the file). It costs nothing: it asks no model and embeds nothing. The tool says `destructive` to the client because `overwrite` can replace a file.
+Gives `document_id`, `title` (the whole stored title), `page` (only when asked) and `concepts`, the most mentioned first: each has `name` and a one-line `definition`. A page with no concept gives an empty list. It reads FalkorDB, as the browser app does beside a page.
 
-### `edit_media`
+### Pictures
 
-| Argument | |
-| --- | --- |
-| `media` | Required. The title of the stored media, whatever the capitals, as `list_documents` gives it |
-| `category` | `book`, `paper` or `other`. A book's chapter PDFs must be named `chapter-<number>-<name>.pdf` |
-| `authors` | The authors, in order. They replace the old ones; `[]` takes every author away |
-| `tags` | The tags of the media. They replace the old ones; `[]` takes every tag away |
+Picture references use `content/...` URLs, with escaped path segments. Resolve them against the registered app base (or the Jet mount for browser display); they never require access to the server filesystem. Paths outside the configured content folder are omitted.
 
-A label that is given replaces the old one, and one that is left out stays. Give at least one. Every document of the media, and every stored item of those documents, gets the new labels in both stores, so `search` and `answer` filter by them at once. The title names the media and cannot change. Nothing is embedded and no model is asked, so it costs nothing, and the old values give the labels back. It does what `rag-ingest media` does. Gives `media` (as the library has it), `category`, `authors`, `tags` and `documents` (how many documents now carry them). The arguments are checked before any store is reached, so a bad edit changes nothing. The tool says `destructive` to the client because a given list replaces the old one.
+## 7. Exploring concepts
 
-### `edit_document_tags`
+Eight tools read the concept graph that an ingest builds, so that an agent can walk from a concept to the items that mention it and to the concepts next to it. They are in the group `concepts`. All are free except `find_concepts` with `query`, which embeds the query with Gemini. Every result names the items it shows with `item_id`, `document_id` and `page`, so the next call is `read_item` with an `item_id`, or `read_pages` with a `document_id` and a page range.
 
-| Argument | |
-| --- | --- |
-| `document_id` | Required. From `list_documents` or a search result |
-| `add` | Tags to give the document |
-| `remove` | Tags to take away, after `add` |
-
-Changes the own tags of one stored document in both stores. The tags of its media stay: change those with `edit_media`. Adding a tag the document has, or taking away one it lacks, changes nothing. Give at least one tag. Gives `document_id`, `tags` (the own tags after the change) and `media_tags`. It costs nothing, like `edit_media`, and does what `rag-ingest tag` does.
-
-### `health`
-
-No arguments. It runs every check, so one report names everything that is wrong, and it costs nothing. Gives:
-
-- `healthy`: `true` when Qdrant, FalkorDB and the agent of the Ingest choice are ready and both keys are `accepted`. A key that could not be checked counts as not ready.
-- `report`: one line for each of Qdrant, FalkorDB and the agent of the Ingest choice, then `Gemini key` and `Jev key`: `ok (accepted)`, or `FAILED (<state>)` and why.
-- `keys`: the Google Gemini key (`EMBEDDING_GEMINI_API_KEY`) and then the Jev key (`CONVERTER_JEV_API_KEY`). Each has `key`, `service`, `state`, `detail` and `billing_page`. Each key is checked with the one free call its provider allows, both at once and for at most 5 seconds. Neither Google nor Jev gives a balance to a key, so the credit is seen on `billing_page` (`https://aistudio.google.com/billing` for Gemini, `https://console.typesafe.ai/` for Jev). Spent credit shows only when the provider says so in answer to a paid call; the free call cannot see it, so a key can be `accepted` and out of credit.
-- `models`: the model and thinking that `ask`, `ingest` and `datasets` use, as saved (`provider`, `model` and `thinking`), with the `tools` that spend each choice. A choice that cannot be read has an `error` instead.
-
-| `state` of a key | Meaning |
-| --- | --- |
-| `accepted` | The provider accepted the key |
-| `missing` | The settings hold no key. Add it to `.env` or to the environment and start the server again |
-| `refused` | The provider does not accept the key. Put a good key in `.env` and start the server again |
-| `out_of_credit` | The provider says the prepaid credit is used up. Add credit on `billing_page` |
-| `unread` | The check could not tell: the provider could not be reached, gave no answer in 5 seconds, or answered with an HTTP status that does not mean a refusal. `detail` says which |
-
-The keys are read when the server starts, so a key that is fixed in `.env` needs a restart. No tool shows a key.
-
-### `check_pdf`
-
-See the next part.
-
-### `ingest_pdf` and `ingest_status`
-
-See the next part. `ingest_status` is deprecated: `job_status` gives the same result.
-
-### `write_insights` and `insights_status`
-
-See part 6. `insights_status` is deprecated: `job_status` gives the same result.
-
-### `build_dataset` and `dataset_status`
-
-See part 5. `dataset_status` is deprecated: `job_status` gives the same result.
-
-### `job_status`, `watch_job`, `list_jobs` and `stop_job`
-
-See part 7.
-
-### Reading the library
-
-Seven tools browse and read the library from the converted files on disk. None costs anything, and none needs a store except for the concepts, which come from FalkorDB.
-
-| Tool | Takes | Gives |
+| Tool | Main arguments | Gives |
 | --- | --- | --- |
-| `list_media` | `category`, `author`, `tag`, `detail` (`summary` or `names`) | `media`: `title`, `category`, `authors`, `tags`, `documents`, `pages`, `items`, `with_insights` |
-| `document_overview` | `document_id`, `detail` (`summary` or `full`) | The header, `items` (formulas, figures, tables, code), `insights`, `concepts` (`concept_id`, `name`, `mentions`) and `ingested_whole`. `full` adds `outline`, every insight, the `cheat_sheet`, fifty concepts with definitions, `related_documents` (three shared concepts or more, at most five) and `artifacts` |
-| `document_outline` | `document_id` | `sections`: `index`, `path`, `rank`, `printed_number`, `pages` (first and last), `chars`, `items` and `concepts` |
-| `read_section` | `document_id`, `section` (an `index` from the outline, or its heading), `as` (`markdown` or `pieces`) | The section as `text` or `pieces`, with `index`, `path`, `pages`, `item_ids` and `pictures` |
-| `read_pages` | `document_id`, `from`, `to`, `as` | The pages as `text` or `pieces`. A paragraph that starts on a page of the run is given whole |
-| `read_item` | `document_id` with `kind` and `label`, or `item_id` | One item with `item_id`, `page`, `section`, `section_index`, `label`, `caption`, `content` and `cited_by` (the paragraphs that cite its label) |
-| `read_many` | `requests` (1 to 20, each `{"tool": …, "args": {…}}` with a tool of `read_section`, `read_pages`, `read_item` or `chapter_insights`), `max_chars` | `results` in order, each with `tool`, `truncated` and `result` or `error`, and `used_chars` |
+| `find_concepts` | exactly one of `name` (an exact name or alias, free) and `query` (by meaning, **paid**: one Gemini call); `limit` 1 to 25, default 10 | `concepts`: `concept_id`, `name`, `definition`, `aliases`, `mentions` (items), `documents` and, for a `query`, `score`; `usage` and `cost_usd` for a `query` |
+| `concept` | `concept_id` or `name`, not both; neither gives the most mentioned concepts | `version`, `nodes` for a program that explores tools by calling them (`concept_items`, `concept_neighbours` and one node for each concept next to it, at most 20), and the concept: `aliases`, `mentions`, `documents` with their mentions, and `top_items`, its first 5 items |
+| `concept_neighbours` | `concept_id`; `kinds` (`DERIVED_FROM`, `ASSUMES`, `GENERALISES`, `PART_OF`, `USED_FOR`); `direction` (`out`, `in` or `both`, default `both`); `depth` 1 or 2; `limit` 1 to 200, default 50 | `edges` (`from`, `to`, `kind` and `stated_by`, the item, document and page that stated it, or `null`), `concepts` they touch, and `truncated` |
+| `concept_items` | `concept_id`; `document`; `kind`; `limit` 1 to 100, default 20; `cursor` | `items` (`item_id`, `document_id`, `page`, `printed_page`, `kind` and `wording`) and `next_cursor` when there are more. Read an item with `read_item` (by `item_id`) or the pages around it with `read_pages` |
+| `concept_path` | `from` and `to`, each a concept id or a name; `max_depth` 1 to 4, default 4 | The shortest chain of relations, followed either way, as `edges` in order, and the `concepts` on it. Both are empty when no chain is that short |
+| `compare_documents` | `document_ids`, 2 to 10 different; `limit` 1 to 500, default 50, for each list | `shared`: concepts that at least two documents mention, with the number of items of each; `only_in`: for each document, the concepts that only it mentions; `truncated` |
+| `document_concepts` | `document_id`; `page`; `limit` 1 to 500; `with_counts` | The concepts of `chapter_concepts` with their `concept_id`, and with `with_counts` the number of items of the whole document that mention each |
+| `similar_items` | `item_id`; `limit` 1 to 50, default 10; `kind` | The stored items nearest to that item by its stored vector, nearest first, with `document`, `page`, `label` and `score`. It reads Qdrant only and embeds nothing |
 
-A read that can be long takes `max_chars` (24000 when left out, at most 200000, counted in characters of the main text) and `cursor`: `read_page`, `read_section`, `read_pages`, `read_item`, `chapter_contents`, `chapter_concepts`, `chapter_insights` and `search`. Its result has `truncated`, and a `cursor` when the text goes on. Give the `cursor` back with the same other arguments to read on from exactly where the text stopped, so the reads put together are the whole text. A cursor of another read is refused.
+A depth, a limit or a cursor that is not allowed is a tool error, never changed quietly. A concept that is not stored is a tool error that says to call `find_concepts`.
 
-`read_many` runs its requests in order against one `max_chars`. Each gets at most what is left (or its own smaller `max_chars`). A request with nothing left is not read and comes back with `truncated: true` and no result. A request that fails has an `error` and does not fail the call.
+The order to use them: `find_concepts` to find a concept, `concept` to see it, `concept_neighbours` and `concept_items` to go on from it, then `read_item` or `read_pages` to read what they mention.
 
-`detail` shortens `list_media`, `list_documents` (`names`, `summary` or `full`) and `document_overview`. With `names` a result lists nodes that a host can open, for a person who browses without asking a model: media, then documents of a media, then the outline of a document, then its sections. The same path is `list_media`, `list_documents`, `document_outline`, `read_section`.
-
-## 4. Sending a PDF
+## 8. Sending a PDF
 
 ### Check it first
 
@@ -348,7 +332,7 @@ Rules:
 - The converted pages are saved under the content folder, in `<media folder>/chapter-<number>/` for a book's chapter and in `<media folder>/<document title folder>/` for any other document, which for a part of a book is `<media folder>/<part title folder>/`, made from the title of the part alone. The folders are made from the titles: lower case, with one dash for each run of characters that are not letters or digits.
 - The ingest also writes `insights.json` in that folder: the insights, the takeaways and the cheat sheet that the agent of the Ingest choice wrote about the whole document, from its converted text, in one question. A document whose file is saved is not asked about again. A part of a book that is not a chapter (its index, table of contents, front cover, glossary or preface) gets no insights and no file, and the agent is not asked; a chapter, and a document of another media such as a paper, does get them. Its fields are in the reference, under "Ingesting a converted document".
 
-The call does not wait for the whole ingest, which takes minutes. It answers once the paid work has begun, with the job (part 7): `job_id`, `kind: "ingest"`, `state: "running"`, the `stage` and the times. Then the agent calls `watch_job` with that `job_id`, which waits until the stage changes, or `job_status`, until `state` is not `running`. `ingest_pdf`, `job_status` and `watch_job` give the same result: the fields of the job (part 7) and, beside them, `media` (the title of the media), `file` (the file name), `artifacts_done` and `artifacts_total` (the artifact descriptions written, while they are) and, by `state`:
+The call does not wait for the whole ingest, which takes minutes. It answers once the paid work has begun, with the job ([section 10](#10-following-and-stopping-a-job)): `job_id`, `kind: "ingest"`, `state: "running"`, the `stage` and the times. The agent then follows it with `watch_job`, which waits for it, or `job_status`. `ingest_pdf`, `job_status` and `watch_job` give the same result: the fields of the job and, beside them, `media` (the title of the media), `file` (the file name), `artifacts_done` and `artifacts_total` (the artifact descriptions written, while they are) and, by `state`:
 
 | `state` | Meaning |
 | --- | --- |
@@ -376,13 +360,57 @@ The stages of an ingest are those of the progress bar of the browser app, with t
 
 Good to know:
 
-- Over unified HTTP, one background job runs at a time across MCP and browser tabs; a running ingest, insights job or dataset build refuses another start. Over stdio, one ingest runs at a time, and the refusal names its `job_id`. Do not send the same PDF through two processes, or beside `rag-ingest pdf`, at the same time.
+- Do not send the same PDF through two processes, or beside `rag-ingest pdf`, at the same time. A second start while a job runs is refused ([section 10](#10-following-and-stopping-a-job)).
 - The graph is read before the PDF is named, because a stored media's category says how the PDF is named. So a store that is down shows before a file name that breaks the rule for a book, as a tool error whose text names the store, says to call `health`, and says to send the same PDF again.
 - A store that is down, a missing Gemini key, and a PDF that is already ingested with its insights saved, or that gets none, show in the answer of `ingest_pdf` itself. A PDF that is already ingested without its insights is answered as `running` with the stage `writing_insights`, and its end is read with `watch_job` or `job_status`. A missing Jev key, `ANTHROPIC_API_KEY` being set, Poppler not installed, and a file that starts with `%PDF-` but is not a PDF are found only after the paid work has begun. So they show in `job_status` as `failed`, or, when they are found at once, in the answer of `ingest_pdf` as a tool error with the same text.
-- A PDF that was ingested before insights were written has no `insights.json`. Sending it again writes that file and nothing else, unless it is a part of a book that is not a chapter, which gets none. To write the files of many stored chapters at once, without sending their PDFs, call `write_insights` (part 6) or run `rag-ingest insights --all`.
-- Jobs live in the memory of the server. Over stdio a running job stops when the client closes the server, and a restarted server forgets its job ids. The server keeps only its last 100 jobs: when it holds 100 and a new one starts, the oldest, which has ended, is forgotten. Send the PDF again: a PDF that is ingested is not ingested twice, and a stopped one goes on from where it ended.
+- A PDF that was ingested before insights were written has no `insights.json`. Sending it again writes that file and nothing else, unless it is a part of a book that is not a chapter, which gets none. To write the files of many stored chapters at once, without sending their PDFs, call `write_insights` ([section 9](#9-insights-and-datasets)) or run `rag-ingest insights --all`.
+- A PDF that is ingested is not ingested twice, and a stopped or failed one goes on from where it ended: send the PDF again.
 
-## 5. Building a training dataset
+### Artifact descriptions
+
+Required artifact descriptions are part of PDF ingestion, including metadata-only repair when both stores already hold the document. `job_status` reports the stage `writing_artifacts` with `artifacts_done` and `artifacts_total`, and reports cumulative usage after accepted or rejected replies. Metadata failure ends the job as failed while preserving prior searchable data and accepted checkpoints. A missing converted folder or oversized pending request blocks repair. Source, embeddings and concept inputs keep their original content. Explicit bulk backfill is available through `rag-ingest artifacts --all --dry-run` and `rag-ingest artifacts --all`.
+
+## 9. Insights and datasets
+
+Two more jobs run on documents that are stored already: `write_insights` writes the missing notes of chapters, and `build_dataset` builds a training dataset. Both are paid unless `dry_run` is `true`, and both start a job like `ingest_pdf` does.
+
+### Writing the insights of stored chapters
+
+A chapter that was ingested before insights were written has no `insights.json`, so `chapter_insights` says `not_written_yet` for it. `write_insights` writes the missing files of documents that are stored already, from their converted text, with nothing embedded. It is the same work as `rag-ingest insights`. It is **paid** unless `dry_run` is `true`: the agent of the Ingest choice is asked once for each document that has none, which spends its subscription usage and takes a minute or more for each. Run a dry run first: it asks no model, costs nothing and lists what would be written.
+
+| Argument | |
+| --- | --- |
+| `document_id` | One stored document: its `document_id` from `list_documents` |
+| `media` | Every document of this media, by title whatever the capitals |
+| `all` | `true` for every stored document that belongs to a media |
+| `dry_run` | List what would be written and ask nothing. `false` when left out |
+
+Give exactly one of `document_id`, `media` and `all: true`. A document whose insights are saved is never asked about again, and a part of a book that is not a chapter gets none. The call does not wait for the work. It answers once the first question is out, or the job has ended, with the job ([section 10](#10-following-and-stopping-a-job)): `job_id`, `kind: "insights"` and `state`. The agent then follows it with `watch_job` or `job_status`. `write_insights`, `job_status` and `watch_job` give the same result: the fields of the job, with `usage` and `cost_usd` (what the questions used so far, in the shape that `search` gives them; empty and `0` for a dry run or a job that asked nothing) and, beside them, `dry_run`, `done` and `total` (documents handled and chosen), `current` (the title of the document being asked about, only while a question is out) and `documents`. The one `stage` is `writing_insights`, with `done` and `total` the documents handled and chosen, and words that name the document being asked about while a question is out.
+
+| `state` | Meaning |
+| --- | --- |
+| `running` | Going on |
+| `done` | Every chosen document was handled. A document that is `not_written` does not fail the job: its `reason` says why, and calling `write_insights` again tries it once more |
+| `failed` | The job stopped. `error` says why and what to do |
+| `stopped` | `stop_job` stopped it. What was written until then is kept: call `write_insights` again, and the insights that are saved are not asked for twice |
+
+`documents` has a line for each document handled so far, with `document_id`, `title` and `outcome`:
+
+| `outcome` | Meaning |
+| --- | --- |
+| `would_write` | A dry run: the insights would be written to `file`, and nothing was asked |
+| `written` | The insights were written to `file` |
+| `already_saved` | The file was there already, so nothing was asked |
+| `not_written` | Nothing was saved, and `reason` says why |
+| `none_for_book_part` | A part of a book that is not a chapter gets none |
+| `no_converted_chapter` | The graph holds the document, but the content folder holds no converted chapter of it. `reason` names the folder |
+
+Good to know:
+
+- The graph is connected first and the documents are chosen before anything is asked. A choice that is not valid, a document or media that is not stored, and a graph that is down show in the answer of `write_insights` as a tool error. Unless `dry_run` is `true`, the sign-in of the agent of the Ingest choice is checked once, which costs nothing, so an agent that is not signed in fails the call before the first document. A job with nothing to write never starts the agent.
+- A separate process that ingests the same chapter at the same moment may ask for its insights too. Keep that process idle until the HTTP or stdio job ends.
+
+### Building a training dataset
 
 `build_dataset` builds a training dataset for Gemma 4 from the documents that are converted under the content folder: whole book sections for continued pre-training, rewritten texts, checked questions and answers for fine-tuning, and a manifest that says what the dataset holds. It is the same build as `rag-dataset build`. Run a dry run first: `dry_run: true` exports, checks and plans, asks no model, costs nothing, and its `summary` says how many texts, questions and model calls the full build would make.
 
@@ -405,7 +433,7 @@ Good to know:
 
 In `media`, `documents` and `holdout`, each entry has its spaces at both ends cut off, and a blank entry is left out.
 
-The call does not wait for the whole build. It answers once the build has begun, with the job (part 7): `job_id`, `kind: "dataset"` and `state: "running"`, or `done` when the build ended before the call answered. A build that failed by then, such as one that a bad argument stopped before its first step, is a tool error. Then the agent calls `watch_job` with that `job_id`, which waits until the stage changes, or `job_status`, until `state` is not `running`. `build_dataset`, `job_status` and `watch_job` give the same result: the fields of the job (part 7), with `usage` and `cost_usd` (what the models used so far, in the shape that `search` gives them; `cost_usd` is `null` when a model has no price, as Codex has none), and, beside them, `folder` (the dataset's folder, as the settings give it), and, by `state`:
+The call does not wait for the whole build. It answers once the build has begun, with the job ([section 10](#10-following-and-stopping-a-job)): `job_id`, `kind: "dataset"` and `state: "running"`, or `done` when the build ended before the call answered. A build that failed by then, such as one that a bad argument stopped before its first step, is a tool error. The agent then follows it with `watch_job` or `job_status`. `build_dataset`, `job_status` and `watch_job` give the same result: the fields of the job, with `usage` and `cost_usd` (what the models used so far, in the shape that `search` gives them; `cost_usd` is `null` when a model has no price, as Codex has none), and, beside them, `folder` (the dataset's folder, as the settings give it), and, by `state`:
 
 | `state` | Meaning |
 | --- | --- |
@@ -429,58 +457,18 @@ The build writes these files in the folder `<DATASET_DIR>/<name>` (`DATASET_DIR`
 
 Good to know:
 
-- Over unified HTTP, one background job runs at a time across MCP and browser tabs. A second start is refused while an ingest, insights job or dataset build runs. Over stdio, one build runs at a time and an ingest or insights job may run beside it. Other processes, including `rag-dataset build`, do not share this admission.
 - A build with the name of an earlier one removes the files that the earlier build wrote, once it knows it can run, and then writes its own. Give a new `name` to keep the earlier dataset.
 - `run_code` is on by default. It runs Python that the model wrote, on the machine the server runs on, to check an answer. `run_code: false` turns that off, and such answers are then checked by the judge alone.
 - The graph is connected first, and the model's sign-in is checked before the job starts, unless `dry_run` is `true`: a dry run needs no model. So a graph that is down, or a model that is not signed in, shows in the answer of `build_dataset` as a tool error that ends with: call the `health` tool.
 - A blank `name` is refused before anything else. A `name` that cannot name a folder, a `media`, `documents` or `holdout` entry that no converted document matches, and a selection that leaves no document are found by the build before its first step, so the graph must be up to find them. They show in the answer of `build_dataset` as a tool error that says what to give instead.
-- Jobs live in the memory of the server. Over stdio a running build stops when the client closes the server, and a restarted server forgets its job ids. The server keeps only its last 100 builds. Call `build_dataset` again: the answers a model already gave are kept.
 
-## 6. Writing the insights of stored chapters
-
-A chapter that was ingested before insights were written has no `insights.json`, so `chapter_insights` says `not_written_yet` for it. `write_insights` writes the missing files of documents that are stored already, from their converted text, with nothing embedded. It is the same work as `rag-ingest insights`. It is **paid** unless `dry_run` is `true`: the agent of the Ingest choice is asked once for each document that has none, which spends its subscription usage and takes a minute or more for each. Run a dry run first: it asks no model, costs nothing and lists what would be written.
-
-| Argument | |
-| --- | --- |
-| `document_id` | One stored document: its `document_id` from `list_documents` |
-| `media` | Every document of this media, by title whatever the capitals |
-| `all` | `true` for every stored document that belongs to a media |
-| `dry_run` | List what would be written and ask nothing. `false` when left out |
-
-Give exactly one of `document_id`, `media` and `all: true`. A document whose insights are saved is never asked about again, and a part of a book that is not a chapter gets none. The call does not wait for the work. It answers once the first question is out, or the job has ended, with the job (part 7): `job_id`, `kind: "insights"` and `state`. Then the agent calls `watch_job` with that `job_id`, which waits until the stage or the state changes, or `job_status`, until `state` is not `running`. `write_insights`, `job_status` and `watch_job` give the same result: the fields of the job (part 7), with `usage` and `cost_usd` (what the questions used so far, in the shape that `search` gives them; empty and `0` for a dry run or a job that asked nothing) and, beside them, `dry_run`, `done` and `total` (documents handled and chosen), `current` (the title of the document being asked about, only while a question is out) and `documents`. The one `stage` is `writing_insights`, with `done` and `total` the documents handled and chosen, and words that name the document being asked about while a question is out.
-
-| `state` | Meaning |
-| --- | --- |
-| `running` | Going on |
-| `done` | Every chosen document was handled. A document that is `not_written` does not fail the job: its `reason` says why, and calling `write_insights` again tries it once more |
-| `failed` | The job stopped. `error` says why and what to do |
-| `stopped` | `stop_job` stopped it. What was written until then is kept: call `write_insights` again, and the insights that are saved are not asked for twice |
-
-`documents` has a line for each document handled so far, with `document_id`, `title` and `outcome`:
-
-| `outcome` | Meaning |
-| --- | --- |
-| `would_write` | A dry run: the insights would be written to `file`, and nothing was asked |
-| `written` | The insights were written to `file` |
-| `already_saved` | The file was there already, so nothing was asked |
-| `not_written` | Nothing was saved, and `reason` says why |
-| `none_for_book_part` | A part of a book that is not a chapter gets none |
-| `no_converted_chapter` | The graph holds the document, but the content folder holds no converted chapter of it. `reason` names the folder |
-
-Good to know:
-
-- Over unified HTTP, an insights job excludes other background work in MCP and browser tabs. Over stdio, one insights job runs at a time and an ingest or dataset build may run beside it. Other processes do not share this admission.
-- The graph is connected first and the documents are chosen before anything is asked. A choice that is not valid, a document or media that is not stored, and a graph that is down show in the answer of `write_insights` as a tool error. Unless `dry_run` is `true`, the sign-in of the agent of the Ingest choice is checked once, which costs nothing, so an agent that is not signed in fails the call before the first document. A job with nothing to write never starts the agent.
-- A separate process that ingests the same chapter at the same moment may ask for its insights too. Keep that process idle until the HTTP or stdio job ends.
-- Jobs live in the memory of the server. Over stdio a running job stops when the client closes the server, and a restarted server forgets its job ids. The server keeps only its last 100 insights jobs. Call `write_insights` again: insights that are saved are not asked for twice.
-
-## 7. Following and stopping a job
+## 10. Following and stopping a job
 
 `ingest_pdf`, `write_insights` and `build_dataset` start a job and answer at once. Every tool that is about a job gives the same view of it, whatever its kind, and `job_status`, `watch_job` and `list_jobs` follow jobs of any kind by their `job_id`.
 
 ### The job
 
-The result of a job tool is these fields at the top level, with the fields of its kind (parts 4 to 6) beside them:
+The result of a job tool is these fields at the top level, with the fields of its kind (sections 8 and 9) beside them:
 
 | Field | |
 | --- | --- |
@@ -513,18 +501,6 @@ When the call carries a progress token, it also sends `notifications/progress` w
 
 `list_jobs` gives `{ "running", "jobs" }`. `running` is the work that holds the shared background slot of the unified HTTP server, as `{ "kind", "name" }`, whether this server or the browser started it, and `null` when the slot is free and always over stdio, which has no shared slot. `jobs` are the jobs of this server of every kind, newest first, at most the last 20 of each kind, each as the fields above and without the fields of its kind. It costs nothing.
 
-### Tasks
-
-A client that declares the tasks extension (`io.modelcontextprotocol/tasks`) gets a task instead of the report from `ingest_pdf`, `write_insights` and `build_dataset`, with the `job_id` as its id, a poll interval of 5 seconds and a lifetime of a day; a client that does not declare it gets the report as before. `tasks/get` says `working` with the `words` of the stage as the status message, `cancelled` for a stopped job, or `completed` with what `job_status` gives as the result of the call, with `isError` set when the job failed. `tasks/cancel` stops the job as `stop_job` does, `tasks/update` changes nothing, and a `job_id` that this server does not hold is an invalid params error.
-
-### The older status tools
-
-`ingest_status`, `insights_status` and `dataset_status` still answer, with the same result as `job_status` for a job of their kind. Their descriptions start with "Deprecated: call `job_status`", and they will go once the programs that call them have moved.
-
-### Marks for programs that list tools
-
-Each tool carries `_meta` for programs that list tools: `quanty/group` (`jobs`, `ingest` or `datasets` for the tools of this part and of parts 4 to 6) and `quanty/cost` (`{ "paid": false }`, or `{ "paid": true, "who": "ingest" }` for `ingest_pdf` and `write_insights` and `"datasets"` for `build_dataset`). `ingest_pdf`, `write_insights`, `build_dataset`, `job_status` and `watch_job` also carry `jet/job`: `{ "version": 1, "statusTool": "job_status", "idField": "job_id" }`, so that a host can follow the job with the free status tool after the model's turn has ended. These tools declare an `outputSchema` whose root is an object with the fields above.
-
 ### `stop_job`
 
 `stop_job` stops a running job of this server by the `job_id` that started it: an ingest (`ingest_pdf`), an insights job (`write_insights`) or a dataset build (`build_dataset`). A build can take hours, and a stopped job stops spending. It costs nothing.
@@ -537,7 +513,77 @@ Gives `job_id`, `kind` (`ingest`, `insights` or `dataset`), `state` and `status_
 
 What was paid for is kept, so the same work started again goes on from there: converted pages and kept answers of an ingest, the answers a model already gave in a dataset build, and the insights that are saved. The status tool of a stopped job gives `state: "stopped"` and an `error` that says what to call again. This is what the Stop button of the browser app does. A new job can start after the stopped work has ended.
 
-## 8. What is not a tool
+### Tasks
+
+A client that declares the tasks extension (`io.modelcontextprotocol/tasks`) gets a task instead of the report from `ingest_pdf`, `write_insights` and `build_dataset`, with the `job_id` as its id, a poll interval of 5 seconds and a lifetime of a day; a client that does not declare it gets the report as before. `tasks/get` says `working` with the `words` of the stage as the status message, `cancelled` for a stopped job, or `completed` with what `job_status` gives as the result of the call, with `isError` set when the job failed. `tasks/cancel` stops the job as `stop_job` does, `tasks/update` changes nothing, and a `job_id` that this server does not hold is an invalid params error.
+
+### The older status tools
+
+`ingest_status`, `insights_status` and `dataset_status` still answer, with the same result as `job_status` for a job of their kind. Their descriptions start with "Deprecated: call `job_status`", and they will go once the programs that call them have moved.
+
+### Marks for programs that list tools
+
+`ingest_pdf`, `write_insights`, `build_dataset`, `job_status` and `watch_job` carry `jet/job` in their `_meta` ([section 3](#3-discovering-the-tools)), and every job tool declares an `outputSchema` whose root is an object with the fields above.
+
+### Good to know
+
+- Over unified HTTP, one background job runs at a time across MCP and browser tabs: a running ingest, insights job or dataset build refuses another start, and the refusal names its `job_id` and says to ask `job_status` with it. Over stdio, one job of each kind runs at a time; it does not share admission with the HTTP server or with other processes, `rag-ingest` and `rag-dataset` included. Searches, reads and status calls stay available while a job runs.
+- Jobs live in the memory of the server. Over stdio a running job stops when the client closes the server, and a restarted server forgets its job ids. The server keeps only its last 100 jobs of each kind. Start the work again: a PDF that is ingested is not ingested twice, a stopped one goes on from where it ended, insights that are saved are not asked for twice, and the answers a model already gave in a dataset build are kept.
+
+## 11. Checking, changing and exporting
+
+### `health`
+
+No arguments. It runs every check, so one report names everything that is wrong, and it costs nothing. Gives:
+
+- `healthy`: `true` when Qdrant, FalkorDB and the agent of the Ingest choice are ready and both keys are `accepted`. A key that could not be checked counts as not ready.
+- `report`: one line for each of Qdrant, FalkorDB and the agent of the Ingest choice, then `Gemini key` and `Jev key`: `ok (accepted)`, or `FAILED (<state>)` and why.
+- `keys`: the Google Gemini key (`EMBEDDING_GEMINI_API_KEY`) and then the Jev key (`CONVERTER_JEV_API_KEY`). Each has `key`, `service`, `state`, `detail` and `billing_page`. Each key is checked with the one free call its provider allows, both at once and for at most 5 seconds. Neither Google nor Jev gives a balance to a key, so the credit is seen on `billing_page` (`https://aistudio.google.com/billing` for Gemini, `https://console.typesafe.ai/` for Jev). Spent credit shows only when the provider says so in answer to a paid call; the free call cannot see it, so a key can be `accepted` and out of credit.
+- `models`: the model and thinking that `ask`, `ingest` and `datasets` use, as saved (`provider`, `model` and `thinking`), with the `tools` that spend each choice. A choice that cannot be read has an `error` instead.
+
+| `state` of a key | Meaning |
+| --- | --- |
+| `accepted` | The provider accepted the key |
+| `missing` | The settings hold no key. Add it to `.env` or to the environment and start the server again |
+| `refused` | The provider does not accept the key. Put a good key in `.env` and start the server again |
+| `out_of_credit` | The provider says the prepaid credit is used up. Add credit on `billing_page` |
+| `unread` | The check could not tell: the provider could not be reached, gave no answer in 5 seconds, or answered with an HTTP status that does not mean a refusal. `detail` says which |
+
+The keys are read when the server starts, so a key that is fixed in `.env` needs a restart. No tool shows a key.
+
+### `edit_media`
+
+| Argument | |
+| --- | --- |
+| `media` | Required. The title of the stored media, whatever the capitals, as `list_documents` gives it |
+| `category` | `book`, `paper` or `other`. A book's chapter PDFs must be named `chapter-<number>-<name>.pdf` |
+| `authors` | The authors, in order. They replace the old ones; `[]` takes every author away |
+| `tags` | The tags of the media. They replace the old ones; `[]` takes every tag away |
+
+A label that is given replaces the old one, and one that is left out stays. Give at least one. Every document of the media, and every stored item of those documents, gets the new labels in both stores, so `search` and `answer` filter by them at once. The title names the media and cannot change. Nothing is embedded and no model is asked, so it costs nothing, and the old values give the labels back. It does what `rag-ingest media` does. Gives `media` (as the library has it), `category`, `authors`, `tags` and `documents` (how many documents now carry them). The arguments are checked before any store is reached, so a bad edit changes nothing. The tool says `destructive` to the client because a given list replaces the old one.
+
+### `edit_document_tags`
+
+| Argument | |
+| --- | --- |
+| `document_id` | Required. From `list_documents` or a search result |
+| `add` | Tags to give the document |
+| `remove` | Tags to take away, after `add` |
+
+Changes the own tags of one stored document in both stores. The tags of its media stay: change those with `edit_media`. Adding a tag the document has, or taking away one it lacks, changes nothing. Give at least one tag. Gives `document_id`, `tags` (the own tags after the change) and `media_tags`. It costs nothing, like `edit_media`, and does what `rag-ingest tag` does.
+
+### `export_insights`
+
+| Argument | |
+| --- | --- |
+| `document_id` | Required. From `list_documents` or a search result |
+| `format` | Required. `pdf`, `markdown` or `html`, whatever the capitals |
+| `path` | Required. The absolute path of the file to write, on the machine the server runs on, ending in `.pdf`, `.md` or `.html` as `format` is. Its folder must exist |
+| `overwrite` | `true` to replace a file that is at `path`. `false` when left out: a file that is there is kept and the call fails |
+
+Writes what `chapter_insights` reads to one file that stands alone, the same file that **Export** in the Insights view of the browser app writes: the title of the document, a line that names the model, the insights with their pages, the takeaways and the cheat sheet. The PDF has its formulas typeset, the HTML file has its pictures inside it, and the Markdown file keeps its formulas as `$…$`. Every check runs before anything is written, in this order: `format`, that `path` is absolute, that it ends with the extension of the format (whatever the capitals), that its folder is there, that no file is at `path` unless `overwrite` is `true` (a link that points nowhere counts as a file), and then the saved insights, which it reads as `chapter_insights` does. A document with no saved insights is refused with a text that says to call `write_insights`, which is paid, and so is a part of a book that is not a chapter, which gets none. It makes no folder. Gives `document_id`, `format`, `path` (as it was given) and `bytes` (the size of the file). It costs nothing: it asks no model and embeds nothing. The tool says `destructive` to the client because `overwrite` can replace a file.
+
+## 12. What is not a tool
 
 The tools do what the browser app does where an agent needs it. These are left out on purpose.
 
@@ -550,28 +596,29 @@ The tools do what the browser app does where an agent needs it. These are left o
 | Cancelling an ask | The client cancels its own call |
 | Navigation and drawing: the shelf, the find box, panels, the concept graph, notices | An agent filters the list itself, and a tool says how it ended. The concepts that a search went through are in `search` with `explain` |
 
-## 9. When a call fails
+## 13. When a call fails
 
 A failure comes back as a tool error (`isError: true`) with a text that says what to do. It never ends the connection.
 
 | What went wrong | What the text says |
 | --- | --- |
 | A store or a service is down, or a key is missing | The error, the address or key it names, and: call the `health` tool |
+| `describe_tool` for a name that no tool has | That no tool has that name, and: call `catalog` for the names |
 | A bad argument: a blank question, an unknown `kind` or `category`, a blank tag, a bad `document_id`, a `limit` of 0, more than one of `path`, `pdf_base64` and `pdf_url`, a `kind` of `chunk` for `chapter_contents` | What was given and what is allowed |
 | `read_page` for a document that has no converted folder | The id, the content folder, and: call `list_documents` |
 | `read_page` for a document that is not found, when some converted documents cannot be read | The id, the content folder, "the document may be one of the chapters that cannot be read" with the file of each, and: call `list_documents` |
 | `read_page` for a page the document does not have | The page and how many pages there are |
-| `job_status`, `watch_job` or `ingest_status` for an unknown `job_id` | Job ids are forgotten when the server restarts, and the server keeps only its last 100 jobs of each kind; for an ingest, send the PDF again |
+| `job_status`, `watch_job` or any status tool for an unknown `job_id` | Job ids are forgotten when the server restarts, and the server keeps only its last 100 jobs of each kind; for an ingest, send the PDF again |
 | `watch_job` with a `timeout_s` that is not from 1 to 90 | That `timeout_s` must be from 1 to 90 seconds, and that leaving it out waits 60 |
 | A PDF that is refused: no file at the path, not a file, not a PDF, too big, a `file_name` with a folder in it, a book's file name that is not `chapter-<number>-<name>.pdf` and has no `document_title` | The reason and the fix |
 | A `pdf_url` that is refused: an origin that is not allowed, a scheme that is not `http` or `https`, a redirect, an HTTP status that is not a success, a body over the size limit or that does not start with `%PDF-`, or a host that cannot be reached | The reason and the fix: send the PDF by `path` or `pdf_base64`, give the URL a redirect points at, or ask whoever runs the server to add the origin to `QUANTY_FETCH_ORIGINS` |
 | A store that is down when the PDF is named, before the job starts | `could not connect to the graph`, or `could not read from the graph which media the library has`, with the address it names, and: call the `health` tool, and send the same PDF again |
-| An ingest is already running | Its `job_id`, and: ask `ingest_status`, and send this PDF when that job has ended |
-| `insights_status` or `stop_job` for an unknown `job_id` | Job ids are forgotten when the server restarts, and the server keeps only its last 100 jobs of each kind; for `insights_status`, call `write_insights` again, because insights that are saved are not asked for twice |
+| An ingest is already running | Its `job_id`, and: ask `job_status` with it, and send this PDF when that job has ended |
+| `stop_job` for an unknown `job_id` | Job ids are forgotten when the server restarts, and the server keeps only its last 100 jobs of each kind; call `write_insights` again for insights, because insights that are saved are not asked for twice |
 | `write_insights` without exactly one of `document_id`, `media` and `all: true` | That exactly one of `document_id`, `media` and `all: true` must be given. It is checked before any store is reached |
 | `write_insights` for a document or media that is not stored | The id or title, and: call `list_documents` |
 | `write_insights` when the agent of the Ingest choice is not signed in, for a job that is not a dry run | That no insights were written, to sign it in or give `dry_run: true`, and: call the `health` tool |
-| An insights job is already running | Its `job_id`, and: ask `insights_status`, and call `write_insights` again when that job has ended |
+| An insights job is already running | Its `job_id`, and: ask `job_status` with it, and call `write_insights` again when that job has ended |
 | `chapter_insights` for a file that cannot be read | The file, and: call `write_insights` with the `document_id`, which is paid |
 | `export_insights` with a `format` that is not `pdf`, `markdown` or `html`, a `path` that is not absolute, that does not end with the extension of the format, or whose folder is not there | What was given and what is allowed. Nothing is written |
 | `export_insights` when a file is at `path` and `overwrite` is not `true` | The path, and: give another path, or `overwrite: true` to replace it |
@@ -582,14 +629,13 @@ A failure comes back as a tool error (`isError: true`) with a text that says wha
 | `edit_media` or `edit_document_tags` with nothing to change, a blank tag, a bad `category` or a blank `media` | What is missing or not valid. It is checked before any store is reached, so nothing changes |
 | `edit_media` for a media that is not stored, or `edit_document_tags` for a document that is not | The title or id, and: call `list_documents` |
 | A paid call that fails because the credit of a provider is used up | The error, then `Your Google Gemini prepaid credit is used up: add credit at https://aistudio.google.com/billing, then try again.` or `Your Jev credit is used up: add credit in the console at https://console.typesafe.ai/, then try again.` |
-| `dataset_status` for an unknown `job_id` | Job ids are forgotten when the server restarts, and the server keeps only its last 100 builds; call `build_dataset` again |
 | A bad `name` for a dataset, or a blank one | What the name may be made of |
 | A `media`, `documents` or `holdout` entry that no converted document matches, or no document left to build from | The entry, and: give a `document_id` or the whole `title` from `list_documents`, or the title of a media; for no document, check that the documents are converted to the end, and give `include_book_parts: true` for a part of a book |
 | The model is not signed in, for a build that is not a dry run | That it is not signed in, to sign it in or give `dry_run: true`, and: call the `health` tool |
 | The graph is down when a build starts | `could not connect to the graph` with the address it names, and: call the `health` tool |
-| A dataset build is already running | Its `job_id`, and: ask `dataset_status`, and start this build when that job has ended |
+| A dataset build is already running | Its `job_id`, and: ask `job_status` with it, and start this build when that job has ended |
 
-## 10. Add it to Claude Code
+## 14. Add it to Claude Code
 
 ### With `claude mcp add`
 
@@ -640,6 +686,6 @@ For stdio on the host, replace that entry with:
 
 Another MCP client uses the same HTTPS URL and authorization header, or starts the same stdio command locally on the host.
 
-Required artifact descriptions are part of PDF ingestion, including metadata-only repair when both stores already hold the document. `job_status` reports the stage `writing_artifacts` with `artifacts_done` and `artifacts_total`, and reports cumulative usage after accepted or rejected replies. Metadata failure ends the job as failed while preserving prior searchable data and accepted checkpoints. A missing converted folder or oversized pending request blocks repair. Source, embeddings and concept inputs keep their original content. Explicit bulk backfill is available through `rag-ingest artifacts --all --dry-run` and `rag-ingest artifacts --all`.
+## Resources and prompts
 
-Picture references use `content/...` URLs, with escaped path segments. Resolve them against the registered app base (or the Jet mount for browser display); they never require access to the server filesystem. Paths outside the configured content folder are omitted.
+Added by a later change.

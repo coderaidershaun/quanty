@@ -12,7 +12,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::args::{Budget, Scope, Truncation};
 use crate::library::LibraryError;
-use crate::library::chapter::{DocumentHeader, Whole, find_chapter, parse_document_id};
+use crate::library::chapter::{
+    DocumentHeader, DocumentIdentity, Whole, find_chapter, parse_document_id,
+};
 use crate::library::piece::PieceView;
 
 /// What a section's headings are joined with to name it.
@@ -49,16 +51,16 @@ pub(crate) enum SectionChoice {
 /// What an agent gives `read_section`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct ReadSectionArgs {
-    /// From `list_documents` or a search result.
+    /// From `list_documents`.
     pub(crate) document_id: String,
-    /// The `index` of a section of `document_outline`, or its heading, whatever the capitals.
+    /// Outline `index` or heading.
     pub(crate) section: SectionChoice,
-    /// `markdown` (default) or `pieces`.
+    /// `markdown` or `pieces`.
     #[serde(rename = "as")]
     pub(crate) form: Option<Form>,
-    /// At most this many characters of text. 24000 when left out.
+    /// Text limit. Default 24000.
     pub(crate) max_chars: Option<u32>,
-    /// From a result that was `truncated`, with the same other arguments.
+    /// From a `truncated` result.
     pub(crate) cursor: Option<String>,
 }
 
@@ -66,7 +68,9 @@ pub(crate) struct ReadSectionArgs {
 #[derive(Serialize, JsonSchema)]
 pub(crate) struct SectionView {
     #[serde(flatten)]
-    document: DocumentHeader,
+    document: DocumentIdentity,
+    /// How many pages the whole document has.
+    document_pages: u32,
     index: usize,
     path: Vec<String>,
     /// The first and the last page of the section, counted from 1.
@@ -129,8 +133,10 @@ pub(crate) fn read_section(
             (None, Some(views), more)
         }
     };
+    let (document, document_pages) = DocumentHeader::of(&whole.entry).into_parts();
     Ok(SectionView {
-        document: DocumentHeader::of(&whole.entry),
+        document,
+        document_pages,
         index,
         path: section.section_path.clone(),
         pages: page_range(&section.pages),
@@ -197,18 +203,18 @@ pub(super) fn page_range(pages: &[u32]) -> [u32; 2] {
 /// What an agent gives `read_pages`.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct ReadPagesArgs {
-    /// From `list_documents` or a search result.
+    /// From `list_documents`.
     pub(crate) document_id: String,
-    /// The first page, counted from 1.
+    /// First page, from 1.
     pub(crate) from: u32,
-    /// The last page, no earlier than `from`.
+    /// Last page.
     pub(crate) to: u32,
-    /// `markdown` (default) or `pieces`.
+    /// `markdown` or `pieces`.
     #[serde(rename = "as")]
     pub(crate) form: Option<Form>,
-    /// At most this many characters of text. 24000 when left out.
+    /// Text limit. Default 24000.
     pub(crate) max_chars: Option<u32>,
-    /// From a result that was `truncated`, with the same other arguments.
+    /// From a `truncated` result.
     pub(crate) cursor: Option<String>,
 }
 

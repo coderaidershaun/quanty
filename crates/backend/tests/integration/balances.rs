@@ -162,7 +162,6 @@ fn a_refused_location_fails_a_job_in_words_of_its_own() {
 }
 
 /// Every node of the window, with everything its accessibility data says, written out.
-
 fn everything_the_nodes_say(harness: &egui_kittest::Harness<'_, gui::app::App>) -> String {
     harness
         .query_all(By::new().predicate(|_| true))

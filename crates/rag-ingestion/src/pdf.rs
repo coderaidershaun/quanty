@@ -51,8 +51,16 @@ pub enum PdfError {
     #[error("could not check the items collection for the document")]
     Store(#[from] StoreError),
 
+    // Boxed because an IngestError held inline would make every result that can fail with this
+    // error too large.
     #[error("could not ingest the converted chapter")]
-    Ingest(#[from] IngestError),
+    Ingest(#[source] Box<IngestError>),
+}
+
+impl From<IngestError> for PdfError {
+    fn from(error: IngestError) -> Self {
+        Self::Ingest(Box::new(error))
+    }
 }
 
 /// What a PDF is named from, before the graph says which category its media has.

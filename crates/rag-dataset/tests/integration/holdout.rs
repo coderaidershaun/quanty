@@ -44,10 +44,12 @@ fn content_with_an_index(parent: &Path) -> PathBuf {
 
 /// Runs the build on a task of its own, as the servers of this project do, so that it must be
 /// `Send`.
-async fn spawned_build(options: BuildOptions) -> Result<Report, BuildError> {
+async fn spawned_build(options: BuildOptions) -> Result<Report, Box<BuildError>> {
     tokio::spawn(async move {
         let llm = StandInLlm::finding_nothing();
-        build(&options, &llm, None, &mut |_, _| {}).await
+        build(&options, &llm, None, &mut |_, _| {})
+            .await
+            .map_err(Box::new)
     })
     .await
     .expect("the build task should not panic")
@@ -114,7 +116,7 @@ async fn held_out_documents_and_book_parts_follow_the_selection() {
     options.selection.holdout = vec!["No Such Document".to_owned()];
     let result = spawned_build(options).await;
     assert!(
-        matches!(result, Err(BuildError::Selection(_))),
+        matches!(&result, Err(error) if matches!(**error, BuildError::Selection(_))),
         "a misspelt held-out document must stop the build, or it would be trained on: {result:?}"
     );
     assert!(!missing_out.join("cpt/raw.jsonl").exists());

@@ -249,7 +249,10 @@ async fn a_chapter_pdf_is_converted_and_ingested_in_one_run_and_a_second_run_doe
     let rejected = StandInLlm::replying_to_questions(|_, _| Ok(json!({"artifacts":[]})));
     let failing = throwaway.models(rejected.clone());
     let error = pdf.ingest(&failing, &stores).await.unwrap_err();
-    assert!(matches!(error, PdfError::Ingest(IngestError::Artifacts(_))));
+    assert!(matches!(
+        &error,
+        PdfError::Ingest(ingest) if matches!(**ingest, IngestError::Artifacts(_))
+    ));
     assert_eq!(rejected.calls(), 2);
     assert_eq!(held_by(&throwaway, &stores, doc_id).await, held_before);
     assert!(failing.embedder.received().is_empty());
@@ -321,8 +324,9 @@ async fn a_run_that_stops_in_conversion_or_in_ingestion_is_finished_by_the_same_
     let error = working.ingest(&limited, &stores).await.unwrap_err();
     assert!(
         matches!(
-            error,
-            PdfError::Ingest(IngestError::Concepts(ConceptError::Stopped { .. }))
+            &error,
+            PdfError::Ingest(ingest)
+                if matches!(**ingest, IngestError::Concepts(ConceptError::Stopped { .. }))
         ),
         "{error:?}"
     );

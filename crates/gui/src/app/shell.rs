@@ -62,6 +62,7 @@ impl App {
             Intent::RecheckHealth,
             Intent::RefreshCatalogue,
             Intent::ReadBalances,
+            Intent::FollowIngest,
         ];
         intents.extend(opening);
         App {

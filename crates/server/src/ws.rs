@@ -86,6 +86,7 @@ async fn connection<H: Handler>(mut socket: WebSocket, state: SocketState<H>) {
                 };
                 match command {
                     Command::Cancel(request) => { if !state.guard.cancel(&owner, request) { runtime.send(Command::Cancel(request)); } },
+                    Command::FollowIngest { request } => state.guard.follow(&owner, request),
                     command @ (Command::Ingest { .. } | Command::BuildDataset { .. }) => {
                         if let Err(failure) = state.guard.start(owner.clone(), command.clone(), state.handler.clone()) {
                             for event in command.failed(&failure) { if send(&mut socket, Frame::Event(event)).await.is_err() { return; } }

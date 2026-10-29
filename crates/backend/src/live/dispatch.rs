@@ -79,6 +79,9 @@ impl<S: Services> Handler for LiveContext<S> {
                 doc,
                 folder,
             } => chapter::load_chapter_insights(self, request, doc, folder, &reply).await,
+            // One process has no earlier tab to follow: the server is what keeps an ingest between
+            // tabs.
+            Command::FollowIngest { .. } => {}
             Command::Cancel(_) => {}
             Command::ReadBalances { request } => balances::read(self, request, &reply).await,
         }

@@ -129,6 +129,8 @@ impl Shared {
             Intent::PdfUploadFailed(error) => self.cues.pdf_upload_error = Some(error),
             Intent::CheckIngest(request) => self.check_ingest(request, effects),
             Intent::StartIngest => self.start_ingest(effects),
+            Intent::StopIngest => self.stop_ingest(effects),
+            Intent::FollowIngest => self.follow_ingest(effects),
             Intent::ClearIngest => self.clear_ingest(effects),
             Intent::StartDatasetBuild(request) => self.start_dataset_build(request, effects),
             Intent::ClearDatasetBuild => self.clear_dataset_build(),
@@ -209,6 +211,11 @@ impl Shared {
                 self.media_deleted(request, result, effects);
             }
             Event::Preflight { request, result } => self.preflight_arrived(request, result),
+            Event::IngestFollowed {
+                request,
+                ingest,
+                progress,
+            } => self.ingest_followed(request, ingest, progress),
             Event::IngestProgress { request, progress } => self.progress_arrived(request, progress),
             Event::IngestFinished { request, result } => {
                 self.ingest_finished(request, result, effects)

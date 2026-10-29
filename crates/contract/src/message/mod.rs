@@ -90,6 +90,12 @@ pub enum Command {
         doc: DocId,
         folder: Option<std::path::PathBuf>,
     },
+    /// Asks for the ingest that the server runs for the browser, or has just finished, so a tab
+    /// that was reloaded shows it again. Its answer is `Event::IngestFollowed` when there is one,
+    /// and nothing but the end of the request when there is none.
+    FollowIngest {
+        request: RequestId,
+    },
     Cancel(RequestId),
     ReadBalances {
         request: RequestId,
@@ -113,6 +119,7 @@ impl Command {
             | Command::DeleteMedia { request, .. }
             | Command::Preflight { request, .. }
             | Command::Ingest { request, .. }
+            | Command::FollowIngest { request }
             | Command::BuildDataset { request, .. }
             | Command::CheckHealth { request }
             | Command::LoadChapterInsights { request, .. }
@@ -198,6 +205,14 @@ pub enum Event {
     Preflight {
         request: RequestId,
         result: Result<Preflight, Failure>,
+    },
+    /// The ingest that `Command::FollowIngest` found. The `IngestProgress` and `IngestFinished` of
+    /// that ingest come after it under the same `request`. `progress` is `None` before the first
+    /// step.
+    IngestFollowed {
+        request: RequestId,
+        ingest: IngestRequest,
+        progress: Option<IngestProgress>,
     },
     IngestProgress {
         request: RequestId,

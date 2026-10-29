@@ -84,7 +84,7 @@ impl<H: Handler> Runtime<H> {
             let (stop, stopped) = Stop::pair();
             let reply = Reply::new(sender.clone(), Arc::clone(&wake), stopped);
             let kind = match command {
-                Command::Ingest { .. } => TaskKind::Ingest,
+                Command::Ingest { .. } | Command::FollowIngest { .. } => TaskKind::Ingest,
                 Command::ReadBalances { .. } => TaskKind::BalanceRead,
                 _ => TaskKind::Other,
             };

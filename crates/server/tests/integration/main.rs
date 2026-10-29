@@ -3,6 +3,7 @@
 mod content;
 mod downloads;
 mod fake_ingest;
+mod jobs;
 mod login;
 mod loopback;
 mod mcp;

@@ -17,15 +17,20 @@ use contract::{
     ItemCounts, PageToCheck, RequestId,
 };
 
-/// A cancel is not listened to: the work has no safe place to stop inside, so a run goes on to
-/// its end.
+/// A stop ends the run at its next wait, like a killed process, and what is already saved stays.
+/// This is safe only while marking the document whole is the very last write of an ingest: a
+/// stopped document is then never marked, and starting the same PDF again finishes it.
 pub async fn run<S: Services>(
     cx: &LiveContext<S>,
     request: RequestId,
     ingest: &IngestRequest,
     reply: &Reply,
 ) {
-    let result = finish(cx, request, ingest, reply).await;
+    let result = tokio::select! {
+        biased;
+        () = reply.cancelled() => Ok(IngestOutcome::Cancelled),
+        result = finish(cx, request, ingest, reply) => result,
+    };
     reply.send(Event::IngestFinished { request, result });
 }
 

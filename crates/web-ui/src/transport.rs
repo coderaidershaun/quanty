@@ -129,6 +129,7 @@ impl SocketTransport {
                     if self.has_connected || self.startup_failed {
                         self.refresh(Intent::RecheckHealth);
                         self.refresh(Intent::RefreshCatalogue);
+                        self.refresh(Intent::FollowIngest);
                     }
                     if self.startup_failed {
                         self.refresh(Intent::ReadBalances);
@@ -195,7 +196,7 @@ impl Transport for SocketTransport {
         };
         if !matches!(command, Command::Cancel(_)) {
             let kind = match command {
-                Command::Ingest { .. } => TaskKind::Ingest,
+                Command::Ingest { .. } | Command::FollowIngest { .. } => TaskKind::Ingest,
                 Command::ReadBalances { .. } => TaskKind::BalanceRead,
                 _ => TaskKind::Other,
             };

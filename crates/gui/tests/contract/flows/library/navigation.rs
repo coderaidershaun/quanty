@@ -10,14 +10,15 @@ use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::DEFAULT_WINDOW;
 use gui::state::Open;
 use gui::testkit;
+use gui::theme::space;
 
 use super::{
     BLACK_SCHOLES, BOOK, HAWKES, Ingests, NOTES, PAPER, SAMPLE_PAGES, documents_of, is_open_row,
-    open_switched,
+    open_document, open_switched,
 };
 use crate::flows::recording;
 use crate::flows::{
-    Window, click, field, has, hover_on, is_enabled, node, retype, says, shared, type_into,
+    Window, click, field, has, hover_on, is_enabled, node, panels, retype, says, shared, type_into,
 };
 
 fn the_rows_are(harness: &Window, names: &[&str]) {
@@ -131,11 +132,9 @@ fn open_in_library_shows_the_page_of_the_document_the_source_shows() {
     ));
 }
 
-/// Presses the handle of the shelf, moves it by `by` points along the row and lets go.
-fn drag_the_shelf_edge(harness: &mut Window, by: f32) {
-    let from = node(harness, Role::Splitter, "Resize the shelf")
-        .rect()
-        .center();
+/// Presses the handle named `edge`, moves it by `by` points along the row and lets go.
+fn drag_an_edge(harness: &mut Window, edge: &str, by: f32) {
+    let from = node(harness, Role::Splitter, edge).rect().center();
     harness.drag_at(from);
     harness.run_ok();
     harness.hover_at(from + egui::vec2(by, 0.0));
@@ -144,10 +143,24 @@ fn drag_the_shelf_edge(harness: &mut Window, by: f32) {
     harness.run_ok();
 }
 
+fn edge_at(harness: &Window, edge: &str) -> f32 {
+    node(harness, Role::Splitter, edge).rect().left()
+}
+
+fn drag_the_shelf_edge(harness: &mut Window, by: f32) {
+    drag_an_edge(harness, "Resize the shelf", by);
+}
+
 fn shelf_edge(harness: &Window) -> f32 {
-    node(harness, Role::Splitter, "Resize the shelf")
-        .rect()
-        .left()
+    edge_at(harness, "Resize the shelf")
+}
+
+fn drag_the_page_edge(harness: &mut Window, by: f32) {
+    drag_an_edge(harness, "Resize the page", by);
+}
+
+fn page_edge(harness: &Window) -> f32 {
+    edge_at(harness, "Resize the page")
 }
 
 #[test]
@@ -182,4 +195,72 @@ fn dragging_the_shelf_edge_resizes_it_within_bounds() {
         "the shelf stops at its narrowest"
     );
     assert!(narrowest < start);
+}
+
+#[test]
+fn dragging_the_page_edge_resizes_it_within_bounds() {
+    const READER_MIN: f32 = 320.0;
+    // Wide enough that a reader capped at the width of a page would leave a gap at the room's right.
+    const WIDE_WINDOW: [f32; 2] = [2400.0, 1024.0];
+    let (mut harness, _seen) = recording::open("black-scholes", WIDE_WINDOW);
+    testkit::settle(&mut harness);
+    click(&mut harness, Role::Tab, "Library");
+    open_document(&mut harness, NOTES, BLACK_SCHOLES);
+    let start = page_edge(&harness);
+
+    drag_the_page_edge(&mut harness, 100.0);
+    let wider = page_edge(&harness);
+    assert!(
+        (wider - start - 100.0).abs() <= 8.0,
+        "the edge followed the pointer from {start} to {wider}"
+    );
+
+    drag_the_page_edge(&mut harness, 4000.0);
+    let widest = page_edge(&harness);
+    drag_the_page_edge(&mut harness, 4000.0);
+    assert_eq!(page_edge(&harness), widest, "the page stops at its widest");
+    assert!(widest > wider);
+    let room = panels(WIDE_WINDOW).page;
+    assert!(
+        widest + space::MD <= room.right(),
+        "the page edge {widest} stays inside the room that ends at {}",
+        room.right()
+    );
+
+    drag_the_page_edge(&mut harness, -4000.0);
+    let narrowest = page_edge(&harness);
+    drag_the_page_edge(&mut harness, -4000.0);
+    assert_eq!(
+        page_edge(&harness),
+        narrowest,
+        "the page stops at its narrowest"
+    );
+    assert!(narrowest < start);
+
+    click(&mut harness, Role::Button, "Read");
+    testkit::settle(&mut harness);
+    assert!(shared(&harness).shelf.is_reading);
+    let beside = page_edge(&harness);
+    drag_the_page_edge(&mut harness, 100.0);
+    let wider = page_edge(&harness);
+    assert!(
+        (wider - beside - 100.0).abs() <= 8.0,
+        "the edge followed the pointer from {beside} to {wider} with the reader beside"
+    );
+
+    drag_the_page_edge(&mut harness, 4000.0);
+    let widest = page_edge(&harness);
+    let reader_width = room.right() - widest - space::MD;
+    assert!(
+        (reader_width - READER_MIN).abs() <= 1.0,
+        "the reader keeps its least width {READER_MIN}, not {reader_width}"
+    );
+
+    drag_the_page_edge(&mut harness, -4000.0);
+    let reader_end = node(&harness, Role::Button, "Close reader").rect().right();
+    assert!(
+        room.right() - reader_end <= space::XL,
+        "the reader fills the room that ends at {}, not up to {reader_end}",
+        room.right()
+    );
 }

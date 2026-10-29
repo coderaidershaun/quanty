@@ -7,6 +7,7 @@ mod concepts;
 mod contents;
 mod delete;
 mod document;
+mod edge;
 mod insights;
 mod media;
 mod media_form;
@@ -43,6 +44,12 @@ const READER_BESIDE_FROM: f32 = 1200.0;
 const NARROW_BELOW: f32 = 480.0;
 /// The page of the open item is never wider than this, and the desk shows to its right.
 const PAGE_WIDTH: f32 = 960.0;
+/// The narrowest the page can be dragged to.
+// SMELL: the shelf keeps its own, wider least width for the page when it is dragged, so the two
+// values can drift apart. One shared value would be clearer.
+const MIN_PAGE_WIDTH: f32 = 360.0;
+/// The narrowest the page leaves the reader beside it when it is dragged.
+const MIN_READER_WIDTH: f32 = 320.0;
 
 const TITLE: &str = "Library";
 const LOADING: &str = "Reading the library";
@@ -52,6 +59,7 @@ const EMPTY_HINT: &str = "Add media on the Ingest tab.";
 const NOTHING_OPEN: &str = "Nothing is open";
 const NOTHING_OPEN_HINT: &str = "Choose a media or a chapter on the shelf.";
 const INGEST_RUNNING: &str = "An ingest is running. Media and tags can be edited, and documents and media deleted, when it is done.";
+const PAGE_EDGE: &str = "Resize the page";
 const SAVE: &str = "Save";
 const CANCEL: &str = "Cancel";
 
@@ -72,6 +80,9 @@ pub struct Local {
     /// How wide the person dragged the shelf to, until the window closes. `None` keeps the width
     /// that suits the room.
     shelf_width: Option<f32>,
+    /// How wide the person dragged the page to, until the window closes. `None` keeps the width
+    /// that suits the room.
+    page_width: Option<f32>,
 }
 
 #[derive(Debug)]
@@ -240,20 +251,26 @@ fn panes(ui: &mut egui::Ui, catalogue: &Catalogue, local: &mut Local, cx: &mut P
     shelf::drag_edge(ui, shelf, room.width(), local);
     let rest = (room.right() - page_left).max(0.0);
     let is_reader_beside_page = is_reading && room.width() >= READER_BESIDE_FROM;
-    let page_width = if is_reader_beside_page {
-        ((rest - space::MD) / 2.0).clamp(0.0, PAGE_WIDTH)
-    } else {
-        rest.clamp(0.0, PAGE_WIDTH)
-    };
+    let page_width = page_width(local.page_width, rest, is_reader_beside_page);
     let page = egui::Rect::from_min_size(
         egui::pos2(page_left, room.top()),
         egui::vec2(page_width, room.height()),
     );
+    // A page that fills the room at the width that suits it has nothing to widen into. A dragged
+    // page keeps its edge, also at its widest, so that it can be dragged back.
+    let is_page_beside_shelf = !is_reading || is_reader_beside_page;
+    let has_room_for_edge = local.page_width.is_some() || page.right() + space::MD <= room.right();
+    if is_page_beside_shelf && has_room_for_edge {
+        let widest = widest_page(rest, is_reader_beside_page);
+        if let Some(width) = edge::drag(ui, page, PAGE_EDGE, MIN_PAGE_WIDTH..=widest) {
+            local.page_width = Some(width);
+        }
+    }
     framed(ui, "library_shelf", shelf, |ui, height| {
         ui.set_min_height(height);
         shelf::show(ui, local, catalogue, fit, cx);
     });
-    if !is_reading || is_reader_beside_page {
+    if is_page_beside_shelf {
         framed(ui, "library_page", page, |ui, height| {
             ui.set_min_height(height);
             open_page(ui, open, Place::Beside, local, cx);
@@ -265,12 +282,40 @@ fn panes(ui: &mut egui::Ui, catalogue: &Catalogue, local: &mut Local, cx: &mut P
         } else {
             page.left()
         };
+        // Once the page is dragged, the reader beside it takes all that is left.
+        let reader_right = if is_reader_beside_page && local.page_width.is_some() {
+            room.right()
+        } else {
+            room.right().min(reader_left + PAGE_WIDTH)
+        };
         let reader = egui::Rect::from_min_max(
             egui::pos2(reader_left, room.top()),
-            egui::pos2(room.right().min(reader_left + PAGE_WIDTH), room.bottom()),
+            egui::pos2(reader_right, room.bottom()),
         );
         reader::show(ui, reader, local, cx);
     }
+}
+
+/// How wide the page is in `rest` points of room: as the person dragged it, or else the width that
+/// suits the room, with the reader beside it taking the other half.
+fn page_width(dragged: Option<f32>, rest: f32, is_reader_beside_page: bool) -> f32 {
+    match dragged {
+        Some(width) => width.clamp(MIN_PAGE_WIDTH, widest_page(rest, is_reader_beside_page)),
+        None if is_reader_beside_page => ((rest - space::MD) / 2.0).clamp(0.0, PAGE_WIDTH),
+        None => rest.clamp(0.0, PAGE_WIDTH),
+    }
+}
+
+/// The widest the page can be dragged to: the room keeps a gap for the handle, and the reader
+/// beside the page keeps `MIN_READER_WIDTH`. A room too narrow for both leaves the page its least
+/// width and the reader less than its own.
+fn widest_page(rest: f32, is_reader_beside_page: bool) -> f32 {
+    let reader = if is_reader_beside_page {
+        MIN_READER_WIDTH
+    } else {
+        0.0
+    };
+    (rest - space::MD - reader).max(MIN_PAGE_WIDTH)
 }
 
 /// The shelf fills the room, unless the page of the open document fills it, or the page of the

@@ -3,12 +3,12 @@
 
 use eframe::egui;
 
-use super::{Local, ShelfFit, TITLE};
+use super::{Local, ShelfFit, TITLE, edge};
 use crate::panels::PanelCx;
 use crate::panels::labels::NO_MEDIA;
 use crate::panels::pages::media_card::category_icon;
 use crate::state::{Open, Shelf};
-use crate::theme::{self, Icon, TextRole, space, stroke};
+use crate::theme::{Icon, TextRole, space};
 use crate::widgets::{ControlSize, ListRow, Placeholder, TextInput};
 use contract::{Catalogue, Category, DocId, Document, Intent, Media};
 
@@ -266,39 +266,10 @@ fn widest(room_width: f32) -> f32 {
         .max(MIN_WIDTH)
 }
 
-/// The strip between the shelf and the page is a handle: dragging it sets the width of the shelf,
-/// and the edge shows under the pointer.
+/// The strip between the shelf and the page is a handle: dragging it sets the width of the shelf.
 pub(super) fn drag_edge(ui: &mut egui::Ui, shelf: egui::Rect, room_width: f32, local: &mut Local) {
-    let handle = egui::Rect::from_min_max(
-        shelf.right_top(),
-        egui::pos2(shelf.right() + space::MD, shelf.bottom()),
-    );
-    let response = ui
-        .interact(handle, ui.id().with("shelf_edge"), egui::Sense::drag())
-        .on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
-    ui.ctx().accesskit_node_builder(response.id, |node| {
-        node.set_role(egui::accesskit::Role::Splitter);
-        node.set_label(EDGE);
-    });
-    if let Some(pointer) = response.interact_pointer_pos()
-        && response.dragged()
-    {
-        // The pointer is taken to hold the middle of the gap, so a press that does not move keeps
-        // the width.
-        let width = pointer.x - shelf.left() - space::MD / 2.0;
-        local.shelf_width = Some(width.clamp(MIN_WIDTH, widest(room_width)));
-    }
-    if response.hovered() || response.dragged() {
-        let palette = theme::palette(ui.ctx());
-        let color = if response.dragged() {
-            palette.focus
-        } else {
-            palette.border
-        };
-        let x = handle.center().x;
-        ui.painter().line_segment(
-            [egui::pos2(x, handle.top()), egui::pos2(x, handle.bottom())],
-            egui::Stroke::new(stroke::BORDER, color),
-        );
+    let range = MIN_WIDTH..=widest(room_width);
+    if let Some(width) = edge::drag(ui, shelf, EDGE, range) {
+        local.shelf_width = Some(width);
     }
 }

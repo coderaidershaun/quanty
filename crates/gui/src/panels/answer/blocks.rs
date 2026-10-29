@@ -8,13 +8,15 @@ use super::{cards, results, states};
 use crate::media::rich_text;
 use crate::panels::heights::Heights;
 use crate::theme::{TextRole, space};
-use contract::{Answer, AnswerBlock, ItemKind};
+use crate::widgets::Copyable;
+use contract::{Answer, AnswerBlock, Intent, ItemKind};
 
 /// What a block of the answer is taken to be high until it has been drawn once.
 const BLOCK_ESTIMATE: f32 = 2.0 * TextRole::Body.line_height();
 /// The widest the written answer runs, in points: about seventy letters of body text. A pane
 /// that is narrower uses its whole width.
 const MEASURE: f32 = 720.0;
+const COPY_ANSWER: &str = "Copy answer";
 
 /// Narrows `ui` to the reading column. `set_max_width` alone would also widen a pane that is
 /// narrower than the column, so the narrower of the two is taken.
@@ -48,7 +50,12 @@ fn blocks(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, answer: &Answer) {
     let mut heights = Heights::take(&mut pane.view.block_heights, BLOCK_ESTIMATE);
     heights.show(ui, 0, |ui| {
         narrow_to_measure(ui);
-        ui.label(TextRole::Title.rich(ui, title));
+        let heading = Copyable::new(COPY_ANSWER).show(ui, |ui| {
+            ui.label(TextRole::Title.rich(ui, title));
+        });
+        if heading.copied {
+            pane.cx.intents.push(Intent::ShareAnswer);
+        }
     });
     for (place, block) in answer.blocks.iter().enumerate() {
         let index = place + 1;

@@ -25,6 +25,28 @@ pub enum AskMode {
     ResultsOnly,
 }
 
+/// How far the search reaches. A broad search pulls in more loosely related results than a
+/// focused one.
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Default,
+)]
+pub enum AskDepth {
+    Focused,
+    #[default]
+    Balanced,
+    Broad,
+}
+
 /// A media or an author matches whatever its capitals, and an author matches any author of a
 /// document. Every tag must be a media tag or an own tag of the document, and a category must be
 /// the document's. A document is one stored document, by its id; the search then looks at that
@@ -64,6 +86,9 @@ pub struct Filters {
 pub struct AskDraft {
     pub question: String,
     pub mode: AskMode,
+    /// A draft saved before the depth could be chosen reads as balanced.
+    #[serde(default)]
+    pub depth: AskDepth,
     pub filters: Filters,
 }
 

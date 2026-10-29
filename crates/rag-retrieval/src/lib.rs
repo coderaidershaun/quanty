@@ -6,6 +6,6 @@ mod search;
 
 pub use answer::{Answer, AnswerError, Claim, Source, answer};
 pub use search::{
-    MAX_RESULTS_PER_DOCUMENT, RESULTS_PER_QUERY, Reason, Retriever, SearchError, SearchHit,
+    MAX_RESULTS_PER_DOCUMENT, RESULTS_PER_QUERY, Reach, Reason, Retriever, SearchError, SearchHit,
     SearchResults, SearchTrace, TracedSearch,
 };

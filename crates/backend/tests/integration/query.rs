@@ -1,11 +1,11 @@
 //! Checks that an ask on the live backend finds the stored items and writes the answer, and that an
-//! ask over stores with nothing in them asks no model.
+//! ask over stores with nothing in them asks no model. A broader depth reaches no less far.
 
 use backend::Reply;
 use backend::live::{LiveContext, query};
 use contract::{
-    AnswerBlock, AskDraft, AskMode, ConceptId, DocId, EdgeKind, Event, Filters, GraphEdge,
-    GraphNode, ItemId, ItemKind, NodeId, NodeKind, Reason, RequestId, ResultItem,
+    AnswerBlock, AskDepth, AskDraft, AskMode, ConceptId, DocId, EdgeKind, Event, Filters,
+    GraphEdge, GraphNode, ItemId, ItemKind, NodeId, NodeKind, Reason, RequestId, ResultItem,
 };
 use rag_core::Config;
 use rag_ingestion::testing::{StandInEmbedder, StandInLlm, ThrowawayStores};
@@ -43,6 +43,7 @@ async fn an_ask_sends_the_results_with_their_trace_then_the_graph_then_the_answe
         question: QUESTION.to_owned(),
         mode: AskMode::Answer,
         filters: Filters::default(),
+        ..AskDraft::default()
     };
 
     let events = ask(&world.cx, &draft).await;
@@ -180,6 +181,42 @@ async fn an_ask_sends_the_results_with_their_trace_then_the_graph_then_the_answe
     an_ask_with_nothing_stored_sends_an_empty_search_and_asks_no_model().await;
 }
 
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs the local Qdrant and FalkorDB from docker compose and bills nothing; run with: cargo test -p backend --test integration -- --ignored query::"]
+async fn a_broad_ask_reaches_at_least_as_far_as_a_balanced_one() {
+    let answering = StandInLlm::finding_nothing();
+    let world = fill("query-depth", &answering, FOLDERS).await;
+    let searched = |depth| {
+        let draft = AskDraft {
+            question: QUESTION.to_owned(),
+            mode: AskMode::ResultsOnly,
+            depth,
+            ..AskDraft::default()
+        };
+        let cx = &world.cx;
+        async move {
+            let events = ask(cx, &draft).await;
+            let Some(Event::Search {
+                result: Ok(search), ..
+            }) = events.into_iter().next()
+            else {
+                panic!("expected a search that found something at depth {depth:?}");
+            };
+            search
+        }
+    };
+
+    let focused = searched(AskDepth::Focused).await;
+    let balanced = searched(AskDepth::Balanced).await;
+    let broad = searched(AskDepth::Broad).await;
+
+    assert_eq!(balanced.trace.nearest, RESULTS_PER_QUERY);
+    assert!(focused.trace.nearest < balanced.trace.nearest);
+    assert!(broad.trace.nearest >= balanced.trace.nearest);
+    assert!(focused.results.len() <= balanced.results.len());
+    assert!(broad.results.len() >= balanced.results.len());
+}
+
 async fn an_ask_with_nothing_stored_sends_an_empty_search_and_asks_no_model() {
     let answering = StandInLlm::finding_nothing();
     let stores = ThrowawayStores::new("query-empty");
@@ -188,6 +225,7 @@ async fn an_ask_with_nothing_stored_sends_an_empty_search_and_asks_no_model() {
         question: QUESTION.to_owned(),
         mode: AskMode::Answer,
         filters: Filters::default(),
+        ..AskDraft::default()
     };
 
     let events = ask(&cx, &draft).await;

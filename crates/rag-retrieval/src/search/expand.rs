@@ -7,7 +7,7 @@ use graph::{ConceptNode, FalkorGraph, ItemMentions};
 use rag_core::{ConceptHit, ConceptId, ConceptStore, Embedding, ItemHit, ItemId};
 
 use super::results::Reason;
-use super::{MAX_EXPANSION_ITEMS, QUESTION_CONCEPTS, SearchError};
+use super::{Reach, SearchError};
 
 type NamedConcept = (ConceptId, String);
 
@@ -23,8 +23,9 @@ pub(super) struct Expansion {
 }
 
 /// The concepts come in this order, each once: the ones nearest to the question, then the ones
-/// that the seeds mention, then the ones one `RELATES_TO` edge away from those. An item that the
-/// graph adds is shown under the first concept in that order that it mentions.
+/// that the seeds mention, then those one `RELATES_TO` edge away, two edges away, and so on up to
+/// the hops of the reach. An item that the graph adds is shown under the first concept in that
+/// order that it mentions.
 ///
 /// # Errors
 /// - [`SearchError::Concepts`] when the nearest concepts cannot be searched
@@ -34,11 +35,12 @@ pub(super) async fn from_seeds(
     graph: &FalkorGraph,
     vector: &Embedding,
     seeds: &[ItemHit],
+    reach: &Reach,
 ) -> Result<Expansion, SearchError> {
     let seed_ids: Vec<ItemId> = seeds.iter().map(|seed| seed.id).collect();
     let mut named: Vec<NamedConcept> = Vec::new();
     let question_concepts = concepts
-        .nearest(vector.clone(), QUESTION_CONCEPTS)
+        .nearest(vector.clone(), reach.question_concepts)
         .await
         .map_err(SearchError::Concepts)?;
     for concept in &question_concepts {
@@ -48,13 +50,17 @@ pub(super) async fn from_seeds(
     for concept in &seed_concepts {
         keep_once(&mut named, concept.id, &concept.name);
     }
-    let related_concepts = graph.related_concepts(&ids_of(&named)).await?;
-    for concept in &related_concepts {
-        keep_once(&mut named, concept.id, &concept.name);
+    let mut related_concepts = Vec::new();
+    for _ in 0..reach.related_hops {
+        let next = graph.related_concepts(&ids_of(&named)).await?;
+        for concept in &next {
+            keep_once(&mut named, concept.id, &concept.name);
+        }
+        related_concepts.extend(next);
     }
 
     let mentions = graph
-        .items_for_concepts(&ids_of(&named), MAX_EXPANSION_ITEMS)
+        .items_for_concepts(&ids_of(&named), reach.expansion_items)
         .await?;
     Ok(Expansion {
         candidates: candidates(seed_ids, mentions, &named),

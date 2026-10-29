@@ -12,7 +12,7 @@ use crate::widgets::{Button, ControlSize};
 /// content of the sheets below.
 const SIDE: f32 = space::LG + stroke::BORDER;
 pub(crate) const TWO_ROWS: f32 = size::CONTROL_LG + space::SM + size::CONTROL_SM;
-/// The question and Ask over the mode and the one button for all the filters.
+/// The question and Ask over the mode, the depth and the one button for all the filters.
 const NARROW_ROWS: f32 = size::CONTROL_LG + space::SM + size::CONTROL_MD;
 /// The note stands on a row of its own under the rows of a narrow bar, as tall as the button that
 /// may stand in it for a finger.
@@ -23,10 +23,16 @@ pub(super) const PICKER_WIDTH: f32 = 4.5 * size::CONTROL_LG;
 const CATEGORY_WIDTH: f32 = 3.5 * size::CONTROL_LG;
 /// The button for the filters that have no slot is as wide as the narrowest slot.
 const FILTERS_WIDTH: f32 = CATEGORY_WIDTH;
+/// On a narrow bar the button for the filters is as small as its words allow, so that the mode and
+/// the depth beside it can be read.
+const NARROW_FILTERS_WIDTH: f32 = 2.5 * size::CONTROL_LG;
+/// The share of the room beside the filters button that the mode gets on a narrow bar, because
+/// "Results only" is the longest word of the two.
+const NARROW_MODE_SHARE: f32 = 0.55;
 /// The note keeps at least this much of its row, so a reason not to ask can be read.
 const NOTE_LEAST: f32 = 200.0;
-/// A question box narrower than this shows too few words, so the mode moves down to the second
-/// row.
+/// A question box narrower than this shows too few words, so the mode and the depth move down to
+/// the second row.
 const QUESTION_LEAST: f32 = 200.0;
 
 pub(super) const FILTER_COUNT: usize = 5;
@@ -45,6 +51,7 @@ const SLOT_WIDTHS: [f32; FILTER_COUNT] = [
 pub(super) struct Rects {
     pub(super) question: egui::Rect,
     pub(super) mode: egui::Rect,
+    pub(super) depth: egui::Rect,
     pub(super) mode_size: ControlSize,
     pub(super) ask: egui::Rect,
     /// The slot of each filter that stands on the bar, in the order of the filters. The filters
@@ -62,7 +69,14 @@ pub(super) struct Rects {
 /// Whether a bar that wide is narrow, so that it stands in three rows.
 fn is_narrow(bar_width: f32) -> bool {
     let width = bar_width - 2.0 * SIDE;
-    width < ASK_WIDTH + space::SM + PICKER_WIDTH + space::SM + QUESTION_LEAST
+    width
+        < ASK_WIDTH
+            + space::SM
+            + PICKER_WIDTH
+            + space::SM
+            + CATEGORY_WIDTH
+            + space::SM
+            + QUESTION_LEAST
 }
 
 /// The height of the rows that `arrange` fills in a bar that wide, without the margin around them.
@@ -91,7 +105,7 @@ pub(super) fn arrange(bar: egui::Rect, note: NoteRow) -> Rects {
     }
 }
 
-/// The question, the mode and Ask, over as many filters as fit and the note.
+/// The question, the depth, the mode and Ask, over as many filters as fit and the note.
 fn two_rows(content: egui::Rect) -> Rects {
     let first =
         egui::Rect::from_min_size(content.min, egui::vec2(content.width(), size::CONTROL_LG));
@@ -107,9 +121,13 @@ fn two_rows(content: egui::Rect) -> Rects {
         egui::pos2(ask.left() - space::SM - PICKER_WIDTH, first.top()),
         egui::pos2(ask.left() - space::SM, first.bottom()),
     );
+    let depth = egui::Rect::from_min_max(
+        egui::pos2(mode.left() - space::SM - CATEGORY_WIDTH, first.top()),
+        egui::pos2(mode.left() - space::SM, first.bottom()),
+    );
     let question = egui::Rect::from_min_max(
         first.min,
-        egui::pos2(mode.left() - space::SM, first.bottom()),
+        egui::pos2(depth.left() - space::SM, first.bottom()),
     );
 
     let inline = inline_filters(second.width());
@@ -141,6 +159,7 @@ fn two_rows(content: egui::Rect) -> Rects {
     Rects {
         question,
         mode,
+        depth,
         mode_size: ControlSize::Large,
         ask,
         filters,
@@ -151,8 +170,8 @@ fn two_rows(content: egui::Rect) -> Rects {
     }
 }
 
-/// The question and Ask over the mode and the one button for all the filters, over the note when
-/// there is one.
+/// The question and Ask over the mode, the depth and the one button for all the filters, over the
+/// note when there is one.
 fn three_rows(content: egui::Rect, note: NoteRow) -> Rects {
     let first =
         egui::Rect::from_min_size(content.min, egui::vec2(content.width(), size::CONTROL_LG));
@@ -173,14 +192,21 @@ fn three_rows(content: egui::Rect, note: NoteRow) -> Rects {
         egui::pos2(ask.left() - space::SM, first.bottom()),
     );
     let more = egui::Rect::from_min_max(
-        egui::pos2(second.right() - FILTERS_WIDTH, second.top()),
+        egui::pos2(second.right() - NARROW_FILTERS_WIDTH, second.top()),
         second.max,
     );
-    let mode_width = PICKER_WIDTH.min(more.left() - space::SM - second.left());
+    let room = more.left() - space::SM - second.left() - space::SM;
+    let mode_width = PICKER_WIDTH.min(room * NARROW_MODE_SHARE);
+    let depth_width = CATEGORY_WIDTH.min(room - mode_width);
     let mode = egui::Rect::from_min_size(second.min, egui::vec2(mode_width, second.height()));
+    let depth = egui::Rect::from_min_size(
+        egui::pos2(mode.right() + space::SM, second.top()),
+        egui::vec2(depth_width, second.height()),
+    );
     Rects {
         question,
         mode,
+        depth,
         mode_size: ControlSize::Medium,
         ask,
         filters: [None; FILTER_COUNT],
@@ -230,6 +256,7 @@ mod tests {
         let mut slots = vec![
             ("question".to_owned(), rects.question),
             ("mode".to_owned(), rects.mode),
+            ("depth".to_owned(), rects.depth),
             ("ask".to_owned(), rects.ask),
         ];
         if let Some(note) = rects.note {
@@ -307,15 +334,16 @@ mod tests {
                             "a wide window (bar of 1148 or more) keeps all five filters on the bar"
                         );
                     }
-                    if width < 526 {
+                    if width < 674 {
                         assert!(
-                            rects.mode.top() > rects.question.bottom(),
-                            "at {width} the mode stands under the question"
+                            rects.mode.top() > rects.question.bottom()
+                                && rects.depth.top() > rects.question.bottom(),
+                            "at {width} the mode and the depth stand under the question"
                         );
                     }
                     assert_eq!(
                         rects.note.is_some(),
-                        width >= 526 || note == NoteRow::Shown,
+                        width >= 674 || note == NoteRow::Shown,
                         "at {width} the note has a slot beside the filters or, on a narrow bar, \
                          only while a note shows"
                     );

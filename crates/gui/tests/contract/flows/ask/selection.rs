@@ -3,10 +3,10 @@
 
 use std::time::{Duration, Instant};
 
-use contract::{ConceptId, Loadable, NodeId, NodeKind, ResultItem};
+use contract::{ConceptId, ItemKind, Loadable, NodeId, NodeKind, ResultItem};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
-use egui_kittest::kittest::NodeT as _;
+use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::{DEFAULT_WINDOW, MIN_WINDOW};
 use gui::state::SourceTarget;
 use gui::testkit;
@@ -330,4 +330,73 @@ fn interactive_controls_report_browser_pointer() {
             "{label}"
         );
     }
+}
+
+/// The tops of the texts that reach into `card`, from the left and the top. A preview that
+/// scrolls draws its whole text, so a text can reach out of the card.
+fn tops_inside(harness: &Window, card: egui::Rect) -> Vec<f32> {
+    let mut texts: Vec<egui::Rect> = harness
+        .query_all_by_role(Role::Label)
+        .map(|label| label.rect())
+        .filter(|rect| rect.intersects(card))
+        .collect();
+    texts.sort_by(|a, b| {
+        (a.left(), a.min.y.to_bits())
+            .partial_cmp(&(b.left(), b.min.y.to_bits()))
+            .unwrap()
+    });
+    texts.iter().map(|rect| rect.top()).collect()
+}
+
+#[test]
+fn the_wheel_scrolls_a_cut_result_preview() {
+    let size = MIN_WINDOW;
+    let mut harness = testkit::app("black-scholes", size);
+    testkit::settle(&mut harness);
+    click(&mut harness, Role::Tab, "Results");
+    let longest = shared(&harness)
+        .ask
+        .results()
+        .iter()
+        .filter(|result| result.kind == ItemKind::Chunk)
+        .max_by_key(|result| result.text.len())
+        .map(|result| result.number)
+        .expect("the search found a text");
+    let name = format!("Result {longest}");
+    scroll_to(
+        &mut harness,
+        panels(size).answer,
+        Wheel::Down,
+        Role::Button,
+        &name,
+    );
+    let card = node(&harness, Role::Button, &name).rect();
+    let before = tops_inside(&harness, card);
+    let at = egui::pos2(card.center().x, card.bottom() - 20.0);
+
+    harness.hover_at(at);
+    harness.run_ok();
+    harness.event(egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(0.0, -40.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: egui::Modifiers::NONE,
+    });
+    harness.run_ok();
+
+    assert_eq!(
+        node(&harness, Role::Button, &name).rect(),
+        card,
+        "the card stays where it is while its preview can still move"
+    );
+    let after = tops_inside(&harness, card);
+    assert_eq!(before.len(), after.len());
+    let moved_up = before
+        .iter()
+        .zip(&after)
+        .any(|(was, now)| *now < *was - 1.0);
+    assert!(
+        moved_up,
+        "the text of the preview moved up: {before:?} then {after:?}"
+    );
 }

@@ -1,5 +1,5 @@
-//! The question box, the mode, and the Ask or Stop button. They make up the first row of the bar,
-//! except on a narrow bar, where the mode stands on the second row.
+//! The question box, the mode, the depth and the Ask or Stop button. They make up the first row of
+//! the bar, except on a narrow bar, where the mode and the depth stand on the second row.
 
 use eframe::egui;
 use egui::text::{CCursor, CCursorRange};
@@ -10,13 +10,19 @@ use super::note::refusal;
 use crate::panels::PanelCx;
 use crate::theme::Icon;
 use crate::widgets::{Button, ControlSize, Dropdown, TextInput};
-use contract::{AskDraft, AskMode, Intent};
+use contract::{AskDepth, AskDraft, AskMode, Intent};
 
 const PLACEHOLDER: &str = "Ask a question about your library";
 const MODES: [(&str, AskMode); 2] = [
     ("Answer", AskMode::Answer),
     ("Results only", AskMode::ResultsOnly),
 ];
+const DEPTHS: [(&str, AskDepth); 3] = [
+    ("Focused", AskDepth::Focused),
+    ("Balanced", AskDepth::Balanced),
+    ("Broad", AskDepth::Broad),
+];
+const DEPTH_HINT: &str = "How far the search reaches: Broad pulls in more loosely related results.";
 
 impl Local {
     pub(super) fn show_question(&mut self, ui: &mut egui::Ui, rects: &Rects, cx: &mut PanelCx<'_>) {
@@ -47,6 +53,7 @@ impl Local {
                 None => self.ask(cx.intents),
             }
         }
+        self.show_depth(ui, rects);
         self.show_mode(ui, rects);
         self.show_ask_or_stop(ui, rects, refusal, cx);
     }
@@ -103,10 +110,34 @@ impl Local {
         }
     }
 
+    fn show_depth(&mut self, ui: &mut egui::Ui, rects: &Rects) {
+        let labels = DEPTHS.map(|(label, _)| label);
+        let selected = DEPTHS
+            .iter()
+            .position(|(_, depth)| *depth == self.draft.depth);
+        let chosen = slot(ui, "depth", rects.depth, |ui| {
+            Dropdown::new("Depth", &labels, rects.depth.width())
+                .id_salt("depth")
+                .selected(selected)
+                .size(rects.mode_size)
+                .show(ui)
+        });
+        ui.interact(
+            rects.depth,
+            ui.id().with("depth hint"),
+            egui::Sense::hover(),
+        )
+        .on_hover_text(DEPTH_HINT);
+        if let Some(index) = chosen {
+            self.draft.depth = DEPTHS[index].1;
+        }
+    }
+
     fn ask(&self, intents: &mut Vec<Intent>) {
         intents.push(Intent::Ask(AskDraft {
             question: self.draft.question.trim().to_owned(),
             mode: self.draft.mode,
+            depth: self.draft.depth,
             filters: self.draft.filters.clone(),
         }));
     }

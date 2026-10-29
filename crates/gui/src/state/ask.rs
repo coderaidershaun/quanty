@@ -8,9 +8,9 @@ use export::{Block, Document, Format, Source, fence_for};
 use super::HealthLevel;
 use super::shared::{Shared, push_cancel};
 use contract::{
-    Answer, AnswerBlock, AskDraft, AskMode, AskView, Command, ConceptGraph, ConceptId, Effect,
-    ExportPlace, ExportRequest, Failure, Filters, ItemKind, Loadable, RequestId, ResultItem,
-    SearchReply, Tab,
+    Answer, AnswerBlock, AskDepth, AskDraft, AskMode, AskView, Command, ConceptGraph, ConceptId,
+    Effect, ExportPlace, ExportRequest, Failure, Filters, ItemKind, Loadable, RequestId,
+    ResultItem, SearchReply, Tab,
 };
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
@@ -21,6 +21,7 @@ pub struct AskSession {
     /// The question as it was submitted.
     pub question: String,
     pub mode: AskMode,
+    pub depth: AskDepth,
     pub filters: Filters,
     pub search: Loadable<SearchReply>,
     pub graph: Loadable<ConceptGraph>,
@@ -297,6 +298,7 @@ impl Shared {
             request: Some(request),
             question: draft.question.clone(),
             mode: draft.mode,
+            depth: draft.depth,
             filters: draft.filters.clone(),
             search: Loadable::Loading,
             graph: Loadable::Loading,

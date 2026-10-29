@@ -34,6 +34,7 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
         PanelWidth::Roomy => widgets::ControlSize::Medium,
     };
     let mut asked = None;
+    let mut copied = None;
     widgets::panel_frame(widgets::Surface::Desk).show(ui, |ui| {
         ui.set_min_size(ui.available_size());
         ui.spacing_mut().item_spacing.y = space::SM;
@@ -47,17 +48,24 @@ pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
             return;
         };
         let typed = ask_box(ui, &mut local.draft, box_size);
-        let clicked = egui::ScrollArea::vertical()
+        let list = egui::ScrollArea::vertical()
             .id_salt(("follow_up", ask.generation))
             .auto_shrink([false, false])
             .show(ui, |ui| body::show(ui, &guidance))
             .inner;
-        asked = typed.or_else(|| clicked.map(str::to_owned));
+        if list.copied {
+            copied = Some(guidance.suggestions.join("\n"));
+        }
+        asked = typed.or_else(|| list.asked.map(str::to_owned));
     });
+    if let Some(questions) = copied {
+        cx.intents.push(Intent::CopyText(questions));
+    }
     if let Some(question) = asked {
         cx.intents.push(Intent::Ask(AskDraft {
             question,
             mode: ask.mode,
+            depth: ask.depth,
             filters: ask.filters.clone(),
         }));
     }

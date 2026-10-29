@@ -2,7 +2,7 @@
 //! fake loads every sample page.
 
 use backend::fake::{self, Fake};
-use contract::{DatasetStage, DocumentName, FailureKind, Loadable, Tab};
+use contract::{AskDepth, AskDraft, DatasetStage, DocumentName, FailureKind, Loadable, Tab};
 use egui_kittest::Harness;
 use gui::app::App;
 use gui::app::layout::DEFAULT_WINDOW;
@@ -134,4 +134,18 @@ fn every_scene_opens_and_every_sample_page_loads() {
     }
 
     sample_pages::assert_every_sample_page_loads(&fake_of("idle"));
+}
+
+#[test]
+fn an_ask_without_a_depth_reads_as_balanced() {
+    let saved_before_depth = r#"{
+        "question": "What is a call?",
+        "mode": "ResultsOnly",
+        "filters": { "document": null, "media": null, "author": null, "tags": [], "category": null }
+    }"#;
+
+    let draft: AskDraft = serde_json::from_str(saved_before_depth).unwrap();
+
+    assert_eq!(draft.depth, AskDepth::Balanced);
+    assert_eq!(draft.depth, AskDraft::default().depth);
 }

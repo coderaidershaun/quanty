@@ -11,7 +11,7 @@ use rag_core::{
     Category, ConceptStore, Config, DocId, EmbedError, EmptyTag, ItemId, ItemKind, ItemStore,
     LabelFilter, Llm, StoreError, UnknownCategory, UnknownItemKind, WantedDocument, WorkKind,
 };
-use rag_retrieval::{AnswerError, Retriever, SearchError, SearchHit};
+use rag_retrieval::{AnswerError, Reach, Retriever, SearchError, SearchHit};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -189,7 +189,13 @@ pub(crate) async fn search<S: Services>(
     };
     let retriever = retriever(config, services).await?;
     let found = retriever
-        .search_traced_within(&asked.question, asked.kind, &asked.wanted, items.as_deref())
+        .search_traced_within(
+            &asked.question,
+            asked.kind,
+            &asked.wanted,
+            items.as_deref(),
+            Reach::default(),
+        )
         .await?;
     let all = found.results.hits;
     let rest = all.get(first..).unwrap_or_default();

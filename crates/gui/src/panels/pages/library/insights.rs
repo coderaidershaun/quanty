@@ -11,7 +11,7 @@ use crate::panels::exporting;
 use crate::panels::labels::{COPY_COMMAND, TRY_AGAIN};
 use crate::panels::{PanelCx, PanelWidth};
 use crate::theme::{Icon, TextRole, space};
-use crate::widgets::{Button, Chip, ControlSize, Placeholder};
+use crate::widgets::{Button, Chip, ControlSize, Copyable, Placeholder};
 use contract::{
     Catalogue, ChapterInsights, DocId, DocumentView, ExportPlace, Failure, Insight, Intent,
     Loadable,
@@ -114,8 +114,14 @@ fn saved_part(
         .show(ui, |ui| {
             if !saved.insights.is_empty() {
                 section_title(ui, INSIGHTS);
-                for insight in &saved.insights {
-                    insight_paragraph(ui, cx, doc, insight);
+                let section = Copyable::new("Copy insights").show(ui, |ui| {
+                    for insight in &saved.insights {
+                        insight_paragraph(ui, cx, doc, insight);
+                    }
+                });
+                if section.copied {
+                    let texts: Vec<&str> = saved.insights.iter().map(|i| i.text.as_str()).collect();
+                    cx.intents.push(Intent::CopyText(texts.join("\n\n")));
                 }
             }
             if !saved.takeaways.is_empty() {
@@ -125,11 +131,19 @@ fn saved_part(
                     .iter()
                     .map(|takeaway| format!("- {takeaway}"))
                     .collect();
-                blocks(ui, cx, &dollar_blocks(&lines.join("\n")));
+                let section = Copyable::new("Copy takeaways")
+                    .show(ui, |ui| blocks(ui, cx, &dollar_blocks(&lines.join("\n"))));
+                if section.copied {
+                    cx.intents.push(Intent::CopyText(lines.join("\n")));
+                }
             }
             if !saved.cheat_sheet.trim().is_empty() {
                 section_title(ui, CHEAT_SHEET);
-                blocks(ui, cx, &dollar_blocks(&saved.cheat_sheet));
+                let section = Copyable::new("Copy cheat sheet")
+                    .show(ui, |ui| blocks(ui, cx, &dollar_blocks(&saved.cheat_sheet)));
+                if section.copied {
+                    cx.intents.push(Intent::CopyText(saved.cheat_sheet.clone()));
+                }
             }
         });
 }

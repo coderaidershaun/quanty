@@ -4,8 +4,9 @@ use eframe::egui::{
     self, Align, Color32, Response, Sense, Stroke, StrokeKind, WidgetInfo, WidgetType, pos2, vec2,
 };
 
+use super::copyable::Copyable;
 use crate::theme::{self, Icon, Kind, TextRole, Tone, radius, size, space, stroke};
-use crate::widgets::controls::Button;
+use crate::widgets::controls::{Button, CopyButton};
 use crate::widgets::look::{ControlSize, Look, focus_ring};
 
 const MARGIN: f32 = space::MD;
@@ -14,6 +15,7 @@ pub struct Card<'a> {
     tag: Option<(Kind, &'a str)>,
     action: Option<(Icon, &'a str)>,
     action_size: ControlSize,
+    copy: Option<&'a str>,
     is_selected: bool,
     clickable: Option<&'a str>,
     forced: Option<Look>,
@@ -23,6 +25,8 @@ pub struct CardResponse<R> {
     pub inner: R,
     pub response: Response,
     pub action_clicked: bool,
+    /// True in the frame the copy button was clicked. The caller copies the text.
+    pub copied: bool,
 }
 
 impl Default for Card<'_> {
@@ -31,6 +35,7 @@ impl Default for Card<'_> {
             tag: None,
             action: None,
             action_size: ControlSize::Small,
+            copy: None,
             is_selected: false,
             clickable: None,
             forced: None,
@@ -70,6 +75,13 @@ impl<'a> Card<'a> {
         self
     }
 
+    /// A copy button at the top right, left of the action when there is one. `label` is its
+    /// accessible name, and `None` gives no button.
+    pub fn copy(mut self, label: impl Into<Option<&'a str>>) -> Self {
+        self.copy = label.into();
+        self
+    }
+
     pub fn selected(mut self, is_selected: bool) -> Self {
         self.is_selected = is_selected;
         self
@@ -98,7 +110,7 @@ impl<'a> Card<'a> {
             builder = builder.sense(Sense::click());
         }
         let scope = ui.scope_builder(builder, |ui| self.framed(ui, add_contents));
-        let (inner, action_clicked) = scope.inner;
+        let (inner, action_clicked, copied) = scope.inner;
         crate::widgets::interactive_cursor(ui, &scope.response);
         if let Some(label) = self.clickable {
             scope.response.widget_info(|| {
@@ -109,16 +121,18 @@ impl<'a> Card<'a> {
             inner,
             response: scope.response,
             action_clicked,
+            copied,
         }
     }
 
     /// The outline, the header and the content, in the `Ui` that senses a click on the whole
-    /// card. Returns what the content returns, and whether the action button was clicked.
+    /// card. Returns what the content returns, and whether the action button and the copy button
+    /// were clicked.
     fn framed<R>(
         &self,
         ui: &mut egui::Ui,
         add_contents: impl FnOnce(&mut egui::Ui) -> R,
-    ) -> (R, bool) {
+    ) -> (R, bool, bool) {
         // The width of the outline never changes, so that selecting a card does not move what
         // is below it. The heavier outline of a selected card is drawn over it.
         let palette = theme::palette(ui.ctx());
@@ -131,11 +145,19 @@ impl<'a> Card<'a> {
         if room.is_finite() {
             frame.content_ui.set_min_width(room);
         }
-        let mut action_clicked = false;
-        if self.tag.is_some() || self.action.is_some() {
-            action_clicked = self.header(&mut frame.content_ui);
+        let mut clicks = HeaderClicks::default();
+        let has_header = self.tag.is_some() || self.action.is_some();
+        if has_header {
+            clicks = self.header(&mut frame.content_ui);
         }
-        let inner = add_contents(&mut frame.content_ui);
+        let inner = match self.copy {
+            Some(label) if !has_header => {
+                let copyable = Copyable::new(label).show(&mut frame.content_ui, add_contents);
+                clicks.copied = copyable.copied;
+                copyable.inner
+            }
+            _ => add_contents(&mut frame.content_ui),
+        };
 
         let look = match (self.clickable, self.forced) {
             (None, _) => Look::default(),
@@ -159,24 +181,36 @@ impl<'a> Card<'a> {
         if look.focused {
             focus_ring(ui.painter(), outer, radius::SM);
         }
-        (inner, action_clicked)
+        (inner, clicks.action, clicks.copied)
     }
 
-    fn header(&self, ui: &mut egui::Ui) -> bool {
-        let mut action_clicked = false;
+    fn header(&self, ui: &mut egui::Ui) -> HeaderClicks {
+        let mut clicks = HeaderClicks::default();
         ui.horizontal(|ui| {
             if let Some((kind, text)) = self.tag {
                 paint_tag(ui, kind, text);
             }
-            if let Some((icon, label)) = self.action {
-                ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                    let button = Button::icon_only(icon, label).size(self.action_size);
-                    action_clicked = ui.add(button).clicked();
-                });
+            if self.action.is_none() && self.copy.is_none() {
+                return;
             }
+            ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                if let Some((icon, label)) = self.action {
+                    let button = Button::icon_only(icon, label).size(self.action_size);
+                    clicks.action = ui.add(button).clicked();
+                }
+                if let Some(label) = self.copy {
+                    clicks.copied = ui.add(CopyButton::new(label)).clicked();
+                }
+            });
         });
-        action_clicked
+        clicks
     }
+}
+
+#[derive(Default)]
+struct HeaderClicks {
+    action: bool,
+    copied: bool,
 }
 
 /// The text of the tag is a label of its own, so a test or a screen reader finds it. It is

@@ -59,6 +59,25 @@ fn the_insights_view_shows_the_saved_insights_takeaways_and_cheat_sheet_and_a_pa
         assert!(has(&harness, Role::Button, chip), "the chip `{chip}`");
     }
 
+    let insights = shared(&harness)
+        .insights
+        .saved
+        .ready()
+        .and_then(Option::as_ref)
+        .map(|saved| {
+            let texts: Vec<&str> = saved
+                .insights
+                .iter()
+                .map(|insight| insight.text.as_str())
+                .collect();
+            texts.join("\n\n")
+        })
+        .expect("the chapter has insights");
+    let copied = copied_by(&mut harness, |harness| {
+        node(harness, Role::Button, "Copy insights").click();
+    });
+    assert_eq!(copied, [insights], "a section copies its own text");
+
     let chapter = documents_of(&harness)
         .into_iter()
         .find(|document| document.name().label() == BLACK_SCHOLES)

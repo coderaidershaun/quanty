@@ -5,12 +5,14 @@ use eframe::egui::{self, Color32, Sense, StrokeKind, WidgetInfo, WidgetType};
 
 use super::guidance::{self, Guidance, Message};
 use crate::theme::{self, TextRole, hairline, radius, size, space, stroke};
-use crate::widgets;
+use crate::widgets::{self, Copyable};
 
 /// A panel narrower than this, as on a phone, wraps each suggested question to at most three
 /// lines and makes each row tall enough for a finger. The narrowest wide window gives the panel
 /// 388 points, so a wide window never wraps.
 const NARROW: f32 = 380.0;
+
+const COPY_QUESTIONS: &str = "Copy follow-ups";
 
 /// How a suggested question is set in its row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,31 +31,47 @@ impl Fit {
     }
 }
 
-pub(super) fn show<'a>(ui: &mut egui::Ui, guidance: &Guidance<'a>) -> Option<&'a str> {
+/// What the person did in the list of questions.
+pub(super) struct Outcome<'a> {
+    /// The question that was clicked.
+    pub(super) asked: Option<&'a str>,
+    /// Whether the button that copies all the questions was clicked.
+    pub(super) copied: bool,
+}
+
+pub(super) fn show<'a>(ui: &mut egui::Ui, guidance: &Guidance<'a>) -> Outcome<'a> {
     if let Some(message) = &guidance.message {
         show_message(ui, message);
     }
     show_questions(ui, guidance.suggestions)
 }
 
-fn show_questions<'a>(ui: &mut egui::Ui, questions: &'a [String]) -> Option<&'a str> {
-    let mut clicked = None;
-    ui.scope(|ui| {
+fn show_questions<'a>(ui: &mut egui::Ui, questions: &'a [String]) -> Outcome<'a> {
+    let mut outcome = Outcome {
+        asked: None,
+        copied: false,
+    };
+    if questions.is_empty() {
+        return outcome;
+    }
+    let list = Copyable::new(COPY_QUESTIONS).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
         for (turn, question) in questions.iter().enumerate() {
             if question_row(ui, question, turn > 0).clicked() {
-                clicked = Some(question.as_str());
+                outcome.asked = Some(question.as_str());
             }
         }
     });
-    clicked
+    outcome.copied = list.copied;
+    outcome
 }
 
 // SMELL: the kit has no list row, so this row paints by hand the cut text, the hover fill and
 // the focus ring that a kit widget would paint. A change to the kit's look will miss this row.
 fn question_row(ui: &mut egui::Ui, question: &str, has_row_above: bool) -> egui::Response {
     let width = ui.available_width();
-    let fit = Fit::of(width);
+    // The row stands left of the copy button, but the narrow rule is about the whole panel.
+    let fit = Fit::of(width + Copyable::gutter());
     let galley = ui
         .painter()
         .layout_job(question_job(question, width - 2.0 * space::SM, fit));

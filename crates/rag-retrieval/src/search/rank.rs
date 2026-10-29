@@ -6,14 +6,14 @@ use std::collections::{BTreeMap, HashMap};
 use rag_core::{DocId, Embedding, ItemFilter, ItemHit, ItemId, ItemStore};
 
 use super::results::{Reason, SearchHit};
-use super::{MAX_RESULTS_PER_DOCUMENT, RESULTS_PER_QUERY, SearchError};
+use super::{Reach, SearchError};
 
 pub(super) struct Ranking {
     /// How many of the candidates the item store gave back.
     pub(super) ranked: usize,
     pub(super) kept: Vec<SearchHit>,
-    /// The items passed over because their document already had [`MAX_RESULTS_PER_DOCUMENT`]
-    /// results, nearest first.
+    /// The items passed over because their document already had the most results one document
+    /// gives, nearest first.
     pub(super) capped: Vec<ItemHit>,
 }
 
@@ -24,26 +24,31 @@ pub(super) async fn ranked_within_the_cap(
     vector: &Embedding,
     filter: &ItemFilter,
     candidates: BTreeMap<ItemId, Reason>,
+    reach: &Reach,
 ) -> Result<Ranking, SearchError> {
     let ids: Vec<ItemId> = candidates.keys().copied().collect();
     let ranked = items
         .rank(vector.clone(), &ids, filter)
         .await
         .map_err(SearchError::Items)?;
-    Ok(keep_within_the_cap(ranked, candidates))
+    Ok(keep_within_the_cap(ranked, candidates, reach))
 }
 
-fn keep_within_the_cap(ranked: Vec<ItemHit>, mut candidates: BTreeMap<ItemId, Reason>) -> Ranking {
+fn keep_within_the_cap(
+    ranked: Vec<ItemHit>,
+    mut candidates: BTreeMap<ItemId, Reason>,
+    reach: &Reach,
+) -> Ranking {
     let ranked_count = ranked.len();
     let mut kept_of_document: HashMap<DocId, usize> = HashMap::new();
     let mut kept = Vec::new();
     let mut capped = Vec::new();
     for item in ranked {
-        if kept.len() == RESULTS_PER_QUERY {
+        if kept.len() == reach.nearest {
             break;
         }
         let in_document = kept_of_document.entry(item.payload.doc_id).or_insert(0);
-        if *in_document == MAX_RESULTS_PER_DOCUMENT {
+        if *in_document == reach.per_document {
             capped.push(item);
             continue;
         }

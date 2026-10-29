@@ -20,7 +20,7 @@ use contract::Loadable;
 use follow::marked_piece;
 use tabs::{SourceTab, TabCx};
 
-pub(super) use piece::{body as piece_body, kind_name};
+pub(super) use piece::{body as piece_body, copy_label, kind_name};
 
 /// Below this inner width the panel is narrow, so it stacks its header and makes its main controls
 /// tall enough for a finger. The panel of the smallest wide window is 386 points inside and a

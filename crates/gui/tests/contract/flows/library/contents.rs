@@ -12,7 +12,7 @@ use gui::testkit;
 
 use super::{BLACK_SCHOLES, BOOK, HAWKES, NOTES, PAPER, SAMPLE_PAGES, documents_of, open_document};
 use crate::flows::recording::{self, Seen};
-use crate::flows::{Window, are_stacked_in_order, click, has, node, says, shared};
+use crate::flows::{Window, are_stacked_in_order, click, copied_by, has, node, says, shared};
 
 const FALKORDB_URL: &str = "falkor://localhost:6379";
 
@@ -133,6 +133,26 @@ fn an_item_reads_its_page_in_ask_with_the_piece_shown() {
         Some("The call price in Python"),
         "Source preserves the printed caption"
     );
+}
+
+#[test]
+fn the_copy_icon_copies_a_library_item() {
+    let (mut harness, _seen) = open_library("black-scholes");
+    open_document(&mut harness, NOTES, BLACK_SCHOLES);
+    click(&mut harness, Role::Tab, "Formulas");
+    let first_formula = shared(&harness)
+        .contents
+        .items
+        .ready()
+        .and_then(|contents| contents.of_kind(PieceKind::Formula).next())
+        .map(|item| item.piece.text.clone())
+        .expect("the chapter has a formula");
+
+    let copied = copied_by(&mut harness, |harness| {
+        node(harness, Role::Button, "Copy LaTeX").click();
+    });
+
+    assert_eq!(copied, [first_formula]);
 }
 
 #[test]

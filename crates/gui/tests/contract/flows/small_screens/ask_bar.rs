@@ -36,7 +36,7 @@ fn the_ask_bar_fits_a_phone_and_a_tablet_and_asks_with_the_filters_of_its_sheet(
 
         let controls = assert_the_bar_fits(&harness, window);
         let names: Vec<&str> = controls.iter().map(|(name, _)| name.as_str()).collect();
-        let mut on_the_bar = vec!["Question", "Mode", "Ask", more];
+        let mut on_the_bar = vec!["Question", "Mode", "Depth", "Ask", more];
         if window == TABLET_WINDOW {
             on_the_bar.extend(["Media", "Document filter"]);
         }

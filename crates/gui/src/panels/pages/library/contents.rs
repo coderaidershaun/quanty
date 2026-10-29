@@ -8,7 +8,7 @@ use super::width;
 use crate::panels::PanelCx;
 use crate::panels::heights::Heights;
 use crate::panels::labels::TRY_AGAIN;
-use crate::panels::source::{kind_name, piece_body};
+use crate::panels::source::{copy_label, kind_name, piece_body};
 use crate::theme::{self, Icon, Kind, TextRole};
 use crate::widgets::{Card, Placeholder};
 use contract::{
@@ -113,6 +113,7 @@ fn card(ui: &mut egui::Ui, doc: DocId, item: &ChapterItem, cx: &mut PanelCx<'_>)
         .tag(Kind::from(piece.kind), tag)
         .action(Icon::OPEN, &read)
         .action_size(width(ui).control_size())
+        .copy(copy_label(piece.kind))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             let pages_color = theme::palette(ui.ctx()).text_muted;
@@ -136,6 +137,9 @@ fn card(ui: &mut egui::Ui, doc: DocId, item: &ChapterItem, cx: &mut PanelCx<'_>)
             }
             piece_body(ui, &body, cx.media, cx.intents);
         });
+    if shown.copied {
+        cx.intents.push(Intent::CopyText(piece.text.clone()));
+    }
     if shown.action_clicked {
         cx.intents.push(Intent::OpenSource {
             doc,

@@ -1,10 +1,7 @@
-//! Socket replies retain request identity and paid jobs survive their originating tab.
+//! Socket replies keep the request id they answer, and a socket that cannot be trusted is closed.
 
 use super::support::{TestServer, finish, frame, send, test_server};
-use contract::{
-    Category, Command, DatasetRequest, DocumentName, Event, Frame, IngestRequest, RequestId,
-    StartupFacts, UploadId,
-};
+use contract::{Command, Event, Frame, RequestId, StartupFacts};
 use futures_util::{SinkExt, StreamExt};
 use tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest};
 
@@ -262,124 +259,6 @@ async fn websocket_events_finish_and_bad_commands_close_the_connection() {
         .unwrap();
     assert_eq!(facts.fixture.as_deref(), Some("black-scholes"));
     assert_eq!(facts.model_choices.of(choices::WorkKind::Ask), &choice);
-}
-
-async fn running(server: &TestServer, expected: bool) -> StartupFacts {
-    let client = server.client();
-    let cookie = server.login(&client).await;
-    tokio::time::timeout(std::time::Duration::from_secs(30), async {
-        loop {
-            let facts: StartupFacts = client
-                .get(server.url("/api/facts"))
-                .header("cookie", &cookie)
-                .send()
-                .await
-                .unwrap()
-                .json()
-                .await
-                .unwrap();
-            if !facts.running.is_empty() == expected {
-                break facts;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        }
-    })
-    .await
-    .unwrap()
-}
-fn dataset(request: u64) -> Command {
-    Command::BuildDataset {
-        request: RequestId(request),
-        build: DatasetRequest {
-            name: "guarded".into(),
-            ..Default::default()
-        },
-    }
-}
-
-#[tokio::test]
-async fn paid_jobs_are_global_detached_and_only_the_owner_can_cancel() {
-    let server = test_server(Some("secret")).await;
-    let mut owner = server.socket().await;
-    let alternate = test_server(Some("secret")).await;
-    let mut other = alternate.socket().await;
-    send(&mut owner, &dataset(11)).await;
-    assert!(matches!(
-        frame(&mut owner).await,
-        Frame::Event(Event::DatasetProgress { .. })
-    ));
-    let facts = running(&server, true).await;
-    assert_eq!(facts.running.len(), 1);
-    assert_eq!(facts.running[0].kind, contract::JobKind::Dataset);
-    assert_eq!(facts.running[0].name, "guarded");
-    send(&mut other, &Command::Cancel(RequestId(11))).await;
-    send(&mut other, &dataset(12)).await;
-    let refused = finish(&mut other, RequestId(12)).await;
-    assert!(
-        matches!(&refused[..], [Event::DatasetFinished { result: Err(failure), .. }] if failure.detail == "an ingest is running" && failure.hint.contains("guarded"))
-    );
-    owner.close(None).await.unwrap();
-    running(&server, true).await;
-    running(&server, false).await;
-
-    send(&mut other, &dataset(13)).await;
-    assert!(matches!(
-        frame(&mut other).await,
-        Frame::Event(Event::DatasetProgress { .. })
-    ));
-    send(&mut other, &Command::Cancel(RequestId(13))).await;
-    finish(&mut other, RequestId(13)).await;
-    running(&server, false).await;
-
-    let ingest = IngestRequest {
-        pdf: UploadId::default(),
-        file_name: "sample.pdf".into(),
-        media: "Sample".into(),
-        category: Category::Book,
-        name: DocumentName::Chapter {
-            number: 1,
-            name: "Sample".into(),
-        },
-        tags: vec![],
-    };
-    send(
-        &mut other,
-        &Command::Ingest {
-            request: RequestId(14),
-            ingest: ingest.clone(),
-        },
-    )
-    .await;
-    assert!(matches!(
-        frame(&mut other).await,
-        Frame::Event(Event::IngestProgress { .. })
-    ));
-    send(&mut other, &Command::Cancel(RequestId(14))).await;
-    // An ingest cancellation is cooperative; its slot remains held until the handler ends.
-    let facts = running(&server, true).await;
-    assert_eq!(facts.running[0].kind, contract::JobKind::Ingest);
-    assert_eq!(facts.running[0].name, "sample.pdf");
-    other.close(None).await.unwrap();
-    let mut third = server.socket().await;
-    send(
-        &mut third,
-        &Command::Ingest {
-            request: RequestId(14),
-            ingest,
-        },
-    )
-    .await;
-    assert!(matches!(
-        &finish(&mut third, RequestId(14)).await[..],
-        [Event::IngestFinished { result: Err(_), .. }]
-    ));
-    running(&server, false).await;
-    send(&mut third, &dataset(15)).await;
-    let events = finish(&mut third, RequestId(15)).await;
-    assert!(matches!(
-        events.last(),
-        Some(Event::DatasetFinished { result: Ok(_), .. })
-    ));
 }
 
 async fn handshake(

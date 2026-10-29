@@ -20,7 +20,8 @@ use contract::{
 const CHECKING: &str = "Checking the PDF";
 const CONNECTING: &str = "Connecting to the stores";
 const COST: &str = "Checking is free. Starting is paid work: the selected agent and Jev convert each page, Gemini embeds the items, and the selected agent writes artifact descriptions, the insights, takeaways and cheat sheet and reads the concepts.";
-const KEEP_OPEN: &str = "This ingest continues on the server if you close the tab. If it stops, start the same PDF again: pages that are converted are not paid for twice.";
+const KEEP_OPEN: &str = "This ingest goes on at the server if you close or reload this tab, and this page shows it again. Stop ingest ends it: the pages that are converted are kept and are not paid for twice.";
+const STOPPED: &str = "The pages converted so far are kept and are not paid for again. Start the same PDF again to finish it.";
 
 /// `draft` is what the form holds now, made of its settled fields.
 pub(super) fn show(
@@ -98,7 +99,7 @@ pub(super) fn show(
             try_again(ui, draft, cx.intents);
         }
         IngestJob::Running { progress, .. } => {
-            running(ui, progress.as_ref());
+            running(ui, cx.intents, progress.as_ref());
         }
         IngestJob::Finished {
             request,
@@ -197,7 +198,7 @@ fn stage_words(stage: Option<IngestStage>) -> String {
     }
 }
 
-fn running(ui: &mut egui::Ui, progress: Option<&IngestProgress>) {
+fn running(ui: &mut egui::Ui, intents: &mut Vec<Intent>, progress: Option<&IngestProgress>) {
     let stage = progress.map(|progress| progress.stage);
     let words = stage_words(stage);
     stage_row(ui, &words, progress.map(|progress| &progress.spent));
@@ -206,6 +207,10 @@ fn running(ui: &mut egui::Ui, progress: Option<&IngestProgress>) {
         Some(share) => widgets::progress_bar(ui, &words, share),
         None => widgets::indeterminate_bar(ui, &words),
     };
+    ui.add_space(space::SM);
+    if ui.add(Button::secondary("Stop ingest")).clicked() {
+        intents.push(Intent::StopIngest);
+    }
     ui.add_space(space::SM);
     ui.label(TextRole::Small.rich(ui, KEEP_OPEN));
 }
@@ -240,9 +245,7 @@ fn finished(
             not_written(ui, intents, *doc, insights.as_ref());
         }
         Ok(IngestOutcome::Cancelled) => {
-            Notice::info("Stopped")
-                .body("Start the same PDF again to go on.")
-                .show(ui);
+            Notice::info("Ingest stopped").body(STOPPED).show(ui);
         }
         Err(failure) => {
             Notice::error("The ingest failed")
@@ -257,7 +260,8 @@ fn finished(
     }
     ui.add_space(space::MD);
     ui.horizontal_wrapped(|ui| {
-        if result.is_err() && ui.add(Button::primary(TRY_AGAIN)).clicked() {
+        let can_try_again = matches!(result, Err(_) | Ok(IngestOutcome::Cancelled));
+        if can_try_again && ui.add(Button::primary(TRY_AGAIN)).clicked() {
             intents.push(Intent::CheckIngest(request.clone()));
         }
         if ui.add(Button::secondary("Add another PDF")).clicked() {

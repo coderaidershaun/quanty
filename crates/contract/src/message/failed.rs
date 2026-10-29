@@ -50,7 +50,9 @@ impl Command {
             Command::EditMedia { request, .. } => vec![failure_of!(MediaEdited, request)],
             Command::DeleteMedia { request, .. } => vec![failure_of!(MediaDeleted, request)],
             Command::Preflight { request, .. } => vec![failure_of!(Preflight, request)],
-            Command::Ingest { request, .. } => vec![failure_of!(IngestFinished, request)],
+            Command::Ingest { request, .. } | Command::FollowIngest { request } => {
+                vec![failure_of!(IngestFinished, request)]
+            }
             Command::BuildDataset { request, .. } => vec![failure_of!(DatasetFinished, request)],
             Command::CheckHealth { request } => unknown_health(*request).collect(),
             Command::LoadChapterInsights { request, .. } => {

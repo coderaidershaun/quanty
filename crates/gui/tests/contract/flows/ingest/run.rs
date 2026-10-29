@@ -4,7 +4,10 @@
 
 use backend::fake::Fake;
 use backend::{Handler, Reply};
-use contract::{Command, IngestStage, Tab};
+use contract::{
+    Category, Command, DocumentName, Event, IngestOutcome, IngestProgress, IngestRequest,
+    IngestStage, Tab, UploadId, Usage,
+};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::NodeT as _;
@@ -200,9 +203,121 @@ fn a_run_shows_its_page_and_its_cost() {
     );
 }
 
+fn a_running_ingest_stops_and_can_start_again() {
+    let (mut harness, seen) = open("ingest-running", DEFAULT_WINDOW);
+    assert!(
+        !has(&harness, Role::Button, "Stop ingest"),
+        "nothing runs yet"
+    );
+    // The ingest never ends on its own, so the app is never idle, and `click` would wait for ever.
+    node(&harness, Role::Button, "Start ingest").click();
+    run_until(&mut harness, "page 3", |shared| is_at_page(shared, 3));
+    harness.run_ok();
+
+    node(&harness, Role::Button, "Stop ingest").click();
+    run_until(&mut harness, "the stop", |shared| {
+        matches!(shared.ingest, IngestJob::Finished { .. })
+    });
+    testkit::settle(&mut harness);
+    assert!(matches!(
+        shared(&harness).ingest,
+        IngestJob::Finished {
+            result: Ok(IngestOutcome::Cancelled),
+            ..
+        }
+    ));
+    assert!(says(&harness, "Ingest stopped"));
+    assert_eq!(
+        seen.count(|command| matches!(command, Command::LoadCatalogue { .. })),
+        2,
+        "a stopped run may have left a partial document, so the catalogue is loaded again"
+    );
+
+    click(&mut harness, Role::Button, "Try again");
+    assert_eq!(seen.count(is_preflight), 2);
+    assert!(
+        is_enabled(&harness, Role::Button, "Start ingest"),
+        "a new ingest can start after a stop"
+    );
+}
+
+/// Stands for a server whose tab was reloaded while an ingest ran: it hands the running ingest to
+/// the app that follows it, and ends it with a stop when the app asks for one.
+struct ServerWithARunningIngest(Fake);
+
+fn followed_pdf() -> IngestRequest {
+    IngestRequest {
+        pdf: UploadId::default(),
+        file_name: "chapter-3-greeks.pdf".to_owned(),
+        media: "Option Volatility and Pricing".to_owned(),
+        category: Category::Book,
+        name: DocumentName::Chapter {
+            number: 3,
+            name: "Greeks".to_owned(),
+        },
+        tags: Vec::new(),
+    }
+}
+
+impl Handler for ServerWithARunningIngest {
+    async fn serve(&self, command: Command, reply: Reply) {
+        let Command::FollowIngest { request } = command else {
+            return self.0.serve(command, reply).await;
+        };
+        reply.send(Event::IngestFollowed {
+            request,
+            ingest: followed_pdf(),
+            progress: Some(IngestProgress {
+                stage: IngestStage::Converting {
+                    saved: 3,
+                    pages: 12,
+                },
+                spent: Usage::default(),
+            }),
+        });
+        reply.cancelled().await;
+        reply.send(Event::IngestFinished {
+            request,
+            result: Ok(IngestOutcome::Cancelled),
+        });
+    }
+}
+
+fn a_reloaded_app_shows_the_running_ingest_and_stops_it() {
+    let (mut harness, seen) =
+        recording::open_with("idle", DEFAULT_WINDOW, ServerWithARunningIngest);
+    // The followed ingest never ends on its own, so the app is never idle, and `click` would wait
+    // for ever.
+    node(&harness, Role::Tab, "Ingest").click();
+    run_until(&mut harness, "the followed ingest", |shared| {
+        shared.ingest.is_running()
+    });
+    harness.run_ok();
+    assert_eq!(
+        seen.count(|command| matches!(command, Command::FollowIngest { .. })),
+        1,
+        "the app asks for a running ingest when it opens"
+    );
+    assert!(says(&harness, "Converting the pages — 3 of 12 done"));
+    assert!(says(&harness, "chapter-3-greeks.pdf"));
+
+    node(&harness, Role::Button, "Stop ingest").click();
+    run_until(&mut harness, "the stop", |shared| {
+        matches!(shared.ingest, IngestJob::Finished { .. })
+    });
+    testkit::settle(&mut harness);
+    assert!(says(&harness, "Ingest stopped"));
+}
+
 #[test]
 fn the_check_and_the_run_show_their_progress() {
     a_check_shows_a_bar_with_no_count();
     a_run_shows_its_page_and_its_cost();
     super::insights::assert_artifacts_precede_store_changes();
+}
+
+#[test]
+fn a_running_ingest_is_stopped_from_the_page_also_after_a_reload() {
+    a_running_ingest_stops_and_can_start_again();
+    a_reloaded_app_shows_the_running_ingest_and_stops_it();
 }

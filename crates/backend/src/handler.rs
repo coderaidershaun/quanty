@@ -39,10 +39,8 @@ impl Reply {
 
     /// Resolves when cancellation is requested or the runtime is gone; it can be awaited again.
     /// A cancel command asks an ingest to stop and aborts other requests. Dropping the runtime
-    /// aborts all its tasks, including ingests.
-    // SMELL: nothing calls this, so an ingest that is asked to stop runs to its end. Neither the
-    // conversion nor the ingest has a point where it can stop safely, and only the converter can
-    // give one between pages.
+    /// aborts all its tasks, including ingests. An ingest listens to this and ends at its next wait
+    /// when it is asked to stop.
     pub async fn cancelled(&self) {
         // An error here means the backend is gone, which also ends the wait.
         self.stop.clone().wait_for(|asked| *asked).await.ok();

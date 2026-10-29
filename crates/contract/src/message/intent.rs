@@ -137,6 +137,10 @@ pub enum Intent {
     PdfUploadFailed(String),
     CheckIngest(IngestRequest),
     StartIngest,
+    /// Stops the ingest that runs. What it saved stays.
+    StopIngest,
+    /// Asks the backend for an ingest that runs already, as after the browser was reloaded.
+    FollowIngest,
     ClearIngest,
     StartDatasetBuild(DatasetRequest),
     ClearDatasetBuild,

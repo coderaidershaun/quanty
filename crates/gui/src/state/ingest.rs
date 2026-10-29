@@ -92,6 +92,42 @@ impl Shared {
         }));
     }
 
+    /// The state stays running until the backend says the ingest ended, because a stop can come
+    /// too late.
+    pub(super) fn stop_ingest(&mut self, effects: &mut Vec<Effect>) {
+        if let IngestJob::Running { id, .. } = &self.ingest {
+            push_cancel(effects, *id);
+        }
+    }
+
+    /// Asks the server for the ingest it runs, so a page that was reloaded shows it again.
+    pub(super) fn follow_ingest(&mut self, effects: &mut Vec<Effect>) {
+        if self.ingest.is_running() {
+            return;
+        }
+        let request = self.issue_request();
+        effects.push(Effect::Send(Command::FollowIngest { request }));
+    }
+
+    pub(super) fn ingest_followed(
+        &mut self,
+        request: RequestId,
+        ingest: IngestRequest,
+        progress: Option<IngestProgress>,
+    ) {
+        if self.ingest.is_running() {
+            return;
+        }
+        // The server runs one paid job at a time, and this is it. The jobs read when the page
+        // opened are no longer true, and a start must be allowed again once it ends.
+        self.health.facts.running.clear();
+        self.ingest = IngestJob::Running {
+            request: ingest,
+            id: request,
+            progress,
+        };
+    }
+
     pub(super) fn clear_ingest(&mut self, effects: &mut Vec<Effect>) {
         if self.ingest.is_running() {
             return;
@@ -149,7 +185,11 @@ impl Shared {
             return;
         };
         self.announce_ingest(&request, &result);
-        if matches!(result, Ok(IngestOutcome::Ingested(_))) {
+        // A stopped run may have left a partial document that the Library lists.
+        if matches!(
+            result,
+            Ok(IngestOutcome::Ingested(_) | IngestOutcome::Cancelled)
+        ) {
             self.refresh_catalogue(effects);
         }
         let spent = progress.map_or_else(Usage::default, |progress| progress.spent);

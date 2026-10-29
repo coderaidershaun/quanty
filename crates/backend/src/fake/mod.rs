@@ -319,6 +319,20 @@ impl Fake {
     }
 
     async fn ingest(&self, request: RequestId, ingest: &IngestRequest, reply: &Reply) {
+        let result = tokio::select! {
+            biased;
+            () = reply.cancelled() => Ok(IngestOutcome::Cancelled),
+            result = self.play_ingest(request, ingest, reply) => result,
+        };
+        reply.send(Event::IngestFinished { request, result });
+    }
+
+    async fn play_ingest(
+        &self,
+        request: RequestId,
+        ingest: &IngestRequest,
+        reply: &Reply,
+    ) -> Result<IngestOutcome, Failure> {
         let script = self.scene.script.ingest;
         let played = match script {
             Ingest::Stalls => fixtures::ingest::steps_to_the_stall(),
@@ -331,15 +345,14 @@ impl Fake {
             reply.send(Event::IngestProgress { request, progress });
         }
         self.wait(STEP_WAIT).await;
-        let result = match script {
+        match script {
             Ingest::Done => Ok(IngestOutcome::Ingested(fixtures::ingest::report(ingest))),
             Ingest::InsightsNotWritten => Ok(IngestOutcome::Ingested(
                 fixtures::ingest::report_with_insights_not_written(ingest),
             )),
             Ingest::Fails(kind) => Err(self.failure(kind)),
             Ingest::Stalls => std::future::pending().await,
-        };
-        reply.send(Event::IngestFinished { request, result });
+        }
     }
 
     async fn build_dataset(&self, request: RequestId, wanted: &DatasetRequest, reply: &Reply) {
@@ -444,6 +457,9 @@ impl Handler for Fake {
             Command::LoadChapterInsights { request, doc, .. } => {
                 self.load_chapter_insights(request, doc, &reply).await;
             }
+            // One process has no earlier tab to follow: the server is what keeps an ingest between
+            // tabs.
+            Command::FollowIngest { .. } => {}
             Command::Cancel(_) => {}
             Command::ReadBalances { request } => self.read_balances(request, &reply).await,
         }

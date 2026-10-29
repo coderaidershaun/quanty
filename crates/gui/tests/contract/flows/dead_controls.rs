@@ -78,12 +78,13 @@ fn assert_start_up_sent_only_its_own_commands(scene: &str, seen: &Seen) {
         .filter(|intent| matches!(intent, Intent::StartDatasetBuild(_)))
         .count();
     let counted = |is: fn(&Command) -> bool| seen.count(is);
+    let (catalogue_loads, follows) = (1, 1);
     // One read at start, and one after each ask and each build ends.
     let reads = counted(|c| matches!(c, Command::ReadBalances { .. }));
     assert_eq!(reads, 1 + asks + builds, "`{scene}`");
     assert_eq!(
         counted(|c| matches!(c, Command::LoadCatalogue { .. })),
-        1,
+        catalogue_loads,
         "`{scene}`"
     );
     assert_eq!(
@@ -107,8 +108,15 @@ fn assert_start_up_sent_only_its_own_commands(scene: &str, seen: &Seen) {
         "`{scene}`"
     );
     assert_eq!(
+        counted(|c| matches!(c, Command::FollowIngest { .. })),
+        follows,
+        "`{scene}` asks once for an ingest that runs already"
+    );
+    assert_eq!(
         seen.all().len(),
-        1 + asks
+        catalogue_loads
+            + follows
+            + asks
             + pages
             + checks
             + builds

@@ -35,14 +35,12 @@ pub(in crate::panels) fn body(
 ) {
     let words = |role| RichText::new(&piece.text, role);
     let clicked = match piece.kind {
-        PieceKind::Heading { rank } => {
-            let role = if rank == 1 {
-                TextRole::Heading
-            } else {
-                TextRole::BodyStrong
-            };
-            after_marker(ui, media, piece.label.as_deref(), &words(role))
-        }
+        PieceKind::Heading { .. } => after_marker(
+            ui,
+            media,
+            piece.label.as_deref(),
+            &words(TextRole::Subheading),
+        ),
         PieceKind::Text => rich_text::show(ui, media, &words(TextRole::Body)),
         PieceKind::Footnote => {
             after_marker(ui, media, piece.label.as_deref(), &words(TextRole::Small))

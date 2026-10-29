@@ -7,7 +7,7 @@ use super::{Local, ShelfFit, TITLE};
 use crate::panels::PanelCx;
 use crate::panels::labels::NO_MEDIA;
 use crate::panels::pages::media_card::category_icon;
-use crate::state::Open;
+use crate::state::{Open, Shelf};
 use crate::theme::{Icon, TextRole, space};
 use crate::widgets::{ControlSize, ListRow, Placeholder, TextInput};
 use contract::{Catalogue, Category, DocId, Document, Intent, Media};
@@ -37,10 +37,10 @@ enum Row {
 }
 
 /// The rows of the shelf, kept between frames so that drawing builds no text. They are made again
-/// when the catalogue, the open item or the find text changes.
+/// when the catalogue, the open item, its fold or the find text changes.
 #[derive(Debug, Default)]
 pub(super) struct Rows {
-    key: Option<(u64, Option<Open>, String)>,
+    key: Option<(u64, Option<Open>, bool, String)>,
     rows: Vec<Row>,
 }
 
@@ -49,28 +49,41 @@ impl Rows {
         &mut self,
         catalogue: &Catalogue,
         revision: u64,
-        open: Option<&Open>,
+        shelf: &Shelf,
         find: &str,
     ) {
-        let is_current = self.key.as_ref().is_some_and(|(seen, kept, typed)| {
-            *seen == revision && kept.as_ref() == open && typed == find
-        });
+        let is_current = self
+            .key
+            .as_ref()
+            .is_some_and(|(seen, kept, is_folded, typed)| {
+                *seen == revision
+                    && *kept == shelf.open
+                    && *is_folded == shelf.is_folded
+                    && typed == find
+            });
         if is_current {
             return;
         }
-        self.rows = rows_of(catalogue, open, find);
-        self.key = Some((revision, open.cloned(), find.to_owned()));
+        self.rows = rows_of(catalogue, shelf, find);
+        self.key = Some((
+            revision,
+            shelf.open.clone(),
+            shelf.is_folded,
+            find.to_owned(),
+        ));
     }
 }
 
 /// The rows the shelf shows. With no find text it is every media, and the documents of the media
-/// that holds the open item. With find text it is every media whose title holds the text, with all
-/// its documents, and every other media with a document whose name holds it, with only those.
-fn rows_of(catalogue: &Catalogue, open: Option<&Open>, find: &str) -> Vec<Row> {
+/// that holds the open item, unless that item is the media and it is folded. With find text it is
+/// every media whose title holds the text, with all its documents, and every other media with a
+/// document whose name holds it, with only those.
+fn rows_of(catalogue: &Catalogue, shelf: &Shelf, find: &str) -> Vec<Row> {
     let needle = find.trim().to_lowercase();
+    let open = shelf.open.as_ref();
     let mut rows = Vec::new();
     for media in &catalogue.media {
-        let Some(documents) = unfolded_documents(media, open, &needle) else {
+        let Some(documents) = unfolded_documents(media, shelf, &needle) else {
             continue;
         };
         rows.push(Row::Media {
@@ -93,12 +106,12 @@ fn rows_of(catalogue: &Catalogue, open: Option<&Open>, find: &str) -> Vec<Row> {
 /// text, trimmed and in lower case.
 fn unfolded_documents<'a>(
     media: &'a Media,
-    open: Option<&Open>,
+    shelf: &Shelf,
     needle: &str,
 ) -> Option<Vec<&'a Document>> {
     if needle.is_empty() {
-        let is_unfolded = match open {
-            Some(Open::Media { title }) => *title == media.title,
+        let is_unfolded = match &shelf.open {
+            Some(Open::Media { title }) => *title == media.title && !shelf.is_folded,
             Some(Open::Document(doc)) => media.documents.iter().any(|document| document.id == *doc),
             None => false,
         };
@@ -147,10 +160,12 @@ pub(super) fn show(
     ui.add_space(space::SM);
 
     let shared = cx.shared;
-    let open = shared.shelf.open.as_ref();
-    local
-        .rows
-        .refresh(catalogue, shared.library.revision, open, &local.find);
+    local.rows.refresh(
+        catalogue,
+        shared.library.revision,
+        &shared.shelf,
+        &local.find,
+    );
     if local.rows.rows.is_empty() {
         Placeholder::empty(Icon::SEARCH, NOTHING_MATCHES)
             .hint(NOTHING_MATCHES_HINT)

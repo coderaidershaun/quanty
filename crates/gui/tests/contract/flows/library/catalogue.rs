@@ -1,6 +1,6 @@
 //! The Library tab lists each media on a shelf, shows the page of the open media or document,
-//! copies the id of a document, opens it to read, has no Delete for the whole group of documents
-//! with no media, and says what no sample shows.
+//! copies the id of a document, opens it in a reader, has no Delete for the whole group of
+//! documents with no media, and says what no sample shows.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -24,8 +24,7 @@ use super::{
 };
 use crate::flows::recording::Seen;
 use crate::flows::{
-    COMMAND, Window, are_stacked_in_order, click, copied_by, has, is_open_tab, node, press, says,
-    shared,
+    Window, are_stacked_in_order, click, copied_by, has, is_open_tab, node, press, says, shared,
 };
 
 /// Lists one catalogue that the test wrote by hand and refuses every other command.
@@ -188,6 +187,26 @@ fn each_media_row_opens_its_page_and_unfolds_its_documents(harness: &mut Window)
                 );
             }
         }
+        let names: Vec<String> = media
+            .documents
+            .iter()
+            .map(|document| document.name().label())
+            .collect();
+        click(harness, Role::Button, title);
+        assert!(is_open_row(harness, title), "`{title}` stays the open row");
+        for name in &names {
+            assert!(
+                !has(harness, Role::Button, name),
+                "pressing the open media again folds `{name}` away"
+            );
+        }
+        click(harness, Role::Button, title);
+        for name in &names {
+            assert!(
+                has(harness, Role::Button, name),
+                "pressing it once more unfolds `{name}`"
+            );
+        }
     }
     assert!(
         are_stacked_in_order(
@@ -240,23 +259,43 @@ fn each_document_row_opens_its_page(harness: &mut Window) {
     click(harness, Role::Tab, "Library");
 }
 
-/// The view that is shown stays when another document opens.
+/// The views of a document open on the Insights, in the order of the strip with no Overview, and
+/// the view that is shown stays when another document opens.
 fn the_shown_view_stays_when_another_document_opens(harness: &mut Window) {
     open_document(harness, BOOK, SAMPLE_PAGES);
     assert!(
-        is_open_tab(harness, "Overview"),
-        "the Overview is the first view"
+        is_open_tab(harness, "Insights"),
+        "the Insights is the first view"
     );
-    click(harness, Role::Tab, DocumentView::Insights.label());
-    assert_eq!(shared(harness).shelf.view, DocumentView::Insights);
+    assert!(!has(harness, Role::Tab, "Overview"), "there is no Overview");
+    let strip = [
+        "Insights",
+        "Takeaways",
+        "Cheat sheet",
+        "Code",
+        "Formulas",
+        "Figures",
+        "Tables",
+        "Concepts",
+    ];
+    let lefts: Vec<f32> = strip
+        .iter()
+        .map(|name| node(harness, Role::Tab, name).rect().left())
+        .collect();
+    assert!(
+        lefts.is_sorted_by(|before, after| before < after),
+        "the strip lists {strip:?} from left to right"
+    );
+    click(harness, Role::Tab, "Takeaways");
+    assert_eq!(shared(harness).shelf.view, DocumentView::Takeaways);
 
     open_document(harness, NOTES, BLACK_SCHOLES);
     assert!(
-        is_open_tab(harness, DocumentView::Insights.label()),
+        is_open_tab(harness, "Takeaways"),
         "the view that was shown stays when another document opens"
     );
-    click(harness, Role::Tab, DocumentView::Overview.label());
-    assert_eq!(shared(harness).shelf.view, DocumentView::Overview);
+    click(harness, Role::Tab, DocumentView::Insights.label());
+    assert_eq!(shared(harness).shelf.view, DocumentView::Insights);
 }
 
 fn a_saved_book_with_no_document_is_a_row_with_none_and_says_so(harness: &mut Window) {
@@ -312,20 +351,40 @@ fn copy_id_puts_the_open_document_id_on_the_clipboard(harness: &mut Window, firs
     assert_eq!(texts, [first.id.0.to_string()]);
 }
 
-fn read_opens_the_chapter_in_the_source_panel(harness: &mut Window, seen: &Seen, first: &Document) {
+/// The controls of a document stand above the strip of its views on every view, and Read shows the
+/// Source panel beside the document without leaving the Library tab. Its Close button hides it.
+fn read_opens_the_reader_beside_the_document(harness: &mut Window, seen: &Seen, first: &Document) {
     let loads_of_first = |seen: &Seen| {
         seen.count(
             |command| matches!(command, Command::LoadPage { doc, page: 1, .. } if *doc == first.id),
         )
     };
     assert_eq!(loads_of_first(seen), 0);
+    let delete = format!("Delete document {}", first.name().label());
+    for view in DocumentView::ALL {
+        click(harness, Role::Tab, view.label());
+        let strip_top = node(harness, Role::Tab, view.label()).rect().top();
+        for name in ["Copy id", "Read", "Edit tags", &delete] {
+            let bottom = node(harness, Role::Button, name).rect().bottom();
+            assert!(
+                bottom < strip_top,
+                "`{name}` ends at {bottom}, above the strip that starts at {strip_top}, on the {view:?} view"
+            );
+        }
+    }
+    click(harness, Role::Tab, DocumentView::Insights.label());
+
     let read = harness
         .query_all_by_role_and_label(Role::Button, "Read")
         .find(|button| !button.accesskit_node().is_disabled())
         .expect("a Read button is on");
     read.click();
     testkit::settle(harness);
-    assert_eq!(shared(harness).tab, Tab::Ask);
+    assert_eq!(
+        shared(harness).tab,
+        Tab::Library,
+        "Read stays on the Library"
+    );
     let target = SourceTarget {
         doc: first.id,
         page: 1,
@@ -333,18 +392,20 @@ fn read_opens_the_chapter_in_the_source_panel(harness: &mut Window, seen: &Seen,
     };
     assert_eq!(shared(harness).source.target, Some(target));
     assert_eq!(loads_of_first(seen), 1);
+    assert!(shared(harness).shelf.is_reading);
+    assert!(
+        has(harness, Role::Label, "Source in Context"),
+        "the reader is drawn"
+    );
 
-    press(harness, COMMAND, egui::Key::Num2);
-    assert_eq!(
-        shared(harness).tab,
-        Tab::Library,
-        "⌘2 opens the Library tab"
+    click(harness, Role::Button, "Close reader");
+    assert!(!shared(harness).shelf.is_reading);
+    assert!(
+        !has(harness, Role::Button, "Close reader"),
+        "the reader is gone"
     );
-    assert_eq!(
-        shared(harness).shelf.open,
-        Some(Open::Document(first.id)),
-        "the Library shows what was open before"
-    );
+    assert_eq!(shared(harness).tab, Tab::Library);
+    assert_eq!(shared(harness).shelf.open, Some(Open::Document(first.id)));
     assert!(is_open_row(harness, &first.name().label()));
 }
 
@@ -358,7 +419,7 @@ fn the_library_shows_each_media_on_the_shelf_and_each_document_on_its_page() {
     a_saved_book_with_no_document_is_a_row_with_none_and_says_so(&mut harness);
     let first = first_readable(&harness);
     copy_id_puts_the_open_document_id_on_the_clipboard(&mut harness, &first);
-    read_opens_the_chapter_in_the_source_panel(&mut harness, &seen, &first);
+    read_opens_the_reader_beside_the_document(&mut harness, &seen, &first);
 }
 
 #[test]

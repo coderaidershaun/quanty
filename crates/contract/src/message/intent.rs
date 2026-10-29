@@ -112,9 +112,13 @@ pub enum Intent {
         piece: Option<u32>,
     },
     TurnPage(i32),
+    /// Opens the reader beside the page of the document on the Library tab, on its first page.
+    OpenReader(DocId),
+    /// Closes the reader of the Library tab.
+    CloseReader,
     ReloadSource,
     /// Opens the Library tab on the page of that media. `None` is the group of documents with no
-    /// media.
+    /// media. For the media that is open already, it folds or unfolds its documents on the shelf.
     OpenMedia {
         title: Option<String>,
     },

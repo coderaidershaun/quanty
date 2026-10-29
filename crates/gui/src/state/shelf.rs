@@ -18,6 +18,12 @@ pub struct Shelf {
     pub open: Option<Open>,
     /// Kept when another document opens, so a person can read one view of chapter after chapter.
     pub view: DocumentView,
+    // SMELL: `is_folded` only means something while a media is open, and `is_reading` only while a
+    // document is open, so `open_item` must reset both. Each belongs inside its variant of `Open`.
+    /// True while the open media's documents are hidden because its row was pressed again.
+    pub is_folded: bool,
+    /// True while the reader shows beside the open document.
+    pub is_reading: bool,
     /// True only while nothing is open because Back closed the last open item. A catalogue read
     /// meanwhile leaves the shelf empty and does not open the first media.
     is_left_empty: bool,
@@ -53,9 +59,16 @@ fn is_media_listed(title: Option<&str>, catalogue: &Catalogue) -> bool {
 // The intents set the tab themselves and do not use `open_tab`, so a maximised panel of Ask stays
 // maximised, as it does when a source is opened.
 impl Shared {
+    /// Pressing the row of the open media again folds its documents away, and pressing it once
+    /// more unfolds them.
     pub(super) fn open_media(&mut self, title: Option<String>, effects: &mut Vec<Effect>) {
         self.tab = Tab::Library;
-        self.open_item(Some(Open::Media { title }), effects);
+        let media = Some(Open::Media { title });
+        if self.shelf.open == media {
+            self.shelf.is_folded = !self.shelf.is_folded;
+            return;
+        }
+        self.open_item(media, effects);
     }
 
     pub(super) fn open_document(&mut self, doc: DocId, effects: &mut Vec<Effect>) {
@@ -80,16 +93,23 @@ impl Shared {
         }
         self.forget_contents(effects);
         self.forget_insights(effects);
+        self.shelf.is_folded = false;
+        self.shelf.is_reading = false;
         if item.is_some() {
             self.shelf.is_left_empty = false;
         }
         self.shelf.open = item;
     }
 
-    /// The Library's step of Back: a document gives way to its media, and a media to a shelf with
-    /// nothing open, which a catalogue that is read later does not fill again. A document that the
-    /// catalogue does not list has no media to go back to. Returns false when nothing was open.
+    /// The Library's step of Back: an open reader closes first, then a document gives way to its
+    /// media, and a media to a shelf with nothing open, which a catalogue that is read later does
+    /// not fill again. A document that the catalogue does not list has no media to go back to.
+    /// Returns false when nothing was open.
     pub(super) fn back_on_shelf(&mut self, effects: &mut Vec<Effect>) -> bool {
+        if self.shelf.is_reading {
+            self.shelf.is_reading = false;
+            return true;
+        }
         let Some(open) = &self.shelf.open else {
             return false;
         };

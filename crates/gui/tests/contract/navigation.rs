@@ -2,9 +2,9 @@
 
 use contract::{
     AskDraft, AskView, Catalogue, Command, DocId, Document, DocumentView, Effect, Event, Intent,
-    Media, Panel, Tab,
+    Media, PageView, Panel, Tab,
 };
-use gui::state::{Open, Shared};
+use gui::state::{Open, Shared, SourceTarget};
 use gui::testkit::{self, sample};
 use uuid::Uuid;
 
@@ -70,6 +70,7 @@ fn the_ask_views_and_back_follow_their_rules() {
     new_asks_and_focus_return_to_the_answer(&mut shared);
     choosing_a_result_shows_the_source();
     back_undoes_one_step_at_a_time();
+    the_reader_keeps_the_library_and_back_closes_it();
 }
 
 fn new_asks_and_focus_return_to_the_answer(shared: &mut Shared) {
@@ -291,4 +292,68 @@ fn back_undoes_one_step_at_a_time() {
     assert_eq!(shared.ask_view, AskView::Source);
     apply(&mut shared, Intent::Back);
     assert_eq!((shared.tab, shared.ask_view), (Tab::Ask, AskView::Answer));
+}
+
+/// The reader of the Library stays on the Library tab, also for a page that is opened or turned
+/// while it shows, and Back closes it before it goes up the shelf. With the reader closed, a
+/// turned page shows on the Ask tab.
+fn the_reader_keeps_the_library_and_back_closes_it() {
+    let (mut shared, doc) = answered_with_a_library();
+    apply(&mut shared, Intent::OpenDocument(doc));
+    apply(&mut shared, Intent::OpenReader(doc));
+    assert_eq!(shared.tab, Tab::Library, "the reader is on the Library tab");
+    assert!(shared.shelf.is_reading);
+    let page = |page| {
+        Some(SourceTarget {
+            doc,
+            page,
+            piece: None,
+        })
+    };
+    assert_eq!(shared.source.target, page(1));
+    apply(
+        &mut shared,
+        Intent::OpenSource {
+            doc,
+            page: 3,
+            piece: None,
+        },
+    );
+    assert_eq!(shared.tab, Tab::Library, "a page opens in the reader");
+    assert_eq!(shared.source.target, page(3));
+    let request = shared.source.pending.expect("page 3 is asked for");
+    let shown = PageView {
+        doc,
+        page: 3,
+        page_count: 9,
+        ..PageView::default()
+    };
+    shared.apply_event(
+        Event::Page {
+            request,
+            result: Ok(shown),
+        },
+        &mut Vec::new(),
+    );
+    apply(&mut shared, Intent::TurnPage(1));
+    assert_eq!(shared.tab, Tab::Library, "a page turns in the reader");
+    assert_eq!(shared.source.target, page(4));
+    apply(&mut shared, Intent::Back);
+    assert!(!shared.shelf.is_reading, "Back closes the reader first");
+    assert_eq!(shared.shelf.open, Some(Open::Document(doc)));
+    apply(&mut shared, Intent::OpenReader(doc));
+    apply(&mut shared, Intent::CloseReader);
+    assert!(!shared.shelf.is_reading);
+    assert_eq!(shared.tab, Tab::Library);
+    apply(&mut shared, Intent::Back);
+    assert!(
+        matches!(shared.shelf.open, Some(Open::Media { .. })),
+        "the next Back goes up to the media"
+    );
+    apply(&mut shared, Intent::TurnPage(1));
+    assert_eq!(
+        shared.tab,
+        Tab::Ask,
+        "with the reader closed a page turns on the Ask tab"
+    );
 }

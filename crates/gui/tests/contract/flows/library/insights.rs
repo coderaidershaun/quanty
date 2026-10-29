@@ -1,6 +1,6 @@
-//! The Insights view of a document shows the insights, takeaways and cheat sheet that were saved
-//! for it, opens the page an insight rests on, and says what it finds when there are none or the
-//! file cannot be read.
+//! The Insights, Takeaways and Cheat sheet views of a document show what was saved for them, the
+//! Insights view opens the page an insight rests on, and the views say what they find when there
+//! are none or the file cannot be read.
 
 use backend::fake::Fake;
 use backend::{Handler, Reply};
@@ -10,9 +10,11 @@ use gui::app::layout::DEFAULT_WINDOW;
 use gui::state::SourceTarget;
 use gui::testkit;
 
-use super::{BLACK_SCHOLES, BOOK, NOTES, SAMPLE_PAGES, documents_of, open_document};
+use super::{
+    BLACK_SCHOLES, BOOK, NOTES, SAMPLE_PAGES, documents_of, open_document, open_row_while_busy,
+};
 use crate::flows::recording::{self, Seen};
-use crate::flows::{Window, click, copied_by, has, node, says, shared};
+use crate::flows::{Window, click, copied_by, has, is_open_tab, node, says, shared};
 
 /// The fake, except that a read of insights is never answered.
 struct NeverAnswersInsights(Fake);
@@ -37,24 +39,43 @@ fn reads_of_insights(seen: &Seen) -> usize {
 }
 
 #[test]
-fn the_insights_view_shows_the_saved_insights_takeaways_and_cheat_sheet_and_a_page_chip_opens_its_page()
- {
+fn the_insights_takeaways_and_cheat_sheet_views_show_what_was_saved_and_a_page_chip_opens_its_page()
+{
     let (mut harness, seen) = open_library("black-scholes");
     open_document(&mut harness, NOTES, BLACK_SCHOLES);
-    click(&mut harness, Role::Tab, "Insights");
+    assert!(
+        is_open_tab(&harness, "Insights"),
+        "a document opens on the Insights"
+    );
 
-    assert!(says(&harness, "Written by sonnet"));
-    for title in ["Insights", "Takeaways", "Cheat sheet"] {
-        assert!(has(&harness, Role::Label, title), "the section `{title}`");
+    let views = [
+        ("Insights", "drops out of the price"),
+        ("Takeaways", "so its price can never become negative"),
+        ("Cheat sheet", "Assumptions"),
+    ];
+    for (tab, phrase) in views {
+        click(&mut harness, Role::Tab, tab);
+        assert!(
+            says(&harness, "Written by sonnet"),
+            "`{tab}` names the model"
+        );
+        assert!(says(&harness, phrase), "`{tab}` says `{phrase}`");
+        for (other, other_phrase) in views {
+            if other != tab {
+                assert!(
+                    !says(&harness, other_phrase),
+                    "`{tab}` does not say `{other_phrase}` of `{other}`"
+                );
+            }
+        }
+        let has_chips = has(&harness, Role::Button, "Page 2");
+        assert_eq!(
+            has_chips,
+            tab == "Insights",
+            "only the Insights has page chips"
+        );
     }
-    for phrase in [
-        "drops out of the price",
-        "so its price can never become negative",
-        "Assumptions",
-        "the strike",
-    ] {
-        assert!(says(&harness, phrase), "the view says `{phrase}`");
-    }
+    click(&mut harness, Role::Tab, "Insights");
     for chip in ["Page 2", "Page 3"] {
         assert!(has(&harness, Role::Button, chip), "the chip `{chip}`");
     }
@@ -71,7 +92,11 @@ fn the_insights_view_shows_the_saved_insights_takeaways_and_cheat_sheet_and_a_pa
             _ => None,
         })
         .collect();
-    assert_eq!(reads, [(chapter.id, chapter.folder.clone())]);
+    assert_eq!(
+        reads,
+        [(chapter.id, chapter.folder.clone())],
+        "the three views share one read"
+    );
 
     click(&mut harness, Role::Button, "Page 2");
     assert_eq!(shared(&harness).tab, Tab::Ask);
@@ -132,10 +157,10 @@ fn each_state_of_the_insights_view_says_what_it_is() {
         recording::open_with("black-scholes", DEFAULT_WINDOW, NeverAnswersInsights);
     testkit::settle(&mut harness);
     click(&mut harness, Role::Tab, "Library");
-    open_document(&mut harness, NOTES, BLACK_SCHOLES);
-    // The read never ends, so the app is never at rest: `click` would wait for ever.
-    node(&harness, Role::Tab, "Insights").click();
-    harness.run_ok();
+    // The Insights view is the first one shown. Its read never ends, so the app is never at rest:
+    // `click` would wait for ever.
+    open_row_while_busy(&mut harness, NOTES);
+    open_row_while_busy(&mut harness, BLACK_SCHOLES);
     assert!(says(&harness, "Reading the insights"));
     assert!(
         !has(&harness, Role::Button, "Export"),

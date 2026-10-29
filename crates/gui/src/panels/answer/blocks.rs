@@ -57,7 +57,7 @@ fn blocks(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, answer: &Answer) {
                 heights.show(ui, index, |ui| {
                     narrow_to_measure(ui);
                     ui.add_space(space::SM);
-                    ui.label(TextRole::Heading.rich(ui, text));
+                    ui.label(TextRole::Subheading.rich(ui, text));
                 });
             }
             AnswerBlock::Paragraph { text, cites } => {

@@ -1,4 +1,5 @@
-//! The page of the chapter that an answer stands on, with its pieces and concepts.
+//! The page of the chapter that an answer stands on, or that the reader of the Library shows,
+//! with its pieces and concepts.
 
 mod cards;
 mod concepts;
@@ -42,14 +43,31 @@ pub struct Local {
     index: tabs::PieceIndex,
 }
 
+/// Where the panel is drawn. The Ask tab keeps it beside the answer, with a button that gives it
+/// the whole tab, and the Library keeps it beside a document, with a button that closes it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Host {
+    Ask,
+    Library,
+}
+
 pub fn show(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
+    draw(ui, local, cx, Host::Ask);
+}
+
+/// The panel as the Library draws it, in the room the caller gives it.
+pub fn show_reader(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>) {
+    draw(ui, local, cx, Host::Library);
+}
+
+fn draw(ui: &mut egui::Ui, local: &mut Local, cx: &mut PanelCx<'_>, host: Host) {
     let shared = cx.shared;
     local.follow(shared);
     panel_frame(Surface::Sheet).show(ui, |ui| {
         ui.set_min_size(ui.available_size());
         ui.spacing_mut().item_spacing = egui::vec2(space::SM, space::SM);
         let width = PanelWidth::of(ui, NARROW_BELOW);
-        header::show(ui, &mut local.header, cx, width);
+        header::show(ui, &mut local.header, cx, width, host);
         let is_anything_open = !matches!(shared.source.page, Loadable::Idle);
         let list = tabs::tab_list(&shared.source, &local.index);
         let has_failed_concepts = matches!(shared.source.concepts, Loadable::Failed(_));

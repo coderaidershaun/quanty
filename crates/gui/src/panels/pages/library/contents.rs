@@ -53,9 +53,10 @@ fn nothing_of(view: DocumentView) -> (Icon, &'static str) {
         DocumentView::Figures => (Icon::FIGURE, "No figures in this document"),
         DocumentView::Tables => (Icon::TABLE, "No tables in this document"),
         DocumentView::Code => (Icon::CODE, "No code listings in this document"),
-        DocumentView::Overview | DocumentView::Insights | DocumentView::Concepts => {
-            (Icon::DOCUMENT, view.label())
-        }
+        DocumentView::Insights
+        | DocumentView::Takeaways
+        | DocumentView::CheatSheet
+        | DocumentView::Concepts => (Icon::DOCUMENT, view.label()),
     }
 }
 

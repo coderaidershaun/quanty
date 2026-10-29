@@ -1,6 +1,6 @@
-//! The Insights view of a document: the insights, takeaways and cheat sheet that were saved for
-//! it, with the page each insight rests on and the export of all three, or what is said while
-//! there are none.
+//! The Insights, Takeaways and Cheat sheet views of a document: the part of what was saved for it
+//! that the view names, with the page each insight rests on and the export of all three, or what
+//! is said while there are none.
 
 use eframe::egui;
 
@@ -24,11 +24,12 @@ const READING: &str = "Reading the insights";
 const UNREADABLE: &str = "The insights could not be read";
 const NOT_WRITTEN: &str = "No insights yet";
 const EXPORT: &str = "Export";
-const INSIGHTS: &str = "Insights";
-const TAKEAWAYS: &str = "Takeaways";
-const CHEAT_SHEET: &str = "Cheat sheet";
+const NO_INSIGHTS: &str = "No insights";
+const NO_TAKEAWAYS: &str = "No takeaways";
+const NO_CHEAT_SHEET: &str = "No cheat sheet";
 
-pub(super) fn show(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
+/// `part` is the view that is shown: `Insights`, `Takeaways` or `CheatSheet`.
+pub(super) fn show(ui: &mut egui::Ui, part: DocumentView, cx: &mut PanelCx<'_>) {
     let shared = cx.shared;
     let Some(doc) = shared.shelf.document() else {
         return;
@@ -47,10 +48,10 @@ pub(super) fn show(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
     let slot = &shared.insights;
     match &slot.saved {
         Loadable::Ready(Some(saved)) if slot.doc == Some(doc) => {
-            saved_part(ui, cx, catalogue, doc, saved);
+            saved_part(ui, cx, catalogue, doc, saved, part);
         }
         Loadable::Ready(None) if slot.doc == Some(doc) => not_written(ui, cx, doc),
-        Loadable::Failed(failure) if slot.doc == Some(doc) => failed(ui, cx, failure),
+        Loadable::Failed(failure) if slot.doc == Some(doc) => failed(ui, cx, failure, part),
         _ => {
             Placeholder::loading(READING).show(ui);
         }
@@ -72,15 +73,14 @@ fn not_written(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, doc: DocId) {
     }
 }
 
-fn failed(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, failure: &Failure) {
+fn failed(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, failure: &Failure, part: DocumentView) {
     let placeholder = Placeholder::error(UNREADABLE)
         .hint(&failure.hint)
         .action(TRY_AGAIN)
         .action_size(width(ui).control_size())
         .show(ui);
     if placeholder.action_clicked {
-        cx.intents
-            .push(Intent::ShowDocumentView(DocumentView::Insights));
+        cx.intents.push(Intent::ShowDocumentView(part));
     }
 }
 
@@ -90,6 +90,7 @@ fn saved_part(
     catalogue: &Catalogue,
     doc: DocId,
     saved: &ChapterInsights,
+    part: DocumentView,
 ) {
     let written_by = TextRole::Small.rich(ui, format!("Written by {}", saved.model));
     let panel = width(ui);
@@ -109,29 +110,43 @@ fn saved_part(
     exporting::strip(ui, cx, ExportPlace::Insights { doc });
     ui.add_space(space::SM);
     egui::ScrollArea::vertical()
-        .id_salt(("insights", doc))
+        .id_salt(("insights", doc, part))
         .auto_shrink([false, true])
-        .show(ui, |ui| {
-            if !saved.insights.is_empty() {
-                section_title(ui, INSIGHTS);
-                for insight in &saved.insights {
-                    insight_paragraph(ui, cx, doc, insight);
-                }
-            }
-            if !saved.takeaways.is_empty() {
-                section_title(ui, TAKEAWAYS);
-                let lines: Vec<String> = saved
-                    .takeaways
-                    .iter()
-                    .map(|takeaway| format!("- {takeaway}"))
-                    .collect();
-                blocks(ui, cx, &dollar_blocks(&lines.join("\n")));
-            }
-            if !saved.cheat_sheet.trim().is_empty() {
-                section_title(ui, CHEAT_SHEET);
-                blocks(ui, cx, &dollar_blocks(&saved.cheat_sheet));
-            }
+        .show(ui, |ui| match part {
+            DocumentView::Takeaways => takeaways(ui, cx, &saved.takeaways),
+            DocumentView::CheatSheet => cheat_sheet(ui, cx, &saved.cheat_sheet),
+            _ => insights(ui, cx, doc, &saved.insights),
         });
+}
+
+fn insights(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, doc: DocId, insights: &[Insight]) {
+    if insights.is_empty() {
+        Placeholder::empty(Icon::INSIGHT, NO_INSIGHTS).show(ui);
+        return;
+    }
+    for insight in insights {
+        insight_paragraph(ui, cx, doc, insight);
+    }
+}
+
+fn takeaways(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, takeaways: &[String]) {
+    if takeaways.is_empty() {
+        Placeholder::empty(Icon::INSIGHT, NO_TAKEAWAYS).show(ui);
+        return;
+    }
+    let lines: Vec<String> = takeaways
+        .iter()
+        .map(|takeaway| format!("- {takeaway}"))
+        .collect();
+    blocks(ui, cx, &dollar_blocks(&lines.join("\n")));
+}
+
+fn cheat_sheet(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, cheat_sheet: &str) {
+    if cheat_sheet.trim().is_empty() {
+        Placeholder::empty(Icon::INSIGHT, NO_CHEAT_SHEET).show(ui);
+        return;
+    }
+    blocks(ui, cx, &dollar_blocks(cheat_sheet));
 }
 
 fn export_menu(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, catalogue: &Catalogue, size: ControlSize) {
@@ -148,12 +163,6 @@ fn export_menu(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, catalogue: &Catalogue, s
         });
 }
 
-fn section_title(ui: &mut egui::Ui, title: &str) {
-    ui.add_space(space::LG);
-    ui.label(TextRole::Heading.rich(ui, title));
-    ui.add_space(space::SM);
-}
-
 /// One insight, then a chip for each page it rests on.
 fn insight_paragraph(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, doc: DocId, insight: &Insight) {
     blocks(ui, cx, &dollar_blocks(&insight.text));
@@ -162,7 +171,7 @@ fn insight_paragraph(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, doc: DocId, insigh
     ui.horizontal_wrapped(|ui| {
         for page in &insight.pages {
             let chip = ui.add(Chip::plain(&format!("Page {page}")).min_height(chip_height));
-            let hover = format!("Open page {page} in the Source panel of the Ask tab");
+            let hover = format!("Open page {page} in the Source panel");
             if chip.on_hover_text(hover).clicked() {
                 cx.intents.push(Intent::OpenSource {
                     doc,
@@ -182,7 +191,7 @@ fn blocks(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, blocks: &[DollarBlock]) {
         }
         let clicked = match block {
             DollarBlock::Heading(words) => {
-                rich_text::show(ui, cx.media, &RichText::new(words, TextRole::BodyStrong))
+                rich_text::show(ui, cx.media, &RichText::new(words, TextRole::Subheading))
             }
             DollarBlock::Text(text) => {
                 rich_text::show(ui, cx.media, &RichText::new(text, TextRole::Body))

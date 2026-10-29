@@ -102,13 +102,11 @@ impl Shared {
             Intent::StepResult(delta) => self.step_result(delta, effects),
             Intent::FocusConcept(concept) => self.ask.focused_concept = concept,
             Intent::OpenSource { doc, page, piece } => {
-                // Choosing another page inside the Source view keeps where it was opened from.
-                let from_library = self.tab == Tab::Library || self.returns_to_library();
-                self.open_source(doc, page, piece, effects);
-                self.show_ask_view(AskView::Source);
-                self.source_from_library = from_library;
+                self.show_source(doc, page, piece, effects);
             }
             Intent::TurnPage(delta) => self.turn_page(delta, effects),
+            Intent::OpenReader(doc) => self.open_reader(doc, effects),
+            Intent::CloseReader => self.shelf.is_reading = false,
             Intent::ReloadSource => self.reload_source(effects),
             Intent::OpenMedia { title } => self.open_media(title, effects),
             Intent::OpenDocument(doc) => self.open_document(doc, effects),
@@ -334,13 +332,13 @@ impl Shared {
     }
 
     /// Whether the Source view that shows is the one the Library opened.
-    fn returns_to_library(&self) -> bool {
+    pub(super) fn returns_to_library(&self) -> bool {
         self.tab == Tab::Ask && self.ask_view == AskView::Source && self.source_from_library
     }
 
     /// Any view other than the Answer also becomes the side view. A view that is chosen is not the
     /// Library's any more.
-    fn show_ask_view(&mut self, view: AskView) {
+    pub(super) fn show_ask_view(&mut self, view: AskView) {
         self.ask_view = view;
         self.source_from_library = false;
         if AskView::SIDE.contains(&view) {

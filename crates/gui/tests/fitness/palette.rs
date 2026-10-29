@@ -170,6 +170,7 @@ fn pairs(palette: &Palette) -> Vec<Pair> {
     for (name, color) in [
         ("text", palette.text),
         ("text_heading", palette.text_heading),
+        ("text_subheading", palette.text_subheading),
         ("text_secondary", palette.text_secondary),
         ("text_muted", palette.text_muted),
     ] {

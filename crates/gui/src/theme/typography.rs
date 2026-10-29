@@ -1,4 +1,4 @@
-//! The ten text roles of the app: family, size, line height, colour and letter spacing of each.
+//! The eleven text roles of the app: family, size, line height, colour and letter spacing of each.
 
 use std::sync::Arc;
 
@@ -22,6 +22,9 @@ const CAPS_SPACING: f32 = 1.1;
 pub enum TextRole {
     Title,
     Heading,
+    /// A heading inside content, in the accent colour of the theme so that it stands apart from
+    /// the body text around it.
+    Subheading,
     Body,
     BodyStrong,
     Caption,
@@ -38,7 +41,7 @@ impl TextRole {
     const fn size(self) -> f32 {
         match self {
             TextRole::Title => 24.0,
-            TextRole::Heading => 17.0,
+            TextRole::Heading | TextRole::Subheading => 17.0,
             TextRole::Body | TextRole::BodyStrong => 16.0,
             TextRole::Caption | TextRole::Label | TextRole::Mono => 13.0,
             TextRole::Small => 12.0,
@@ -49,6 +52,7 @@ impl TextRole {
     pub const fn color(self, palette: &Palette) -> Color32 {
         match self {
             TextRole::Title | TextRole::Heading => palette.text_heading,
+            TextRole::Subheading => palette.text_subheading,
             TextRole::Caption | TextRole::Small | TextRole::Caps => palette.text_secondary,
             TextRole::Body
             | TextRole::BodyStrong
@@ -63,7 +67,7 @@ impl TextRole {
             TextRole::Title => SERIF_DISPLAY.clone(),
             TextRole::Heading | TextRole::Caption => SERIF_ITALIC.clone(),
             TextRole::Body => SERIF.clone(),
-            TextRole::BodyStrong => SERIF_SEMIBOLD.clone(),
+            TextRole::BodyStrong | TextRole::Subheading => SERIF_SEMIBOLD.clone(),
             TextRole::Label | TextRole::Caps => SANS_MEDIUM.clone(),
             TextRole::Small => FontFamily::Proportional,
             TextRole::Micro => SANS_SEMIBOLD.clone(),
@@ -76,7 +80,9 @@ impl TextRole {
     pub const fn line_height(self) -> f32 {
         match self {
             TextRole::Title => 30.0,
-            TextRole::Heading | TextRole::Body | TextRole::BodyStrong => 24.0,
+            TextRole::Heading | TextRole::Subheading | TextRole::Body | TextRole::BodyStrong => {
+                24.0
+            }
             TextRole::Caption | TextRole::Label | TextRole::Mono => 18.0,
             TextRole::Small => 16.0,
             TextRole::Micro | TextRole::Caps => 14.0,
@@ -130,6 +136,7 @@ impl TextRole {
         let family = match self {
             TextRole::Title
             | TextRole::Heading
+            | TextRole::Subheading
             | TextRole::Body
             | TextRole::BodyStrong
             | TextRole::Caption => SERIF_SEMIBOLD.clone(),
@@ -147,5 +154,19 @@ impl TextRole {
 
     pub const fn math_size(self) -> f32 {
         self.size() * INLINE_MATH_SCALE
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn content_headings_stand_apart_from_body_text_in_both_palettes() {
+        for palette in [&Palette::LIGHT, &Palette::DARK] {
+            let heading = TextRole::Subheading.color(palette);
+            assert_ne!(heading, TextRole::Body.color(palette));
+            assert_ne!(heading, palette.text_heading);
+        }
     }
 }

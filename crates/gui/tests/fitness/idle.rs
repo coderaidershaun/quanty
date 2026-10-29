@@ -40,7 +40,7 @@ fn press_the_first_delete_button(harness: &mut Window) -> bool {
 
 /// Shows every view of the first document that has a folder, and the Code view of the last one,
 /// so that a view which repaints while it reads or draws its chapter is found. Ends on the
-/// Overview, where the Delete of that document is.
+/// Insights, where the Delete of that document is, as on every view.
 fn check_the_views_of_the_documents(harness: &mut Window, scene: &str) {
     let catalogue = harness.state().shared().library.catalogue.ready();
     let documents: Vec<DocId> = catalogue
@@ -54,7 +54,6 @@ fn check_the_views_of_the_documents(harness: &mut Window, scene: &str) {
     };
     let shown = DocumentView::ALL
         .into_iter()
-        .skip(1)
         .map(|view| (first, view))
         .chain([(last, DocumentView::Code)]);
     for (doc, view) in shown {
@@ -71,7 +70,7 @@ fn check_the_views_of_the_documents(harness: &mut Window, scene: &str) {
     }
     harness
         .state_mut()
-        .push(Intent::ShowDocumentView(DocumentView::Overview));
+        .push(Intent::ShowDocumentView(DocumentView::Insights));
     testkit::settle(harness);
 }
 

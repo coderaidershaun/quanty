@@ -98,8 +98,12 @@ fn view() -> egui::Rect {
     panels(DEFAULT_WINDOW).page.shrink(VIEW_INSET)
 }
 
-/// Presses the row of a media on the shelf, so that its page shows and its documents unfold.
+/// Presses the row of a media on the shelf, so that its page shows and its documents unfold. A
+/// media that is open and unfolded is left as it is, because pressing its row would fold it.
 fn open_media(harness: &mut Window, title: &str) {
+    if is_open_row(harness, title) && !shared(harness).shelf.is_folded {
+        return;
+    }
     click(harness, Role::Button, title);
 }
 
@@ -120,6 +124,9 @@ fn is_open_row(harness: &Window, label: &str) -> bool {
 /// As a click on a row, for an app that is never at rest: a change on its way or an ingest that
 /// never ends, where `click` would wait for ever.
 fn open_row_while_busy(harness: &mut Window, label: &str) {
+    if is_open_row(harness, label) && !shared(harness).shelf.is_folded {
+        return;
+    }
     node(harness, Role::Button, label).click();
     harness.run_ok();
 }

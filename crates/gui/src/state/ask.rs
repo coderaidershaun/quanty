@@ -334,6 +334,7 @@ impl Shared {
         let (doc, page, piece) = (result.doc, result.page, result.piece);
         self.ask.selected_result = Some(number);
         self.source_from_library = false;
+        self.tab = Tab::Ask;
         self.open_source(doc, page, piece, effects);
     }
 

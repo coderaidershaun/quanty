@@ -2,7 +2,9 @@
 //! the next one loads.
 
 use super::shared::{Shared, push_cancel};
-use contract::{Command, DocId, Effect, Failure, Loadable, PageConcept, PageView, RequestId, Tab};
+use contract::{
+    AskView, Command, DocId, Effect, Failure, Loadable, PageConcept, PageView, RequestId, Tab,
+};
 
 /// What was asked for, which may be a page that has not arrived yet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -25,6 +27,40 @@ pub struct SourceNav {
 }
 
 impl Shared {
+    /// What a request for a page does: it opens in the reader while the Library shows one, and
+    /// else in the Source view of the Ask tab, which Back returns from to the Library if the
+    /// request came from there.
+    pub(super) fn show_source(
+        &mut self,
+        doc: DocId,
+        page: u32,
+        piece: Option<u32>,
+        effects: &mut Vec<Effect>,
+    ) {
+        if self.is_reader_shown() {
+            self.open_source(doc, page, piece, effects);
+            return;
+        }
+        // Choosing another page inside the Source view keeps where it was opened from.
+        let from_library = self.tab == Tab::Library || self.returns_to_library();
+        self.tab = Tab::Ask;
+        self.open_source(doc, page, piece, effects);
+        self.show_ask_view(AskView::Source);
+        self.source_from_library = from_library;
+    }
+
+    /// Opens the reader of the Library on the first page of `doc`.
+    pub(super) fn open_reader(&mut self, doc: DocId, effects: &mut Vec<Effect>) {
+        self.shelf.is_reading = true;
+        self.open_source(doc, 1, None, effects);
+    }
+
+    /// True while the Library shows its reader, where a page that is asked for opens.
+    fn is_reader_shown(&self) -> bool {
+        self.tab == Tab::Library && self.shelf.is_reading
+    }
+
+    /// Asks for the page and leaves the tab as it is, so the caller chooses where it shows.
     pub(super) fn open_source(
         &mut self,
         doc: DocId,
@@ -32,7 +68,6 @@ impl Shared {
         piece: Option<u32>,
         effects: &mut Vec<Effect>,
     ) {
-        self.tab = Tab::Ask;
         self.cues.source_shows += 1;
         let another_document = self.source.target.map(|target| target.doc) != Some(doc);
         let is_shown = self.source.pending.is_none()
@@ -77,6 +112,8 @@ impl Shared {
         }));
     }
 
+    /// The turned page shows in the reader of the Library while it is open, and else on the Ask
+    /// tab, so a shortcut never turns a page that is out of sight.
     pub(super) fn turn_page(&mut self, delta: i32, effects: &mut Vec<Effect>) {
         let (Some(target), Some(shown)) = (self.source.target, self.source.page.ready()) else {
             return;
@@ -87,6 +124,9 @@ impl Shared {
             return;
         };
         if page != target.page {
+            if !self.is_reader_shown() {
+                self.tab = Tab::Ask;
+            }
             self.open_source(target.doc, page, None, effects);
         }
     }

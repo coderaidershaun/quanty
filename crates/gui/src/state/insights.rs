@@ -1,11 +1,12 @@
-//! The saved insights of the open document, as the Insights view reads them.
+//! The saved insights of the open document, as the Insights, Takeaways and Cheat sheet views read
+//! them.
 
 use export::{Format, InsightsSheet, SheetInsight, insights_document};
 
 use super::shared::{Shared, push_cancel};
 use contract::{
-    Catalogue, ChapterInsights, Command, DocId, DocumentView, Effect, ExportPlace, ExportRequest,
-    Failure, Loadable, RequestId,
+    Catalogue, ChapterInsights, Command, DocId, Effect, ExportPlace, ExportRequest, Failure,
+    Loadable, RequestId,
 };
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
@@ -50,13 +51,13 @@ impl Insights {
 }
 
 impl Shared {
-    /// Called when a document opens and when a view is shown. The Insights view reads the saved
-    /// insights of the open document unless the slot holds them or a read of them is on its way,
-    /// so showing the view again reads a file that was missing or could not be read, as after the
-    /// command that writes it has run. What the slot shows stays until the new answer comes. A
-    /// part of a book that gets none is not read.
+    /// Called when a document opens and when a view is shown. The Insights, Takeaways and Cheat
+    /// sheet views read the saved insights of the open document unless the slot holds them or a
+    /// read of them is on its way, so showing a view again reads a file that was missing or could
+    /// not be read, as after the command that writes it has run. What the slot shows stays until
+    /// the new answer comes. A part of a book that gets none is not read.
     pub(super) fn open_view_insights(&mut self, effects: &mut Vec<Effect>) {
-        if self.shelf.view != DocumentView::Insights {
+        if !self.shelf.view.reads_insights() {
             return;
         }
         let Some(doc) = self.shelf.document() else {

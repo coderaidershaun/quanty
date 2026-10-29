@@ -1,5 +1,5 @@
-//! The Overview of a document: its own tags or the form that changes them, its last failure, and
-//! the buttons that act on it.
+//! The controls of a document, drawn above its views: its own tags or the form that changes them,
+//! its last failure, and the buttons that act on it.
 
 use eframe::egui;
 
@@ -24,26 +24,22 @@ pub(super) fn show(
     cx: &mut PanelCx<'_>,
 ) {
     let is_edited = matches!(&local.form, Some(Form::Tags(draft)) if draft.doc == document.id);
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, true])
-        .show(ui, |ui| {
-            match &mut local.form {
-                Some(Form::Tags(draft)) if draft.doc == document.id => {
-                    if tags_form::form(ui, document, draft, cx.shared, cx.intents) {
-                        local.form = None;
-                    }
-                }
-                _ => labels(ui, document),
+    match &mut local.form {
+        Some(Form::Tags(draft)) if draft.doc == document.id => {
+            if tags_form::form(ui, document, draft, cx.shared, cx.intents) {
+                local.form = None;
             }
-            // The failure is said above the buttons, so it is in view with the button that was
-            // pressed. The open form of the tags says a refused save itself.
-            if !is_edited && let Some(failure) = cx.shared.library.failures.get(&document.id) {
-                ui.add_space(space::SM);
-                Notice::error(&failure.hint).show(ui);
-            }
-            ui.add_space(space::SM);
-            buttons(ui, document, is_edited, local, cx);
-        });
+        }
+        _ => labels(ui, document),
+    }
+    // The failure is said above the buttons, so it is in view with the button that was pressed.
+    // The open form of the tags says a refused save itself.
+    if !is_edited && let Some(failure) = cx.shared.library.failures.get(&document.id) {
+        ui.add_space(space::SM);
+        Notice::error(&failure.hint).show(ui);
+    }
+    ui.add_space(space::SM);
+    buttons(ui, document, is_edited, local, cx);
 }
 
 /// The document's own tags. The labels of its media are shown on the media.
@@ -81,11 +77,7 @@ fn buttons(
             .add_enabled(document.folder.is_some(), read)
             .on_disabled_hover_text(READ_DISABLED);
         if read.clicked() {
-            cx.intents.push(Intent::OpenSource {
-                doc: document.id,
-                page: 1,
-                piece: None,
-            });
+            cx.intents.push(Intent::OpenReader(document.id));
         }
         if !is_edited {
             let edit_tags = Button::ghost(EDIT_TAGS).icon(Icon::EDIT).size(size);

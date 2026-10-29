@@ -1,5 +1,5 @@
-//! The page of the open document: its media and name, its facts, the strip of its views, and the
-//! body of the view that is shown.
+//! The page of the open document: its media and name, its facts, the controls that act on it, the
+//! strip of its views, and the body of the view that is shown.
 
 use eframe::egui;
 
@@ -24,12 +24,15 @@ pub(super) fn show(
 ) {
     header(ui, media, document);
     ui.add_space(space::SM);
+    overview::show(ui, document, local, cx);
+    ui.add_space(space::SM);
     strip(ui, document, cx);
     ui.add_space(space::MD);
     let view = cx.shared.shelf.view;
     match view {
-        DocumentView::Overview => overview::show(ui, document, local, cx),
-        DocumentView::Insights => insights::show(ui, cx),
+        DocumentView::Insights | DocumentView::Takeaways | DocumentView::CheatSheet => {
+            insights::show(ui, view, cx);
+        }
         DocumentView::Code
         | DocumentView::Formulas
         | DocumentView::Figures
@@ -104,7 +107,10 @@ fn count_of(view: DocumentView, document: &Document, contents: &Contents) -> Opt
         DocumentView::Formulas => items.formulas,
         DocumentView::Figures => items.figures,
         DocumentView::Tables => items.tables,
-        DocumentView::Overview | DocumentView::Insights | DocumentView::Concepts => return None,
+        DocumentView::Insights
+        | DocumentView::Takeaways
+        | DocumentView::CheatSheet
+        | DocumentView::Concepts => return None,
     };
     Some(usize::try_from(count).unwrap_or(usize::MAX))
 }

@@ -1,6 +1,7 @@
 //! The Library page: the shelf of media on the left, the page of the open media or document on the
-//! right, what is said when there is nothing to list, and the sheet that asks before a delete. In a
-//! room too narrow for both, the shelf and the page take turns at filling it.
+//! right with the reader of a document beside it, what is said when there is nothing to list, and
+//! the sheet that asks before a delete. In a room too narrow for both, the shelf and the page take
+//! turns at filling it.
 
 mod concepts;
 mod contents;
@@ -10,6 +11,7 @@ mod insights;
 mod media;
 mod media_form;
 mod overview;
+mod reader;
 mod shelf;
 mod tags_form;
 
@@ -17,7 +19,7 @@ use eframe::egui;
 
 use crate::panels::labels::{NO_MEDIA, TRY_AGAIN};
 use crate::panels::seam::{column, framed};
-use crate::panels::{PanelCx, PanelWidth};
+use crate::panels::{PanelCx, PanelWidth, source};
 use crate::state::{Library, Open, Shared};
 use crate::theme::{Icon, TextRole, space};
 use crate::widgets::{ControlSize, ListRow, Placeholder};
@@ -33,6 +35,9 @@ const NARROW_SHELF_WIDTH: f32 = 240.0;
 const FULL_SHELF_FROM: f32 = 960.0;
 /// Below this width of the room, the shelf and the page take turns at filling it.
 const BESIDE_FROM: f32 = 720.0;
+/// From this width of the room on, the reader stands beside the page. In a narrower room it takes
+/// the place of the page.
+const READER_BESIDE_FROM: f32 = 1200.0;
 /// A page whose content is narrower than this wraps its rows of buttons and makes the buttons tall
 /// enough for a finger.
 const NARROW_BELOW: f32 = 480.0;
@@ -62,6 +67,8 @@ pub struct Local {
     /// The title of the media whose own page fills a room too narrow for the shelf beside it. It
     /// is dropped as soon as that media is not the open item.
     media_page: Option<String>,
+    /// The Source panel as the reader shows it, with its own zoom and tab.
+    reader: source::Local,
 }
 
 #[derive(Debug)]
@@ -203,13 +210,20 @@ enum Place {
     Alone,
 }
 
-/// Two sheets that fill the room: the shelf, and beside it the page of what is open. A room too
-/// narrow for both is filled by one of them.
+/// Two sheets that fill the room: the shelf, and beside it the page of what is open. A reader that
+/// is open stands beside the page, or takes its place in a room that is too narrow for both. A room
+/// too narrow for the shelf and the page is filled by one of them.
 fn panes(ui: &mut egui::Ui, catalogue: &Catalogue, local: &mut Local, cx: &mut PanelCx<'_>) {
     let room = ui.max_rect();
     let open = opened(catalogue, cx.shared.shelf.open.as_ref());
+    let is_reading = cx.shared.shelf.is_reading && matches!(open, Some(Opened::Document(..)));
     if room.width() < BESIDE_FROM {
-        one_at_a_time(ui, catalogue, open, local, cx);
+        match &open {
+            Some(Opened::Document(_, document)) if is_reading => {
+                reader::show_alone(ui, room, &document.name().label(), local, cx);
+            }
+            _ => one_at_a_time(ui, catalogue, open, local, cx),
+        }
         return;
     }
     let (fit, shelf_width) = if room.width() >= FULL_SHELF_FROM {
@@ -219,7 +233,13 @@ fn panes(ui: &mut egui::Ui, catalogue: &Catalogue, local: &mut Local, cx: &mut P
     };
     let shelf = egui::Rect::from_min_size(room.min, egui::vec2(shelf_width, room.height()));
     let page_left = shelf.right() + space::MD;
-    let page_width = (room.right() - page_left).clamp(0.0, PAGE_WIDTH);
+    let rest = (room.right() - page_left).max(0.0);
+    let is_reader_beside_page = is_reading && room.width() >= READER_BESIDE_FROM;
+    let page_width = if is_reader_beside_page {
+        ((rest - space::MD) / 2.0).clamp(0.0, PAGE_WIDTH)
+    } else {
+        rest.clamp(0.0, PAGE_WIDTH)
+    };
     let page = egui::Rect::from_min_size(
         egui::pos2(page_left, room.top()),
         egui::vec2(page_width, room.height()),
@@ -228,10 +248,24 @@ fn panes(ui: &mut egui::Ui, catalogue: &Catalogue, local: &mut Local, cx: &mut P
         ui.set_min_height(height);
         shelf::show(ui, local, catalogue, fit, cx);
     });
-    framed(ui, "library_page", page, |ui, height| {
-        ui.set_min_height(height);
-        open_page(ui, open, Place::Beside, local, cx);
-    });
+    if !is_reading || is_reader_beside_page {
+        framed(ui, "library_page", page, |ui, height| {
+            ui.set_min_height(height);
+            open_page(ui, open, Place::Beside, local, cx);
+        });
+    }
+    if is_reading {
+        let reader_left = if is_reader_beside_page {
+            page.right() + space::MD
+        } else {
+            page.left()
+        };
+        let reader = egui::Rect::from_min_max(
+            egui::pos2(reader_left, room.top()),
+            egui::pos2(room.right().min(reader_left + PAGE_WIDTH), room.bottom()),
+        );
+        reader::show(ui, reader, local, cx);
+    }
 }
 
 /// The shelf fills the room, unless the page of the open document fills it, or the page of the

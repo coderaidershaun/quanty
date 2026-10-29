@@ -110,7 +110,7 @@ fn wheel_tab_into_view(harness: &mut Window, window: [f32; 2], name: &str) {
             return;
         }
         // Every tab of the strip stands on the row of the first one, also when it is scrolled out.
-        let row = node(harness, Role::Tab, "Overview").rect().center().y;
+        let row = node(harness, Role::Tab, "Insights").rect().center().y;
         wheel_down_at(harness, egui::pos2(view.center().x, row));
     }
     panic!("the tab `{name}` never came into view");
@@ -198,6 +198,37 @@ fn a_phone_shows_the_shelf_until_a_page_is_opened() {
     assert_shelf_fills_the_page(&harness, PHONE_WINDOW);
 }
 
+/// Read fills the phone with the reader and a back row, and Back leaves the reader for the page
+/// of the chapter.
+fn read_fills_the_phone_and_back_leaves_the_reader(harness: &mut Window, page: Rect) {
+    click_in(harness, Role::Button, "Read", page);
+    assert_eq!(
+        shared(harness).tab,
+        Tab::Library,
+        "Read stays on the Library"
+    );
+    assert!(shared(harness).shelf.is_reading);
+    assert!(
+        node_in(harness, Role::Label, "Source in Context", page).is_some(),
+        "the reader fills the phone"
+    );
+    assert!(
+        node_in(harness, Role::Button, BLACK_SCHOLES, page).is_some(),
+        "the reader has a back row"
+    );
+    assert!(
+        !has(harness, Role::Tab, "Insights"),
+        "the page is not drawn behind it"
+    );
+    testkit::save_png(harness, "phone-library-reader");
+    click_in(harness, Role::Button, BLACK_SCHOLES, page);
+    assert!(!shared(harness).shelf.is_reading, "Back closes the reader");
+    assert!(
+        has(harness, Role::Label, BLACK_SCHOLES),
+        "the page of the chapter shows again"
+    );
+}
+
 #[test]
 fn a_phone_opens_every_view_of_a_chapter_and_goes_back_step_by_step() {
     let mut harness = open_library(PHONE_WINDOW);
@@ -215,7 +246,7 @@ fn a_phone_opens_every_view_of_a_chapter_and_goes_back_step_by_step() {
     for name in ["Copy id", "Read", "Edit tags", &delete] {
         assert_touchable(&harness, PHONE_WINDOW, name);
     }
-    testkit::save_png(&mut harness, "phone-library-overview");
+    testkit::save_png(&mut harness, "phone-library-controls");
 
     for view in DocumentView::ALL {
         let label = view.label();
@@ -225,9 +256,10 @@ fn a_phone_opens_every_view_of_a_chapter_and_goes_back_step_by_step() {
         assert!(is_open_tab(&harness, label), "`{label}` is the open view");
         rect_in_view(&harness, PHONE_WINDOW, Role::Tab, label);
         match view {
-            DocumentView::Insights => {
-                for name in ["Export", "Page 2"] {
-                    assert_touchable(&harness, PHONE_WINDOW, name);
+            DocumentView::Insights | DocumentView::Takeaways | DocumentView::CheatSheet => {
+                assert_touchable(&harness, PHONE_WINDOW, "Export");
+                if view == DocumentView::Insights {
+                    assert_touchable(&harness, PHONE_WINDOW, "Page 2");
                 }
                 click_in(&mut harness, Role::Button, "Export", page);
                 let item = node(&harness, Role::Button, "Export as PDF…").rect();
@@ -248,6 +280,8 @@ fn a_phone_opens_every_view_of_a_chapter_and_goes_back_step_by_step() {
             );
         }
     }
+
+    read_fills_the_phone_and_back_leaves_the_reader(&mut harness, page);
 
     click_in(&mut harness, Role::Button, NOTES, page);
     let media = Open::Media {
@@ -346,13 +380,23 @@ fn a_tablet_shows_the_shelf_beside_the_page() {
     let window = fit::window_rect(TABLET_WINDOW);
 
     let mut shelf = vec![node(&harness, Role::TextInput, "Find").rect()];
-    shelf.extend(shelf_rows(&harness).iter().map(Node::rect));
+    // The page chips of the Insights view are on or off like a row of the shelf.
+    let is_chip = |row: &Node<'_>| {
+        let name = row.accesskit_node().label();
+        name.is_some_and(|name| name.starts_with("Page "))
+    };
+    shelf.extend(
+        shelf_rows(&harness)
+            .iter()
+            .filter(|row| !is_chip(row))
+            .map(Node::rect),
+    );
     let mut page = vec![node(&harness, Role::Label, BLACK_SCHOLES).rect()];
     let delete = format!("Delete document {BLACK_SCHOLES}");
     for name in ["Copy id", "Read", "Edit tags", &delete] {
         page.push(node(&harness, Role::Button, name).rect());
     }
-    let overview = node(&harness, Role::Tab, "Overview").rect();
+    let insights = node(&harness, Role::Tab, "Insights").rect();
     // The views at the right end of the strip may be scrolled out of the window.
     let strip: Vec<Rect> = DocumentView::ALL
         .iter()
@@ -372,7 +416,7 @@ fn a_tablet_shows_the_shelf_beside_the_page() {
         shelf_right <= page_left,
         "the shelf ends at {shelf_right}, and the page starts at {page_left}"
     );
-    for rect in shelf.iter().chain(&page).chain([&overview]) {
+    for rect in shelf.iter().chain(&page).chain([&insights]) {
         assert!(
             window.contains_rect(*rect),
             "{rect:?} is outside the window"

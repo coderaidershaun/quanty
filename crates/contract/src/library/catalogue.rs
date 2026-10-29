@@ -60,8 +60,9 @@ impl fmt::Display for ItemCounts {
 )]
 pub enum DocumentView {
     #[default]
-    Overview,
     Insights,
+    Takeaways,
+    CheatSheet,
     Code,
     Formulas,
     Figures,
@@ -70,9 +71,10 @@ pub enum DocumentView {
 }
 
 impl DocumentView {
-    pub const ALL: [DocumentView; 7] = [
-        DocumentView::Overview,
+    pub const ALL: [DocumentView; 8] = [
         DocumentView::Insights,
+        DocumentView::Takeaways,
+        DocumentView::CheatSheet,
         DocumentView::Code,
         DocumentView::Formulas,
         DocumentView::Figures,
@@ -82,8 +84,9 @@ impl DocumentView {
 
     pub const fn label(self) -> &'static str {
         match self {
-            DocumentView::Overview => "Overview",
             DocumentView::Insights => "Insights",
+            DocumentView::Takeaways => "Takeaways",
+            DocumentView::CheatSheet => "Cheat sheet",
             DocumentView::Code => "Code",
             DocumentView::Formulas => "Formulas",
             DocumentView::Figures => "Figures",
@@ -93,15 +96,26 @@ impl DocumentView {
     }
 
     /// The kind of piece the view lists: `Code`, `Formula`, `Figure` or `Table`. `None` for the
-    /// other three.
+    /// other four.
     pub const fn piece_kind(self) -> Option<PieceKind> {
         match self {
             DocumentView::Code => Some(PieceKind::Code),
             DocumentView::Formulas => Some(PieceKind::Formula),
             DocumentView::Figures => Some(PieceKind::Figure),
             DocumentView::Tables => Some(PieceKind::Table),
-            DocumentView::Overview | DocumentView::Insights | DocumentView::Concepts => None,
+            DocumentView::Insights
+            | DocumentView::Takeaways
+            | DocumentView::CheatSheet
+            | DocumentView::Concepts => None,
         }
+    }
+
+    /// True for the three views that show parts of the saved insights of a chapter.
+    pub const fn reads_insights(self) -> bool {
+        matches!(
+            self,
+            DocumentView::Insights | DocumentView::Takeaways | DocumentView::CheatSheet
+        )
     }
 }
 

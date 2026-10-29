@@ -66,6 +66,9 @@ pub struct Palette {
     pub text: Color32,
     /// Titles.
     pub text_heading: Color32,
+    /// A heading inside content: a Markdown heading of insights or an answer, or a heading of a
+    /// page.
+    pub text_subheading: Color32,
     /// Text that supports content.
     pub text_secondary: Color32,
     /// A placeholder or a zero count.
@@ -136,6 +139,7 @@ impl Palette {
             rule: rgb(0x1C1B1A),
             text: rgb(0x1C1B1A),
             text_heading: rgb(0x100F0F),
+            text_subheading: rgb(0x1A4F8C),
             text_secondary: rgb(0x575653),
             text_muted: rgb(0x676662),
             text_faint: rgb(0xB7B5AC),
@@ -179,6 +183,7 @@ impl Palette {
             rule: rgb(0xE8EDF1),
             text: rgb(0xE8EDF1),
             text_heading: rgb(0xF3F7FA),
+            text_subheading: rgb(0x8CC4FF),
             text_secondary: rgb(0xAEBCC5),
             text_muted: rgb(0x8D9BA7),
             text_faint: rgb(0x54626D),
@@ -282,6 +287,7 @@ mod tests {
             ("rule", dark.rule, FG),
             ("text", dark.text, FG),
             ("text_heading", dark.text_heading, ON_USER),
+            ("text_subheading", dark.text_subheading, LINK),
             ("text_secondary", dark.text_secondary, SECONDARY_TEXT),
             ("text_muted", dark.text_muted, MUTED),
             ("text_on_ink", dark.text_on_ink, GROUND),

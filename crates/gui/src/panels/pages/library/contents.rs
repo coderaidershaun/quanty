@@ -5,15 +5,15 @@
 use eframe::egui;
 
 use super::width;
-use crate::panels::PanelCx;
 use crate::panels::heights::Heights;
 use crate::panels::labels::TRY_AGAIN;
 use crate::panels::source::{copy_label, kind_name, piece_body};
-use crate::theme::{self, Icon, Kind, TextRole};
+use crate::panels::{PanelCx, exporting};
+use crate::theme::{self, Icon, Kind, TextRole, space};
 use crate::widgets::{Card, Placeholder};
 use contract::{
-    ChapterContents, ChapterItem, DocId, DocumentView, Failure, FailureKind, Intent, Loadable,
-    PieceKind,
+    ChapterContents, ChapterItem, DocId, DocumentView, ExportPlace, Failure, FailureKind, Intent,
+    Loadable, PieceKind,
 };
 
 const LOADING: &str = "Reading the document";
@@ -43,7 +43,10 @@ pub(super) fn show(ui: &mut egui::Ui, view: DocumentView, cx: &mut PanelCx<'_>) 
             let (icon, title) = nothing_of(view);
             Placeholder::empty(icon, title).show(ui);
         }
-        Loadable::Ready(chapter) => list(ui, chapter, view, kind, cx),
+        Loadable::Ready(chapter) => {
+            export_row(ui, cx, chapter.doc, view);
+            list(ui, chapter, view, kind, cx);
+        }
     }
 }
 
@@ -74,6 +77,22 @@ fn failed(ui: &mut egui::Ui, failure: &Failure, view: DocumentView, intents: &mu
     if shown.action_clicked {
         intents.push(Intent::ShowDocumentView(view));
     }
+}
+
+/// The Export menu of a view that lists the contents of `doc`, and how the last export ended.
+pub(super) fn export_row(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, doc: DocId, view: DocumentView) {
+    let shared = cx.shared;
+    if let Some(catalogue) = shared.library.catalogue.ready() {
+        let request = |format| shared.contents.export_request(catalogue, view, format);
+        let size = width(ui).control_size();
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                exporting::menu(ui, cx, size, request);
+            });
+        });
+    }
+    exporting::strip(ui, cx, ExportPlace::Library { doc, view });
+    ui.add_space(space::SM);
 }
 
 /// The heights of the cards are kept in egui's memory for each document and view, so a card out of

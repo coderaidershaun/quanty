@@ -11,7 +11,7 @@ use crate::panels::exporting;
 use crate::panels::labels::{COPY_COMMAND, TRY_AGAIN};
 use crate::panels::{PanelCx, PanelWidth};
 use crate::theme::{Icon, TextRole, space};
-use crate::widgets::{Button, Chip, ControlSize, Copyable, Placeholder};
+use crate::widgets::{Chip, Copyable, Placeholder};
 use contract::{
     Catalogue, ChapterInsights, DocId, DocumentView, ExportPlace, Failure, Insight, Intent,
     Loadable,
@@ -23,7 +23,6 @@ const NO_INSIGHTS_FOR_PART_HINT: &str =
 const READING: &str = "Reading the insights";
 const UNREADABLE: &str = "The insights could not be read";
 const NOT_WRITTEN: &str = "No insights yet";
-const EXPORT: &str = "Export";
 const NO_INSIGHTS: &str = "No insights";
 const NO_TAKEAWAYS: &str = "No takeaways";
 const NO_CHEAT_SHEET: &str = "No cheat sheet";
@@ -95,19 +94,21 @@ fn saved_part(
     let written_by = TextRole::Small.rich(ui, format!("Written by {}", saved.model));
     let panel = width(ui);
     let size = panel.control_size();
+    let shared = cx.shared;
+    let request = |format| shared.insights.export_request(catalogue, part, format);
     if panel == PanelWidth::Narrow {
         // The label may wrap, so the button gets a line of its own, tall enough for a finger.
         ui.label(written_by);
-        export_menu(ui, cx, catalogue, size);
+        exporting::menu(ui, cx, size, request);
     } else {
         ui.horizontal(|ui| {
             ui.label(written_by);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                export_menu(ui, cx, catalogue, size);
+                exporting::menu(ui, cx, size, request);
             });
         });
     }
-    exporting::strip(ui, cx, ExportPlace::Insights { doc });
+    exporting::strip(ui, cx, ExportPlace::Library { doc, view: part });
     ui.add_space(space::SM);
     egui::ScrollArea::vertical()
         .id_salt(("insights", doc, part))
@@ -164,20 +165,6 @@ fn cheat_sheet(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, cheat_sheet: &str) {
     if section.copied {
         cx.intents.push(Intent::CopyText(cheat_sheet.to_owned()));
     }
-}
-
-fn export_menu(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, catalogue: &Catalogue, size: ControlSize) {
-    let shared = cx.shared;
-    let button = Button::secondary(EXPORT).icon(Icon::DOCUMENT).size(size);
-    let response = ui.add(button);
-    egui::Popup::menu(&response)
-        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-        .show(|ui| {
-            let request = |format| shared.insights.export_request(catalogue, format);
-            if exporting::items(ui, cx, size, request) {
-                ui.close();
-            }
-        });
 }
 
 /// One insight, then a chip for each page it rests on.

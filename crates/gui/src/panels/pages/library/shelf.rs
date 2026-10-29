@@ -1,5 +1,5 @@
-//! The shelf: the box that finds a media or a chapter, and the rows of the media with the
-//! documents of the open one.
+//! The shelf: the box that finds a media or a chapter, the rows of the media with the documents
+//! of the open one, and the edge that is dragged to make it wider or narrower.
 
 use eframe::egui;
 
@@ -8,7 +8,7 @@ use crate::panels::PanelCx;
 use crate::panels::labels::NO_MEDIA;
 use crate::panels::pages::media_card::category_icon;
 use crate::state::{Open, Shelf};
-use crate::theme::{Icon, TextRole, space};
+use crate::theme::{self, Icon, TextRole, space, stroke};
 use crate::widgets::{ControlSize, ListRow, Placeholder, TextInput};
 use contract::{Catalogue, Category, DocId, Document, Intent, Media};
 
@@ -18,6 +18,13 @@ const CLEAR: &str = "Clear";
 const NOTHING_MATCHES: &str = "Nothing matches";
 const NOTHING_MATCHES_HINT: &str = "Try fewer letters.";
 const ABOUT_MEDIA: &str = "About this media";
+const EDGE: &str = "Resize the shelf";
+
+/// The narrowest and the widest the shelf can be dragged to. The widest is cut further so that the
+/// page keeps `MIN_PAGE_WIDTH`.
+const MIN_WIDTH: f32 = 200.0;
+const MAX_WIDTH: f32 = 520.0;
+const MIN_PAGE_WIDTH: f32 = 400.0;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Row {
@@ -241,5 +248,57 @@ fn show_row(ui: &mut egui::Ui, row: &Row, size: ControlSize) -> Option<Intent> {
                 .clicked()
                 .then_some(Intent::OpenDocument(*doc))
         }
+    }
+}
+
+/// How wide the shelf is in a room `room_width` wide: as the person dragged it, or else `suited`,
+/// kept within the widths it can be dragged to.
+pub(super) fn width(local: &Local, suited: f32, room_width: f32) -> f32 {
+    local
+        .shelf_width
+        .unwrap_or(suited)
+        .clamp(MIN_WIDTH, widest(room_width))
+}
+
+fn widest(room_width: f32) -> f32 {
+    MAX_WIDTH
+        .min(room_width - MIN_PAGE_WIDTH - space::MD)
+        .max(MIN_WIDTH)
+}
+
+/// The strip between the shelf and the page is a handle: dragging it sets the width of the shelf,
+/// and the edge shows under the pointer.
+pub(super) fn drag_edge(ui: &mut egui::Ui, shelf: egui::Rect, room_width: f32, local: &mut Local) {
+    let handle = egui::Rect::from_min_max(
+        shelf.right_top(),
+        egui::pos2(shelf.right() + space::MD, shelf.bottom()),
+    );
+    let response = ui
+        .interact(handle, ui.id().with("shelf_edge"), egui::Sense::drag())
+        .on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
+    ui.ctx().accesskit_node_builder(response.id, |node| {
+        node.set_role(egui::accesskit::Role::Splitter);
+        node.set_label(EDGE);
+    });
+    if let Some(pointer) = response.interact_pointer_pos()
+        && response.dragged()
+    {
+        // The pointer is taken to hold the middle of the gap, so a press that does not move keeps
+        // the width.
+        let width = pointer.x - shelf.left() - space::MD / 2.0;
+        local.shelf_width = Some(width.clamp(MIN_WIDTH, widest(room_width)));
+    }
+    if response.hovered() || response.dragged() {
+        let palette = theme::palette(ui.ctx());
+        let color = if response.dragged() {
+            palette.focus
+        } else {
+            palette.border
+        };
+        let x = handle.center().x;
+        ui.painter().line_segment(
+            [egui::pos2(x, handle.top()), egui::pos2(x, handle.bottom())],
+            egui::Stroke::new(stroke::BORDER, color),
+        );
     }
 }

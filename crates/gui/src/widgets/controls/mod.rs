@@ -11,7 +11,9 @@ mod tabs;
 
 pub use button::Button;
 pub use copy::CopyButton;
-pub use field::{Dropdown, Slider, Step, Stepper, TextInput, TextInputResponse, paint_caret};
+pub use field::{
+    Dropdown, Slider, Step, Stepper, TextInput, TextInputResponse, paint_caret, style_list_rows,
+};
 pub use list_row::ListRow;
 pub use nav_bar::{NavBar, NavItem};
 pub use tabs::{Tab, TabStrip};

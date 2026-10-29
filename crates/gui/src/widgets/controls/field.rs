@@ -261,6 +261,7 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
                     .truncate()
                     .icon(paint_caret)
                     .show_ui(ui, |ui| {
+                        style_list_rows(ui, self.size);
                         for (index, option) in self.options.iter().enumerate() {
                             let is_selected = self.selected == Some(index);
                             if ui.selectable_label(is_selected, option.as_ref()).clicked() {
@@ -274,6 +275,24 @@ impl<'a, S: AsRef<str>> Dropdown<'a, S> {
         ui.ctx()
             .accesskit_node_builder(response.response.id, |node| node.set_label(self.label));
         chosen
+    }
+}
+
+/// Gives the rows of an open list a fill and no edge in every state. egui takes the width of a
+/// row's edge off its padding and draws the edge only while the row has a frame, so a row that
+/// has an edge when it is hovered or chosen is two points taller and wider than at rest, and the
+/// list grows with it until it scrolls.
+pub fn style_list_rows(ui: &mut egui::Ui, size: ControlSize) {
+    ui.spacing_mut().interact_size.y = size.height();
+    let widgets = &mut ui.visuals_mut().widgets;
+    let states = [
+        &mut widgets.inactive,
+        &mut widgets.hovered,
+        &mut widgets.active,
+        &mut widgets.open,
+    ];
+    for state in states {
+        state.bg_stroke = Stroke::NONE;
     }
 }
 

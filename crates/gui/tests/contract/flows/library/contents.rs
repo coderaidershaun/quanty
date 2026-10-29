@@ -4,8 +4,9 @@
 
 use backend::fake::Fake;
 use backend::{Handler, Reply};
-use contract::{Command, DocId, Event, Failure, PieceKind, Tab};
+use contract::{Command, DocId, DocumentView, Event, ExportPlace, Failure, PieceKind, Tab};
 use eframe::egui::accesskit::Role;
+use export::{Block, Format};
 use gui::app::layout::DEFAULT_WINDOW;
 use gui::state::SourceTarget;
 use gui::testkit;
@@ -218,4 +219,89 @@ fn a_document_whose_folder_is_missing_says_so_with_what_to_do() {
     open_document(&mut harness, HAWKES, PAPER);
     click(&mut harness, Role::Tab, "Code");
     assert!(says(&harness, "The pages of this document were not found"));
+}
+
+#[test]
+fn every_document_tab_has_an_export_menu_and_code_exports_its_listings() {
+    let (mut harness, seen) = open_library("black-scholes");
+    let mut exportable: Vec<DocumentView> = Vec::new();
+    for document in documents_of(&harness) {
+        let media = shared(&harness)
+            .library
+            .catalogue
+            .ready()
+            .and_then(|catalogue| catalogue.media_of(document.id))
+            .and_then(|media| media.title.clone())
+            .expect("a sample document belongs to a titled media");
+        open_document(&mut harness, &media, &document.name().label());
+        for view in DocumentView::ALL {
+            click(&mut harness, Role::Tab, view.label());
+            if has(&harness, Role::Button, "Export") && !exportable.contains(&view) {
+                exportable.push(view);
+            }
+        }
+    }
+    for view in DocumentView::ALL {
+        assert!(
+            exportable.contains(&view),
+            "no sample document shows an Export menu on its {} tab",
+            view.label()
+        );
+    }
+
+    open_document(&mut harness, NOTES, BLACK_SCHOLES);
+    click(&mut harness, Role::Tab, "Code");
+    click(&mut harness, Role::Button, "Export");
+    click(&mut harness, Role::Button, "Export as Markdown\u{2026}");
+    let exports: Vec<_> = seen
+        .all()
+        .into_iter()
+        .filter_map(|command| match command {
+            Command::Export { file, .. } => Some(file),
+            _ => None,
+        })
+        .collect();
+    let [file] = exports.as_slice() else {
+        panic!("one export was sent, got {}", exports.len());
+    };
+    let listings: Vec<&str> = file
+        .document
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Code { code, .. } => Some(code.as_str()),
+            _ => None,
+        })
+        .collect();
+    let on_screen: Vec<String> = shared(&harness)
+        .contents
+        .items
+        .ready()
+        .expect("the chapter is read")
+        .of_kind(PieceKind::Code)
+        .map(|item| item.piece.text.clone())
+        .collect();
+    assert!(!on_screen.is_empty());
+    assert_eq!(
+        listings, on_screen,
+        "the file holds the listings the tab shows"
+    );
+    assert_eq!(file.format, Format::Markdown);
+    let title = documents_of(&harness)
+        .into_iter()
+        .find(|document| document.name().label() == BLACK_SCHOLES)
+        .map(|document| document.title)
+        .expect("the notes chapter is listed");
+    assert_eq!(
+        file.file_name,
+        Format::Markdown.file_name(&format!("{title} code"))
+    );
+    let place = shared(&harness).export.as_ref().map(|export| export.place);
+    assert_eq!(
+        place,
+        Some(ExportPlace::Library {
+            doc: id_of(&harness, BLACK_SCHOLES),
+            view: DocumentView::Code
+        })
+    );
 }

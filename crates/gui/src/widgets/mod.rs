@@ -12,7 +12,7 @@ mod progress;
 
 pub use controls::{
     Button, CopyButton, Dropdown, ListRow, NavBar, NavItem, Slider, Step, Stepper, Tab, TabStrip,
-    TextInput, TextInputResponse, paint_caret,
+    TextInput, TextInputResponse, paint_caret, style_list_rows,
 };
 pub use frames::{
     Card, CardResponse, Copyable, CopyableResponse, PanelFrame, Surface, panel_frame,

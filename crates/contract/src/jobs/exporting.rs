@@ -3,7 +3,7 @@
 
 use export::{Document, Format};
 
-use crate::DocId;
+use crate::{DocId, DocumentView};
 
 /// An export request carries its download name and the place that will show its result.
 #[derive(
@@ -34,8 +34,8 @@ pub struct ExportFile {
 pub enum ExportPlace {
     /// The written answer of the ask with this generation.
     Answer { generation: u64 },
-    /// The saved insights of this document, from the Insights view of the Library.
-    Insights { doc: DocId },
+    /// This view of this document in the Library.
+    Library { doc: DocId, view: DocumentView },
 }
 
 impl ExportPlace {
@@ -43,7 +43,16 @@ impl ExportPlace {
     pub fn what(self) -> &'static str {
         match self {
             ExportPlace::Answer { .. } => "the answer",
-            ExportPlace::Insights { .. } => "the insights",
+            ExportPlace::Library { view, .. } => match view {
+                DocumentView::Insights => "the insights",
+                DocumentView::Takeaways => "the takeaways",
+                DocumentView::CheatSheet => "the cheat sheet",
+                DocumentView::Code => "the code",
+                DocumentView::Formulas => "the formulas",
+                DocumentView::Figures => "the figures",
+                DocumentView::Tables => "the tables",
+                DocumentView::Concepts => "the concepts",
+            },
         }
     }
 }

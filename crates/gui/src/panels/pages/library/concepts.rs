@@ -3,6 +3,7 @@
 
 use eframe::egui;
 
+use super::contents::export_row;
 use super::width;
 use crate::panels::PanelCx;
 use crate::panels::heights::Heights;
@@ -37,7 +38,10 @@ pub(super) fn show(ui: &mut egui::Ui, cx: &mut PanelCx<'_>) {
         Loadable::Ready(list) if list.is_empty() => {
             Placeholder::empty(Icon::CONCEPT, NONE).show(ui);
         }
-        Loadable::Ready(list) => rows(ui, doc, list),
+        Loadable::Ready(list) => {
+            export_row(ui, cx, doc, DocumentView::Concepts);
+            rows(ui, doc, list);
+        }
     }
 }
 

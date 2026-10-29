@@ -8,7 +8,7 @@ use eframe::egui;
 
 use super::layout::{FILTER_COUNT, Rects, slot};
 use crate::state::Library;
-use crate::widgets::{ControlSize, Dropdown, paint_caret};
+use crate::widgets::{ControlSize, Dropdown, paint_caret, style_list_rows};
 use contract::{Category, DocId, Document, Filters};
 
 const ALL_MEDIA: &str = "All media";
@@ -344,7 +344,12 @@ fn pick_several(ui: &mut egui::Ui, options: &[String], room: Room, chosen: &mut 
             .icon(paint_caret)
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .show_ui(ui, |ui| {
-                if ui.selectable_label(chosen.is_empty(), ALL_TAGS).clicked() {
+                // Only this row loses its edge: an unchecked check box below would vanish without it.
+                let all = ui.scope(|ui| {
+                    style_list_rows(ui, room.size);
+                    ui.selectable_label(chosen.is_empty(), ALL_TAGS)
+                });
+                if all.inner.clicked() {
                     chosen.clear();
                 }
                 for tag in options {

@@ -14,7 +14,7 @@ use gui::media::rich_text::{self, Clicked, RichText};
 use gui::state::Shared;
 use gui::testkit::{self, Host, sample};
 use gui::theme::{TextRole, space};
-use gui::widgets::{Button, Tab, TabStrip};
+use gui::widgets::{Button, Dropdown, Tab, TabStrip};
 
 #[test]
 fn a_panel_gives_its_intents_and_never_changes_what_it_reads() {
@@ -185,6 +185,46 @@ fn a_tab_strip_narrower_than_its_tabs_scrolls_and_keeps_the_active_tab_in_view()
         assert!(
             is_in_view(strip, harness.get_by_role_and_label(Role::Tab, name).rect()),
             "the chosen tab `{name}` stays in view"
+        );
+    }
+}
+
+/// The rect of every option of the open list.
+fn option_rects(harness: &Harness<'_, Host>, options: &[&str]) -> Vec<egui::Rect> {
+    options
+        .iter()
+        .map(|option| {
+            harness
+                .query_all_by_label(option)
+                .last()
+                .unwrap_or_else(|| panic!("the open list has no option `{option}`"))
+                .rect()
+        })
+        .collect()
+}
+
+#[test]
+fn hovering_a_dropdown_item_keeps_the_popup_size() {
+    let options = ["Alpha", "Beta", "Gamma"];
+    let mut harness = testkit::panel([300.0, 300.0], Shared::default(), move |ui, _| {
+        Dropdown::new("Pick one", &options, 200.0)
+            .selected(Some(1))
+            .show(ui);
+    });
+    harness.get_by_label("Pick one").click();
+    harness.run();
+    harness.run();
+    let at_rest = option_rects(&harness, &options);
+
+    for hovered in 0..options.len() {
+        harness.hover_at(at_rest[hovered].center());
+        harness.run();
+        harness.run();
+        assert_eq!(
+            option_rects(&harness, &options),
+            at_rest,
+            "hovering `{}` moves or resizes the options of the list",
+            options[hovered]
         );
     }
 }

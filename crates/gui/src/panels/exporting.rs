@@ -1,5 +1,5 @@
-//! What every panel that exports a document draws alike: the three Export items of its menu, and
-//! the strip that says how the last export from it ended.
+//! What every panel that exports a document draws alike: the Export button, the items of its menu,
+//! and the strip that says how the last export from it ended.
 
 use eframe::egui;
 use export::Format;
@@ -14,9 +14,28 @@ use contract::{ExportPlace, ExportRequest, Intent, NoticeKind};
 pub(crate) const ITEM_WIDTH: f32 = 6.0 * size::CONTROL_LG;
 
 const BUSY: &str = "A file is being exported.";
+const EXPORT: &str = "Export";
 
 /// A strip narrower than this makes its buttons tall enough for a finger.
 const NARROW_BELOW: f32 = 480.0;
+
+/// The Export button and the menu of its items. `request` is as for `items`.
+pub(crate) fn menu(
+    ui: &mut egui::Ui,
+    cx: &mut PanelCx<'_>,
+    size: ControlSize,
+    request: impl Fn(Format) -> Option<ExportRequest>,
+) {
+    let button = Button::secondary(EXPORT).icon(Icon::DOCUMENT).size(size);
+    let response = ui.add(button);
+    egui::Popup::menu(&response)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .show(|ui| {
+            if items(ui, cx, size, request) {
+                ui.close();
+            }
+        });
+}
 
 /// One item for each kind of file, `size` tall. `request` builds what the panel asks to export,
 /// and gives `None` when there is nothing to export. Gives back whether an item was chosen, so

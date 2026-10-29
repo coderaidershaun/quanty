@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use contract::{Intent, Tab};
+use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use gui::app::layout::DEFAULT_WINDOW;
@@ -16,7 +17,7 @@ use super::{
 };
 use crate::flows::recording;
 use crate::flows::{
-    Window, click, field, has, hover_on, is_enabled, retype, says, shared, type_into,
+    Window, click, field, has, hover_on, is_enabled, node, retype, says, shared, type_into,
 };
 
 fn the_rows_are(harness: &Window, names: &[&str]) {
@@ -128,4 +129,57 @@ fn open_in_library_shows_the_page_of_the_document_the_source_shows() {
         &harness,
         "The library does not list this document yet."
     ));
+}
+
+/// Presses the handle of the shelf, moves it by `by` points along the row and lets go.
+fn drag_the_shelf_edge(harness: &mut Window, by: f32) {
+    let from = node(harness, Role::Splitter, "Resize the shelf")
+        .rect()
+        .center();
+    harness.drag_at(from);
+    harness.run_ok();
+    harness.hover_at(from + egui::vec2(by, 0.0));
+    harness.run_ok();
+    harness.drop_at(from + egui::vec2(by, 0.0));
+    harness.run_ok();
+}
+
+fn shelf_edge(harness: &Window) -> f32 {
+    node(harness, Role::Splitter, "Resize the shelf")
+        .rect()
+        .left()
+}
+
+#[test]
+fn dragging_the_shelf_edge_resizes_it_within_bounds() {
+    let (mut harness, _seen) = open_switched("black-scholes", &Arc::default(), Ingests::Run);
+    click(&mut harness, Role::Tab, "Library");
+    let start = shelf_edge(&harness);
+
+    drag_the_shelf_edge(&mut harness, 100.0);
+    let wider = shelf_edge(&harness);
+    assert!(
+        (wider - start - 100.0).abs() <= 8.0,
+        "the edge followed the pointer from {start} to {wider}"
+    );
+
+    drag_the_shelf_edge(&mut harness, 4000.0);
+    let widest = shelf_edge(&harness);
+    drag_the_shelf_edge(&mut harness, 4000.0);
+    assert_eq!(
+        shelf_edge(&harness),
+        widest,
+        "the shelf stops at its widest"
+    );
+    assert!(widest > wider);
+
+    drag_the_shelf_edge(&mut harness, -4000.0);
+    let narrowest = shelf_edge(&harness);
+    drag_the_shelf_edge(&mut harness, -4000.0);
+    assert_eq!(
+        shelf_edge(&harness),
+        narrowest,
+        "the shelf stops at its narrowest"
+    );
+    assert!(narrowest < start);
 }

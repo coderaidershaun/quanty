@@ -69,6 +69,9 @@ pub struct Local {
     media_page: Option<String>,
     /// The Source panel as the reader shows it, with its own zoom and tab.
     reader: source::Local,
+    /// How wide the person dragged the shelf to, until the window closes. `None` keeps the width
+    /// that suits the room.
+    shelf_width: Option<f32>,
 }
 
 #[derive(Debug)]
@@ -226,13 +229,15 @@ fn panes(ui: &mut egui::Ui, catalogue: &Catalogue, local: &mut Local, cx: &mut P
         }
         return;
     }
-    let (fit, shelf_width) = if room.width() >= FULL_SHELF_FROM {
+    let (fit, suited_width) = if room.width() >= FULL_SHELF_FROM {
         (ShelfFit::Full, SHELF_WIDTH)
     } else {
         (ShelfFit::Narrow, NARROW_SHELF_WIDTH)
     };
+    let shelf_width = shelf::width(local, suited_width, room.width());
     let shelf = egui::Rect::from_min_size(room.min, egui::vec2(shelf_width, room.height()));
     let page_left = shelf.right() + space::MD;
+    shelf::drag_edge(ui, shelf, room.width(), local);
     let rest = (room.right() - page_left).max(0.0);
     let is_reader_beside_page = is_reading && room.width() >= READER_BESIDE_FROM;
     let page_width = if is_reader_beside_page {

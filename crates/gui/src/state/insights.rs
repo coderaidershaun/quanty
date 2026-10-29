@@ -5,8 +5,8 @@ use export::{Format, InsightsSheet, SheetInsight, insights_document};
 
 use super::shared::{Shared, push_cancel};
 use contract::{
-    Catalogue, ChapterInsights, Command, DocId, Effect, ExportPlace, ExportRequest, Failure,
-    Loadable, RequestId,
+    Catalogue, ChapterInsights, Command, DocId, DocumentView, Effect, ExportPlace, ExportRequest,
+    Failure, Loadable, RequestId,
 };
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
@@ -20,10 +20,16 @@ pub struct Insights {
 }
 
 impl Insights {
-    /// What the Insights view asks of an export as `format`: the saved insights as a document, a
-    /// file name made from the document's title, and the place that asked. `None` while no
-    /// insights are saved in the slot, or the catalogue does not list its document.
-    pub fn export_request(&self, catalogue: &Catalogue, format: Format) -> Option<ExportRequest> {
+    /// What the Insights, Takeaways or Cheat sheet view asks of an export as `format`: the saved
+    /// insights as one document whichever of the three is shown, a file name made from the
+    /// document's title, and the place that asked. `None` while no insights are saved in the slot,
+    /// or the catalogue does not list its document.
+    pub fn export_request(
+        &self,
+        catalogue: &Catalogue,
+        view: DocumentView,
+        format: Format,
+    ) -> Option<ExportRequest> {
         let doc = self.doc?;
         let saved = self.saved.ready()?.as_ref()?;
         let title = &catalogue.document(doc)?.title;
@@ -45,7 +51,9 @@ impl Insights {
             format,
             document: insights_document(&sheet),
             file_name: format.file_name(&format!("{title} insights")),
-            place: ExportPlace::Insights { doc },
+            // SMELL: any view is taken, so a caller could file the insights under another tab. Only
+            // the Insights, Takeaways and Cheat sheet views should be passed.
+            place: ExportPlace::Library { doc, view },
         })
     }
 }

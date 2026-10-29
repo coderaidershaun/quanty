@@ -35,6 +35,7 @@ impl Local {
             self.draft = AskDraft {
                 question: shared.ask.question.clone(),
                 mode: shared.ask.mode,
+                depth: shared.ask.depth,
                 filters: shared.ask.filters.clone(),
             };
         }

@@ -27,6 +27,18 @@ pub(in crate::panels) const fn kind_name(kind: PieceKind) -> &'static str {
     }
 }
 
+/// The name of the button that copies a piece of that kind. A heading gets no button.
+pub(in crate::panels) const fn copy_label(kind: PieceKind) -> Option<&'static str> {
+    match kind {
+        PieceKind::Heading { .. } => None,
+        PieceKind::Text | PieceKind::Footnote => Some("Copy text"),
+        PieceKind::Formula => Some("Copy LaTeX"),
+        PieceKind::Figure => Some("Copy description"),
+        PieceKind::Table => Some("Copy table"),
+        PieceKind::Code => Some("Copy code"),
+    }
+}
+
 pub(in crate::panels) fn body(
     ui: &mut egui::Ui,
     piece: &PagePiece,

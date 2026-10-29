@@ -13,11 +13,10 @@ use crate::state::AskSession;
 use crate::theme::TextRole;
 use contract::{AskMode, Intent, Loadable, ResultItem, Usage};
 
-/// The button that reads "Copied". It goes back to its name when the pointer leaves it.
+/// The Share menu item that reads "Copied". It goes back to its name when the pointer leaves it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Copied {
     Answer,
-    Latex(usize),
 }
 
 #[derive(Debug, Default)]
@@ -77,11 +76,6 @@ impl<'a> Pane<'a, '_> {
 
     pub(super) fn select(&mut self, number: usize) {
         self.cx.intents.push(Intent::SelectResult(number));
-    }
-
-    pub(super) fn copy(&mut self, text: &str, mark: Copied) {
-        self.cx.intents.push(Intent::CopyText(text.to_owned()));
-        self.view.copied = Some(mark);
     }
 
     pub(super) fn share(&mut self) {

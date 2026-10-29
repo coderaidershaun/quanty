@@ -1,8 +1,8 @@
-//! The filters offer what the library holds and an ask sends what was chosen. A follow-up starts a
-//! new ask with the same mode and filters, a plain key stays in the question box, and every way to
-//! copy reaches the clipboard.
+//! The filters offer what the library holds and an ask sends what was chosen. The depth is chosen
+//! in its dropdown. A follow-up starts a new ask with the same mode, depth and filters, a plain key
+//! stays in the question box, and every way to copy reaches the clipboard.
 
-use contract::{AnswerBlock, DocId, Filters};
+use contract::{AnswerBlock, AskDepth, Command, DocId, Filters, ItemKind};
 use eframe::egui;
 use eframe::egui::accesskit::Role;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
@@ -156,6 +156,103 @@ fn the_filters_offer_the_library_and_an_ask_sends_them(harness: &mut Window, see
         Some(paper.filters()),
         "the ask sends the filters that were chosen"
     );
+}
+
+fn depth_of_the_last_ask(seen: &Seen) -> Option<AskDepth> {
+    seen.all()
+        .into_iter()
+        .rev()
+        .find_map(|command| match command {
+            Command::Ask { ask, .. } => Some(ask.depth),
+            _ => None,
+        })
+}
+
+#[test]
+fn the_depth_dropdown_sets_the_depth_of_the_ask() {
+    let (mut harness, seen) = recording::open("black-scholes", DEFAULT_WINDOW);
+    testkit::settle(&mut harness);
+    let bar = panels(DEFAULT_WINDOW).ask_bar;
+
+    click(&mut harness, Role::Button, "Ask");
+    assert_eq!(
+        depth_of_the_last_ask(&seen),
+        Some(AskDepth::Balanced),
+        "an ask that chose no depth is balanced"
+    );
+
+    click_in(&mut harness, Role::ComboBox, "Depth", bar);
+    for row in ["Focused", "Balanced", "Broad"] {
+        assert!(has(&harness, Role::Button, row), "`{row}` is a depth");
+    }
+    click(&mut harness, Role::Button, "Broad");
+    click(&mut harness, Role::Button, "Ask");
+    assert_eq!(depth_of_the_last_ask(&seen), Some(AskDepth::Broad));
+    assert_eq!(shared(&harness).ask.depth, AskDepth::Broad);
+
+    let follow_up = shared(&harness)
+        .ask
+        .answer
+        .ready()
+        .and_then(|answer| answer.follow_ups.first().cloned())
+        .expect("the answer suggests a follow-up");
+    click(&mut harness, Role::Button, &follow_up);
+    assert_eq!(
+        depth_of_the_last_ask(&seen),
+        Some(AskDepth::Broad),
+        "a follow-up keeps the depth of the ask it follows"
+    );
+
+    click_in(&mut harness, Role::ComboBox, "Depth", bar);
+    click(&mut harness, Role::Button, "Focused");
+    click(&mut harness, Role::Button, "Ask");
+    assert_eq!(depth_of_the_last_ask(&seen), Some(AskDepth::Focused));
+}
+
+#[test]
+fn the_copy_icon_copies_the_text_of_its_card() {
+    let (mut harness, _seen) = recording::open("black-scholes", DEFAULT_WINDOW);
+    testkit::settle(&mut harness);
+    let ask = &shared(&harness).ask;
+    let answer = ask.answer.ready().expect("an answer");
+    let follow_ups = answer.follow_ups.join("\n");
+    let markdown = ask.answer_markdown().expect("an answer to share");
+    let first_formula = ask
+        .results()
+        .iter()
+        .find(|result| result.kind == ItemKind::Formula)
+        .map(|result| result.text.clone())
+        .expect("a formula result");
+
+    let texts = copied_by(&mut harness, |harness| {
+        node(harness, Role::Button, "Copy answer").click()
+    });
+    assert_eq!(
+        texts,
+        [markdown],
+        "the icon of the answer copies the answer"
+    );
+    assert!(
+        has(&harness, Role::Button, "Copied"),
+        "the icon reads Copied while the pointer is on it"
+    );
+    node(&harness, Role::Tab, "Results").hover();
+    harness.run_ok();
+    assert!(
+        !has(&harness, Role::Button, "Copied"),
+        "the icon reads Copy again once the pointer leaves it"
+    );
+
+    let texts = copied_by(&mut harness, |harness| {
+        node(harness, Role::Button, "Copy follow-ups").click()
+    });
+    assert_eq!(texts, [follow_ups], "the follow-ups, one on each line");
+
+    click(&mut harness, Role::Tab, "Results");
+    let texts = copied_by(&mut harness, |harness| {
+        node(harness, Role::Button, "Copy LaTeX").click()
+    });
+    assert_eq!(texts, [first_formula], "a result card");
 }
 
 #[test]

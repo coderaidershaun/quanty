@@ -13,13 +13,13 @@ use std::sync::Arc;
 
 use graph::FalkorGraph;
 use rag_core::DocId;
-use rag_retrieval::{SearchError, SearchResults, TracedSearch};
+use rag_retrieval::{Reach, SearchError, SearchResults, TracedSearch};
 
 use self::results::PieceFacts;
 use crate::Reply;
 use crate::live::chapter::chapters_on_disk;
 use crate::live::{Kept, LiveContext, Services};
-use contract::{AskDraft, AskMode, Event, RequestId, SearchReply};
+use contract::{AskDepth, AskDraft, AskMode, Event, RequestId, SearchReply};
 
 /// A search that finds nothing or fails is the only event: the window settles
 /// the later steps itself, and the model is never asked without a result.
@@ -103,7 +103,10 @@ async fn search<S: Services>(
             return None;
         }
     };
-    let error = match retriever.search_traced(&ask.question, None, &wanted).await {
+    let found = retriever
+        .search_traced_within(&ask.question, None, &wanted, None, reach_of(ask.depth))
+        .await;
+    let error = match found {
         Ok(traced) => return Some((retriever, traced)),
         Err(error) => error,
     };
@@ -118,6 +121,14 @@ async fn search<S: Services>(
     };
     reply.send(Event::Search { request, result });
     None
+}
+
+const fn reach_of(depth: AskDepth) -> Reach {
+    match depth {
+        AskDepth::Focused => Reach::FOCUSED,
+        AskDepth::Balanced => Reach::BALANCED,
+        AskDepth::Broad => Reach::BROAD,
+    }
 }
 
 /// A reading that does not finish gives an empty list, which leaves every hit without facts.

@@ -11,7 +11,7 @@ use crate::panels::exporting;
 use crate::panels::labels::{COPY_COMMAND, TRY_AGAIN};
 use crate::panels::{PanelCx, PanelWidth};
 use crate::theme::{Icon, TextRole, space};
-use crate::widgets::{Button, Chip, ControlSize, Placeholder};
+use crate::widgets::{Button, Chip, ControlSize, Copyable, Placeholder};
 use contract::{
     Catalogue, ChapterInsights, DocId, DocumentView, ExportPlace, Failure, Insight, Intent,
     Loadable,
@@ -124,8 +124,17 @@ fn insights(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, doc: DocId, insights: &[Ins
         Placeholder::empty(Icon::INSIGHT, NO_INSIGHTS).show(ui);
         return;
     }
-    for insight in insights {
-        insight_paragraph(ui, cx, doc, insight);
+    let section = Copyable::new("Copy insights").show(ui, |ui| {
+        for insight in insights {
+            insight_paragraph(ui, cx, doc, insight);
+        }
+    });
+    if section.copied {
+        let texts: Vec<&str> = insights
+            .iter()
+            .map(|insight| insight.text.as_str())
+            .collect();
+        cx.intents.push(Intent::CopyText(texts.join("\n\n")));
     }
 }
 
@@ -138,7 +147,11 @@ fn takeaways(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, takeaways: &[String]) {
         .iter()
         .map(|takeaway| format!("- {takeaway}"))
         .collect();
-    blocks(ui, cx, &dollar_blocks(&lines.join("\n")));
+    let section = Copyable::new("Copy takeaways")
+        .show(ui, |ui| blocks(ui, cx, &dollar_blocks(&lines.join("\n"))));
+    if section.copied {
+        cx.intents.push(Intent::CopyText(lines.join("\n")));
+    }
 }
 
 fn cheat_sheet(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, cheat_sheet: &str) {
@@ -146,7 +159,11 @@ fn cheat_sheet(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, cheat_sheet: &str) {
         Placeholder::empty(Icon::INSIGHT, NO_CHEAT_SHEET).show(ui);
         return;
     }
-    blocks(ui, cx, &dollar_blocks(cheat_sheet));
+    let section = Copyable::new("Copy cheat sheet")
+        .show(ui, |ui| blocks(ui, cx, &dollar_blocks(cheat_sheet)));
+    if section.copied {
+        cx.intents.push(Intent::CopyText(cheat_sheet.to_owned()));
+    }
 }
 
 fn export_menu(ui: &mut egui::Ui, cx: &mut PanelCx<'_>, catalogue: &Catalogue, size: ControlSize) {

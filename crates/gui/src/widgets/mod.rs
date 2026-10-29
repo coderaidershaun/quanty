@@ -11,10 +11,13 @@ mod messages;
 mod progress;
 
 pub use controls::{
-    Button, Dropdown, ListRow, NavBar, NavItem, Slider, Step, Stepper, Tab, TabStrip, TextInput,
-    TextInputResponse, paint_caret,
+    Button, CopyButton, Dropdown, ListRow, NavBar, NavItem, Slider, Step, Stepper, Tab, TabStrip,
+    TextInput, TextInputResponse, paint_caret,
 };
-pub use frames::{Card, CardResponse, PanelFrame, Surface, panel_frame, section_header, separator};
+pub use frames::{
+    Card, CardResponse, Copyable, CopyableResponse, PanelFrame, Surface, panel_frame,
+    section_header, separator,
+};
 pub use look::ControlSize;
 pub(crate) use look::focus_ring;
 pub use marks::{Badge, Chip, CitationChip, StepMarker, StepState, dot, logo};

@@ -7,6 +7,7 @@ use super::states::whole_area;
 use super::tabs::{CardTab, SourceTab, TabCx};
 use crate::theme::{Icon, Kind};
 use crate::widgets::{Card, Placeholder};
+use contract::Intent;
 
 pub(super) fn show(ui: &mut egui::Ui, tab: CardTab, cx: &mut TabCx<'_>) {
     let (page, index) = (cx.page, cx.index);
@@ -36,12 +37,16 @@ pub(super) fn show(ui: &mut egui::Ui, tab: CardTab, cx: &mut TabCx<'_>) {
                         Card::new()
                             .tag(Kind::from(piece.kind), tag)
                             .selected(is_marked)
+                            .copy(piece::copy_label(piece.kind))
                             .show(ui, |ui| {
                                 ui.set_min_width(ui.available_width());
                                 piece::body(ui, piece, cx.media, cx.intents);
                             })
                     })
                     .inner;
+                if shown.copied {
+                    cx.intents.push(Intent::CopyText(piece.text.clone()));
+                }
                 if *cx.reveal == Some(piece.number) {
                     piece::bring_into_view(&shown.response);
                 }

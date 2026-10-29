@@ -4,6 +4,7 @@
 mod cited;
 mod expand;
 mod rank;
+mod reach;
 mod results;
 mod trace;
 
@@ -13,11 +14,12 @@ use rag_core::{
     LabelFilter, StoreError, UsageTally, question_usage,
 };
 
+pub use reach::Reach;
 pub use results::{Reason, SearchHit, SearchResults};
 pub(crate) use results::{page_text, write_usage};
 pub use trace::{SearchTrace, TracedSearch};
 
-// The four numbers below are starting values.
+// The four numbers below are the starting values of a balanced search.
 
 /// The search also starts from this many of the nearest items.
 pub const RESULTS_PER_QUERY: usize = 8;
@@ -71,7 +73,8 @@ impl<E: Embedder> Retriever<E> {
         Ok(self.search_traced(question, kind, wanted).await?.results)
     }
 
-    /// The items for the question, and what each step produced, in the order of the steps:
+    /// The items for the question, and what each step produced, in the order of the steps. The
+    /// numbers below are those of [`Reach::BALANCED`], which this search uses:
     /// 1. the [`RESULTS_PER_QUERY`] items nearest to the question are the seeds;
     /// 2. the search starts from the concepts nearest to the question and the seed concepts, which
     ///    are the concepts that the seeds mention;
@@ -103,14 +106,15 @@ impl<E: Embedder> Retriever<E> {
         kind: Option<ItemKind>,
         wanted: &LabelFilter,
     ) -> Result<TracedSearch, SearchError> {
-        self.search_traced_within(question, kind, wanted, None)
+        self.search_traced_within(question, kind, wanted, None, Reach::BALANCED)
             .await
     }
 
-    /// Like [`Retriever::search_traced`], and with `items` given only those items are looked at,
-    /// in every step: the seeds, the items the graph adds and the items that a result cites. The
-    /// scope is applied before the nearest items are taken, because one document gives at most
-    /// [`MAX_RESULTS_PER_DOCUMENT`] results and a scope applied afterwards would leave nothing.
+    /// Like [`Retriever::search_traced`] with the numbers of `reach` in place of the balanced
+    /// ones, and with `items` given only those items are looked at, in every step: the seeds, the
+    /// items the graph adds and the items that a result cites. The scope is applied before the
+    /// nearest items are taken, because one document gives only a few results and a scope applied
+    /// afterwards would leave nothing.
     /// An empty scope finds nothing, and the question is then not embedded, which costs nothing.
     ///
     /// # Errors
@@ -121,6 +125,7 @@ impl<E: Embedder> Retriever<E> {
         kind: Option<ItemKind>,
         wanted: &LabelFilter,
         items: Option<&[ItemId]>,
+        reach: Reach,
     ) -> Result<TracedSearch, SearchError> {
         if items.is_some_and(<[ItemId]>::is_empty) {
             return Ok(nothing_found(Some(0), UsageTally::default()));
@@ -151,17 +156,23 @@ impl<E: Embedder> Retriever<E> {
         let usage = question_usage(question);
         let seeds = self
             .items
-            .search(vector.clone(), &filter, RESULTS_PER_QUERY)
+            .search(vector.clone(), &filter, reach.nearest)
             .await
             .map_err(SearchError::Items)?;
         if seeds.is_empty() {
             return Ok(nothing_found(documents_searched, usage));
         }
-        let expansion = expand::from_seeds(&self.concepts, &self.graph, &vector, &seeds).await?;
+        let expansion =
+            expand::from_seeds(&self.concepts, &self.graph, &vector, &seeds, &reach).await?;
         let candidates = expansion.candidates.len();
-        let ranking =
-            rank::ranked_within_the_cap(&self.items, &vector, &filter, expansion.candidates)
-                .await?;
+        let ranking = rank::ranked_within_the_cap(
+            &self.items,
+            &vector,
+            &filter,
+            expansion.candidates,
+            &reach,
+        )
+        .await?;
         let mut hits = ranking.kept;
         let kept = hits.len();
         if kind.is_none() {

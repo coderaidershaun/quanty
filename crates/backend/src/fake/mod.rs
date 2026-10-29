@@ -112,6 +112,7 @@ impl Fake {
                 question: fixtures::QUESTION.to_owned(),
                 mode,
                 filters,
+                ..AskDraft::default()
             })
         };
         match self.scene.script.opening {

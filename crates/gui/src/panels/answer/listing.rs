@@ -73,6 +73,17 @@ impl Row {
     }
 }
 
+/// The name of the button that copies a result of that kind.
+pub(super) const fn copy_label(kind: ItemKind) -> &'static str {
+    match kind {
+        ItemKind::Chunk => "Copy text",
+        ItemKind::Formula => "Copy LaTeX",
+        ItemKind::Figure => "Copy description",
+        ItemKind::Table => "Copy table",
+        ItemKind::Code => "Copy code",
+    }
+}
+
 /// The kind's name, and the printed label when the label adds to it: "Figure 13-4" already
 /// names its kind, "(2.4)" does not.
 fn kind_label(item: &ResultItem) -> String {

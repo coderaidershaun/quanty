@@ -1,16 +1,16 @@
-//! The list of results, one card for each, with a preview cut at a fixed height. A text that the
-//! cut takes a part of ends with `…`.
+//! The list of results, one card for each, with a preview of a fixed height. A preview that is
+//! longer than that scrolls inside the card.
 
 use eframe::egui;
 
-use super::listing::Row;
+use super::listing::{Row, copy_label};
 use super::pane::Pane;
 use super::phase::AnswerTab;
 use crate::media::{code, images, math, rich_text};
 use crate::panels::heights::{Heights, Slot};
 use crate::theme::{self, Icon, Kind, TextRole, size, space};
 use crate::widgets::{Badge, Card, CitationChip, Placeholder};
-use contract::{ItemKind, ResultItem};
+use contract::{Intent, ItemKind, ResultItem};
 
 const TEXT_PREVIEW: f32 = 3.0 * TextRole::Body.line_height();
 /// The size of a figure's picture in the list, in points.
@@ -31,7 +31,6 @@ const SCORE_WIDTH: f32 = size::CONTROL_LG;
 /// Rounding to whole pixels can move a row by a hair. This is the room that allows for it.
 const SLACK: f32 = 1.0;
 const SCORE_HELP: &str = "How close the item is to the question. Higher is closer.";
-const CUT_MARK: &str = "…";
 
 pub(super) fn list(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, tab: AnswerTab) {
     let none_of_the_kind = pane
@@ -124,66 +123,19 @@ fn card(
     let card = Card::new()
         .selected(is_selected)
         .clickable(&row.open_label)
+        .copy(copy_label(item.kind))
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = space::SM;
             let chip_clicked = head(ui, item, row, is_selected, number_width);
-            let (preview_clicked, cut) = preview(ui, pane, item, row);
-            (chip_clicked || preview_clicked, cut)
+            let preview_clicked = preview(ui, pane, item, row);
+            chip_clicked || preview_clicked
         });
-    let (inner_clicked, cut) = card.inner;
-    if card.response.clicked() || inner_clicked {
+    if card.response.clicked() || card.inner {
         pane.select(item.number);
     }
-    if let Some(window) = cut {
-        mark_cut(ui, window, card_fill(&card.response));
+    if card.copied {
+        pane.cx.intents.push(Intent::CopyText(item.text.clone()));
     }
-}
-
-// SMELL: these are the fills of a card and of the sheet under it, copied from the widget kit, so
-// a change to how a card is filled must be made here too.
-fn card_fill(card: &egui::Response) -> egui::Color32 {
-    let palette = theme::palette(&card.ctx);
-    if card.is_pointer_button_down_on() {
-        palette.well_deep
-    } else if card.hovered() {
-        palette.well
-    } else {
-        palette.sheet
-    }
-}
-
-/// The mark stands over a fade of the card's own fill, so a text that goes on past the box does
-/// not look as if it ended there. It is drawn after the card, so nothing covers it.
-fn mark_cut(ui: &mut egui::Ui, window: egui::Rect, fill: egui::Color32) {
-    let mark = TextRole::Body.rich(ui, CUT_MARK);
-    let width = TextRole::Body.galley(ui, CUT_MARK, fill).size().x;
-    let line = egui::Rect::from_min_max(
-        egui::pos2(
-            window.right() - width,
-            window.bottom() - TextRole::Body.line_height(),
-        ),
-        window.right_bottom(),
-    );
-    let solid_from = line.left() - space::SM;
-    let fade_from = solid_from - space::LG;
-    let top = line.top();
-    let bottom = line.bottom();
-    let mut fade = egui::Mesh::default();
-    for (x, tint) in [
-        (fade_from, egui::Color32::TRANSPARENT),
-        (solid_from, fill),
-        (window.right(), fill),
-    ] {
-        fade.colored_vertex(egui::pos2(x, top), tint);
-        fade.colored_vertex(egui::pos2(x, bottom), tint);
-    }
-    for column in 0..2 {
-        let at = column * 2;
-        fade.add_triangle(at, at + 1, at + 2);
-        fade.add_triangle(at + 1, at + 2, at + 3);
-    }
-    ui.painter().add(fade);
-    ui.put(line, egui::Label::new(mark).selectable(false).extend());
 }
 
 fn head(
@@ -230,69 +182,59 @@ fn head(
     chip_clicked
 }
 
-/// Returns true when a picture or a formula in the preview was clicked, and the box of the text
-/// when the cut took a part of it.
-fn preview(
-    ui: &mut egui::Ui,
-    pane: &mut Pane<'_, '_>,
-    item: &ResultItem,
-    row: &Row,
-) -> (bool, Option<egui::Rect>) {
+/// Returns true when a picture or a formula in the preview was clicked.
+fn preview(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem, row: &Row) -> bool {
+    let salt = ("preview", item.number);
     match item.kind {
         ItemKind::Chunk => {
-            let cut = clipped(ui, TEXT_PREVIEW, |ui| pane.rich(ui, &body(&item.text)));
-            (false, cut)
+            scrolled(ui, salt, TEXT_PREVIEW, |ui| {
+                pane.rich(ui, &body(&item.text))
+            });
+            false
         }
         ItemKind::Formula => {
             if let Some(name) = &item.name {
                 ui.label(TextRole::Small.rich(ui, name));
             }
             let formula = math::MathRef::block(&item.text);
-            (math::show(ui, pane.cx.media, &formula).clicked(), None)
+            math::show(ui, pane.cx.media, &formula).clicked()
         }
         ItemKind::Figure => figure(ui, pane, item, row),
         ItemKind::Table => {
             if let Some(caption) = &item.caption {
                 pane.rich(ui, &body(caption));
             }
-            clipped(ui, TABLE_PREVIEW, |ui| {
+            scrolled(ui, salt, TABLE_PREVIEW, |ui| {
                 pane.table(ui, &item.text, TextRole::Body);
             });
-            (false, None)
+            false
         }
         ItemKind::Code => {
             if let Some(caption) = &item.caption {
                 pane.rich(ui, &body(caption));
             }
-            clipped(ui, CODE_PREVIEW, |ui| {
+            scrolled(ui, salt, CODE_PREVIEW, |ui| {
                 pane.code(ui, &item.text, item.language.as_deref());
             });
-            (false, None)
+            false
         }
     }
 }
 
 /// The picture of a figure beside its words, or over them in a narrow pane, where words beside
 /// the picture would have room for only a few letters.
-fn figure(
-    ui: &mut egui::Ui,
-    pane: &mut Pane<'_, '_>,
-    item: &ResultItem,
-    row: &Row,
-) -> (bool, Option<egui::Rect>) {
+fn figure(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem, row: &Row) -> bool {
     if pane.is_narrow {
         let clicked = thumbnail(ui, pane, item, row);
-        return (clicked, figure_words(ui, pane, item));
+        figure_words(ui, pane, item);
+        return clicked;
     }
     let mut clicked = false;
-    let mut cut = None;
     ui.horizontal_top(|ui| {
         clicked = thumbnail(ui, pane, item, row);
-        ui.vertical(|ui| {
-            cut = figure_words(ui, pane, item);
-        });
+        ui.vertical(|ui| figure_words(ui, pane, item));
     });
-    (clicked, cut)
+    clicked
 }
 
 /// True when the picture was clicked.
@@ -312,36 +254,31 @@ fn thumbnail(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem, row:
     clicked
 }
 
-fn figure_words(
-    ui: &mut egui::Ui,
-    pane: &mut Pane<'_, '_>,
-    item: &ResultItem,
-) -> Option<egui::Rect> {
-    clipped(ui, TEXT_PREVIEW, |ui| {
+fn figure_words(ui: &mut egui::Ui, pane: &mut Pane<'_, '_>, item: &ResultItem) {
+    scrolled(ui, ("preview", item.number), TEXT_PREVIEW, |ui| {
         if let Some(caption) = &item.caption {
             pane.rich(ui, &body(caption));
         }
         pane.rich(ui, &body(&item.text));
-    })
+    });
 }
 
 fn body(text: &str) -> rich_text::RichText<'_> {
     rich_text::RichText::new(text, TextRole::Body)
 }
 
-fn clipped(
+/// Shows the contents in a box of at most `max_height`. What is longer scrolls inside the box,
+/// and when the box is at its end the list under it takes the wheel.
+fn scrolled(
     ui: &mut egui::Ui,
+    salt: impl std::hash::Hash + std::fmt::Debug,
     max_height: f32,
     add_contents: impl FnOnce(&mut egui::Ui),
-) -> Option<egui::Rect> {
-    let top_left = ui.cursor().min;
-    let width = ui.available_width();
-    let window = egui::Rect::from_min_size(top_left, egui::vec2(width, max_height));
-    let mut child = ui.new_child(egui::UiBuilder::new().id_salt("preview").max_rect(window));
-    child.set_clip_rect(window.intersect(ui.clip_rect()));
-    add_contents(&mut child);
-    let drawn = child.min_rect().height();
-    let used = drawn.min(max_height);
-    ui.advance_cursor_after_rect(egui::Rect::from_min_size(top_left, egui::vec2(width, used)));
-    (drawn > max_height + SLACK).then_some(window)
+) {
+    egui::ScrollArea::vertical()
+        .id_salt(salt)
+        .max_height(max_height)
+        .auto_shrink([false, true])
+        .animated(false)
+        .show(ui, add_contents);
 }

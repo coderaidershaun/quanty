@@ -22,8 +22,8 @@ pub struct SearchTrace {
     /// Step 2: the concepts that the seeds mention, the one that the most seeds mention first.
     /// One of them can also be among `question_concepts`.
     pub seed_concepts: Vec<ConceptNode>,
-    /// Step 3: the concepts one `RELATES_TO` edge away from the concepts of step 2. None of them
-    /// is a concept of step 2.
+    /// Step 3: the concepts one `RELATES_TO` edge away from the concepts of step 2, then those one
+    /// edge further, up to the hops of the reach, each once. None of them is a concept of step 2.
     pub related_concepts: Vec<ConceptNode>,
     /// Step 3: how many items went on to be ranked: the seeds and the items that the graph added.
     /// The graph adds items of every kind and of every document.
@@ -33,7 +33,7 @@ pub struct SearchTrace {
     /// carry the wanted labels, or is not stored.
     pub ranked: usize,
     /// Step 5: the ranked items that were passed over because their document already had
-    /// [`MAX_RESULTS_PER_DOCUMENT`](super::MAX_RESULTS_PER_DOCUMENT) results, nearest first.
+    /// the most results that one document gives, nearest first.
     pub capped: Vec<ItemHit>,
     /// Step 5: how many results were kept. They are the first hits of the results, and the hits
     /// after them are the cited items of step 6.

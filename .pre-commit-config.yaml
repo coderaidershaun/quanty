@@ -1,3 +1,5 @@
+# rex:pre-commit
+# Installed by `rex init`. Needs pre-commit, gitleaks and trivy on PATH.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -9,9 +11,7 @@ repos:
       - id: check-yaml
       - id: detect-private-key
       - id: end-of-file-fixer
-        exclude: ^(crates/gui/assets/|crates/export/assets/|crates/gui/tests/snapshots/|crates/ocr/tests/integration/fixtures/|samples/content/)
       - id: trailing-whitespace
-        exclude: ^(crates/gui/assets/|crates/export/assets/|crates/gui/tests/snapshots/|crates/ocr/tests/integration/fixtures/|samples/content/)
 
   - repo: local
     hooks:
@@ -22,9 +22,10 @@ repos:
         pass_filenames: false
       - id: trivy
         name: trivy secrets, vulnerabilities and misconfigurations
-        entry: trivy fs --timeout 15m --quiet --skip-version-check --scanners secret,vuln,misconfig --severity HIGH,CRITICAL --exit-code 1 --skip-dirs target,data,content,.scratch,.claude --skip-files .env .
+        entry: trivy fs --timeout 15m --quiet --skip-version-check --scanners secret,vuln,misconfig --severity HIGH,CRITICAL --exit-code 1 --skip-dirs target,node_modules,.claude,.rex --skip-files .env .
         language: system
         pass_filenames: false
+        stages: [pre-push]
       - id: cargo-fmt
         name: cargo fmt
         entry: cargo fmt --all -- --check
@@ -44,9 +45,3 @@ repos:
         types: [rust]
         pass_filenames: false
         stages: [pre-push]
-      - id: check-wasm
-        name: browser UI checks
-        entry: scripts/check-wasm.sh
-        language: system
-        types: [rust]
-        pass_filenames: false

@@ -27,3 +27,10 @@ crates/gui/tests/snapshots/**/*.old.png
 
 # Saved model selection
 .quanty-model.json
+
+# rex:ignore superrex
+.claude/skills/
+.claude/agents/
+.claude/settings.local.json
+/.rex/
+/.claude/worktrees/
